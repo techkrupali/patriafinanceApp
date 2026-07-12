@@ -177,10 +177,17 @@ async function executeTransfer({ user, amount, charge, reference, destinationAcc
     });
 
     // Internal destination -> credit the receiving wallet in the same transaction.
+    // A virtual account resolves to its settlement wallet (deposits are then
+    // reported to the company webhook under the virtual account number).
     let credited = null;
+    let creditedVa = null;
     if (String(bankCode) === OUR_BANK_CODE()) {
+      creditedVa = await tx.virtualAccount.findUnique({
+        where: { accountno: String(destinationAccount) },
+      });
+      const targetAccount = creditedVa ? creditedVa.settlement_accountno : String(destinationAccount);
       const destWallet = await tx.wallet.findUnique({
-        where: { account_number: String(destinationAccount) },
+        where: { account_number: targetAccount },
         include: { user: true },
       });
       if (!destWallet) return { error: 'Destination account not found' };
@@ -208,13 +215,13 @@ async function executeTransfer({ user, amount, charge, reference, destinationAcc
       credited = destWallet;
     }
 
-    return { wallet: fresh, credited };
+    return { wallet: fresh, credited, creditedVa };
   });
 
   if (result.error) return result;
 
   // Post-commit side effects (notifications, webhook) — non-critical.
-  const { wallet, credited } = result;
+  const { wallet, credited, creditedVa } = result;
   await prisma.notification.create({
     data: {
       user_id: user.id,
@@ -233,8 +240,8 @@ async function executeTransfer({ user, amount, charge, reference, destinationAcc
     }).catch(() => {});
 
     sendDepositWebhook({
-      accountName: `${credited.user.first_name} ${credited.user.last_name}`,
-      accountNumber: credited.account_number,
+      accountName: creditedVa ? creditedVa.account_name : `${credited.user.first_name} ${credited.user.last_name}`,
+      accountNumber: creditedVa ? creditedVa.accountno : credited.account_number,
       amount: toNairaNumber(amount),
       tranxfee: toNairaNumber(charge),
       narration: description || 'Transfer',
