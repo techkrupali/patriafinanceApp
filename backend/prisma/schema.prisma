@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                           Int       @id @default(autoincrement())
+  first_name                   String
+  last_name                    String
+  business_name                String?
+  phone                        String    @unique
+  email                        String    @unique
+  username                     String    @unique
+  password                     String
+  pin                          String
+  device_id                    String?
+  company                      String?
+  sex                          String?
+  address                      String?
+  profile_pic                  String?
+  bvn                          String?
+  bvn_status_id                Int?
+  nin                          String?
+  dob                          String?
+  virtual_account              String    @unique
+  account_reference            String    @unique
+  api_key                      String    @unique
+  bank_id                      Int       @default(1)
+  company_id                   Int       @default(1)
+  status_id                    Int       @default(1)
+  user_type_id                 Int       @default(2)
+  phone_verification_status_id Int       @default(2)
+  account_officer_id           Int       @default(1)
+  branch_id                    Int?
+  combalance                   BigInt    @default(0)
+  created_at                   DateTime  @default(now())
+  updated_at                   DateTime  @updatedAt
+
+  wallets       Wallet[]
+  cards         Card[]
+  loans         Loan[]
+  beneficiaries Beneficiary[]
+  notifications Notification[]
+  transactions  Transaction[]
+  posTerminals  PosTerminal[]
+}
+
+model Wallet {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  account_number String   @unique
+  bank_id        Int      @default(1)
+  product_name   String   @default("Current Account")
+  balance        BigInt   @default(0)
+  is_primary     Boolean  @default(true)
+  created_at     DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model Bank {
+  id         Int    @id @default(autoincrement())
+  bank_name  String
+  bank_code  String @unique
+  short_code String @default("")
+}
+
+model TransactionType {
+  id     Int    @id
+  name   String
+  charge BigInt @default(0)
+}
+
+model Transaction {
+  id                    Int      @id @default(autoincrement())
+  transaction_reference String   @unique
+  user_id               Int
+  wallet_id             Int?
+  transaction_type_id   Int      @default(8)
+  direction             String // Credit | Debit
+  amount                BigInt
+  charge                BigInt   @default(0)
+  balance_after         BigInt?
+  description           String?
+  destination_account   String?
+  destination_bank_code String?
+  destination_bank_name String?
+  recipient_name        String?
+  source_account        String?
+  source_name           String?
+  status                String   @default("Initiated") // Initiated | Successful | Failed
+  session_id            String?
+  created_at            DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, created_at])
+}
+
+model Beneficiary {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  account_name   String
+  account_number String?
+  bank_name      String?
+  bank_code      String?
+  provider       String?
+  network        String?
+  biller_number  String?
+  type           String   @default("BankTransfer")
+  created_at     DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, type])
+}
+
+model Card {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  card_number      String   @unique
+  masked_pan       String
+  card_cv          String
+  card_expiry      String
+  card_pin         String?
+  card_status      Int      @default(0) // 0 processing | 1 active | 2 blocked | 3 permanently blocked
+  address          String?
+  phone            String?
+  thirdparty_name  String?
+  thirdparty_phone String?
+  note             String?
+  block_reason     String?
+  created_at       DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model Loan {
+  id              Int       @id @default(autoincrement())
+  user_id         Int
+  loan_code       String    @unique
+  principal       BigInt
+  interest        BigInt    @default(0)
+  fees            BigInt    @default(0)
+  duration_months Int       @default(1)
+  total_paid      BigInt    @default(0)
+  due_date        DateTime?
+  status          String    @default("pending") // pending | active | paid | rejected
+  created_at      DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  title      String
+  message    String
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model Slider {
+  id        Int    @id @default(autoincrement())
+  image_url String
+  link_url  String @default("")
+  status_id Int    @default(1)
+}
+
+model PosTerminal {
+  id            Int    @id @default(autoincrement())
+  serial_number String @unique
+  pin           String
+  user_id       Int
+  status        String @default("Active")
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model VirtualAccount {
+  id                   Int      @id @default(autoincrement())
+  accountno            String   @unique
+  account_name         String
+  settlement_accountno String
+  created_at           DateTime @default(now())
+}
