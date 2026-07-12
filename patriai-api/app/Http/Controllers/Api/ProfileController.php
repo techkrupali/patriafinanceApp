@@ -71,11 +71,8 @@ class ProfileController extends ApiController
     public function verifyPin(Request $request): JsonResponse
     {
         $data = $request->validate(['pin' => ['required', 'digits:4']]);
-        $user = $request->user();
 
-        if (!$user->pin || !Hash::check($data['pin'], $user->pin)) {
-            return $this->fail('Invalid PIN', 422);
-        }
+        app(\App\Services\PinService::class)->verify($request->user(), $data['pin']);
 
         return $this->ok('PIN verified');
     }

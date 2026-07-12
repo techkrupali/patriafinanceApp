@@ -111,6 +111,9 @@ class WalletController extends ApiController
         if (!$wallet->isAccessibleBy($request->user())) {
             return $this->fail('Wallet not found', 404);
         }
+        if (!$wallet->canSpend($request->user())) {
+            return $this->fail('You do not have permission to move money out of this wallet', 403);
+        }
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
@@ -123,9 +126,7 @@ class WalletController extends ApiController
         ]);
 
         $user = $request->user();
-        if (!$user->pin || !\Illuminate\Support\Facades\Hash::check($data['pin'], $user->pin)) {
-            return $this->fail('Invalid transaction PIN', 422);
-        }
+        app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
         $txn = WalletService::make()->withdrawToBank(
             $wallet,

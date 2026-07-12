@@ -7,7 +7,6 @@ use App\Models\Wallet;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class TransferController extends ApiController
 {
@@ -36,13 +35,14 @@ class TransferController extends ApiController
 
         $user = $request->user();
 
-        if (!$user->pin || !Hash::check($data['pin'], $user->pin)) {
-            return $this->fail('Invalid transaction PIN', 422);
-        }
+        app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
         $from = Wallet::find($data['from_wallet_id']);
         if (!$from || !$from->isAccessibleBy($user)) {
             return $this->fail('Source wallet not found', 404);
+        }
+        if (!$from->canSpend($user)) {
+            return $this->fail('You do not have permission to move money out of this wallet', 403);
         }
 
         $amountKobo = $this->toKobo($data['amount']);

@@ -6,10 +6,11 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletMember;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 /**
  * Wallet ledger engine. All balance mutations happen inside DB transactions
@@ -89,30 +90,39 @@ class WalletService
     /** Credit a wallet (deposit webhook). Idempotent by sessionId. */
     public function credit(Wallet $wallet, int $amountKobo, string $type, array $counterparty = [], ?string $sessionId = null, ?string $description = null, ?int $userId = null, ?string $bankingReference = null): Transaction
     {
-        return DB::transaction(function () use ($wallet, $amountKobo, $type, $counterparty, $sessionId, $description, $userId, $bankingReference) {
-            if ($sessionId && Transaction::where('session_id', $sessionId)->exists()) {
-                return Transaction::where('session_id', $sessionId)->first();
+        try {
+            return DB::transaction(function () use ($wallet, $amountKobo, $type, $counterparty, $sessionId, $description, $userId, $bankingReference) {
+                if ($sessionId && Transaction::where('session_id', $sessionId)->exists()) {
+                    return Transaction::where('session_id', $sessionId)->first();
+                }
+
+                $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
+                $locked->balance += $amountKobo;
+                $locked->save();
+
+                return Transaction::create([
+                    'reference' => Transaction::generateReference(),
+                    'wallet_id' => $locked->id,
+                    'user_id' => $userId,
+                    'type' => $type,
+                    'direction' => 'credit',
+                    'amount' => $amountKobo,
+                    'balance_after' => $locked->balance,
+                    'status' => 'successful',
+                    'description' => $description,
+                    'counterparty' => $counterparty ?: null,
+                    'session_id' => $sessionId,
+                    'banking_reference' => $bankingReference,
+                ]);
+            });
+        } catch (QueryException $e) {
+            // Concurrent duplicate delivery: the unique session_id lost the race.
+            // Return the winning row instead of surfacing a 500 (keeps webhooks idempotent).
+            if ($sessionId && ($existing = Transaction::where('session_id', $sessionId)->first())) {
+                return $existing;
             }
-
-            $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
-            $locked->balance += $amountKobo;
-            $locked->save();
-
-            return Transaction::create([
-                'reference' => Transaction::generateReference(),
-                'wallet_id' => $locked->id,
-                'user_id' => $userId,
-                'type' => $type,
-                'direction' => 'credit',
-                'amount' => $amountKobo,
-                'balance_after' => $locked->balance,
-                'status' => 'successful',
-                'description' => $description,
-                'counterparty' => $counterparty ?: null,
-                'session_id' => $sessionId,
-                'banking_reference' => $bankingReference,
-            ]);
-        });
+            throw $e;
+        }
     }
 
     /** Debit a wallet with an overdraft guard. */
@@ -243,11 +253,21 @@ class WalletService
             'pending',
         );
 
-        // 2. Execute on the banking rails; refund the ledger on failure.
+        // 2. Execute on the banking rails.
         try {
             $this->banking->payout($txn->reference, $amountNaira, $accountNumber, $bankCode, $description ?: 'Patriai withdrawal');
             $txn->update(['status' => 'successful', 'banking_reference' => $txn->reference]);
-        } catch (RuntimeException $e) {
+        } catch (ConnectionException $e) {
+            // Timeout / network failure: the payout outcome is UNKNOWN. Do NOT refund
+            // blindly (the bank may have executed it) — leave funds reserved as 'pending'
+            // for reconciliation so we never double-spend.
+            Log::error("Withdrawal {$txn->reference} banking status unknown: {$e->getMessage()}");
+            $txn->update(['status' => 'pending', 'meta' => ['needs_reconciliation' => true, 'error' => $e->getMessage()]]);
+            throw ValidationException::withMessages([
+                'banking' => 'Your withdrawal is processing. It will complete shortly or be reversed automatically.',
+            ]);
+        } catch (\Throwable $e) {
+            // Definitive rejection from the provider: refund the reserved amount + fee.
             DB::transaction(function () use ($wallet, $txn, $amountKobo, $feeKobo) {
                 $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
                 $locked->balance += $amountKobo + $feeKobo;

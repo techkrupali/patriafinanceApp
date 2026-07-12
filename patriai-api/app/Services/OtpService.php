@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\OtpCode;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -42,27 +43,32 @@ class OtpService
     /** Verify and consume an OTP. Throws ValidationException on failure. */
     public function verify(string $identifier, string $purpose, string $code): void
     {
-        $otp = OtpCode::where('identifier', $identifier)
-            ->where('purpose', $purpose)
-            ->whereNull('consumed_at')
-            ->latest()
-            ->first();
+        // Lock the OTP row so the attempts gate and increment are atomic — otherwise
+        // concurrent requests could each read attempts < MAX and all proceed.
+        DB::transaction(function () use ($identifier, $purpose, $code) {
+            $otp = OtpCode::where('identifier', $identifier)
+                ->where('purpose', $purpose)
+                ->whereNull('consumed_at')
+                ->latest()
+                ->lockForUpdate()
+                ->first();
 
-        if (!$otp || $otp->expires_at->isPast()) {
-            throw ValidationException::withMessages(['code' => 'OTP is invalid or has expired. Request a new one.']);
-        }
+            if (!$otp || $otp->expires_at->isPast()) {
+                throw ValidationException::withMessages(['code' => 'OTP is invalid or has expired. Request a new one.']);
+            }
 
-        if ($otp->attempts >= self::MAX_ATTEMPTS) {
-            throw ValidationException::withMessages(['code' => 'Too many attempts. Request a new OTP.']);
-        }
+            if ($otp->attempts >= self::MAX_ATTEMPTS) {
+                throw ValidationException::withMessages(['code' => 'Too many attempts. Request a new OTP.']);
+            }
 
-        $otp->increment('attempts');
+            $otp->increment('attempts');
 
-        if (!Hash::check($code, $otp->code_hash)) {
-            throw ValidationException::withMessages(['code' => 'Incorrect OTP code.']);
-        }
+            if (!Hash::check($code, $otp->code_hash)) {
+                throw ValidationException::withMessages(['code' => 'Incorrect OTP code.']);
+            }
 
-        $otp->update(['consumed_at' => now()]);
+            $otp->update(['consumed_at' => now()]);
+        });
     }
 
     private function deliver(string $identifier, string $purpose, string $code, string $channel): void

@@ -45,7 +45,10 @@ class Wallet extends Model
         return $this->hasMany(Transaction::class);
     }
 
-    /** Can the given user operate on this wallet (owner or active member)? */
+    /** Roles allowed to move money out of a wallet. Viewers are read-only. */
+    public const SPENDING_ROLES = ['owner', 'contributor'];
+
+    /** Can the given user VIEW this wallet (owner or any active member)? */
     public function isAccessibleBy(User $user): bool
     {
         if ($this->user_id === $user->id) {
@@ -55,6 +58,20 @@ class Wallet extends Model
         return $this->members()
             ->where('user_id', $user->id)
             ->where('status', 'active')
+            ->exists();
+    }
+
+    /** Can the given user MOVE MONEY out (withdraw/transfer)? Excludes viewers. */
+    public function canSpend(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        return $this->members()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->whereIn('role', self::SPENDING_ROLES)
             ->exists();
     }
 
