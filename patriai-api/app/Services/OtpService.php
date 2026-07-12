@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\OtpCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
@@ -75,11 +76,17 @@ class OtpService
     {
         // Email channel via Laravel Mail (log driver in dev, SMTP/Resend in prod).
         // SMS channel wires to Termii in Milestone 4.
+        // Delivery failures must NOT break auth flows — the code is already persisted,
+        // and password login works without it. Log and move on if the mailer is down.
         if ($channel === 'email' && str_contains($identifier, '@')) {
-            Mail::raw(
-                "Your Patriai {$purpose} code is: {$code}\nIt expires in " . self::TTL_MINUTES . ' minutes.',
-                fn ($m) => $m->to($identifier)->subject("Patriai verification code: {$code}")
-            );
+            try {
+                Mail::raw(
+                    "Your Patriai {$purpose} code is: {$code}\nIt expires in " . self::TTL_MINUTES . ' minutes.',
+                    fn ($m) => $m->to($identifier)->subject("Patriai verification code: {$code}")
+                );
+            } catch (\Throwable $e) {
+                Log::warning("OTP email delivery failed for {$identifier}: {$e->getMessage()}");
+            }
         }
     }
 }
