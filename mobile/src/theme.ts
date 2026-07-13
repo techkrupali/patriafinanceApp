@@ -1,71 +1,71 @@
 import type { ViewStyle } from 'react-native';
 
 /**
- * The Patriai brand palette as JS constants, for the many places that need a
- * literal color instead of a Tailwind class: LinearGradient stops, icon `color`
- * props, ActivityIndicator / RefreshControl tints and native tab-bar styling.
- * Mirrors tailwind.config.js.
+ * Patriai palette — a clean white + blue system (no green). The token NAMES are
+ * kept stable so every screen/component keeps working; only the values changed.
+ * `brand` / `success` are now blue, so accents, links, "money in", verified
+ * states and success checks all read blue instead of green.
  */
 export const colors = {
-  navy: '#001736',
-  navyLight: '#002b5c',
-  ink: '#0b1c30',
-  brand: '#006c49',
-  brandMint: '#4edea3',
-  brandGlow: '#6cf8bb',
-  lav: '#d3e4fe',
-  lavSoft: '#e5eeff',
-  lavFaint: '#eff4ff',
-  page: '#f8f9ff',
+  navy: '#0a1f44', // primary dark (hero, buttons, headings)
+  navyLight: '#12376e',
+  ink: '#0f1e38',
+  brand: '#1f6feb', // accent blue (links, active, credit, success ticks)
+  brandMint: '#4f9bff', // lighter accent blue
+  brandGlow: '#bcd7ff', // soft blue for glows/tints
+  lav: '#d7e5fb',
+  lavSoft: '#e8f0fe',
+  lavFaint: '#f0f5ff',
+  page: '#f6f9ff',
   muted: '#64748b',
-  faded: '#94a3b8',
-  danger: '#ba1a1a',
-  dangerSoft: '#ffdad6',
-  success: '#047857',
-  successSoft: '#ecfdf5',
+  faded: '#98a6bd',
+  danger: '#c62828',
+  dangerSoft: '#fde8e8',
+  success: '#1f6feb', // "success" is blue in this theme (no green)
+  successSoft: '#eaf1ff',
   card: '#ffffff',
-  border: '#e8ecf4',
+  border: '#e6ecf6',
   white: '#ffffff',
-  rose: '#fb7185',
-  roseSoft: '#fee2e2',
+  rose: '#ef5b6e', // money-out accent (kept red-ish, not green)
+  roseSoft: '#fdeaec',
 } as const;
 
-/** LinearGradient colour stops (typed as tuples so expo-linear-gradient accepts them). */
+/** LinearGradient colour stops (typed as tuples so expo-linear-gradient accepts them). Blue/navy only. */
 export const gradients = {
-  navy: ['#001736', '#002b5c'] as const,
-  navyDeep: ['#00224d', '#001024'] as const,
-  brand: ['#006c49', '#04a06a'] as const,
-  mint: ['#04a06a', '#4edea3'] as const,
-  glow: ['#0b7a56', '#6cf8bb'] as const,
-  lav: ['#e5eeff', '#d3e4fe'] as const,
-  avatar: ['#002b5c', '#006c49'] as const,
+  navy: ['#0a1f44', '#12376e'] as const,
+  navyDeep: ['#0c2555', '#07152f'] as const,
+  brand: ['#1f6feb', '#1657c9'] as const,
+  mint: ['#2f7ff0', '#4f9bff'] as const,
+  glow: ['#1f6feb', '#bcd7ff'] as const,
+  lav: ['#e8f0fe', '#d7e5fb'] as const,
+  avatar: ['#12376e', '#1f6feb'] as const,
 };
 
 /** Reusable soft elevation for cards / floating surfaces. */
 export const shadow: Record<'card' | 'soft' | 'hero' | 'tab', ViewStyle> = {
   card: {
-    shadowColor: '#001736',
+    shadowColor: '#0a1f44',
     shadowOpacity: 0.06,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
   soft: {
-    shadowColor: '#0b1c30',
+    shadowColor: '#0f1e38',
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
   hero: {
-    shadowColor: '#001736',
-    shadowOpacity: 0.28,
+    shadowColor: '#0a1f44',
+    shadowOpacity: 0.26,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 14 },
     elevation: 10,
   },
   tab: {
-    shadowColor: '#001736',
+    shadowColor: '#0a1f44',
     shadowOpacity: 0.08,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -4 },
