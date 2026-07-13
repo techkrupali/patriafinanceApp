@@ -173,7 +173,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               <QuickAction
                 icon="paper-plane"
                 label="Send"
-                tint={gradients.brand}
+                tint={gradients.navy}
                 onPress={() => navigation.navigate('Transfer', { walletId: mainWallet?.id })}
                 disabled={!mainWallet}
               />
@@ -194,7 +194,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               <QuickAction
                 icon="wallet"
                 label="New"
-                tint={gradients.brand}
+                tint={gradients.navy}
                 onPress={() => navigation.navigate('CreateWallet')}
               />
             </View>

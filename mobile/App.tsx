@@ -1,4 +1,5 @@
 import './global.css';
+import './src/lib/gh-nativewind';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
