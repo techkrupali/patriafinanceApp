@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Transaction } from '../api/types';
-import { colors, shadow } from '../theme';
+import { colors } from '../theme';
 import { formatMoney, humanizeType, timeLabel } from '../lib/format';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -18,15 +18,15 @@ interface TxnRowProps {
 function visuals(txn: Transaction): { icon: IconName; tile: string; tint: string } {
   const t = txn.type.toLowerCase();
   if (t.includes('withdraw')) {
-    return { icon: 'cash-outline', tile: 'bg-lav', tint: colors.navy };
+    return { icon: 'arrow-up-outline', tile: 'bg-white', tint: colors.muted };
   }
   if (t.includes('fund') || t.includes('deposit') || t.includes('top')) {
-    return { icon: 'add-circle', tile: 'bg-success-soft', tint: colors.brand };
+    return { icon: 'add-outline', tile: 'bg-lav-soft', tint: colors.brand };
   }
   if (txn.direction === 'credit') {
-    return { icon: 'arrow-down-circle', tile: 'bg-success-soft', tint: colors.brand };
+    return { icon: 'arrow-down-outline', tile: 'bg-lav-soft', tint: colors.brand };
   }
-  return { icon: 'arrow-up-circle', tile: 'bg-lav', tint: colors.navy };
+  return { icon: 'arrow-up-outline', tile: 'bg-white', tint: colors.muted };
 }
 
 export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps) {
@@ -40,29 +40,28 @@ export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps
   return (
     <Container
       onPress={onPress}
-      className={`flex-row items-center rounded-3xl bg-white p-4 ${onPress ? 'active:opacity-90' : ''} ${className}`}
-      style={shadow.soft}
+      className={`flex-row items-center rounded-2xl bg-lav-faint p-3.5 ${onPress ? 'active:opacity-90' : ''} ${className}`}
     >
-      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-2xl ${v.tile}`}>
-        <Ionicons name={v.icon} size={22} color={v.tint} />
+      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-full ${v.tile}`}>
+        <Ionicons name={v.icon} size={20} color={v.tint} />
       </View>
 
       <View className="flex-1 pr-2">
-        <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
+        <Text className="text-[15px] font-medium text-ink" numberOfLines={1}>
           {title}
         </Text>
-        <Text className="mt-0.5 text-xs text-faded" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
           {subtitleParts.join(' · ')}
         </Text>
       </View>
 
       <View className="items-end">
-        <Text className={`text-[15px] font-bold ${credit ? 'text-brand' : 'text-ink'}`}>
+        <Text className={`text-[15px] font-semibold ${credit ? 'text-brand' : 'text-ink'}`}>
           {credit ? '+' : '-'}
           {formatMoney(txn.amount)}
         </Text>
         {txn.status !== 'successful' ? (
-          <View className="mt-1 rounded-full bg-lav-faint px-2 py-0.5">
+          <View className="mt-1 rounded-full bg-white px-2 py-0.5">
             <Text className="text-[10px] font-semibold uppercase tracking-wider text-muted">{txn.status}</Text>
           </View>
         ) : null}

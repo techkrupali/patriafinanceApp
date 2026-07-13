@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../components/Screen';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { PinPad } from '../components/PinPad';
-import { colors, gradients } from '../theme';
+import { colors } from '../theme';
 import { useLogoutApi } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { initials } from '../lib/format';
@@ -26,8 +25,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 function Row({
   icon,
-  tint = 'bg-lav-faint',
-  iconColor = colors.navy,
+  tint = 'bg-white',
+  iconColor = colors.ink,
   title,
   subtitle,
   onPress,
@@ -136,19 +135,14 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-        <Text className="text-3xl font-extrabold tracking-tight text-ink">Profile</Text>
+        <Text className="text-[26px] font-semibold tracking-tight text-ink">Profile</Text>
 
         {/* Identity card */}
         <Card className="mt-5 items-center py-7">
-          <LinearGradient
-            colors={gradients.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ height: 72, width: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text className="text-2xl font-bold text-white">{initials(user?.full_name)}</Text>
-          </LinearGradient>
-          <Text className="mt-3 text-lg font-extrabold text-ink">{user?.full_name}</Text>
+          <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-lav-soft">
+            <Text className="text-2xl font-semibold text-brand">{initials(user?.full_name)}</Text>
+          </View>
+          <Text className="mt-3 text-lg font-semibold text-ink">{user?.full_name}</Text>
           <Text className="mt-1 text-sm text-muted">{user?.email}</Text>
           <Text className="mt-0.5 text-sm text-muted">{user?.phone}</Text>
 
@@ -179,7 +173,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           <Divider />
           <Row
             icon={support?.icon ?? 'finger-print'}
-            tint="bg-success-soft"
+            tint="bg-lav-soft"
             iconColor={colors.brand}
             title={bioLabel}
             subtitle={biometricEnabled ? 'Enabled for unlock & payments' : 'Use biometrics to authorize'}
@@ -208,7 +202,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             icon="notifications-outline"
             title="Notifications"
             subtitle="Transaction & security alerts"
-            right={<View className="rounded-full bg-lav-faint px-2.5 py-1"><Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Soon</Text></View>}
+            right={<View className="rounded-full bg-white px-2.5 py-1"><Text className="text-[10px] font-semibold uppercase tracking-wider text-muted">Soon</Text></View>}
           />
         </Card>
 
@@ -225,7 +219,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="mb-4 flex-row items-start justify-between">
               <View className="flex-1 pr-3">
-                <Text className="text-xl font-extrabold text-ink">Confirm your PIN</Text>
+                <Text className="text-xl font-semibold text-ink">Confirm your PIN</Text>
                 <Text className="mt-1 text-sm text-muted">
                   Enter your transaction PIN once so {bioLabel} can authorize payments securely.
                 </Text>

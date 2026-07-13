@@ -25,15 +25,15 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Wallets'>) {
         contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
+          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.brand} />
         }
       >
-        <Text className="text-3xl font-extrabold tracking-tight text-ink">Wallets</Text>
+        <Text className="text-[26px] font-semibold tracking-tight text-ink">Wallets</Text>
         <Text className="mt-1 text-[15px] text-muted">Your family's money, organized.</Text>
 
         {isLoading ? (
           <View className="items-center py-24">
-            <ActivityIndicator size="large" color={colors.navy} />
+            <ActivityIndicator size="large" color={colors.brand} />
           </View>
         ) : error ? (
           <LoadError message={(error as Error).message} onRetry={() => refetch()} />
@@ -54,15 +54,15 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Wallets'>) {
           </>
         ) : (
           <>
-            <View className="mt-5 flex-row items-center rounded-2xl bg-lav-faint p-4">
-              <View className="h-10 w-10 items-center justify-center rounded-2xl bg-white">
-                <Ionicons name="albums-outline" size={20} color={colors.navy} />
+            <View className="mt-5 flex-row items-center rounded-[20px] bg-lav-faint p-4">
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-lav-soft">
+                <Ionicons name="albums-outline" size={20} color={colors.brand} />
               </View>
               <View className="ml-3">
-                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <Text className="text-[12px] text-muted">
                   Across {wallets!.length} wallet{wallets!.length === 1 ? '' : 's'}
                 </Text>
-                <Text className="text-xl font-extrabold tracking-tight text-ink">{formatMoney(total)}</Text>
+                <Text className="text-xl font-bold tracking-tight text-ink">{formatMoney(total)}</Text>
               </View>
             </View>
 

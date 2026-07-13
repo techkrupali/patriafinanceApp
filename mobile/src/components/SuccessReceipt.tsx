@@ -1,10 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from './Button';
 import { Card } from './Card';
-import { colors, gradients } from '../theme';
+import { colors } from '../theme';
 import { notifySuccess } from '../lib/haptics';
 
 interface ReceiptRow {
@@ -20,7 +19,7 @@ interface SuccessReceiptProps {
   onShare?: () => void;
 }
 
-/** Full-screen success state: animated gradient check + summary card + actions. */
+/** Full-screen success state: calm animated blue check + summary card + actions. */
 export function SuccessReceipt({ title, subtitle, rows, onDone, onShare }: SuccessReceiptProps) {
   const scale = useRef(new Animated.Value(0.4)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -41,28 +40,15 @@ export function SuccessReceipt({ title, subtitle, rows, onDone, onShare }: Succe
       <Animated.View className="items-center" style={{ opacity }}>
         <Animated.View style={{ transform: [{ scale }] }}>
           <View className="h-28 w-28 items-center justify-center rounded-full bg-success-soft">
-            <LinearGradient
-              colors={gradients.brand}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                height: 84,
-                width: 84,
-                borderRadius: 42,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: colors.brandMint,
-                shadowOpacity: 0.7,
-                shadowRadius: 20,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 10,
-              }}
+            <View
+              className="items-center justify-center rounded-full bg-brand"
+              style={{ height: 84, width: 84 }}
             >
               <Ionicons name="checkmark-sharp" size={44} color={colors.white} />
-            </LinearGradient>
+            </View>
           </View>
         </Animated.View>
-        <Text className="mt-6 text-3xl font-extrabold tracking-tight text-ink">{title}</Text>
+        <Text className="mt-6 text-2xl font-bold tracking-tight text-ink">{title}</Text>
         {subtitle ? <Text className="mt-2 text-center text-sm text-muted">{subtitle}</Text> : null}
       </Animated.View>
 

@@ -28,7 +28,7 @@ const TYPES: { value: 'shared' | 'project'; title: string; description: string; 
     description: 'Save toward a goal — school fees, rent, a trip — separate from daily spending.',
     icon: 'flag',
     tint: 'bg-lav-soft',
-    iconColor: colors.navy,
+    iconColor: colors.brand,
   },
 ];
 

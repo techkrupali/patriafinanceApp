@@ -98,7 +98,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       <Header />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 4 }} keyboardShouldPersistTaps="handled">
-          <Text className="text-3xl font-extrabold tracking-tight text-ink">Welcome back</Text>
+          <Text className="text-[26px] font-semibold tracking-tight text-ink">Welcome back</Text>
           <Text className="mt-2 text-[15px] text-muted">
             Sign in to continue managing your family finances.
           </Text>
@@ -107,20 +107,13 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             <Pressable
               onPress={() => void biometricSignIn()}
               disabled={bioBusy}
-              className="mt-7 flex-row items-center rounded-3xl bg-white p-5 active:opacity-90"
-              style={{
-                shadowColor: colors.navy,
-                shadowOpacity: 0.06,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 3,
-              }}
+              className="mt-7 flex-row items-center rounded-[20px] bg-lav-faint p-5 active:opacity-90"
             >
-              <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-success-soft">
+              <View className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-lav-soft">
                 <Ionicons name={support?.icon ?? 'finger-print'} size={26} color={colors.brand} />
               </View>
               <View className="flex-1">
-                <Text className="text-base font-bold text-ink">Sign in with {support?.label}</Text>
+                <Text className="text-base font-semibold text-ink">Sign in with {support?.label}</Text>
                 <Text className="mt-0.5 text-[13px] text-muted">
                   {bioBusy ? 'Authenticating…' : 'Fastest way back into your account'}
                 </Text>

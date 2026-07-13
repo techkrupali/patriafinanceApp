@@ -152,7 +152,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
       {walletsLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       ) : walletsError ? (
         <LoadError message={(walletsError as Error).message} onRetry={() => refetch()} />
@@ -164,21 +164,21 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             showsVerticalScrollIndicator={false}
           >
             {/* Amount hero */}
-            <View className="items-center rounded-3xl bg-lav-faint py-8">
+            <View className="items-center rounded-[20px] bg-lav-faint py-8">
               <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
               <View className="mt-2 flex-row items-center justify-center">
-                <Text className="text-4xl font-extrabold text-faded">₦</Text>
+                <Text className="text-4xl font-bold text-faded">₦</Text>
                 <TextInput
                   value={amount}
                   onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
                   placeholder="0.00"
                   placeholderTextColor={colors.faded}
                   keyboardType="decimal-pad"
-                  className="ml-1 min-w-[120px] text-center text-5xl font-extrabold text-ink"
+                  className="ml-1 min-w-[120px] text-center text-5xl font-bold text-ink"
                 />
               </View>
               {from ? (
-                <Text className="mt-2 text-xs text-faded">Available in {from.name}: {formatMoney(from.balance)}</Text>
+                <Text className="mt-2 text-xs text-muted">Available in {from.name}: {formatMoney(from.balance)}</Text>
               ) : null}
             </View>
 
@@ -196,12 +196,12 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                         setFromId(w.id);
                         setDestWalletId(undefined);
                       }}
-                      className={`rounded-2xl px-4 py-3 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
+                      className={`rounded-2xl px-4 py-3 ${active ? 'bg-brand' : 'bg-lav-faint'} active:opacity-80`}
                     >
                       <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                         {w.name}
                       </Text>
-                      <Text className={`mt-0.5 text-xs ${active ? 'text-brand-glow' : 'text-muted'}`}>
+                      <Text className={`mt-0.5 text-xs ${active ? 'text-white/80' : 'text-muted'}`}>
                         {formatMoney(w.balance)}
                       </Text>
                     </Pressable>

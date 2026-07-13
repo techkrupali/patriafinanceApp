@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -54,19 +55,32 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.faded,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 4 },
         tabBarItemStyle: { paddingTop: 8 },
         tabBarStyle: {
           backgroundColor: colors.white,
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          height: 62 + insets.bottom,
+          height: 66 + insets.bottom,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-          paddingTop: 6,
+          paddingTop: 8,
           ...shadow.tab,
         },
-        tabBarIcon: ({ focused, color }) => (
-          <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
+        tabBarIcon: ({ focused }) => (
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: focused ? colors.lav : 'transparent',
+            }}
+          >
+            <Ionicons
+              name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off}
+              size={20}
+              color={focused ? colors.brand : colors.faded}
+            />
+          </View>
         ),
       })}
     >

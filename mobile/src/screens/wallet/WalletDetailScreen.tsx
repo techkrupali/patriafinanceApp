@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
@@ -9,7 +8,7 @@ import { Card } from '../../components/Card';
 import { TxnRow } from '../../components/TxnRow';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors } from '../../theme';
 import { useWallet, useWalletTransactions } from '../../api/hooks';
 import { formatMoney, initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -18,10 +17,10 @@ import type { RootScreenProps } from '../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const HERO: Record<WalletType, { gradient: readonly [string, string]; label: string }> = {
-  main: { gradient: gradients.navy, label: 'MAIN' },
-  shared: { gradient: ['#036045', '#0f9d6b'], label: 'SHARED' },
-  project: { gradient: ['#3a2f6b', '#5b4bb0'], label: 'PROJECT' },
+const HERO: Record<WalletType, { label: string }> = {
+  main: { label: 'MAIN' },
+  shared: { label: 'SHARED' },
+  project: { label: 'PROJECT' },
 };
 
 function ActionButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
@@ -33,10 +32,10 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
       }}
       className="flex-1 items-center active:opacity-70"
     >
-      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-lav">
-        <Ionicons name={icon} size={22} color={colors.navy} />
+      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-lav-soft">
+        <Ionicons name={icon} size={22} color={colors.brand} />
       </View>
-      <Text className="mt-2 text-xs font-semibold text-ink">{label}</Text>
+      <Text className="mt-2 text-xs font-medium text-ink">{label}</Text>
     </Pressable>
   );
 }
@@ -71,7 +70,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
 
       {detail.isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       ) : detail.error ? (
         <LoadError message={(detail.error as Error).message} onRetry={refresh} />
@@ -80,49 +79,44 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={detail.isRefetching} onRefresh={refresh} tintColor={colors.navy} />
+            <RefreshControl refreshing={detail.isRefetching} onRefresh={refresh} tintColor={colors.brand} />
           }
         >
-          {/* Balance hero */}
-          <LinearGradient
-            colors={hero.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
-          >
+          {/* Balance panel */}
+          <View className="rounded-[20px] bg-lav-faint p-5">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
+              <Text className="text-[12px] font-medium uppercase tracking-wider text-muted">
                 {hero.label} Wallet
               </Text>
-              <View className="rounded-full bg-white/20 px-2.5 py-1">
-                <Text className="text-[10px] font-bold uppercase tracking-wider text-brand-glow">
+              <View className="rounded-full bg-white px-2.5 py-1">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-brand">
                   {wallet.status}
                 </Text>
               </View>
             </View>
-            <Text className="mt-2 text-[40px] font-extrabold leading-tight tracking-tight text-white">
+            <Text className="mt-2 text-[36px] font-bold leading-tight tracking-tight text-ink">
               {formatMoney(wallet.balance)}
             </Text>
 
             {wallet.virtual_account ? (
               <Pressable
                 onPress={() => void copyAccount()}
-                className="mt-4 flex-row items-center self-start rounded-2xl bg-white/10 px-3.5 py-2 active:opacity-80"
+                className="mt-4 flex-row items-center self-start rounded-2xl bg-white px-3.5 py-2 active:opacity-80"
               >
-                <Ionicons name="card-outline" size={15} color={colors.brandGlow} style={{ marginRight: 7 }} />
-                <Text className="text-[13px] font-semibold text-white">
+                <Ionicons name="card-outline" size={15} color={colors.brand} style={{ marginRight: 7 }} />
+                <Text className="text-[13px] font-medium text-ink">
                   {wallet.virtual_account}
                   {wallet.virtual_account_bank ? ` · ${wallet.virtual_account_bank}` : ''}
                 </Text>
                 <Ionicons
                   name={copied ? 'checkmark-circle' : 'copy-outline'}
                   size={15}
-                  color={copied ? colors.brandGlow : colors.white}
+                  color={colors.brand}
                   style={{ marginLeft: 8 }}
                 />
               </Pressable>
             ) : null}
-          </LinearGradient>
+          </View>
 
           {/* Actions */}
           <View className="mt-6 flex-row" style={{ gap: 8 }}>
@@ -134,20 +128,20 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {/* Members */}
           {wallet.type !== 'main' && members.length > 0 ? (
             <>
-              <Text className="mt-7 text-lg font-bold text-ink">Members</Text>
+              <Text className="mt-7 text-xl font-semibold text-ink">Members</Text>
               <Card className="mt-3 py-1">
                 {members.map((m, i) => (
                   <View key={m.user_id}>
                     <View className="flex-row items-center py-3">
                       <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-lav-soft">
-                        <Text className="text-xs font-bold text-navy">{initials(m.name)}</Text>
+                        <Text className="text-xs font-semibold text-brand">{initials(m.name)}</Text>
                       </View>
                       <View className="flex-1">
-                        <Text className="text-[15px] font-semibold text-ink">{m.name}</Text>
-                        <Text className="text-xs text-faded">{m.email}</Text>
+                        <Text className="text-[15px] font-medium text-ink">{m.name}</Text>
+                        <Text className="text-xs text-muted">{m.email}</Text>
                       </View>
-                      <View className="rounded-full bg-lav-faint px-2.5 py-1">
-                        <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">{m.role}</Text>
+                      <View className="rounded-full bg-white px-2.5 py-1">
+                        <Text className="text-[10px] font-semibold uppercase tracking-wider text-muted">{m.role}</Text>
                       </View>
                     </View>
                     {i < members.length - 1 ? <View style={{ height: 1, backgroundColor: colors.border }} /> : null}
@@ -158,11 +152,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {/* Transactions */}
-          <Text className="mt-7 text-lg font-bold text-ink">Transactions</Text>
+          <Text className="mt-7 text-xl font-semibold text-ink">Transactions</Text>
           <View className="mt-3" style={{ gap: 10 }}>
             {txns.isLoading ? (
               <View className="items-center py-10">
-                <ActivityIndicator color={colors.navy} />
+                <ActivityIndicator color={colors.brand} />
               </View>
             ) : txns.error ? (
               <LoadError message={(txns.error as Error).message} onRetry={() => txns.refetch()} />
@@ -181,12 +175,12 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   <Pressable
                     onPress={() => void txns.fetchNextPage()}
                     disabled={txns.isFetchingNextPage}
-                    className="items-center rounded-2xl bg-lav py-3.5 active:opacity-80"
+                    className="items-center rounded-2xl bg-lav-soft py-3.5 active:opacity-80"
                   >
                     {txns.isFetchingNextPage ? (
-                      <ActivityIndicator color={colors.navy} />
+                      <ActivityIndicator color={colors.brand} />
                     ) : (
-                      <Text className="text-sm font-semibold text-navy">Load more</Text>
+                      <Text className="text-sm font-semibold text-brand">Load more</Text>
                     )}
                   </Pressable>
                 ) : null}

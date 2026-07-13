@@ -79,9 +79,9 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
       <View className="flex-1 px-6 pt-4">
         <View className="items-center">
           <View className="h-16 w-16 items-center justify-center rounded-3xl bg-lav-soft">
-            <Ionicons name="mail-open-outline" size={30} color={colors.navy} />
+            <Ionicons name="mail-open-outline" size={30} color={colors.brand} />
           </View>
-          <Text className="mt-5 text-3xl font-extrabold tracking-tight text-ink">Enter the code</Text>
+          <Text className="mt-5 text-[26px] font-semibold tracking-tight text-ink">Enter the code</Text>
           <Text className="mt-2 text-center text-[15px] leading-6 text-muted">
             We sent a 6-digit code to{'\n'}
             <Text className="font-semibold text-ink">{sentToLabel ?? identifier}</Text>
@@ -96,10 +96,10 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
               <View
                 key={i}
                 className={`h-16 w-[46px] items-center justify-center rounded-2xl ${
-                  active ? 'border-2 border-brand bg-white' : filled ? 'border-2 border-navy bg-white' : 'bg-lav-faint'
+                  active ? 'border-2 border-brand bg-white' : filled ? 'border-2 border-brand bg-white' : 'bg-lav-faint'
                 }`}
               >
-                <Text className="text-2xl font-extrabold text-ink">{code[i] ?? ''}</Text>
+                <Text className="text-2xl font-semibold text-ink">{code[i] ?? ''}</Text>
               </View>
             );
           })}

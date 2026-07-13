@@ -113,17 +113,17 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
           showsVerticalScrollIndicator={false}
         >
           {/* Amount hero */}
-          <View className="items-center rounded-3xl bg-lav-faint py-8">
+          <View className="items-center rounded-[20px] bg-lav-faint py-8">
             <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
             <View className="mt-2 flex-row items-center justify-center">
-              <Text className="text-4xl font-extrabold text-faded">₦</Text>
+              <Text className="text-4xl font-bold text-faded">₦</Text>
               <TextInput
                 value={amount}
                 onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
                 placeholder="0.00"
                 placeholderTextColor={colors.faded}
                 keyboardType="decimal-pad"
-                className="ml-1 min-w-[120px] text-center text-5xl font-extrabold text-ink"
+                className="ml-1 min-w-[120px] text-center text-5xl font-bold text-ink"
               />
             </View>
           </View>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, shadow } from '../theme';
+import { colors } from '../theme';
 import { selection } from '../lib/haptics';
 
 interface HeaderProps {
@@ -26,15 +26,14 @@ export function Header({ title = '', right, className = '' }: HeaderProps) {
               navigation.goBack();
             }}
             hitSlop={8}
-            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-            style={shadow.soft}
+            className="h-11 w-11 items-center justify-center rounded-full bg-lav-faint active:opacity-70"
           >
             <Ionicons name="chevron-back" size={22} color={colors.ink} />
           </Pressable>
         ) : null}
       </View>
 
-      <Text className="flex-1 text-center text-lg font-bold text-ink" numberOfLines={1}>
+      <Text className="flex-1 text-center text-[17px] font-semibold text-ink" numberOfLines={1}>
         {title}
       </Text>
 

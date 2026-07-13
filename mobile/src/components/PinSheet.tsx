@@ -114,7 +114,7 @@ export function PinSheet({
 
           <View className="mb-4 flex-row items-start justify-between">
             <View className="flex-1 pr-3">
-              <Text className="text-xl font-extrabold text-ink">{title}</Text>
+              <Text className="text-xl font-semibold text-ink">{title}</Text>
               {subtitle ? <Text className="mt-1 text-sm text-muted">{subtitle}</Text> : null}
             </View>
             <Pressable
@@ -131,7 +131,7 @@ export function PinSheet({
           {amount || recipient ? (
             <View className="mb-5 rounded-2xl bg-lav-faint p-4">
               {amount ? (
-                <Text className="text-3xl font-extrabold tracking-tight text-ink">{amount}</Text>
+                <Text className="text-3xl font-bold tracking-tight text-ink">{amount}</Text>
               ) : null}
               {recipient ? (
                 <View className="mt-1 flex-row items-center">
@@ -148,7 +148,7 @@ export function PinSheet({
 
           {loading ? (
             <View className="items-center py-14">
-              <ActivityIndicator size="large" color={colors.navy} />
+              <ActivityIndicator size="large" color={colors.brand} />
               <Text className="mt-4 text-sm text-muted">Processing your payment…</Text>
             </View>
           ) : mode === 'bio' ? (
@@ -175,10 +175,10 @@ export function PinSheet({
               {bioFailed ? (
                 <Pressable
                   onPress={() => void tryBiometric()}
-                  className="mt-5 flex-row items-center rounded-full bg-lav px-6 py-2.5 active:opacity-80"
+                  className="mt-5 flex-row items-center rounded-full bg-lav-soft px-6 py-2.5 active:opacity-80"
                 >
-                  <Ionicons name="refresh" size={16} color={colors.navy} style={{ marginRight: 6 }} />
-                  <Text className="text-sm font-semibold text-navy">Try again</Text>
+                  <Ionicons name="refresh" size={16} color={colors.brand} style={{ marginRight: 6 }} />
+                  <Text className="text-sm font-semibold text-brand">Try again</Text>
                 </Pressable>
               ) : null}
               <Pressable onPress={() => setMode('pin')} className="mt-4 active:opacity-70" hitSlop={8}>
