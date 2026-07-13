@@ -27,8 +27,8 @@ interface Style {
 }
 
 const STYLES: Record<WalletType, Style> = {
-  main: { gradient: ['#001736', '#002b5c'], onDark: true, label: 'MAIN', icon: 'shield-checkmark' },
-  shared: { gradient: ['#036045', '#0f9d6b'], onDark: true, label: 'SHARED', icon: 'people' },
+  main: { gradient: ['#0a1f44', '#12376e'], onDark: true, label: 'MAIN', icon: 'shield-checkmark' },
+  shared: { gradient: ['#1f6feb', '#1657c9'], onDark: true, label: 'SHARED', icon: 'people' },
   project: { gradient: ['#e9f0ff', '#d3e4fe'], onDark: false, label: 'PROJECT', icon: 'flag' },
 };
 

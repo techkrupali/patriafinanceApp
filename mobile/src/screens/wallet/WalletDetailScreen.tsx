@@ -21,8 +21,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const HERO: Record<WalletType, { gradient: readonly [string, string]; label: string }> = {
   main: { gradient: gradients.navy, label: 'MAIN' },
-  shared: { gradient: ['#036045', '#0f9d6b'], label: 'SHARED' },
-  project: { gradient: ['#3a2f6b', '#5b4bb0'], label: 'PROJECT' },
+  shared: { gradient: gradients.brand, label: 'SHARED' },
+  project: { gradient: gradients.mint, label: 'PROJECT' },
 };
 
 function ActionButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
