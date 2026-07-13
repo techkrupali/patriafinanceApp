@@ -9,8 +9,11 @@ import type { AuthScreenProps } from '../../navigation/types';
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   return (
     <Screen withBottomInset>
-      {/* Faint blue banner at the very top */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320, backgroundColor: '#f5f8fe' }} />
+      {/* Faint blue banner at the very top (decorative — never intercept touches) */}
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320, backgroundColor: '#f5f8fe' }}
+      />
 
       <View className="flex-1 items-center justify-center px-8">
         <View className="h-[88px] w-[88px] items-center justify-center rounded-[28px] bg-lav-soft">

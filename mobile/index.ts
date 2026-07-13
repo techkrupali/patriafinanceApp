@@ -1,3 +1,7 @@
+// Must be the very first import so gesture-handler sets up native touch handling
+// before anything else — required for React Navigation touches on Android.
+import 'react-native-gesture-handler';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
