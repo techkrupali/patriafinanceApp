@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, View, ViewStyle } from 'react-native';
+import { View, ViewStyle } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 
 interface CardProps {
   children: React.ReactNode;

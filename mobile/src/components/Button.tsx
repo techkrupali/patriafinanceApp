@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
-import { ActivityIndicator, Animated, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { selection } from '../lib/haptics';

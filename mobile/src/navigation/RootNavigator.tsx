@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -53,6 +54,21 @@ function MainTabs() {
     <Tabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        // Default tab button uses RN Pressable, which doesn't fire onPress inside
+        // native-stack on physical Android + New Arch. Use the RNGH Pressable.
+        tabBarButton: (props) => (
+          <GHPressable
+            onPress={props.onPress as never}
+            onLongPress={(props.onLongPress ?? undefined) as never}
+            disabled={props.disabled ?? undefined}
+            accessibilityRole="button"
+            accessibilityState={props.accessibilityState}
+            android_ripple={{ color: 'transparent', borderless: false }}
+            style={props.style as object}
+          >
+            {props.children}
+          </GHPressable>
+        ),
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.faded,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 4 },
