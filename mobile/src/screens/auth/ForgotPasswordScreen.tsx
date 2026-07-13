@@ -74,7 +74,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
           {phase === 'request' ? (
             <>
-              <Text className="text-[26px] font-semibold tracking-tight text-ink">Forgot your password?</Text>
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Forgot your password?</Text>
               <Text className="mt-2 text-[15px] leading-6 text-muted">
                 Enter your email or phone number and we'll send you a reset code.
               </Text>
@@ -94,7 +94,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
             </>
           ) : (
             <>
-              <Text className="text-[26px] font-semibold tracking-tight text-ink">Enter reset code</Text>
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Enter reset code</Text>
               <Text className="mt-2 text-[15px] leading-6 text-muted">
                 We sent a 6-digit code to{' '}
                 <Text className="font-semibold text-ink">{sentTo ?? identifier}</Text>.

@@ -32,7 +32,7 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-page" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <View className="flex-row items-center px-5 py-3">
-          <Text className="flex-1 text-xl font-semibold text-ink">Select bank</Text>
+          <Text className="flex-1 text-xl font-extrabold text-ink">Select bank</Text>
           <Pressable
             onPress={onClose}
             hitSlop={8}
@@ -57,7 +57,7 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
 
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color={colors.brand} />
+            <ActivityIndicator size="large" color={colors.navy} />
           </View>
         ) : error ? (
           <LoadError message={(error as Error).message} onRetry={() => refetch()} />
@@ -77,11 +77,11 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
                     setSearch('');
                   }}
                   className={`mb-2 flex-row items-center rounded-2xl p-4 active:opacity-80 ${
-                    isSelected ? 'bg-lav' : 'bg-lav-faint'
+                    isSelected ? 'bg-lav' : 'bg-white'
                   }`}
                 >
-                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-lav-soft">
-                    <Text className="text-sm font-semibold text-brand">
+                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-soft">
+                    <Text className="text-sm font-bold text-navy">
                       {item.bank_name.charAt(0).toUpperCase()}
                     </Text>
                   </View>

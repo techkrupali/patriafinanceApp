@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { PinPad } from '../../components/PinPad';
 import { ErrorText } from '../../components/ErrorText';
-import { colors } from '../../theme';
+import { colors, gradients, shadow } from '../../theme';
 import { useRegister } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { getBiometricSupport, runBiometricPrompt, saveTxnPin, type BiometricSupport } from '../../lib/biometrics';
@@ -27,13 +28,15 @@ interface OtpParams {
 function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
   return (
     <View className="px-6 pt-1">
-      <View className="h-2 overflow-hidden rounded-full bg-lav-faint">
-        <View
-          className="h-full rounded-full bg-brand"
-          style={{ width: `${(step / 3) * 100}%` }}
+      <View className="h-2 overflow-hidden rounded-full bg-lav">
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ height: '100%', width: `${(step / 3) * 100}%`, borderRadius: 999 }}
         />
       </View>
-      <Text className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-muted">Step {step} / 3</Text>
+      <Text className="mt-2 text-[11px] font-bold uppercase tracking-widest text-muted">Step {step} / 3</Text>
     </View>
   );
 }
@@ -198,11 +201,12 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
         <Pressable
           onPress={back}
           hitSlop={8}
-          className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-lav-faint active:opacity-70"
+          className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
+          style={shadow.soft}
         >
           <Ionicons name="chevron-back" size={22} color={colors.ink} />
         </Pressable>
-        <Text className="text-[17px] font-semibold text-ink">
+        <Text className="text-lg font-bold text-ink">
           {phase === 'biometric' ? 'Almost done' : 'Create account'}
         </Text>
       </View>
@@ -213,7 +217,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
         <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
           {phase === 'form' && step === 1 ? (
             <>
-              <Text className="text-[26px] font-semibold tracking-tight text-ink">Personal details</Text>
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Personal details</Text>
               <Text className="mt-2 text-[15px] text-muted">Tell us a little about yourself.</Text>
               <View className="mt-6" style={{ gap: 16 }}>
                 <Input label="First name" icon="person-outline" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
@@ -245,10 +249,10 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
           {phase === 'form' && step === 2 ? (
             <>
               <View className="items-center">
-                <View className="h-14 w-14 items-center justify-center rounded-3xl bg-lav-soft">
-                  <Ionicons name="shield-checkmark-outline" size={26} color={colors.brand} />
+                <View className="h-14 w-14 items-center justify-center rounded-3xl bg-navy" style={shadow.card}>
+                  <Ionicons name="shield-checkmark" size={26} color={colors.brandGlow} />
                 </View>
-                <Text className="mt-4 text-[26px] font-semibold tracking-tight text-ink">Secure your vault</Text>
+                <Text className="mt-4 text-3xl font-extrabold tracking-tight text-ink">Secure your vault</Text>
                 <Text className="mt-2 text-center text-[15px] text-muted">
                   {confirming
                     ? 'Confirm your 4-digit transaction PIN.'
@@ -264,7 +268,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
 
           {phase === 'form' && step === 3 ? (
             <>
-              <Text className="text-[26px] font-semibold tracking-tight text-ink">Set a password</Text>
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Set a password</Text>
               <Text className="mt-2 text-[15px] text-muted">
                 At least 8 characters. You will use this to sign in.
               </Text>
@@ -299,10 +303,10 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
 
           {phase === 'biometric' ? (
             <View className="items-center pt-6">
-              <View className="h-24 w-24 items-center justify-center rounded-full bg-lav-soft">
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-success-soft">
                 <Ionicons name={support?.icon ?? 'finger-print'} size={46} color={colors.brand} />
               </View>
-              <Text className="mt-6 text-center text-[26px] font-semibold tracking-tight text-ink">
+              <Text className="mt-6 text-center text-3xl font-extrabold tracking-tight text-ink">
                 Enable {support?.label}?
               </Text>
               <Text className="mt-3 text-center text-[15px] leading-6 text-muted">

@@ -40,7 +40,7 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.brand} />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={() => refetch()} />
@@ -61,7 +61,7 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
             </Text>
             <View className="mt-2 flex-row items-center justify-between">
               <Text
-                className="text-[30px] font-bold text-ink"
+                className="text-[30px] font-extrabold text-ink"
                 style={{ letterSpacing: 3, fontVariant: ['tabular-nums'] }}
               >
                 {data.account_number}
@@ -69,8 +69,8 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
             </View>
             <Pressable
               onPress={() => void copy()}
-              className={`mt-4 flex-row items-center justify-center rounded-full py-3.5 active:opacity-80 ${
-                copied ? 'bg-success-soft' : 'bg-brand'
+              className={`mt-4 flex-row items-center justify-center rounded-2xl py-3.5 active:opacity-80 ${
+                copied ? 'bg-success-soft' : 'bg-navy'
               }`}
             >
               <Ionicons

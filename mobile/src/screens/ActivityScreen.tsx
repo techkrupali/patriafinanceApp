@@ -42,7 +42,7 @@ export function ActivityScreen() {
   return (
     <Screen>
       <View className="px-5 pt-4">
-        <Text className="text-[26px] font-semibold tracking-tight text-ink">Activity</Text>
+        <Text className="text-3xl font-extrabold tracking-tight text-ink">Activity</Text>
 
         {/* Search */}
         <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint px-4" style={{ minHeight: 50 }}>
@@ -66,7 +66,7 @@ export function ActivityScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.brand} />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={refetch} />
@@ -75,7 +75,7 @@ export function ActivityScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.brand} />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.navy} />
           }
         >
           {sections.length === 0 ? (

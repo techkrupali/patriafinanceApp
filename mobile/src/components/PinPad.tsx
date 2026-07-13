@@ -35,7 +35,7 @@ function Dot({ filled }: { filled: boolean }) {
         height: 16,
         width: 16,
         borderRadius: 8,
-        backgroundColor: filled ? colors.brand : colors.lav,
+        backgroundColor: filled ? colors.navy : colors.lav,
         transform: [{ scale }],
       }}
     />

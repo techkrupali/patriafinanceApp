@@ -2,7 +2,8 @@ import React, { useRef } from 'react';
 import { ActivityIndicator, Animated, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, gradients, shadow } from '../theme';
 import { selection } from '../lib/haptics';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -19,23 +20,29 @@ interface ButtonProps {
   className?: string;
 }
 
-const surface: Record<Variant, string> = {
-  primary: 'bg-brand',
-  secondary: 'bg-lav-soft',
+const surface: Record<Exclude<Variant, 'primary'>, string> = {
+  secondary: 'bg-lav',
   ghost: 'bg-transparent',
   danger: 'bg-danger-soft',
 };
 
 const textColor: Record<Variant, string> = {
   primary: 'text-white',
-  secondary: 'text-brand',
+  secondary: 'text-navy',
   ghost: 'text-brand',
   danger: 'text-danger',
 };
 
 const iconColor: Record<Variant, string> = {
   primary: colors.white,
-  secondary: colors.brand,
+  secondary: colors.navy,
+  ghost: colors.brand,
+  danger: colors.danger,
+};
+
+const spinnerColor: Record<Variant, string> = {
+  primary: colors.white,
+  secondary: colors.navy,
   ghost: colors.brand,
   danger: colors.danger,
 };
@@ -63,7 +70,7 @@ export function Button({
   };
 
   const content = loading ? (
-    <ActivityIndicator color={iconColor[variant]} />
+    <ActivityIndicator color={spinnerColor[variant]} />
   ) : (
     <View className="flex-row items-center justify-center">
       {icon && iconPosition === 'left' ? (
@@ -85,14 +92,37 @@ export function Button({
         disabled={isDisabled}
         className={`w-full ${className}`}
       >
-        <View
-          style={{ minHeight: 52 }}
-          className={`w-full items-center justify-center rounded-full px-5 py-4 ${surface[variant]} ${
-            isDisabled ? 'opacity-50' : 'active:opacity-90'
-          }`}
-        >
-          {content}
-        </View>
+        {variant === 'primary' ? (
+          <LinearGradient
+            colors={gradients.navy}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              {
+                minHeight: 54,
+                borderRadius: 18,
+                width: '100%',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 20,
+                paddingVertical: 16,
+              },
+              !isDisabled ? shadow.soft : undefined,
+              isDisabled ? { opacity: 0.5 } : undefined,
+            ]}
+          >
+            {content}
+          </LinearGradient>
+        ) : (
+          <View
+            style={{ minHeight: 54 }}
+            className={`w-full items-center justify-center rounded-[18px] px-5 py-4 ${surface[variant]} ${
+              isDisabled ? 'opacity-50' : ''
+            }`}
+          >
+            {content}
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );

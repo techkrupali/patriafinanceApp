@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -71,32 +70,19 @@ function MainTabs() {
         ),
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.faded,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 4 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarItemStyle: { paddingTop: 8 },
         tabBarStyle: {
           backgroundColor: colors.white,
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          height: 66 + insets.bottom,
+          height: 62 + insets.bottom,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-          paddingTop: 8,
+          paddingTop: 6,
           ...shadow.tab,
         },
-        tabBarIcon: ({ focused }) => (
-          <View
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 4,
-              borderRadius: 999,
-              backgroundColor: focused ? colors.lav : 'transparent',
-            }}
-          >
-            <Ionicons
-              name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off}
-              size={20}
-              color={focused ? colors.brand : colors.faded}
-            />
-          </View>
+        tabBarIcon: ({ focused, color }) => (
+          <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
         ),
       })}
     >

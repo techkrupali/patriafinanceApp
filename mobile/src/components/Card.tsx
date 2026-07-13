@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, ViewStyle } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import { shadow } from '../theme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -9,18 +10,18 @@ interface CardProps {
   onPress?: () => void;
 }
 
-/** Flat light card: soft gray-blue fill, rounded-[20px], no shadow. Press feedback when `onPress` is set. */
+/** White rounded-3xl card with a soft navy shadow. Adds press feedback when `onPress` is set. */
 export function Card({ children, className = '', style, onPress }: CardProps) {
-  const classes = `bg-lav-faint rounded-[20px] p-5 ${className}`;
+  const classes = `bg-white rounded-3xl p-5 ${className}`;
   if (onPress) {
     return (
-      <Pressable onPress={onPress} className={`${classes} active:opacity-90`} style={style}>
+      <Pressable onPress={onPress} className={`${classes} active:opacity-90`} style={[shadow.card, style]}>
         {children}
       </Pressable>
     );
   }
   return (
-    <View className={classes} style={style}>
+    <View className={classes} style={[shadow.card, style]}>
       {children}
     </View>
   );

@@ -28,7 +28,7 @@ export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.brand} />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={() => refetch()} />
@@ -37,7 +37,7 @@ export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.brand} />
+            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
           }
         >
           <Text className="mb-4 text-[15px] text-muted">
@@ -50,14 +50,14 @@ export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
             <View style={{ gap: 10 }}>
               {(devices ?? []).map((d) => (
                 <Card key={d.id} className="flex-row items-center p-4">
-                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-full bg-lav-soft">
-                    <Ionicons name={platformIcon[d.platform ?? ''] ?? 'hardware-chip-outline'} size={22} color={colors.brand} />
+                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                    <Ionicons name={platformIcon[d.platform ?? ''] ?? 'hardware-chip-outline'} size={22} color={colors.navy} />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-[15px] font-medium text-ink" numberOfLines={1}>
+                    <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
                       {d.device_name ?? 'Unknown device'}
                     </Text>
-                    <Text className="mt-0.5 text-xs text-muted">
+                    <Text className="mt-0.5 text-xs text-faded">
                       {d.platform ? `${d.platform} · ` : ''}
                       Last active {d.last_active_at ? timeLabel(d.last_active_at) : 'unknown'}
                     </Text>
