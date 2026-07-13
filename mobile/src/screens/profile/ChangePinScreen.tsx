@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { useChangePin } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
+import { saveTxnPin } from '../../lib/biometrics';
 import type { RootScreenProps } from '../../navigation/types';
 
 export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
   const user = useAuth((s) => s.user);
+  const biometricEnabled = useAuth((s) => s.biometricEnabled);
   const hasPin = user?.has_pin ?? true;
 
   const [password, setPassword] = useState('');
@@ -42,7 +43,9 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
     change.mutate(
       { password, new_pin: newPin, ...(hasPin ? { current_pin: currentPin } : {}) },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          // Keep the biometric-cached PIN in sync so authorize keeps working.
+          if (biometricEnabled) await saveTxnPin(newPin);
           Alert.alert('PIN updated', 'Your transaction PIN has been changed.', [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);
@@ -54,55 +57,56 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
 
   return (
     <Screen withBottomInset>
-      <Header title="Change Transaction PIN" />
+      <Header title="Change PIN" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
-          <Text className="text-sm leading-5 text-muted">
+          <Text className="text-[15px] leading-6 text-muted">
             Your PIN authorizes every transfer and withdrawal. Keep it secret.
           </Text>
-          <Card className="mt-5 p-5">
+          <View className="mt-6" style={{ gap: 16 }}>
             <Input
               label="Account password"
+              icon="lock-closed-outline"
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
+              placeholder="Your password"
               secureTextEntry
             />
             {hasPin ? (
               <Input
                 label="Current PIN"
+                icon="keypad-outline"
                 value={currentPin}
                 onChangeText={(t) => setCurrentPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
                 placeholder="••••"
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={4}
-                className="mt-4"
               />
             ) : null}
             <Input
               label="New PIN"
+              icon="keypad-outline"
               value={newPin}
               onChangeText={(t) => setNewPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
               placeholder="••••"
               keyboardType="number-pad"
               secureTextEntry
               maxLength={4}
-              className="mt-4"
             />
             <Input
               label="Confirm new PIN"
+              icon="keypad-outline"
               value={confirmPin}
               onChangeText={(t) => setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
               placeholder="••••"
               keyboardType="number-pad"
               secureTextEntry
               maxLength={4}
-              className="mt-4"
             />
-            <ErrorText message={error} className="mt-3" />
-            <Button title="Update PIN" onPress={submit} loading={change.isPending} className="mt-5" />
-          </Card>
+          </View>
+          <ErrorText message={error} className="mt-4" />
+          <Button title="Update PIN" icon="checkmark" onPress={submit} loading={change.isPending} className="mt-6" />
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

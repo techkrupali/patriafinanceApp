@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
@@ -75,34 +74,40 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
           {phase === 'request' ? (
             <>
-              <Text className="text-2xl font-bold text-ink">Forgot your password?</Text>
-              <Text className="mt-2 text-sm text-muted">
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Forgot your password?</Text>
+              <Text className="mt-2 text-[15px] leading-6 text-muted">
                 Enter your email or phone number and we'll send you a reset code.
               </Text>
-              <Card className="mt-6 p-5">
+              <View className="mt-6">
                 <Input
                   label="Email or phone"
+                  icon="mail-outline"
                   value={identifier}
                   onChangeText={setIdentifier}
                   placeholder="you@example.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
-                <ErrorText message={error} className="mt-3" />
-                <Button title="Send Code" onPress={sendCode} loading={request.isPending} className="mt-5" />
-              </Card>
+                <ErrorText message={error} className="mt-4" />
+                <Button title="Send Code" icon="arrow-forward" onPress={sendCode} loading={request.isPending} className="mt-6" />
+              </View>
             </>
           ) : (
             <>
-              <Text className="text-2xl font-bold text-ink">Enter reset code</Text>
-              <Text className="mt-2 text-sm text-muted">
+              <Text className="text-3xl font-extrabold tracking-tight text-ink">Enter reset code</Text>
+              <Text className="mt-2 text-[15px] leading-6 text-muted">
                 We sent a 6-digit code to{' '}
                 <Text className="font-semibold text-ink">{sentTo ?? identifier}</Text>.
               </Text>
-              {hint ? <Text className="mt-2 text-xs text-faded">Dev code: {hint}</Text> : null}
-              <Card className="mt-6 p-5">
+              {hint ? (
+                <View className="mt-3 self-start rounded-full bg-lav-faint px-3 py-1">
+                  <Text className="text-xs font-medium text-muted">Dev code: {hint}</Text>
+                </View>
+              ) : null}
+              <View className="mt-6" style={{ gap: 16 }}>
                 <Input
                   label="Reset code"
+                  icon="keypad-outline"
                   value={code}
                   onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
                   placeholder="123456"
@@ -111,23 +116,23 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                 />
                 <Input
                   label="New password"
+                  icon="lock-closed-outline"
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="••••••••"
+                  placeholder="At least 8 characters"
                   secureTextEntry
-                  className="mt-4"
                 />
                 <Input
                   label="Confirm new password"
+                  icon="lock-closed-outline"
                   value={passwordConfirm}
                   onChangeText={setPasswordConfirm}
-                  placeholder="••••••••"
+                  placeholder="Re-enter new password"
                   secureTextEntry
-                  className="mt-4"
                 />
-                <ErrorText message={error} className="mt-3" />
-                <Button title="Reset Password" onPress={submitReset} loading={reset.isPending} className="mt-5" />
-              </Card>
+              </View>
+              <ErrorText message={error} className="mt-4" />
+              <Button title="Reset Password" icon="checkmark" onPress={submitReset} loading={reset.isPending} className="mt-6" />
             </>
           )}
         </ScrollView>

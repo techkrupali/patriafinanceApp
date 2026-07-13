@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ViewStyle } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ScreenProps {
@@ -26,6 +27,7 @@ export function Screen({ children, className = '', withBottomInset = false, styl
         style,
       ]}
     >
+      <StatusBar style="dark" />
       {children}
     </View>
   );

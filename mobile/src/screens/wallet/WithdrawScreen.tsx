@@ -9,15 +9,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
+import { colors } from '../../theme';
 import { useVerifyAccount, useWithdraw } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import type { Bank, Transaction } from '../../api/types';
@@ -106,72 +107,80 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
     <Screen withBottomInset>
       <Header title="Withdraw" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
-          {/* Bank picker field */}
-          <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">Bank</Text>
+        <ScrollView
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Amount hero */}
+          <View className="items-center rounded-3xl bg-lav-faint py-8">
+            <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
+            <View className="mt-2 flex-row items-center justify-center">
+              <Text className="text-4xl font-extrabold text-faded">₦</Text>
+              <TextInput
+                value={amount}
+                onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                placeholder="0.00"
+                placeholderTextColor={colors.faded}
+                keyboardType="decimal-pad"
+                className="ml-1 min-w-[120px] text-center text-5xl font-extrabold text-ink"
+              />
+            </View>
+          </View>
+
+          {/* Destination */}
+          <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">Withdraw to</Text>
           <Pressable
             onPress={() => setBankPickerOpen(true)}
-            className="mt-2 flex-row items-center justify-between rounded-2xl bg-lav px-4 py-3.5 active:opacity-80"
+            className="mt-2 flex-row items-center rounded-2xl bg-lav-faint px-4"
+            style={{ minHeight: 52 }}
           >
-            <Text className={`text-base ${bank ? 'text-ink' : 'text-faded'}`}>
+            <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
+            <Text className={`flex-1 text-[15px] ${bank ? 'text-ink' : 'text-faded'}`}>
               {bank?.bank_name ?? 'Select a bank'}
             </Text>
-            <Text className="text-base text-muted">▾</Text>
+            <Ionicons name="chevron-down" size={18} color={colors.muted} />
           </Pressable>
 
           <Input
             label="Account number"
+            icon="card-outline"
             value={accountNumber}
             onChangeText={(t) => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
             placeholder="0123456789"
             keyboardType="number-pad"
             maxLength={10}
-            className="mt-5"
+            containerClassName="mt-4"
           />
 
           {/* Verification state */}
           {verify.isPending ? (
             <View className="mt-3 flex-row items-center">
-              <ActivityIndicator size="small" color="#006c49" />
+              <ActivityIndicator size="small" color={colors.brand} />
               <Text className="ml-2 text-sm text-muted">Verifying account…</Text>
             </View>
           ) : verified ? (
-            <View className="mt-3 flex-row items-center self-start rounded-full bg-success px-3.5 py-2">
-              <Text className="text-[13px] font-bold text-brand">✓ {verified.account_name}</Text>
+            <View className="mt-3 flex-row items-center self-start rounded-full bg-success-soft px-3.5 py-2">
+              <Ionicons name="checkmark-circle" size={16} color={colors.brand} style={{ marginRight: 6 }} />
+              <Text className="text-[13px] font-bold text-brand">{verified.account_name}</Text>
             </View>
           ) : (
             <ErrorText message={verifyError} className="mt-3" />
           )}
 
-          {/* Amount */}
-          <Card className="mt-6 items-center p-6">
-            <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">
-              Amount
-            </Text>
-            <View className="mt-2 flex-row items-center justify-center">
-              <Text className="text-3xl font-bold text-faded">₦</Text>
-              <TextInput
-                value={amount}
-                onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
-                placeholder="0.00"
-                placeholderTextColor="#94a3b8"
-                keyboardType="decimal-pad"
-                className="ml-1 min-w-[120px] text-center text-4xl font-bold text-ink"
-              />
-            </View>
-          </Card>
-
           <Input
             label="Description (optional)"
+            icon="create-outline"
             value={description}
             onChangeText={setDescription}
             placeholder="What's this for?"
             maxLength={200}
-            className="mt-5"
+            containerClassName="mt-5"
           />
 
           <Button
             title="Continue"
+            icon="arrow-forward"
             onPress={() => {
               setPinError(null);
               setPinOpen(true);
@@ -184,6 +193,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
 
       <BankPicker
         visible={bankPickerOpen}
+        selectedCode={bank?.bank_code}
         onSelect={(b) => {
           setBank(b);
           setBankPickerOpen(false);
@@ -194,9 +204,9 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
       <PinSheet
         visible={pinOpen}
         title="Authorize withdrawal"
-        subtitle={`Enter your PIN to send ${amount ? formatMoney(amount) : ''} to ${
-          verified?.account_name ?? ''
-        }`}
+        subtitle="Confirm to send this withdrawal"
+        amount={amount ? formatMoney(amount) : undefined}
+        recipient={verified?.account_name}
         loading={withdraw.isPending}
         error={pinError}
         onSubmit={authorize}

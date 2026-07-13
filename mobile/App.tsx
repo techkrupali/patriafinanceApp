@@ -1,12 +1,15 @@
 import './global.css';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuth } from './src/store/auth';
+import { colors, gradients } from './src/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,15 +22,19 @@ const queryClient = new QueryClient({
 
 function Splash() {
   return (
-    <View className="flex-1 items-center justify-center bg-navy">
-      <View className="h-16 w-16 items-center justify-center rounded-2xl bg-white/10" style={{ transform: [{ rotate: '45deg' }] }}>
-        <Text className="text-2xl font-bold text-white" style={{ transform: [{ rotate: '-45deg' }] }}>
-          P
+    <LinearGradient colors={gradients.navyDeep} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }}>
+      <StatusBar style="light" />
+      <View className="flex-1 items-center justify-center">
+        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-white/10">
+          <Ionicons name="shield-checkmark" size={38} color={colors.brandGlow} />
+        </View>
+        <Text className="mt-6 text-2xl font-extrabold tracking-tight text-white">Patriai</Text>
+        <Text className="mt-1 text-xs font-semibold uppercase tracking-widest text-brand-glow">
+          Secure Portal
         </Text>
+        <ActivityIndicator className="mt-8" color={colors.brandGlow} />
       </View>
-      <Text className="mt-6 text-xl font-bold text-white">Patriai</Text>
-      <ActivityIndicator className="mt-6" color="#6cf8bb" />
-    </View>
+    </LinearGradient>
   );
 }
 

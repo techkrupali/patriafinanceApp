@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
@@ -48,33 +47,37 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
       <Header title="Change Password" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
-          <Card className="p-5">
+          <Text className="text-[15px] leading-6 text-muted">
+            Choose a strong password you don't use anywhere else.
+          </Text>
+          <View className="mt-6" style={{ gap: 16 }}>
             <Input
               label="Current password"
+              icon="lock-closed-outline"
               value={current}
               onChangeText={setCurrent}
-              placeholder="••••••••"
+              placeholder="Your current password"
               secureTextEntry
             />
             <Input
               label="New password"
+              icon="lock-open-outline"
               value={next}
               onChangeText={setNext}
               placeholder="At least 8 characters"
               secureTextEntry
-              className="mt-4"
             />
             <Input
               label="Confirm new password"
+              icon="lock-open-outline"
               value={confirm}
               onChangeText={setConfirm}
-              placeholder="••••••••"
+              placeholder="Re-enter new password"
               secureTextEntry
-              className="mt-4"
             />
-            <ErrorText message={error} className="mt-3" />
-            <Button title="Update Password" onPress={submit} loading={change.isPending} className="mt-5" />
-          </Card>
+          </View>
+          <ErrorText message={error} className="mt-4" />
+          <Button title="Update Password" icon="checkmark" onPress={submit} loading={change.isPending} className="mt-6" />
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

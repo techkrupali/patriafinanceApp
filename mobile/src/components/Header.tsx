@@ -1,37 +1,44 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { colors, shadow } from '../theme';
+import { selection } from '../lib/haptics';
 
 interface HeaderProps {
-  title: string;
+  title?: string;
   right?: React.ReactNode;
   className?: string;
 }
 
-/** In-screen header with a back chevron. */
-export function Header({ title, right, className = '' }: HeaderProps) {
+/** In-screen header: back chevron on the left, centered title, optional right action. */
+export function Header({ title = '', right, className = '' }: HeaderProps) {
   const navigation = useNavigation();
+  const canGoBack = navigation.canGoBack();
+
   return (
-    <View className={`flex-row items-center px-5 py-3 ${className}`}>
-      {navigation.canGoBack() ? (
-        <Pressable
-          onPress={() => navigation.goBack()}
-          className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-white active:opacity-70"
-          style={{
-            shadowColor: '#0b1c30',
-            shadowOpacity: 0.05,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 1,
-          }}
-        >
-          <Text className="text-xl text-ink">‹</Text>
-        </Pressable>
-      ) : null}
-      <Text className="flex-1 text-lg font-bold text-ink" numberOfLines={1}>
+    <View className={`flex-row items-center px-5 py-3 ${className}`} style={{ minHeight: 56 }}>
+      <View className="w-11">
+        {canGoBack ? (
+          <Pressable
+            onPress={() => {
+              selection();
+              navigation.goBack();
+            }}
+            hitSlop={8}
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
+            style={shadow.soft}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.ink} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <Text className="flex-1 text-center text-lg font-bold text-ink" numberOfLines={1}>
         {title}
       </Text>
-      {right}
+
+      <View className="w-11 items-end">{right}</View>
     </View>
   );
 }

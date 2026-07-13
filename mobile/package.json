@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@react-navigation/bottom-tabs": "^7.18.8",
     "@react-navigation/native": "^7.3.8",
     "@react-navigation/native-stack": "^7.17.10",
@@ -10,6 +11,8 @@
     "babel-preset-expo": "~57.0.0",
     "expo": "~57.0.4",
     "expo-clipboard": "~57.0.0",
+    "expo-haptics": "~57.0.0",
+    "expo-linear-gradient": "~57.0.0",
     "expo-local-authentication": "~57.0.0",
     "expo-secure-store": "~57.0.0",
     "expo-status-bar": "~57.0.0",

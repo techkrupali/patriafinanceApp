@@ -1,65 +1,146 @@
 import React from 'react';
-import { Pressable, Text, View, ViewStyle } from 'react-native';
-import type { Wallet } from '../api/types';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import type { Wallet, WalletType } from '../api/types';
+import { colors, shadow } from '../theme';
 import { formatMoney } from '../lib/format';
+import { selection } from '../lib/haptics';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface WalletCardProps {
   wallet: Wallet;
   onPress?: () => void;
+  onFund?: () => void;
+  onWithdraw?: () => void;
+  onSend?: () => void;
   className?: string;
 }
 
-const typeBadge: Record<string, { bg: string; text: string; label: string }> = {
-  main: { bg: 'bg-lav', text: 'text-navy', label: 'MAIN' },
-  shared: { bg: 'bg-success', text: 'text-brand', label: 'SHARED' },
-  project: { bg: 'bg-lav-soft', text: 'text-navy-light', label: 'PROJECT' },
+interface Style {
+  gradient: readonly [string, string];
+  onDark: boolean;
+  label: string;
+  icon: IconName;
+}
+
+const STYLES: Record<WalletType, Style> = {
+  main: { gradient: ['#001736', '#002b5c'], onDark: true, label: 'MAIN', icon: 'shield-checkmark' },
+  shared: { gradient: ['#036045', '#0f9d6b'], onDark: true, label: 'SHARED', icon: 'people' },
+  project: { gradient: ['#e9f0ff', '#d3e4fe'], onDark: false, label: 'PROJECT', icon: 'flag' },
 };
 
-const shadow: ViewStyle = {
-  shadowColor: '#0b1c30',
-  shadowOpacity: 0.06,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 2,
-};
-
-export function WalletCard({ wallet, onPress, className = '' }: WalletCardProps) {
-  const badge = typeBadge[wallet.type] ?? typeBadge.main;
-  const isMember = wallet.my_role && wallet.my_role !== 'owner';
-
+function MiniAction({
+  icon,
+  label,
+  onDark,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  onDark: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
-      onPress={onPress}
-      className={`rounded-2xl bg-white p-4 active:opacity-90 ${className}`}
-      style={shadow}
+      onPress={() => {
+        selection();
+        onPress();
+      }}
+      className="items-center active:opacity-70"
     >
-      <View className="flex-row items-center justify-between">
-        <Text className="flex-1 pr-2 text-base font-semibold text-ink" numberOfLines={1}>
-          {wallet.name}
-        </Text>
-        <View className={`rounded-full px-2.5 py-1 ${badge.bg}`}>
-          <Text className={`text-[10px] font-bold tracking-widest ${badge.text}`}>
-            {badge.label}
-          </Text>
-        </View>
+      <View
+        className={`h-10 w-10 items-center justify-center rounded-2xl ${onDark ? 'bg-white/20' : 'bg-white'}`}
+      >
+        <Ionicons name={icon} size={18} color={onDark ? colors.white : colors.navy} />
       </View>
+      <Text className={`mt-1 text-[10px] font-semibold ${onDark ? 'text-white/80' : 'text-navy'}`}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
-      <Text className="mt-3 text-2xl font-bold text-ink">{formatMoney(wallet.balance)}</Text>
+export function WalletCard({ wallet, onPress, onFund, onWithdraw, onSend, className = '' }: WalletCardProps) {
+  const s = STYLES[wallet.type] ?? STYLES.main;
+  const isMember = wallet.my_role && wallet.my_role !== 'owner';
+  const primaryText = s.onDark ? 'text-white' : 'text-ink';
+  const mutedText = s.onDark ? 'text-white/60' : 'text-muted';
+  const showActions = Boolean(onFund || onWithdraw || onSend);
 
-      {isMember ? (
-        <View className="mt-2 flex-row items-center">
-          <View className="rounded-full bg-lav-faint px-2 py-0.5">
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-              {wallet.my_role}
+  return (
+    <Pressable onPress={onPress} className={`active:opacity-95 ${className}`} style={shadow.card}>
+      <LinearGradient
+        colors={s.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 24, padding: 20 }}
+      >
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <View
+              className={`mr-2.5 h-9 w-9 items-center justify-center rounded-2xl ${
+                s.onDark ? 'bg-white/20' : 'bg-navy'
+              }`}
+            >
+              <Ionicons name={s.icon} size={18} color={s.onDark ? colors.brandGlow : colors.white} />
+            </View>
+            <Text className={`text-base font-bold ${primaryText}`} numberOfLines={1}>
+              {wallet.name}
             </Text>
           </View>
-          {wallet.owner ? (
-            <Text className="ml-2 text-xs text-faded" numberOfLines={1}>
-              Owner: {wallet.owner.name}
+          <View className={`rounded-full px-2.5 py-1 ${s.onDark ? 'bg-white/20' : 'bg-white'}`}>
+            <Text
+              className={`text-[10px] font-bold tracking-widest ${s.onDark ? 'text-white' : 'text-navy'}`}
+            >
+              {s.label}
             </Text>
-          ) : null}
+          </View>
         </View>
-      ) : null}
+
+        <Text className={`mt-4 text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
+          Balance
+        </Text>
+        <Text className={`mt-0.5 text-3xl font-extrabold tracking-tight ${primaryText}`}>
+          {formatMoney(wallet.balance)}
+        </Text>
+
+        {isMember ? (
+          <View className="mt-2 flex-row items-center">
+            <View className={`rounded-full px-2 py-0.5 ${s.onDark ? 'bg-white/20' : 'bg-lav-faint'}`}>
+              <Text
+                className={`text-[10px] font-bold uppercase tracking-wider ${
+                  s.onDark ? 'text-white/80' : 'text-muted'
+                }`}
+              >
+                {wallet.my_role}
+              </Text>
+            </View>
+            {wallet.owner ? (
+              <Text className={`ml-2 text-xs ${mutedText}`} numberOfLines={1}>
+                Owner: {wallet.owner.name}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {showActions ? (
+          <View
+            className={`mt-5 flex-row items-center justify-around border-t pt-4 ${
+              s.onDark ? 'border-white/10' : 'border-navy/10'
+            }`}
+          >
+            {onFund ? <MiniAction icon="add" label="Fund" onDark={s.onDark} onPress={onFund} /> : null}
+            {onSend ? (
+              <MiniAction icon="paper-plane" label="Send" onDark={s.onDark} onPress={onSend} />
+            ) : null}
+            {onWithdraw ? (
+              <MiniAction icon="arrow-down" label="Withdraw" onDark={s.onDark} onPress={onWithdraw} />
+            ) : null}
+          </View>
+        ) : null}
+      </LinearGradient>
     </Pressable>
   );
 }

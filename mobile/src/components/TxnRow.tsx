@@ -1,41 +1,50 @@
 import React from 'react';
-import { Text, View, ViewStyle } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Transaction } from '../api/types';
+import { colors, shadow } from '../theme';
 import { formatMoney, humanizeType, timeLabel } from '../lib/format';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface TxnRowProps {
   txn: Transaction;
   /** Optional wallet name shown in the subtitle. */
   walletName?: string;
+  onPress?: () => void;
   className?: string;
 }
 
-const shadow: ViewStyle = {
-  shadowColor: '#0b1c30',
-  shadowOpacity: 0.05,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 1,
-};
+function visuals(txn: Transaction): { icon: IconName; tile: string; tint: string } {
+  const t = txn.type.toLowerCase();
+  if (t.includes('withdraw')) {
+    return { icon: 'cash-outline', tile: 'bg-lav', tint: colors.navy };
+  }
+  if (t.includes('fund') || t.includes('deposit') || t.includes('top')) {
+    return { icon: 'add-circle', tile: 'bg-success-soft', tint: colors.brand };
+  }
+  if (txn.direction === 'credit') {
+    return { icon: 'arrow-down-circle', tile: 'bg-success-soft', tint: colors.brand };
+  }
+  return { icon: 'arrow-up-circle', tile: 'bg-lav', tint: colors.navy };
+}
 
-export function TxnRow({ txn, walletName, className = '' }: TxnRowProps) {
+export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps) {
   const credit = txn.direction === 'credit';
   const title = txn.description || humanizeType(txn.type);
-  const subtitleParts = [walletName, timeLabel(txn.created_at), txn.reference].filter(Boolean);
+  const subtitleParts = [walletName, timeLabel(txn.created_at)].filter(Boolean);
+  const v = visuals(txn);
+
+  const Container: typeof Pressable | typeof View = onPress ? Pressable : View;
 
   return (
-    <View
-      className={`flex-row items-center rounded-2xl bg-white p-3.5 ${className}`}
-      style={shadow}
+    <Container
+      onPress={onPress}
+      className={`flex-row items-center rounded-3xl bg-white p-4 ${onPress ? 'active:opacity-90' : ''} ${className}`}
+      style={shadow.soft}
     >
-      <View
-        className={`mr-3 h-11 w-11 items-center justify-center rounded-2xl ${
-          credit ? 'bg-success' : 'bg-lav-soft'
-        }`}
-      >
-        <Text className={`text-lg font-bold ${credit ? 'text-brand' : 'text-navy'}`}>
-          {credit ? '↑' : '↓'}
-        </Text>
+      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-2xl ${v.tile}`}>
+        <Ionicons name={v.icon} size={22} color={v.tint} />
       </View>
 
       <View className="flex-1 pr-2">
@@ -53,11 +62,11 @@ export function TxnRow({ txn, walletName, className = '' }: TxnRowProps) {
           {formatMoney(txn.amount)}
         </Text>
         {txn.status !== 'successful' ? (
-          <Text className="mt-0.5 text-[10px] uppercase tracking-wider text-faded">
-            {txn.status}
-          </Text>
+          <View className="mt-1 rounded-full bg-lav-faint px-2 py-0.5">
+            <Text className="text-[10px] font-semibold uppercase tracking-wider text-muted">{txn.status}</Text>
+          </View>
         ) : null}
       </View>
-    </View>
+    </Container>
   );
 }

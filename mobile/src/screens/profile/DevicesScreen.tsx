@@ -1,18 +1,22 @@
 import React from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
+import { colors } from '../../theme';
 import { useDevices } from '../../api/hooks';
 import { timeLabel } from '../../lib/format';
 import type { RootScreenProps } from '../../navigation/types';
 
-const platformGlyph: Record<string, string> = {
-  android: '▣',
-  ios: '□',
-  web: '◍',
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const platformIcon: Record<string, IconName> = {
+  android: 'logo-android',
+  ios: 'logo-apple',
+  web: 'globe-outline',
 };
 
 export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
@@ -24,31 +28,30 @@ export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#001736" />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={() => refetch()} />
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 32 }}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor="#001736" />
+            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
           }
         >
-          <Text className="mb-4 text-sm text-muted">
+          <Text className="mb-4 text-[15px] text-muted">
             Devices that have signed in to your Patriai account.
           </Text>
 
           {(devices ?? []).length === 0 ? (
-            <EmptyState title="No devices" message="Registered devices will appear here." glyph="◫" />
+            <EmptyState title="No devices" message="Registered devices will appear here." icon="phone-portrait-outline" />
           ) : (
             <View style={{ gap: 10 }}>
               {(devices ?? []).map((d) => (
                 <Card key={d.id} className="flex-row items-center p-4">
-                  <View className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
-                    <Text className="text-lg text-navy">
-                      {platformGlyph[d.platform ?? ''] ?? '◫'}
-                    </Text>
+                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                    <Ionicons name={platformIcon[d.platform ?? ''] ?? 'hardware-chip-outline'} size={22} color={colors.navy} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>

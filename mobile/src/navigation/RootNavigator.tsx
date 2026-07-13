@@ -1,8 +1,11 @@
-import React from 'react';
-import { Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
+import { colors, shadow } from '../theme';
+import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
 // Auth screens
@@ -33,48 +36,43 @@ const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 
-const TAB_GLYPHS: Record<keyof MainTabParamList, string> = {
-  Home: '⌂',
-  Wallets: '▤',
-  AI: '✦',
-  Activity: '⇅',
-  Profile: '◎',
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TAB_ICONS: Record<keyof MainTabParamList, { on: IconName; off: IconName }> = {
+  Home: { on: 'home', off: 'home-outline' },
+  Wallets: { on: 'wallet', off: 'wallet-outline' },
+  AI: { on: 'sparkles', off: 'sparkles-outline' },
+  Activity: { on: 'time', off: 'time-outline' },
+  Profile: { on: 'person', off: 'person-outline' },
 };
 
-function TabIcon({ name, focused }: { name: keyof MainTabParamList; focused: boolean }) {
-  return (
-    <View
-      className={`items-center justify-center rounded-full px-4 py-1 ${
-        focused ? 'bg-success' : ''
-      }`}
-    >
-      <Text className={`text-base ${focused ? 'text-brand' : 'text-faded'}`}>
-        {TAB_GLYPHS[name]}
-      </Text>
-    </View>
-  );
-}
-
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#006c49',
-        tabBarInactiveTintColor: '#94a3b8',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.faded,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+        tabBarItemStyle: { paddingTop: 8 },
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#e2e8f0',
-          height: 84,
+          backgroundColor: colors.white,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          height: 62 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
           paddingTop: 6,
+          ...shadow.tab,
         },
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
+        tabBarIcon: ({ focused, color }) => (
+          <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
+        ),
       })}
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Wallets" component={WalletsScreen} />
-      <Tabs.Screen name="AI" component={AiScreen} />
+      <Tabs.Screen name="AI" component={AiScreen} options={{ tabBarLabel: 'AI' }} />
       <Tabs.Screen name="Activity" component={ActivityScreen} />
       <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>
@@ -83,8 +81,15 @@ function MainTabs() {
 
 export function RootNavigator() {
   const status = useAuth((s) => s.status);
+  const hasStoredSession = useAuth((s) => s.hasStoredSession);
+  const biometricEnabled = useAuth((s) => s.biometricEnabled);
+  const [bypassLock, setBypassLock] = useState(false);
 
   if (status !== 'authed') {
+    // A persisted session locked behind biometrics -> present the unlock screen.
+    if (hasStoredSession && biometricEnabled && !bypassLock) {
+      return <AppLock onUsePassword={() => setBypassLock(true)} />;
+    }
     return (
       <AuthStack.Navigator screenOptions={{ headerShown: false }}>
         <AuthStack.Screen name="Welcome" component={WelcomeScreen} />

@@ -1,34 +1,50 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../components/Screen';
 import { TxnRow } from '../components/TxnRow';
 import { EmptyState } from '../components/EmptyState';
 import { LoadError } from '../components/LoadError';
+import { colors, gradients, shadow } from '../theme';
 import { useDashboard } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { formatMoney, initials } from '../lib/format';
+import { selection } from '../lib/haptics';
 import type { TabScreenProps } from '../navigation/types';
 
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
 function QuickAction({
-  glyph,
+  icon,
   label,
+  tint,
   onPress,
   disabled,
 }: {
-  glyph: string;
+  icon: IconName;
   label: string;
+  tint: readonly [string, string];
   onPress: () => void;
   disabled?: boolean;
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        selection();
+        onPress();
+      }}
       disabled={disabled}
       className={`flex-1 items-center ${disabled ? 'opacity-40' : 'active:opacity-70'}`}
     >
-      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-lav-soft">
-        <Text className="text-xl text-navy">{glyph}</Text>
-      </View>
+      <LinearGradient
+        colors={tint}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[{ height: 56, width: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, shadow.soft]}
+      >
+        <Ionicons name={icon} size={23} color={colors.white} />
+      </LinearGradient>
       <Text className="mt-2 text-xs font-semibold text-ink">{label}</Text>
     </Pressable>
   );
@@ -52,120 +68,162 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
     <Screen>
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor="#001736" />
+          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
         }
       >
         {/* Greeting */}
         <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-2xl font-bold text-ink">
-              Hi {user?.first_name ?? 'there'} 👋
-            </Text>
-            <Text className="mt-0.5 text-sm text-muted">Here's your money today.</Text>
+          <View className="flex-row items-center">
+            <Pressable onPress={() => navigation.navigate('Profile')} className="active:opacity-80">
+              <LinearGradient
+                colors={gradients.avatar}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ height: 46, width: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text className="text-sm font-bold text-white">{initials(user?.full_name)}</Text>
+              </LinearGradient>
+            </Pressable>
+            <View className="ml-3">
+              <Text className="text-[13px] text-muted">Welcome back</Text>
+              <Text className="text-lg font-extrabold text-ink">Hi, {user?.first_name ?? 'there'}</Text>
+            </View>
           </View>
           <Pressable
-            onPress={() => navigation.navigate('Profile')}
-            className="h-11 w-11 items-center justify-center rounded-full bg-navy active:opacity-80"
+            onPress={() => navigation.navigate('Activity')}
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-80"
+            style={shadow.soft}
           >
-            <Text className="text-sm font-bold text-white">{initials(user?.full_name)}</Text>
+            <Ionicons name="notifications-outline" size={22} color={colors.ink} />
           </Pressable>
         </View>
 
         {isLoading ? (
           <View className="items-center py-24">
-            <ActivityIndicator size="large" color="#001736" />
+            <ActivityIndicator size="large" color={colors.navy} />
           </View>
         ) : error ? (
           <LoadError message={(error as Error).message} onRetry={() => refetch()} />
         ) : data ? (
           <>
             {/* Balance hero */}
-            <View
-              className="mt-5 rounded-3xl bg-navy p-5"
-              style={{
-                shadowColor: '#001736',
-                shadowOpacity: 0.3,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 6,
-              }}
+            <LinearGradient
+              colors={gradients.navy}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[{ borderRadius: 28, marginTop: 20, padding: 24 }, shadow.hero]}
             >
               <View className="flex-row items-center justify-between">
-                <Text className="text-[11px] font-bold tracking-widest text-white/60">
-                  TOTAL BALANCE
+                <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
+                  Total Balance
                 </Text>
-                <Pressable onPress={() => setHidden((h) => !h)} className="active:opacity-70">
-                  <Text className="text-[11px] font-bold tracking-widest text-brand-glow">
-                    {hidden ? 'SHOW' : 'HIDE'}
+                <Pressable
+                  onPress={() => {
+                    selection();
+                    setHidden((h) => !h);
+                  }}
+                  hitSlop={8}
+                  className="flex-row items-center active:opacity-70"
+                >
+                  <Ionicons name={hidden ? 'eye-off-outline' : 'eye-outline'} size={16} color={colors.brandGlow} />
+                  <Text className="ml-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-glow">
+                    {hidden ? 'Show' : 'Hide'}
                   </Text>
                 </Pressable>
               </View>
-              <Text className="mt-2 text-4xl font-bold text-white">
-                {hidden ? '₦ ••••••' : formatMoney(data.total_balance)}
+              <Text className="mt-2 text-[40px] font-extrabold leading-tight tracking-tight text-white">
+                {hidden ? '₦ • • • • • •' : formatMoney(data.total_balance)}
               </Text>
 
               {/* Inflow / outflow bars */}
-              <View className="mt-5">
+              <View className="mt-5" style={{ gap: 12 }}>
                 <View className="flex-row items-center">
-                  <Text className="w-9 text-[10px] font-bold tracking-wider text-white/50">IN</Text>
-                  <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <Ionicons name="arrow-down" size={13} color={colors.brandGlow} />
+                  <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
                     <View
                       className="h-1.5 rounded-full bg-brand-mint"
-                      style={{ width: `${Math.max((inflow / maxFlow) * 100, 2)}%` }}
+                      style={{ width: `${Math.max((inflow / maxFlow) * 100, 3)}%` }}
                     />
                   </View>
-                  <Text className="ml-3 text-xs font-semibold text-brand-glow">
+                  <Text className="text-xs font-semibold text-brand-glow">
                     {hidden ? '••••' : `+${formatMoney(data.inflow_30d)}`}
                   </Text>
                 </View>
-                <View className="mt-2.5 flex-row items-center">
-                  <Text className="w-9 text-[10px] font-bold tracking-wider text-white/50">OUT</Text>
-                  <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                <View className="flex-row items-center">
+                  <Ionicons name="arrow-up" size={13} color={colors.rose} />
+                  <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
                     <View
                       className="h-1.5 rounded-full"
-                      style={{
-                        width: `${Math.max((outflow / maxFlow) * 100, 2)}%`,
-                        backgroundColor: '#fda4af',
-                      }}
+                      style={{ width: `${Math.max((outflow / maxFlow) * 100, 3)}%`, backgroundColor: colors.rose }}
                     />
                   </View>
-                  <Text className="ml-3 text-xs font-semibold" style={{ color: '#fda4af' }}>
+                  <Text className="text-xs font-semibold" style={{ color: colors.rose }}>
                     {hidden ? '••••' : `-${formatMoney(data.outflow_30d)}`}
                   </Text>
                 </View>
-                <Text className="mt-2 text-[10px] text-white/40">Last 30 days</Text>
               </View>
-            </View>
+              <Text className="mt-3 text-[10px] text-white/40">Inflow vs outflow · last 30 days</Text>
+            </LinearGradient>
 
             {/* Quick actions */}
             <View className="mt-6 flex-row" style={{ gap: 8 }}>
               <QuickAction
-                glyph="↗"
+                icon="paper-plane"
                 label="Send"
+                tint={gradients.brand}
                 onPress={() => navigation.navigate('Transfer', { walletId: mainWallet?.id })}
                 disabled={!mainWallet}
               />
               <QuickAction
-                glyph="＋"
+                icon="add"
                 label="Fund"
+                tint={gradients.navy}
                 onPress={() => mainWallet && navigation.navigate('Fund', { walletId: mainWallet.id })}
                 disabled={!mainWallet}
               />
               <QuickAction
-                glyph="↓"
+                icon="arrow-down"
                 label="Withdraw"
+                tint={gradients.navy}
                 onPress={() => mainWallet && navigation.navigate('Withdraw', { walletId: mainWallet.id })}
                 disabled={!mainWallet}
               />
-              <QuickAction glyph="▦" label="New Wallet" onPress={() => navigation.navigate('CreateWallet')} />
+              <QuickAction
+                icon="wallet"
+                label="New"
+                tint={gradients.brand}
+                onPress={() => navigation.navigate('CreateWallet')}
+              />
             </View>
+
+            {/* AI teaser */}
+            <Pressable
+              onPress={() => navigation.navigate('AI')}
+              className="mt-6 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
+              style={shadow.card}
+            >
+              <LinearGradient
+                colors={gradients.avatar}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="sparkles" size={20} color={colors.brandGlow} />
+              </LinearGradient>
+              <View className="ml-3 flex-1">
+                <Text className="text-[15px] font-bold text-ink">Smart suggestions</Text>
+                <Text className="mt-0.5 text-[13px] text-muted">Ask Patriai AI about your money</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.faded} />
+            </Pressable>
 
             {/* Recent activity */}
             <View className="mt-7 flex-row items-center justify-between">
-              <Text className="text-base font-bold text-ink">Recent Activity</Text>
-              <Pressable onPress={() => navigation.navigate('Activity')} className="active:opacity-70">
-                <Text className="text-sm font-semibold text-brand">View All</Text>
+              <Text className="text-lg font-bold text-ink">Recent activity</Text>
+              <Pressable onPress={() => navigation.navigate('Activity')} className="active:opacity-70" hitSlop={6}>
+                <Text className="text-sm font-semibold text-brand">View all</Text>
               </Pressable>
             </View>
 
@@ -174,7 +232,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                 <EmptyState
                   title="No transactions yet"
                   message="Fund your wallet to see activity here."
-                  glyph="⇅"
+                  icon="swap-vertical-outline"
                 />
               ) : (
                 data.recent_transactions.map((t) => <TxnRow key={t.id} txn={t} />)

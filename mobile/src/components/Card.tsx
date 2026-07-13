@@ -1,24 +1,26 @@
 import React from 'react';
-import { View, ViewStyle } from 'react-native';
+import { Pressable, View, ViewStyle } from 'react-native';
+import { shadow } from '../theme';
 
 interface CardProps {
   children: React.ReactNode;
   className?: string;
   style?: ViewStyle;
+  onPress?: () => void;
 }
 
-const shadow: ViewStyle = {
-  shadowColor: '#0b1c30',
-  shadowOpacity: 0.06,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 2,
-};
-
-/** White rounded card with a subtle shadow. */
-export function Card({ children, className = '', style }: CardProps) {
+/** White rounded-3xl card with a soft navy shadow. Adds press feedback when `onPress` is set. */
+export function Card({ children, className = '', style, onPress }: CardProps) {
+  const classes = `bg-white rounded-3xl p-5 ${className}`;
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} className={`${classes} active:opacity-90`} style={[shadow.card, style]}>
+        {children}
+      </Pressable>
+    );
+  }
   return (
-    <View className={`bg-white rounded-2xl p-4 ${className}`} style={[shadow, style]}>
+    <View className={classes} style={[shadow.card, style]}>
       {children}
     </View>
   );

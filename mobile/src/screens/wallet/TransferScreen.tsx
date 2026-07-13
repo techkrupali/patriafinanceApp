@@ -9,9 +9,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
@@ -20,8 +20,10 @@ import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { LoadError } from '../../components/LoadError';
+import { colors } from '../../theme';
 import { useTransfer, useVerifyAccount, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
+import { selection } from '../../lib/haptics';
 import type { Bank, TransferData, TransferDestination, Wallet } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
@@ -55,10 +57,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
     [wallets, fromId],
   );
 
-  const destWallets = useMemo(
-    () => (wallets ?? []).filter((w) => w.id !== from?.id),
-    [wallets, from],
-  );
+  const destWallets = useMemo(() => (wallets ?? []).filter((w) => w.id !== from?.id), [wallets, from]);
 
   // Auto-verify bank account.
   useEffect(() => {
@@ -99,6 +98,12 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
   const canContinue = Boolean(from && destination && amountOk);
 
+  const recipientLabel = useMemo(() => {
+    if (kind === 'wallet') return destWallets.find((w) => w.id === destWalletId)?.name;
+    if (kind === 'user') return identifier.trim() || undefined;
+    return verified?.account_name;
+  }, [kind, destWallets, destWalletId, identifier, verified]);
+
   const authorize = (pin: string) => {
     if (!from || !destination) return;
     setPinError(null);
@@ -122,13 +127,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
   };
 
   if (receipt) {
-    const recipientName =
-      receipt.recipient?.name ??
-      (kind === 'bank'
-        ? verified?.account_name
-        : kind === 'wallet'
-          ? destWallets.find((w) => w.id === destWalletId)?.name
-          : identifier);
+    const recipientName = receipt.recipient?.name ?? recipientLabel;
     const rows = [
       { label: 'Reference', value: receipt.reference },
       { label: 'Amount', value: formatMoney(receiptAmount) },
@@ -153,15 +152,38 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
       {walletsLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#001736" />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : walletsError ? (
         <LoadError message={(walletsError as Error).message} onRetry={() => refetch()} />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Amount hero */}
+            <View className="items-center rounded-3xl bg-lav-faint py-8">
+              <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
+              <View className="mt-2 flex-row items-center justify-center">
+                <Text className="text-4xl font-extrabold text-faded">₦</Text>
+                <TextInput
+                  value={amount}
+                  onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.faded}
+                  keyboardType="decimal-pad"
+                  className="ml-1 min-w-[120px] text-center text-5xl font-extrabold text-ink"
+                />
+              </View>
+              {from ? (
+                <Text className="mt-2 text-xs text-faded">Available in {from.name}: {formatMoney(from.balance)}</Text>
+              ) : null}
+            </View>
+
             {/* Source wallet */}
-            <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">From</Text>
+            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">From</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2 -mx-1">
               <View className="flex-row px-1" style={{ gap: 8 }}>
                 {(wallets ?? []).map((w) => {
@@ -170,10 +192,11 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                     <Pressable
                       key={w.id}
                       onPress={() => {
+                        selection();
                         setFromId(w.id);
                         setDestWalletId(undefined);
                       }}
-                      className={`rounded-2xl px-4 py-3 ${active ? 'bg-navy' : 'bg-white'} active:opacity-80`}
+                      className={`rounded-2xl px-4 py-3 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
                     >
                       <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                         {w.name}
@@ -188,7 +211,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             </ScrollView>
 
             {/* Destination kind */}
-            <Text className="mt-6 text-[11px] font-bold uppercase tracking-widest text-muted">To</Text>
+            <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">To</Text>
             <View className="mt-2 flex-row" style={{ gap: 8 }}>
               <Chip label="My Wallets" active={kind === 'wallet'} onPress={() => setKind('wallet')} />
               <Chip label="To User" active={kind === 'user'} onPress={() => setKind('user')} />
@@ -196,7 +219,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             </View>
 
             {kind === 'wallet' ? (
-              <View className="mt-4" style={{ gap: 8 }}>
+              <View className="mt-4" style={{ gap: 10 }}>
                 {destWallets.length === 0 ? (
                   <Text className="py-4 text-sm text-muted">
                     You have no other wallets. Create one from the Wallets tab.
@@ -207,22 +230,23 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                     return (
                       <Pressable
                         key={w.id}
-                        onPress={() => setDestWalletId(w.id)}
-                        className={`flex-row items-center justify-between rounded-2xl p-4 ${
-                          active ? 'border-2 border-navy bg-white' : 'border border-[#e2e8f0] bg-white'
-                        } active:opacity-80`}
+                        onPress={() => {
+                          selection();
+                          setDestWalletId(w.id);
+                        }}
+                        className={`flex-row items-center justify-between rounded-2xl border p-4 active:opacity-80 ${
+                          active ? 'border-brand bg-success-soft' : 'border-border bg-white'
+                        }`}
                       >
                         <View className="flex-1 pr-2">
                           <Text className="text-[15px] font-semibold text-ink">{w.name}</Text>
                           <Text className="mt-0.5 text-xs text-muted">{formatMoney(w.balance)}</Text>
                         </View>
-                        <View
-                          className={`h-5 w-5 items-center justify-center rounded-full ${
-                            active ? 'bg-navy' : 'border border-[#e2e8f0]'
-                          }`}
-                        >
-                          {active ? <Text className="text-[10px] font-bold text-white">✓</Text> : null}
-                        </View>
+                        <Ionicons
+                          name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={22}
+                          color={active ? colors.brand : colors.faded}
+                        />
                       </Pressable>
                     );
                   })
@@ -233,46 +257,51 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             {kind === 'user' ? (
               <Input
                 label="Recipient email or phone"
+                icon="at-outline"
                 value={identifier}
                 onChangeText={setIdentifier}
                 placeholder="them@example.com"
                 autoCapitalize="none"
                 keyboardType="email-address"
-                className="mt-4"
+                containerClassName="mt-4"
               />
             ) : null}
 
             {kind === 'bank' ? (
               <View className="mt-4">
-                <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">Bank</Text>
+                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Bank</Text>
                 <Pressable
                   onPress={() => setBankPickerOpen(true)}
-                  className="mt-2 flex-row items-center justify-between rounded-2xl bg-lav px-4 py-3.5 active:opacity-80"
+                  className="mt-2 flex-row items-center rounded-2xl bg-lav-faint px-4"
+                  style={{ minHeight: 52 }}
                 >
-                  <Text className={`text-base ${bank ? 'text-ink' : 'text-faded'}`}>
+                  <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
+                  <Text className={`flex-1 text-[15px] ${bank ? 'text-ink' : 'text-faded'}`}>
                     {bank?.bank_name ?? 'Select a bank'}
                   </Text>
-                  <Text className="text-base text-muted">▾</Text>
+                  <Ionicons name="chevron-down" size={18} color={colors.muted} />
                 </Pressable>
 
                 <Input
                   label="Account number"
+                  icon="card-outline"
                   value={accountNumber}
                   onChangeText={(t) => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
                   placeholder="0123456789"
                   keyboardType="number-pad"
                   maxLength={10}
-                  className="mt-4"
+                  containerClassName="mt-4"
                 />
 
                 {verify.isPending ? (
                   <View className="mt-3 flex-row items-center">
-                    <ActivityIndicator size="small" color="#006c49" />
+                    <ActivityIndicator size="small" color={colors.brand} />
                     <Text className="ml-2 text-sm text-muted">Verifying account…</Text>
                   </View>
                 ) : verified ? (
-                  <View className="mt-3 flex-row items-center self-start rounded-full bg-success px-3.5 py-2">
-                    <Text className="text-[13px] font-bold text-brand">✓ {verified.account_name}</Text>
+                  <View className="mt-3 flex-row items-center self-start rounded-full bg-success-soft px-3.5 py-2">
+                    <Ionicons name="checkmark-circle" size={16} color={colors.brand} style={{ marginRight: 6 }} />
+                    <Text className="text-[13px] font-bold text-brand">{verified.account_name}</Text>
                   </View>
                 ) : (
                   <ErrorText message={verifyError} className="mt-3" />
@@ -280,40 +309,19 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
               </View>
             ) : null}
 
-            {/* Amount */}
-            <Card className="mt-6 items-center p-6">
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">
-                Amount
-              </Text>
-              <View className="mt-2 flex-row items-center justify-center">
-                <Text className="text-3xl font-bold text-faded">₦</Text>
-                <TextInput
-                  value={amount}
-                  onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
-                  placeholder="0.00"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="decimal-pad"
-                  className="ml-1 min-w-[120px] text-center text-4xl font-bold text-ink"
-                />
-              </View>
-              {from ? (
-                <Text className="mt-2 text-xs text-faded">
-                  Available: {formatMoney(from.balance)}
-                </Text>
-              ) : null}
-            </Card>
-
             <Input
               label="Description (optional)"
+              icon="create-outline"
               value={description}
               onChangeText={setDescription}
               placeholder="What's this for?"
               maxLength={200}
-              className="mt-5"
+              containerClassName="mt-5"
             />
 
             <Button
               title="Continue"
+              icon="arrow-forward"
               onPress={() => {
                 setPinError(null);
                 setPinOpen(true);
@@ -327,6 +335,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
       <BankPicker
         visible={bankPickerOpen}
+        selectedCode={bank?.bank_code}
         onSelect={(b) => {
           setBank(b);
           setBankPickerOpen(false);
@@ -337,7 +346,9 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
       <PinSheet
         visible={pinOpen}
         title="Authorize transfer"
-        subtitle={`Enter your PIN to send ${amount ? formatMoney(amount) : ''}`}
+        subtitle="Confirm to send this transfer"
+        amount={amount ? formatMoney(amount) : undefined}
+        recipient={recipientLabel}
         loading={transfer.isPending}
         error={pinError}
         onSubmit={authorize}

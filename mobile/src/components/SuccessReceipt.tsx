@@ -1,7 +1,11 @@
-import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from './Button';
 import { Card } from './Card';
+import { colors, gradients } from '../theme';
+import { notifySuccess } from '../lib/haptics';
 
 interface ReceiptRow {
   label: string;
@@ -13,56 +17,81 @@ interface SuccessReceiptProps {
   subtitle?: string;
   rows: ReceiptRow[];
   onDone: () => void;
+  onShare?: () => void;
 }
 
-/** Full-screen success state: glowing green check + summary card + Done. */
-export function SuccessReceipt({ title, subtitle, rows, onDone }: SuccessReceiptProps) {
+/** Full-screen success state: animated gradient check + summary card + actions. */
+export function SuccessReceipt({ title, subtitle, rows, onDone, onShare }: SuccessReceiptProps) {
+  const scale = useRef(new Animated.Value(0.4)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    notifySuccess();
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 10 }),
+      Animated.timing(opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+    ]).start();
+  }, [scale, opacity]);
+
   return (
     <ScrollView
       className="flex-1"
       contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: 'center' }}
     >
-      <View className="items-center">
-        <View className="h-28 w-28 items-center justify-center rounded-full bg-success">
-          <View
-            className="h-20 w-20 items-center justify-center rounded-full bg-brand"
-            style={{
-              shadowColor: '#6cf8bb',
-              shadowOpacity: 0.9,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 8,
-            }}
-          >
-            <Text className="text-4xl font-bold text-white">✓</Text>
+      <Animated.View className="items-center" style={{ opacity }}>
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-success-soft">
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                height: 84,
+                width: 84,
+                borderRadius: 42,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: colors.brandMint,
+                shadowOpacity: 0.7,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 10,
+              }}
+            >
+              <Ionicons name="checkmark-sharp" size={44} color={colors.white} />
+            </LinearGradient>
           </View>
-        </View>
-        <Text className="mt-6 text-2xl font-bold text-ink">{title}</Text>
-        {subtitle ? (
-          <Text className="mt-2 text-center text-sm text-muted">{subtitle}</Text>
-        ) : null}
-      </View>
+        </Animated.View>
+        <Text className="mt-6 text-3xl font-extrabold tracking-tight text-ink">{title}</Text>
+        {subtitle ? <Text className="mt-2 text-center text-sm text-muted">{subtitle}</Text> : null}
+      </Animated.View>
 
       <Card className="mt-8">
         {rows.map((row, i) => (
           <View
             key={row.label}
-            className={`flex-row items-center justify-between py-3 ${
-              i < rows.length - 1 ? 'border-b border-border' : ''
-            }`}
-            style={i < rows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: '#e2e8f0' } : undefined}
+            className="flex-row items-center justify-between py-3"
+            style={
+              i < rows.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.border } : undefined
+            }
           >
-            <Text className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
               {row.label}
             </Text>
-            <Text className="ml-4 flex-1 text-right text-[15px] font-semibold text-ink" numberOfLines={1}>
+            <Text
+              className="ml-4 flex-1 text-right text-[15px] font-semibold text-ink"
+              numberOfLines={1}
+            >
               {row.value}
             </Text>
           </View>
         ))}
       </Card>
 
-      <Button title="Done" onPress={onDone} className="mt-8" />
+      <Button title="Done" icon="checkmark" onPress={onDone} className="mt-8" />
+      {onShare ? (
+        <Button title="Share receipt" variant="ghost" icon="share-outline" onPress={onShare} className="mt-2" />
+      ) : null}
     </ScrollView>
   );
 }

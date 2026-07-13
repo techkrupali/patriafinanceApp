@@ -32,6 +32,8 @@ async function clearPersisted(): Promise<void> {
     SecureStore.deleteItemAsync(STORAGE_KEYS.token),
     SecureStore.deleteItemAsync(STORAGE_KEYS.user),
     SecureStore.deleteItemAsync(STORAGE_KEYS.biometric),
+    // Also drop the biometric-cached transaction PIN when a session ends.
+    SecureStore.deleteItemAsync(STORAGE_KEYS.txnPin),
   ]);
 }
 

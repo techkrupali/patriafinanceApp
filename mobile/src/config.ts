@@ -10,4 +10,6 @@ export const STORAGE_KEYS = {
   user: 'patriai.user',
   biometric: 'patriai.biometric',
   deviceId: 'patriai.device_id',
+  /** Transaction PIN cached behind biometrics for Google-Pay style authorize. */
+  txnPin: 'patriai.txn_pin',
 } as const;

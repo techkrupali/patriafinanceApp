@@ -1,17 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../components/Screen';
 import { Chip } from '../components/Chip';
 import { TxnRow } from '../components/TxnRow';
 import { EmptyState } from '../components/EmptyState';
 import { LoadError } from '../components/LoadError';
+import { colors } from '../theme';
 import { useActivity } from '../api/hooks';
 import { dayLabel } from '../lib/format';
 import type { Transaction } from '../api/types';
@@ -28,10 +23,7 @@ export function ActivityScreen() {
     const filtered = transactions.filter((t) => {
       if (filter !== 'all' && t.direction !== filter) return false;
       if (!q) return true;
-      return (
-        (t.description ?? '').toLowerCase().includes(q) ||
-        t.reference.toLowerCase().includes(q)
-      );
+      return (t.description ?? '').toLowerCase().includes(q) || t.reference.toLowerCase().includes(q);
     });
 
     const groups: { label: string; items: Transaction[] }[] = [];
@@ -50,16 +42,19 @@ export function ActivityScreen() {
   return (
     <Screen>
       <View className="px-5 pt-4">
-        <Text className="text-2xl font-bold text-ink">Activity</Text>
+        <Text className="text-3xl font-extrabold tracking-tight text-ink">Activity</Text>
 
         {/* Search */}
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search description or reference…"
-          placeholderTextColor="#94a3b8"
-          className="mt-4 w-full rounded-2xl bg-lav px-4 py-3.5 text-base text-ink"
-        />
+        <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint px-4" style={{ minHeight: 50 }}>
+          <Ionicons name="search" size={18} color={colors.faded} style={{ marginRight: 8 }} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search description or reference…"
+            placeholderTextColor={colors.faded}
+            className="flex-1 py-3 text-[15px] text-ink"
+          />
+        </View>
 
         {/* Filter chips */}
         <View className="mt-3 flex-row" style={{ gap: 8 }}>
@@ -71,15 +66,16 @@ export function ActivityScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#001736" />
+          <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={refetch} />
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#001736" />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.navy} />
           }
         >
           {sections.length === 0 ? (
@@ -90,12 +86,12 @@ export function ActivityScreen() {
                   ? 'No transactions match your filters.'
                   : 'Transactions across all your wallets will appear here.'
               }
-              glyph="⇅"
+              icon="swap-vertical-outline"
             />
           ) : (
             sections.map((section) => (
               <View key={section.label} className="mb-5">
-                <Text className="mb-2.5 text-[11px] font-bold uppercase tracking-widest text-muted">
+                <Text className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
                   {section.label}
                 </Text>
                 <View style={{ gap: 10 }}>

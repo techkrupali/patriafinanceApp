@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
+import { colors } from '../../theme';
 import { useRequestOtp, useVerifyOtp } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import type { AuthScreenProps } from '../../navigation/types';
@@ -75,23 +77,29 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
     <Screen withBottomInset>
       <Header title="Verification" />
       <View className="flex-1 px-6 pt-4">
-        <Text className="text-2xl font-bold text-ink">Enter the code</Text>
-        <Text className="mt-2 text-sm leading-5 text-muted">
-          We sent a 6-digit code to{' '}
-          <Text className="font-semibold text-ink">{sentToLabel ?? identifier}</Text>.
-        </Text>
+        <View className="items-center">
+          <View className="h-16 w-16 items-center justify-center rounded-3xl bg-lav-soft">
+            <Ionicons name="mail-open-outline" size={30} color={colors.navy} />
+          </View>
+          <Text className="mt-5 text-3xl font-extrabold tracking-tight text-ink">Enter the code</Text>
+          <Text className="mt-2 text-center text-[15px] leading-6 text-muted">
+            We sent a 6-digit code to{'\n'}
+            <Text className="font-semibold text-ink">{sentToLabel ?? identifier}</Text>
+          </Text>
+        </View>
 
-        <Pressable className="mt-8 flex-row justify-between" onPress={() => inputRef.current?.focus()}>
+        <Pressable className="mt-9 flex-row justify-between" onPress={() => inputRef.current?.focus()}>
           {Array.from({ length: OTP_LENGTH }).map((_, i) => {
             const active = i === code.length;
+            const filled = Boolean(code[i]);
             return (
               <View
                 key={i}
-                className={`h-14 w-12 items-center justify-center rounded-2xl bg-white ${
-                  active ? 'border-2 border-navy' : 'border border-[#e2e8f0]'
+                className={`h-16 w-[46px] items-center justify-center rounded-2xl ${
+                  active ? 'border-2 border-brand bg-white' : filled ? 'border-2 border-navy bg-white' : 'bg-lav-faint'
                 }`}
               >
-                <Text className="text-2xl font-bold text-ink">{code[i] ?? ''}</Text>
+                <Text className="text-2xl font-extrabold text-ink">{code[i] ?? ''}</Text>
               </View>
             );
           })}
@@ -109,13 +117,16 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
         />
 
         {hint ? (
-          <Text className="mt-4 text-center text-xs text-faded">Dev code: {hint}</Text>
+          <View className="mt-4 self-center rounded-full bg-lav-faint px-3 py-1">
+            <Text className="text-xs font-medium text-muted">Dev code: {hint}</Text>
+          </View>
         ) : null}
 
-        <ErrorText message={error} className="mt-4 text-center" />
+        <ErrorText message={error} className="mt-4" />
 
         <Button
           title="Verify"
+          icon="checkmark"
           onPress={() => submit()}
           loading={verify.isPending}
           disabled={code.length !== OTP_LENGTH}
@@ -127,7 +138,7 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
           {cooldown > 0 ? (
             <Text className="text-sm text-faded">Resend in {cooldown}s</Text>
           ) : (
-            <Pressable onPress={resendCode} disabled={resend.isPending}>
+            <Pressable onPress={resendCode} disabled={resend.isPending} hitSlop={6}>
               <Text className="text-sm font-semibold text-brand">
                 {resend.isPending ? 'Sending…' : 'Resend'}
               </Text>
