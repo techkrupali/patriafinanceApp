@@ -49,6 +49,11 @@ const STATUS_TONES: Record<string, Tone> = {
   paid: "green",
   partial: "blue",
   overdue: "red",
+  // Project + milestone statuses
+  completed: "green",
+  released: "green",
+  funded: "blue",
+  submitted: "amber",
 };
 
 /** Badge that picks its tone from a known status string. */

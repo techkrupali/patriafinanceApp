@@ -85,6 +85,15 @@ export function IconLoans({ className }: { className?: string }) {
   );
 }
 
+export function IconProjects({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5V7.5Z" />
+      <path d="M8.5 13.5l2 2 3.5-4" />
+    </Svg>
+  );
+}
+
 export function IconLogout({ className }: { className?: string }) {
   return (
     <Svg className={className}>

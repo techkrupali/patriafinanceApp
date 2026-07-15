@@ -61,6 +61,11 @@ const LABELS: Record<string, string> = {
   overdue: "Overdue",
   partial: "Partial",
   paid: "Paid",
+  // Project + milestone statuses
+  completed: "Completed",
+  funded: "Funded",
+  submitted: "Submitted",
+  released: "Released",
 };
 
 export function label(value: string): string {

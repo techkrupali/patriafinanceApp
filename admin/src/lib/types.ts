@@ -97,6 +97,10 @@ export interface StatsData {
     pending: number;
     outstanding: string; // naira string
   };
+  projects: {
+    active: number;
+    escrow: string; // naira string — total reserved across active projects
+  };
 }
 
 export type ApprovalAction =
@@ -265,4 +269,72 @@ export interface RunDueResult {
   loans_processed: number;
   loans_penalized: number;
   penalty_charged: string; // naira string
+}
+
+export type ProjectStatus = "active" | "completed" | "cancelled";
+
+export type MilestoneStatus =
+  | "funded"
+  | "submitted"
+  | "approved"
+  | "released"
+  | "rejected";
+
+export interface ProjectListItem {
+  id: number;
+  title: string;
+  owner: { name: string } | null;
+  vendor: { name: string } | null;
+  budget: string; // naira string
+  wallet_balance: string; // naira string — escrow balance
+  reserved: string; // naira string
+  released: string; // naira string
+  status: ProjectStatus;
+  milestones_count: number;
+  created_at: string | null;
+}
+
+export interface ProjectsData {
+  projects: ProjectListItem[];
+  pagination: Pagination;
+}
+
+export interface ProjectMilestone {
+  id: number;
+  sequence: number;
+  title: string;
+  description: string | null;
+  amount: string; // naira string
+  status: MilestoneStatus;
+  proof: string | null;
+  submitted_at: string | null;
+  released_at: string | null;
+  released_transaction_reference: string | null;
+  created_at: string | null;
+}
+
+export interface ProjectDetail {
+  id: number;
+  title: string;
+  description: string | null;
+  wallet_id: number | null;
+  wallet_balance: string; // naira string — escrow balance
+  budget: string; // naira string
+  reserved: string; // naira string
+  available: string; // naira string
+  released: string; // naira string
+  status: ProjectStatus;
+  vendor: { id: number; name: string } | null;
+  owner: { id: number; name: string } | null;
+  milestones_total: number;
+  milestones_released: number;
+  created_at: string | null;
+}
+
+export interface ProjectDetailData {
+  project: ProjectDetail;
+  owner: { id: number; name: string; email: string } | null;
+  vendor: { id: number; name: string; email: string } | null;
+  wallet: ApiWallet;
+  milestones: ProjectMilestone[];
 }

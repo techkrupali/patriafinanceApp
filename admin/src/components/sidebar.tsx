@@ -11,6 +11,7 @@ import {
   IconDashboard,
   IconLoans,
   IconLogout,
+  IconProjects,
   IconTransactions,
   IconUsers,
   IconWallet,
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/transactions", label: "Transactions", icon: IconTransactions, exact: false },
   { href: "/approvals", label: "Approvals", icon: IconApprovals, exact: false },
   { href: "/loans", label: "Loans", icon: IconLoans, exact: false },
+  { href: "/projects", label: "Projects", icon: IconProjects, exact: false },
 ] as const;
 
 export function Sidebar() {
