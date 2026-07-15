@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, qs } from "@/lib/api";
@@ -24,6 +25,7 @@ const TYPES = [
 ] as const;
 
 export default function WalletsPage() {
+  const router = useRouter();
   const [type, setType] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -102,7 +104,7 @@ export default function WalletsPage() {
               </THead>
               <TBody>
                 {data.wallets.map((w) => (
-                  <TR key={w.id}>
+                  <TR key={w.id} clickable onClick={() => router.push(`/wallets/${w.id}`)}>
                     <TD className="font-semibold">{w.name}</TD>
                     <TD>
                       <Badge tone="blue">{label(w.type)}</Badge>

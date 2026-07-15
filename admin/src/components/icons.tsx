@@ -66,6 +66,15 @@ export function IconTransactions({ className }: { className?: string }) {
   );
 }
 
+export function IconApprovals({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3.5 19 6v5.5c0 4-2.9 6.8-7 8.5-4.1-1.7-7-4.5-7-8.5V6l7-2.5Z" />
+      <path d="m9 11.5 2 2 3.5-3.5" />
+    </Svg>
+  );
+}
+
 export function IconLogout({ className }: { className?: string }) {
   return (
     <Svg className={className}>

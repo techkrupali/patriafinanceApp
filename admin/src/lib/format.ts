@@ -49,8 +49,26 @@ const LABELS: Record<string, string> = {
   pending: "Pending",
   successful: "Successful",
   failed: "Failed",
+  approved: "Approved",
+  rejected: "Rejected",
+  expired: "Expired",
+  executed: "Executed",
+  cancelled: "Cancelled",
 };
 
 export function label(value: string): string {
   return LABELS[value] ?? value;
+}
+
+// Approval action labels are kept separate from `label()` so the shared
+// transaction-type label for "withdrawal" ("Withdrawal") stays intact.
+const APPROVAL_ACTIONS: Record<string, string> = {
+  withdrawal: "Bank withdrawal",
+  transfer_wallet: "Wallet transfer",
+  transfer_user: "User transfer",
+  transfer_bank: "Bank transfer",
+};
+
+export function approvalActionLabel(action: string): string {
+  return APPROVAL_ACTIONS[action] ?? label(action);
 }

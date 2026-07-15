@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/stores/auth";
 import {
+  IconApprovals,
   IconDashboard,
   IconLogout,
   IconTransactions,
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/users", label: "Users", icon: IconUsers, exact: false },
   { href: "/wallets", label: "Wallets", icon: IconWallet, exact: false },
   { href: "/transactions", label: "Transactions", icon: IconTransactions, exact: false },
+  { href: "/approvals", label: "Approvals", icon: IconApprovals, exact: false },
 ] as const;
 
 export function Sidebar() {

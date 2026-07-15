@@ -31,11 +31,16 @@ export function Badge({
 const STATUS_TONES: Record<string, Tone> = {
   active: "green",
   successful: "green",
+  approved: "green",
+  executed: "green",
   suspended: "red",
   failed: "red",
+  rejected: "red",
   pending: "amber",
   frozen: "amber",
   closed: "gray",
+  expired: "gray",
+  cancelled: "gray",
 };
 
 /** Badge that picks its tone from a known status string. */

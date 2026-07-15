@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isPending ? (
-          Array.from({ length: 7 }).map((_, i) => <StatCardSkeleton key={i} />)
+          Array.from({ length: 8 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
             <StatCard label="Total Users" value={data.users.total.toLocaleString()} />
@@ -49,6 +49,12 @@ export default function DashboardPage() {
               value={naira(data.wallets.total_balance)}
               accent="green"
               hint="Across all wallets"
+            />
+            <StatCard
+              label="Pending Approvals"
+              value={data.approvals.pending.toLocaleString()}
+              accent="amber"
+              hint="Awaiting sign-off"
             />
             <StatCard
               label="Pending Transactions"

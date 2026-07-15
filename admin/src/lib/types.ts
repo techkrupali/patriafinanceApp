@@ -89,6 +89,37 @@ export interface StatsData {
     pending: number;
     failed: number;
   };
+  approvals: {
+    pending: number;
+  };
+}
+
+export type ApprovalAction =
+  | "withdrawal"
+  | "transfer_wallet"
+  | "transfer_user"
+  | "transfer_bank";
+
+export type ApprovalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "executed"
+  | "failed"
+  | "cancelled";
+
+export interface ApiApproval {
+  id: number;
+  wallet: { id: number; name: string };
+  initiator: { name: string; email: string };
+  action: ApprovalAction;
+  amount: string; // naira string
+  fee: string; // naira string
+  status: ApprovalStatus;
+  approvals_count: number;
+  required_approvals: number;
+  created_at: string | null;
 }
 
 export interface UsersData {
@@ -115,4 +146,35 @@ export interface WalletsData {
 export interface TransactionsData {
   transactions: ApiTransaction[];
   pagination: Pagination;
+}
+
+export interface ApprovalsData {
+  approvals: ApiApproval[];
+  pagination: Pagination;
+}
+
+export interface WalletGovernance {
+  approval_enabled: boolean;
+  approval_threshold: string | null; // naira string
+  required_approvals: number;
+  description: string | null;
+  target_amount: string | null; // naira string
+}
+
+export interface WalletMember {
+  name: string;
+  email: string;
+  role: string;
+  can_approve: boolean;
+}
+
+export interface WalletDetailData {
+  wallet: ApiWallet & { governance?: WalletGovernance };
+  members: WalletMember[];
+  approval: {
+    enabled: boolean;
+    threshold: string | null; // naira string
+    required_approvals: number;
+  };
+  recent_transactions: ApiTransaction[];
 }
