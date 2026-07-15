@@ -151,6 +151,60 @@ export function IconAlert({ className }: { className?: string }) {
   );
 }
 
+export function IconClose({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
+    </Svg>
+  );
+}
+
+export function IconArrowUpRight({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M7 17 17 7" />
+      <path d="M8 7h9v9" />
+    </Svg>
+  );
+}
+
+export function IconCheckCircle({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </Svg>
+  );
+}
+
+export function IconTrendUp({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 15l5-5 3.5 3.5L20 6" />
+      <path d="M20 11V6h-5" />
+    </Svg>
+  );
+}
+
+export function IconTrendDown({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 9l5 5 3.5-3.5L20 18" />
+      <path d="M20 13v5h-5" />
+    </Svg>
+  );
+}
+
+export function IconClock({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 1.8" />
+    </Svg>
+  );
+}
+
 /** Patriai brand mark: rounded green tile with a P. */
 export function PatriaiMark({ className }: { className?: string }) {
   return (

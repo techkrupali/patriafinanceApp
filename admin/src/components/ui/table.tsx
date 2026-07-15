@@ -19,7 +19,7 @@ export function THead({
   return (
     <thead
       className={cn(
-        "border-b border-line text-xs font-semibold uppercase tracking-wide text-muted",
+        "border-b border-line bg-page/60 text-[11px] font-semibold uppercase tracking-wider text-muted",
         className,
       )}
       {...props}
@@ -43,7 +43,7 @@ export function TR({
     <tr
       className={cn(
         "transition-colors",
-        clickable && "cursor-pointer hover:bg-rowhover",
+        clickable && "cursor-pointer hover:bg-rowhover focus-within:bg-rowhover",
         className,
       )}
       {...props}
@@ -56,7 +56,7 @@ export function TH({
   ...props
 }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <th className={cn("whitespace-nowrap px-5 py-3", className)} {...props} />
+    <th className={cn("whitespace-nowrap px-5 py-2.5 font-semibold", className)} {...props} />
   );
 }
 

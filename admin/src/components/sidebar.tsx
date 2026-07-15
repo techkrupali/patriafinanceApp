@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { api } from "@/lib/api";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { useAuth } from "@/stores/auth";
 import {
   IconApprovals,
   IconDashboard,
   IconKyc,
   IconLoans,
-  IconLogout,
   IconProjects,
   IconTransactions,
   IconUsers,
@@ -19,36 +15,47 @@ import {
   PatriaiMark,
 } from "@/components/icons";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: IconDashboard, exact: true },
-  { href: "/users", label: "Users", icon: IconUsers, exact: false },
-  { href: "/wallets", label: "Wallets", icon: IconWallet, exact: false },
-  { href: "/transactions", label: "Transactions", icon: IconTransactions, exact: false },
-  { href: "/approvals", label: "Approvals", icon: IconApprovals, exact: false },
-  { href: "/loans", label: "Loans", icon: IconLoans, exact: false },
-  { href: "/projects", label: "Projects", icon: IconProjects, exact: false },
-  { href: "/kyc", label: "KYC", icon: IconKyc, exact: false },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  icon: (props: { className?: string }) => React.ReactNode;
+  exact?: boolean;
+};
+
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Overview",
+    items: [{ href: "/", label: "Dashboard", icon: IconDashboard, exact: true }],
+  },
+  {
+    label: "Money",
+    items: [
+      { href: "/wallets", label: "Wallets", icon: IconWallet },
+      { href: "/transactions", label: "Transactions", icon: IconTransactions },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      { href: "/users", label: "Users", icon: IconUsers },
+      { href: "/kyc", label: "KYC", icon: IconKyc },
+    ],
+  },
+  {
+    label: "Governance",
+    items: [
+      { href: "/approvals", label: "Approvals", icon: IconApprovals },
+      { href: "/loans", label: "Loans", icon: IconLoans },
+      { href: "/projects", label: "Projects", icon: IconProjects },
+    ],
+  },
+];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, clear } = useAuth();
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await api("/api/v1/auth/logout", { method: "POST" });
-    } catch {
-      // Best effort — clear the local session regardless.
-    }
-    clear();
-    router.replace("/login");
-  }
 
   return (
-    <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col bg-navy text-white md:w-60">
+    <aside className="sticky top-0 z-40 flex h-screen w-16 shrink-0 flex-col bg-navy text-white md:w-60">
       <div className="flex items-center gap-3 px-3 py-5 md:px-5">
         <PatriaiMark />
         <div className="hidden md:block">
@@ -59,50 +66,47 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="mt-2 flex-1 space-y-1 px-2 md:px-3">
-        {NAV.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-white/10 text-mint"
-                  : "text-white/70 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              <Icon className="h-5 w-5 shrink-0" />
-              <span className="hidden md:inline">{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-white/10 px-2 py-4 md:px-3">
-        <div className="mb-3 hidden items-center gap-3 px-3 md:flex">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mint/20 text-xs font-bold text-mint">
-            {(user?.first_name?.[0] ?? "A").toUpperCase()}
-            {(user?.last_name?.[0] ?? "").toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{user?.full_name ?? "Admin"}</p>
-            <p className="truncate text-xs text-white/50">{user?.email ?? ""}</p>
+      <nav className="mt-1 flex-1 overflow-y-auto px-2 pb-6 md:px-3">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={group.label} className={cn(gi > 0 && "mt-6")}>
+            <p className="mb-1.5 hidden px-3 text-[10px] font-semibold uppercase tracking-widest text-white/35 md:block">
+              {group.label}
+            </p>
+            <div className="mx-2 mb-2 h-px bg-white/10 md:hidden" />
+            <div className="space-y-1">
+              {group.items.map(({ href, label, icon: Icon, exact }) => {
+                const active = exact
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    title={label}
+                    className={cn(
+                      "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium outline-none transition-colors",
+                      "focus-visible:ring-2 focus-visible:ring-mint/50",
+                      active
+                        ? "bg-white/10 text-mint"
+                        : "text-white/65 hover:bg-white/5 hover:text-white",
+                    )}
+                  >
+                    {active ? (
+                      <span
+                        className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-mint"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="hidden md:inline">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-60"
-        >
-          <IconLogout className="h-5 w-5 shrink-0" />
-          <span className="hidden md:inline">
-            {loggingOut ? "Logging out..." : "Log out"}
-          </span>
-        </button>
-      </div>
+        ))}
+      </nav>
     </aside>
   );
 }

@@ -79,10 +79,10 @@ export default function ApprovalsPage() {
                   <TR
                     key={a.id}
                     clickable
-                    onClick={() => router.push(`/wallets/${a.wallet.id}`)}
+                    onClick={() => router.push(`/approvals/${a.id}`)}
                   >
                     <TD className="font-mono text-xs text-muted">#{a.id}</TD>
-                    <TD className="font-semibold">{a.wallet.name}</TD>
+                    <TD className="font-semibold">{a.wallet?.name ?? "—"}</TD>
                     <TD>
                       <p className="font-medium">{a.initiator.name}</p>
                       <p className="text-xs text-muted">{a.initiator.email}</p>

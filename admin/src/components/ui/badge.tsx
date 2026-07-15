@@ -4,11 +4,11 @@ import { label } from "@/lib/format";
 type Tone = "green" | "red" | "amber" | "blue" | "gray";
 
 const tones: Record<Tone, string> = {
-  green: "bg-mint/20 text-brand",
-  red: "bg-danger/10 text-danger",
-  amber: "bg-amber-100 text-amber-800",
-  blue: "bg-lavender/60 text-navy",
-  gray: "bg-slate-100 text-muted",
+  green: "bg-brand-soft text-brand ring-1 ring-inset ring-brand/15",
+  red: "bg-danger/10 text-danger ring-1 ring-inset ring-danger/15",
+  amber: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+  blue: "bg-lavender/50 text-navy ring-1 ring-inset ring-lavender",
+  gray: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
 };
 
 export function Badge({
@@ -19,7 +19,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold leading-5",
         tones[tone],
         className,
       )}

@@ -1,13 +1,18 @@
 "use client";
 
-import { use } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { use, useCallback, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime, label, naira, signedNaira } from "@/lib/format";
-import type { WalletDetailData } from "@/lib/types";
+import type { ApiWallet, WalletDetailData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
+import { Toast, type ToastState } from "@/components/toast";
+import { AdjustBalanceModal } from "@/components/admin/adjust-balance-modal";
 import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, TableSkeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -27,10 +32,43 @@ export default function WalletDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [adjusting, setAdjusting] = useState(false);
+  const [freezing, setFreezing] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["admin", "wallet", id],
     queryFn: () => api<WalletDetailData>(`/api/v1/admin/wallets/${id}`),
+  });
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["admin", "wallet", id] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "wallets"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+  }
+
+  const statusMutation = useMutation({
+    mutationFn: (status: "active" | "frozen" | "closed") =>
+      api<{ wallet: ApiWallet }>(`/api/v1/admin/wallets/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: (_res, status) => {
+      setFreezing(false);
+      setToast({
+        tone: "green",
+        message: status === "active" ? "Wallet unfrozen." : "Wallet frozen.",
+      });
+      invalidate();
+    },
+    onError: (err: Error) => {
+      setFreezing(false);
+      setToast({ tone: "red", message: err.message });
+    },
   });
 
   if (isError) {
@@ -46,6 +84,9 @@ export default function WalletDetailPage({
 
   const wallet = data?.wallet;
   const governance = wallet?.governance;
+  const isFrozen = wallet?.status === "frozen";
+  const isClosed = wallet?.status === "closed";
+  const nextStatus: "active" | "frozen" = isFrozen ? "active" : "frozen";
 
   return (
     <>
@@ -54,6 +95,20 @@ export default function WalletDetailPage({
         subtitle={isPending ? undefined : wallet!.owner?.name ?? undefined}
       >
         {!isPending && <StatusBadge status={wallet!.status} />}
+        {!isPending && !isClosed && (
+          <>
+            <Button variant="outline" onClick={() => setAdjusting(true)}>
+              Adjust balance
+            </Button>
+            <Button
+              variant={isFrozen ? "primary" : "danger"}
+              onClick={() => setFreezing(true)}
+              disabled={statusMutation.isPending}
+            >
+              {isFrozen ? "Unfreeze" : "Freeze"}
+            </Button>
+          </>
+        )}
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -204,7 +259,11 @@ export default function WalletDetailPage({
               </THead>
               <TBody>
                 {data!.recent_transactions.map((t) => (
-                  <TR key={t.id}>
+                  <TR
+                    key={t.id}
+                    clickable
+                    onClick={() => router.push(`/transactions/${t.id}`)}
+                  >
                     <TD className="font-mono text-xs text-muted">{t.reference}</TD>
                     <TD>{label(t.type)}</TD>
                     <TD
@@ -226,6 +285,36 @@ export default function WalletDetailPage({
           )}
         </Card>
       </div>
+
+      {adjusting && wallet ? (
+        <AdjustBalanceModal
+          walletId={id}
+          walletName={wallet.name}
+          onClose={() => setAdjusting(false)}
+          onSuccess={(msg) => {
+            setAdjusting(false);
+            setToast({ tone: "green", message: msg });
+            invalidate();
+          }}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={freezing}
+        danger={!isFrozen}
+        title={isFrozen ? "Unfreeze this wallet?" : "Freeze this wallet?"}
+        message={
+          isFrozen
+            ? "The owner regains the ability to move funds in and out of this wallet."
+            : "Debits and transfers will be blocked until the wallet is unfrozen. The owner is notified."
+        }
+        confirmLabel={isFrozen ? "Unfreeze" : "Freeze"}
+        busy={statusMutation.isPending}
+        onConfirm={() => statusMutation.mutate(nextStatus)}
+        onCancel={() => setFreezing(false)}
+      />
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </>
   );
 }

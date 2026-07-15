@@ -5,12 +5,12 @@ type Size = "sm" | "md";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-brand text-white hover:bg-brand-dark focus-visible:ring-brand/40 disabled:bg-brand/50",
+    "bg-brand text-white shadow-sm hover:bg-brand-dark active:bg-brand-dark focus-visible:ring-brand/35 disabled:bg-brand/50 disabled:shadow-none",
   outline:
-    "border border-line bg-white text-ink hover:bg-rowhover focus-visible:ring-lavender",
-  ghost: "text-ink hover:bg-rowhover focus-visible:ring-lavender",
+    "border border-line bg-white text-ink hover:bg-rowhover hover:border-lavender active:bg-lavender/40 focus-visible:ring-brand/25",
+  ghost: "text-ink hover:bg-rowhover active:bg-lavender/40 focus-visible:ring-brand/25",
   danger:
-    "bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger/40 disabled:bg-danger/50",
+    "bg-danger text-white shadow-sm hover:bg-danger/90 active:bg-danger focus-visible:ring-danger/35 disabled:bg-danger/50 disabled:shadow-none",
 };
 
 const sizes: Record<Size, string> = {
@@ -32,8 +32,9 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-70",
+        "inline-flex select-none items-center justify-center gap-2 rounded-lg font-semibold transition-all duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-white",
+        "disabled:cursor-not-allowed disabled:opacity-70",
         variants[variant],
         sizes[size],
         className,

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/stores/auth";
 import { Sidebar } from "@/components/sidebar";
+import { TopBar } from "@/components/topbar";
 
 /**
  * Client-side guard for every admin page: requires a stored token AND an
@@ -39,7 +40,10 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-page">
       <Sidebar />
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar />
+        <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      </div>
     </div>
   );
 }

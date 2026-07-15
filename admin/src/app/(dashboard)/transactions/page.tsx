@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, qs } from "@/lib/api";
@@ -17,6 +18,7 @@ import { TableSkeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -104,7 +106,11 @@ export default function TransactionsPage() {
               </THead>
               <TBody>
                 {data.transactions.map((t) => (
-                  <TR key={t.id}>
+                  <TR
+                    key={t.id}
+                    clickable
+                    onClick={() => router.push(`/transactions/${t.id}`)}
+                  >
                     <TD className="font-mono text-xs text-muted">{t.reference}</TD>
                     <TD>
                       <p className="font-medium">{t.wallet?.name ?? `#${t.wallet_id}`}</p>

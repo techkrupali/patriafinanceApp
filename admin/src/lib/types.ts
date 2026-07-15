@@ -42,7 +42,14 @@ export interface ApiTransaction {
   id: number;
   reference: string;
   wallet_id: number;
-  type: "fund" | "withdrawal" | "transfer_in" | "transfer_out";
+  type:
+    | "fund"
+    | "withdrawal"
+    | "transfer_in"
+    | "transfer_out"
+    | "reversal"
+    | "admin_credit"
+    | "admin_debit";
   direction: "credit" | "debit";
   amount: string; // naira string
   fee: string;
@@ -139,15 +146,37 @@ export interface UsersData {
   pagination: Pagination;
 }
 
+export interface UserDevice {
+  device_name: string | null;
+  platform: string | null;
+  last_active_at: string | null;
+}
+
+/** Aggregate money movement for a user, from the enriched detail endpoint. */
+export interface UserSummary {
+  total_in: string; // naira string
+  total_out: string; // naira string
+  wallet_count: number;
+}
+
+/** A project the user is party to (serializeProject shape + their role). */
+export interface UserProject extends ProjectDetail {
+  role: "owner" | "vendor" | string;
+}
+
+/** KYC submission summary (serializeKycSubmission without payload). */
+export type KycSubmissionSummary = Omit<KycSubmission, "payload">;
+
 export interface UserDetailData {
   user: ApiUser;
   wallets: ApiWallet[];
-  devices: {
-    device_name: string | null;
-    platform: string | null;
-    last_active_at: string | null;
-  }[];
+  devices: UserDevice[];
   recent_transactions: ApiTransaction[];
+  loans: LoanDetail[];
+  projects: UserProject[];
+  approvals: ApprovalRequestDetail[];
+  kyc_submissions: KycSubmissionSummary[];
+  summary: UserSummary;
 }
 
 export interface WalletsData {
@@ -390,4 +419,68 @@ export interface KycSubmission {
 export interface KycDetailData {
   submission: KycSubmission;
   user: { id: number; name: string; email: string; kyc_tier: number };
+}
+
+// ── Admin management: transaction detail ──────────────────────────────
+
+export interface TransactionDetailData {
+  transaction: ApiTransaction;
+  wallet: {
+    id: number;
+    name: string;
+    type: string;
+    status: string;
+    owner: { id: number; name: string; email: string } | null;
+  } | null;
+  initiator: { id: number; name: string; email: string } | null;
+  related: ApiTransaction[];
+  reversible: boolean;
+}
+
+// ── Admin management: approval detail (serializeApprovalRequest shape) ─
+
+export interface ApprovalRequestDetail {
+  id: number;
+  wallet_id: number;
+  wallet: { id: number; name: string; type: string } | null;
+  initiator: { id: number; name: string } | null;
+  action: ApprovalAction;
+  amount: string; // naira string
+  fee: string; // naira string
+  description: string | null;
+  status: ApprovalStatus;
+  approvals_count: number;
+  required_approvals: number;
+  executed_transaction_reference: string | null;
+  fail_reason: string | null;
+  expires_at: string | null;
+  created_at: string | null;
+}
+
+export interface ApprovalResponseItem {
+  approver: { name: string | null };
+  decision: string; // "approve" | "reject"
+  note: string | null;
+  created_at: string | null;
+}
+
+export interface ApprovalDetailData {
+  approval: ApprovalRequestDetail;
+  responses: ApprovalResponseItem[];
+}
+
+// ── Admin management: mutation response payloads ──────────────────────
+
+export interface AdjustWalletResult {
+  transaction: ApiTransaction;
+  wallet: ApiWallet;
+}
+
+export interface ReverseTransactionResult {
+  original: ApiTransaction;
+  reversal: ApiTransaction;
+}
+
+export interface BroadcastResult {
+  sent: number;
 }
