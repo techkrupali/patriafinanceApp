@@ -113,11 +113,21 @@ Route::prefix('v1')->group(function () {
             Route::get('stats', [AdminController::class, 'stats']);
             Route::get('users', [AdminController::class, 'users']);
             Route::get('users/{user}', [AdminController::class, 'user']);
+            Route::patch('users/{user}', [AdminController::class, 'updateUser']);
             Route::patch('users/{user}/status', [AdminController::class, 'updateUserStatus']);
+            Route::patch('users/{user}/kyc-tier', [AdminController::class, 'setUserKycTier']);
             Route::get('wallets', [AdminController::class, 'wallets']);
             Route::get('wallets/{wallet}', [AdminController::class, 'walletDetail']);
+            Route::post('wallets/{wallet}/adjust', [AdminController::class, 'adjustWallet']);
+            Route::patch('wallets/{wallet}/status', [AdminController::class, 'updateWalletStatus']);
             Route::get('transactions', [AdminController::class, 'transactions']);
+            Route::get('transactions/{transaction}', [AdminController::class, 'transactionShow']);
+            Route::post('transactions/{transaction}/reverse', [AdminController::class, 'reverseTransaction']);
             Route::get('approvals', [AdminController::class, 'approvals']);
+            Route::get('approvals/{approvalRequest}', [AdminController::class, 'approvalShow']);
+
+            // Broadcast in-app notifications
+            Route::post('notifications/broadcast', [AdminController::class, 'broadcastNotification']);
 
             // Loans
             Route::get('loans', [AdminController::class, 'loans']);

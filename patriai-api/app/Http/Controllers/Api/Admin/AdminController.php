@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\AppNotification;
 use App\Models\ApprovalRequest;
 use App\Models\KycSubmission;
 use App\Models\Loan;
@@ -13,9 +14,12 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\KycService;
 use App\Services\LoanService;
+use App\Services\NotificationService;
+use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class AdminController extends ApiController
 {
@@ -101,6 +105,8 @@ class AdminController extends ApiController
     // GET /admin/users/{user}
     public function user(User $user): JsonResponse
     {
+        $walletIds = $user->wallets()->pluck('id');
+
         return $this->ok('User fetched', [
             'user' => $this->serializeUser($user),
             'wallets' => $user->wallets()->get()->map(fn ($w) => $this->serializeWallet($w)),
@@ -109,9 +115,72 @@ class AdminController extends ApiController
                 'platform' => $d->platform,
                 'last_active_at' => $d->last_active_at?->toIso8601String(),
             ]),
-            'recent_transactions' => Transaction::whereIn('wallet_id', $user->wallets()->pluck('id'))
+            'recent_transactions' => Transaction::whereIn('wallet_id', $walletIds)
                 ->latest()->limit(20)->get()->map(fn ($t) => $this->serializeTransaction($t)),
+            'loans' => Loan::where('user_id', $user->id)->latest()->get()
+                ->map(fn ($l) => $this->serializeLoan($l)),
+            'projects' => Project::with(['wallet', 'owner', 'vendor'])
+                ->where(fn ($q) => $q->where('owner_id', $user->id)->orWhere('vendor_id', $user->id))
+                ->latest()->get()
+                ->map(fn ($p) => $this->serializeProject($p, $user) + ['role' => $p->roleOf($user)]),
+            'approvals' => ApprovalRequest::with(['wallet', 'initiator'])
+                ->where('initiator_id', $user->id)->latest()->limit(10)->get()
+                ->map(fn ($r) => $this->serializeApprovalRequest($r)),
+            'kyc_submissions' => KycSubmission::where('user_id', $user->id)->latest()->get()
+                ->map(fn ($s) => $this->serializeKycSubmission($s)),
+            'summary' => [
+                'total_in' => number_format(
+                    (int) Transaction::whereIn('wallet_id', $walletIds)
+                        ->where('status', 'successful')->where('direction', 'credit')->sum('amount') / 100,
+                    2, '.', ''
+                ),
+                'total_out' => number_format(
+                    (int) Transaction::whereIn('wallet_id', $walletIds)
+                        ->where('status', 'successful')->where('direction', 'debit')->sum('amount') / 100,
+                    2, '.', ''
+                ),
+                'wallet_count' => $walletIds->count(),
+            ],
         ]);
+    }
+
+    // PATCH /admin/users/{user}  { first_name?, last_name?, phone?, email? }
+    public function updateUser(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'first_name' => ['sometimes', 'string', 'max:80'],
+            'last_name' => ['sometimes', 'string', 'max:80'],
+            'phone' => ['sometimes', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)],
+            'email' => ['sometimes', 'email', 'max:120', Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+
+        if ($user->isAdmin()) {
+            return $this->fail('Cannot edit an admin account', 403);
+        }
+
+        $user->fill($data);
+        $user->name = trim("{$user->first_name} {$user->last_name}");
+        $user->save();
+
+        return $this->ok('User updated', ['user' => $this->serializeUser($user)]);
+    }
+
+    // PATCH /admin/users/{user}/kyc-tier  { tier: 0..3 }
+    public function setUserKycTier(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate(['tier' => ['required', 'integer', 'between:0,3']]);
+
+        $user->update(['kyc_tier' => $data['tier']]);
+
+        NotificationService::make()->push(
+            $user,
+            'kyc_tier_adjusted',
+            'Verification tier updated',
+            "Your verification tier was updated to Tier {$data['tier']} by support",
+            ['kyc_tier' => (int) $data['tier']],
+        );
+
+        return $this->ok('KYC tier updated', ['user' => $this->serializeUser($user)]);
     }
 
     // PATCH /admin/users/{user}/status  { status: active|suspended }
@@ -424,5 +493,280 @@ class AdminController extends ApiController
         $submission = KycService::make()->reject($submission, $request->user(), $data['note'] ?? null);
 
         return $this->ok('KYC rejected', ['submission' => $this->serializeKycSubmission($submission)]);
+    }
+
+    // POST /admin/wallets/{wallet}/adjust  { direction: credit|debit, amount, reason }
+    public function adjustWallet(Request $request, Wallet $wallet): JsonResponse
+    {
+        $data = $request->validate([
+            'direction' => ['required', 'in:credit,debit'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['required', 'string', 'max:200'],
+        ]);
+
+        if ($wallet->owner->isAdmin()) {
+            return $this->fail('Cannot adjust an admin-owned wallet', 403);
+        }
+
+        $admin = $request->user();
+        $amountKobo = $this->toKobo($data['amount']);
+        $reason = $data['reason'];
+        $meta = ['kind' => 'admin_adjustment', 'reason' => $reason, 'by' => $admin->id];
+
+        if ($data['direction'] === 'credit') {
+            $txn = WalletService::make()->credit(
+                $wallet,
+                $amountKobo,
+                'admin_credit',
+                $meta,
+                null,
+                "Admin credit: {$reason}",
+                $admin->id,
+            );
+        } else {
+            // Overdraft-guarded: throws ValidationException (422) if insufficient balance.
+            $txn = WalletService::make()->debit(
+                $wallet,
+                $amountKobo,
+                0,
+                'admin_debit',
+                $meta,
+                "Admin debit: {$reason}",
+                $admin->id,
+            );
+        }
+
+        NotificationService::make()->push(
+            $wallet->owner,
+            'admin_adjustment',
+            'Wallet adjustment',
+            ($data['direction'] === 'credit' ? 'Your wallet was credited ₦' : 'Your wallet was debited ₦')
+                . number_format($amountKobo / 100, 2, '.', '') . " by support: {$reason}",
+            [
+                'wallet_id' => $wallet->id,
+                'direction' => $data['direction'],
+                'transaction_reference' => $txn->reference,
+            ],
+        );
+
+        return $this->ok('Wallet adjusted', [
+            'transaction' => $this->serializeTransaction($txn),
+            'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
+        ]);
+    }
+
+    // PATCH /admin/wallets/{wallet}/status  { status: active|frozen|closed }
+    public function updateWalletStatus(Request $request, Wallet $wallet): JsonResponse
+    {
+        $data = $request->validate(['status' => ['required', 'in:active,frozen,closed']]);
+
+        $wallet->update(['status' => $data['status']]);
+
+        NotificationService::make()->push(
+            $wallet->owner,
+            'wallet_status_changed',
+            'Wallet status updated',
+            "Your wallet \"{$wallet->name}\" was set to {$data['status']} by support",
+            ['wallet_id' => $wallet->id, 'status' => $data['status']],
+        );
+
+        return $this->ok("Wallet {$data['status']}", [
+            'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
+        ]);
+    }
+
+    // GET /admin/transactions/{transaction}
+    public function transactionShow(Transaction $transaction): JsonResponse
+    {
+        $transaction->load(['wallet.owner', 'user']);
+
+        $ref = $transaction->reference;
+        $meta = $transaction->meta ?? [];
+        $cp = $transaction->counterparty ?? [];
+
+        // References this transaction itself points at (its transfer pair / its reversal counterpart).
+        $linkedRefs = array_values(array_filter([
+            $meta['pair_reference'] ?? null,
+            $meta['reversal_reference'] ?? null,
+            $meta['original_reference'] ?? null,
+            $cp['original_reference'] ?? null,
+        ]));
+
+        $related = Transaction::where('id', '!=', $transaction->id)
+            ->where(function ($q) use ($ref, $linkedRefs) {
+                $q->where('meta->pair_reference', $ref)
+                    ->orWhere('meta->original_reference', $ref)
+                    ->orWhere('meta->reversal_reference', $ref)
+                    ->orWhere('counterparty->original_reference', $ref);
+                if ($linkedRefs) {
+                    $q->orWhereIn('reference', $linkedRefs);
+                }
+            })
+            ->latest()
+            ->get()
+            ->map(fn ($t) => $this->serializeTransaction($t));
+
+        $reversible = $transaction->status === 'successful'
+            && empty($meta['reversed'])
+            && $transaction->type !== 'reversal';
+
+        $wallet = $transaction->wallet;
+
+        return $this->ok('Transaction fetched', [
+            'transaction' => $this->serializeTransaction($transaction),
+            'wallet' => $wallet ? [
+                'id' => $wallet->id,
+                'name' => $wallet->name,
+                'type' => $wallet->type,
+                'status' => $wallet->status,
+                'owner' => $wallet->owner ? [
+                    'id' => $wallet->owner->id,
+                    'name' => $wallet->owner->fullName(),
+                    'email' => $wallet->owner->email,
+                ] : null,
+            ] : null,
+            'initiator' => $transaction->user ? [
+                'id' => $transaction->user->id,
+                'name' => $transaction->user->fullName(),
+                'email' => $transaction->user->email,
+            ] : null,
+            'related' => $related,
+            'reversible' => $reversible,
+        ]);
+    }
+
+    // POST /admin/transactions/{transaction}/reverse  { reason }
+    public function reverseTransaction(Request $request, Transaction $transaction): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:200']]);
+
+        if ($transaction->status !== 'successful') {
+            return $this->fail('Only successful transactions can be reversed', 422);
+        }
+        $meta = $transaction->meta ?? [];
+        if (!empty($meta['reversed'])) {
+            return $this->fail('Transaction has already been reversed', 422);
+        }
+        if ($transaction->type === 'reversal') {
+            return $this->fail('A reversal cannot itself be reversed', 422);
+        }
+
+        $admin = $request->user();
+        $wallet = $transaction->wallet;
+        $reason = $data['reason'];
+        $counterparty = [
+            'kind' => 'reversal',
+            'original_reference' => $transaction->reference,
+            'reason' => $reason,
+            'by' => $admin->id,
+        ];
+
+        // Reversal-first (doc §16.3): original row preserved, a compensating entry is written.
+        // Both the compensating money move and the meta stamp are atomic.
+        $reversal = DB::transaction(function () use ($transaction, $wallet, $admin, $reason, $counterparty, $meta) {
+            if ($transaction->direction === 'debit') {
+                $rev = WalletService::make()->credit(
+                    $wallet,
+                    $transaction->amount + $transaction->fee,
+                    'reversal',
+                    $counterparty,
+                    null,
+                    "Reversal: {$reason}",
+                    $admin->id,
+                );
+            } else {
+                // May throw ValidationException (422) if the credited funds were already spent.
+                $rev = WalletService::make()->debit(
+                    $wallet,
+                    $transaction->amount,
+                    0,
+                    'reversal',
+                    $counterparty,
+                    "Reversal: {$reason}",
+                    $admin->id,
+                );
+            }
+
+            $transaction->update([
+                'meta' => array_merge($meta, [
+                    'reversed' => true,
+                    'reversal_reference' => $rev->reference,
+                    'reversed_by' => $admin->id,
+                    'reversed_at' => now()->toIso8601String(),
+                ]),
+            ]);
+
+            return $rev;
+        });
+
+        NotificationService::make()->push(
+            $wallet->owner,
+            'transaction_reversed',
+            'Transaction reversed',
+            "Transaction {$transaction->reference} was reversed by support: {$reason}",
+            [
+                'transaction_reference' => $transaction->reference,
+                'reversal_reference' => $reversal->reference,
+            ],
+        );
+
+        return $this->ok('Transaction reversed', [
+            'original' => $this->serializeTransaction($transaction->refresh()),
+            'reversal' => $this->serializeTransaction($reversal),
+        ]);
+    }
+
+    // GET /admin/approvals/{approvalRequest}
+    public function approvalShow(ApprovalRequest $approvalRequest): JsonResponse
+    {
+        $approvalRequest->load(['wallet', 'initiator', 'responses.approver']);
+
+        return $this->ok('Approval request fetched', [
+            'approval' => $this->serializeApprovalRequest($approvalRequest),
+            'responses' => $approvalRequest->responses->map(fn ($r) => [
+                'approver' => ['name' => $r->approver?->fullName()],
+                'decision' => $r->decision,
+                'note' => $r->note,
+                'created_at' => $r->created_at?->toIso8601String(),
+            ]),
+        ]);
+    }
+
+    // POST /admin/notifications/broadcast  { title, body, target: all|user, user_id? }
+    public function broadcastNotification(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:500'],
+            'target' => ['required', 'in:all,user'],
+            'user_id' => ['required_if:target,user', 'integer', 'exists:users,id'],
+        ]);
+
+        if ($data['target'] === 'user') {
+            $user = User::findOrFail($data['user_id']);
+            NotificationService::make()->push($user, 'admin_message', $data['title'], $data['body']);
+
+            return $this->ok('Notification sent', ['sent' => 1]);
+        }
+
+        $now = now();
+        $sent = 0;
+
+        User::where('role', 'user')->select('id')->chunkById(500, function ($users) use ($data, $now, &$sent) {
+            $rows = $users->map(fn ($u) => [
+                'user_id' => $u->id,
+                'type' => 'admin_message',
+                'title' => $data['title'],
+                'body' => $data['body'],
+                'data' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all();
+
+            AppNotification::insert($rows);
+            $sent += count($rows);
+        });
+
+        return $this->ok('Broadcast sent', ['sent' => $sent]);
     }
 }
