@@ -101,6 +101,9 @@ export interface StatsData {
     active: number;
     escrow: string; // naira string — total reserved across active projects
   };
+  kyc: {
+    pending: number;
+  };
 }
 
 export type ApprovalAction =
@@ -337,4 +340,54 @@ export interface ProjectDetailData {
   vendor: { id: number; name: string; email: string } | null;
   wallet: ApiWallet;
   milestones: ProjectMilestone[];
+}
+
+export type KycStatus = "pending" | "approved" | "rejected";
+
+export interface KycListItem {
+  id: number;
+  user: { name: string; email: string };
+  target_tier: number;
+  type: string;
+  status: KycStatus;
+  created_at: string | null;
+}
+
+export interface KycData {
+  submissions: KycListItem[];
+  pagination: Pagination;
+}
+
+/** Tier-specific fields captured on the mobile KYC form. */
+export interface KycPayload {
+  // tier 1 — identity
+  bvn?: string;
+  nin?: string;
+  id_type?: string;
+  id_number?: string;
+  // tier 2 — address
+  address?: string;
+  city?: string;
+  state?: string;
+  // tier 3 — source of funds
+  source_of_funds?: string;
+  occupation?: string;
+  business_name?: string;
+  monthly_income?: string | number;
+}
+
+export interface KycSubmission {
+  id: number;
+  target_tier: number;
+  type: string;
+  status: KycStatus;
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  payload: KycPayload;
+}
+
+export interface KycDetailData {
+  submission: KycSubmission;
+  user: { id: number; name: string; email: string; kyc_tier: number };
 }

@@ -94,6 +94,18 @@ export function IconProjects({ className }: { className?: string }) {
   );
 }
 
+export function IconKyc({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <circle cx="8.5" cy="11" r="2" />
+      <path d="M5.3 16c.4-1.7 1.6-2.6 3.2-2.6s2.8.9 3.2 2.6" />
+      <path d="M14.5 10h3.5" />
+      <path d="M14.5 13.5h3.5" />
+    </Svg>
+  );
+}
+
 export function IconLogout({ className }: { className?: string }) {
   return (
     <Svg className={className}>

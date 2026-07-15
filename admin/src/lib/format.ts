@@ -66,6 +66,9 @@ const LABELS: Record<string, string> = {
   funded: "Funded",
   submitted: "Submitted",
   released: "Released",
+  // KYC applicant types
+  individual: "Individual",
+  business: "Business",
 };
 
 export function label(value: string): string {
@@ -88,6 +91,23 @@ const LOAN_CATEGORIES: Record<string, string> = {
 
 export function loanCategoryLabel(category: string): string {
   return LOAN_CATEGORIES[category] ?? label(category);
+}
+
+// KYC target tiers map to a human verification name.
+const KYC_TIER_NAMES: Record<number, string> = {
+  1: "Identity",
+  2: "Address",
+  3: "Source of Funds",
+};
+
+/** e.g. 2 -> "Address". */
+export function kycTierName(tier: number): string {
+  return KYC_TIER_NAMES[tier] ?? `Tier ${tier}`;
+}
+
+/** e.g. 2 -> "Tier 2 · Address". */
+export function kycTierLabel(tier: number): string {
+  return `Tier ${tier} · ${kycTierName(tier)}`;
 }
 
 /** Basis points -> percentage string, e.g. 1500 -> "15%". */
