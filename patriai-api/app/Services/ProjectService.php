@@ -98,10 +98,14 @@ class ProjectService
         }
 
         // A vendor is already assigned to someone else: only allow reassignment when
-        // nothing has been paid out yet (no released milestones).
+        // nothing has been paid out yet (no released milestones) and no milestone is
+        // mid-flight (submitted/approved) for the current vendor.
         if ($project->vendor_id && $project->vendor_id !== $vendor->id) {
             if ($project->milestones()->where('status', 'released')->exists()) {
                 throw ValidationException::withMessages(['vendor' => 'Cannot reassign the vendor after milestones have been released']);
+            }
+            if ($project->milestones()->whereIn('status', ['submitted', 'approved'])->exists()) {
+                throw ValidationException::withMessages(['vendor' => 'Cannot reassign the vendor while milestones are submitted or approved']);
             }
         }
 
@@ -143,6 +147,9 @@ class ProjectService
     {
         $this->assertOwner($project, $owner);
 
+        if ($project->status !== 'active') {
+            throw ValidationException::withMessages(['project' => 'Project is not active']);
+        }
         if ($amountKobo <= 0) {
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero']);
         }
@@ -329,5 +336,36 @@ class ProjectService
         }
 
         $milestone->delete();
+    }
+
+    /**
+     * Cancel a project. Owner only. Blocked once any milestone has been submitted,
+     * approved, or released (work/payment is already in flight). Sets status to
+     * 'cancelled' and notifies the assigned vendor, if any.
+     */
+    public function cancel(Project $project, User $owner): Project
+    {
+        $this->assertOwner($project, $owner);
+
+        if ($project->status === 'cancelled') {
+            throw ValidationException::withMessages(['project' => 'Project is already cancelled']);
+        }
+        if ($project->milestones()->whereIn('status', ['submitted', 'approved', 'released'])->exists()) {
+            throw ValidationException::withMessages(['project' => 'Cannot cancel a project with submitted, approved, or released milestones']);
+        }
+
+        $project->update(['status' => 'cancelled']);
+
+        if ($project->vendor_id && ($vendor = $project->vendor)) {
+            $this->notifications->push(
+                $vendor,
+                'project_cancelled',
+                'Project cancelled',
+                "{$owner->fullName()} cancelled the project \"{$project->title}\".",
+                ['project_id' => $project->id, 'title' => $project->title],
+            );
+        }
+
+        return $project->refresh();
     }
 }

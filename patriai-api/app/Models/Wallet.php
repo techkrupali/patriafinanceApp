@@ -175,6 +175,33 @@ class Wallet extends Model
             ->sum(\Illuminate\Support\Facades\DB::raw('amount + fee'));
     }
 
+    /** Alias of heldAmount(): kobo tied up in this wallet's pending approval requests. */
+    public function heldForApprovals(): int
+    {
+        return $this->heldAmount();
+    }
+
+    /**
+     * Spendable balance right now (kobo): the raw balance minus funds already
+     * committed to pending approval requests, and — for project escrow wallets —
+     * minus amounts still reserved by unreleased milestones. This is an ADDITIONAL
+     * pre-check on top of WalletService's row-locked overdraft guard; it stops a
+     * direct spend from over-committing funds that are reserved elsewhere.
+     */
+    public function availableToSpend(): int
+    {
+        $available = $this->balance - $this->heldForApprovals();
+
+        if ($this->type === 'project') {
+            $project = Project::where('wallet_id', $this->id)->first();
+            if ($project) {
+                $available -= $project->reservedAmount();
+            }
+        }
+
+        return $available;
+    }
+
     /** Naira string, e.g. "1500.00" */
     public function balanceNaira(): string
     {

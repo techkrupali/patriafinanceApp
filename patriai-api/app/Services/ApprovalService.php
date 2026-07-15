@@ -97,6 +97,10 @@ class ApprovalService
         if ($request->status !== 'pending') {
             throw ValidationException::withMessages(['approval' => 'This request is no longer pending.']);
         }
+        if ($request->expires_at && $request->expires_at->isPast()) {
+            $request->update(['status' => 'expired']);
+            throw ValidationException::withMessages(['approval' => 'This request has expired.']);
+        }
         if (!$request->wallet->canApprove($approver)) {
             throw ValidationException::withMessages(['approval' => 'You are not allowed to approve on this wallet.']);
         }
@@ -114,6 +118,10 @@ class ApprovalService
             // Re-check under the lock (another approver may have finalised it).
             if ($locked->status !== 'pending') {
                 throw ValidationException::withMessages(['approval' => 'This request is no longer pending.']);
+            }
+            if ($locked->expires_at && $locked->expires_at->isPast()) {
+                $locked->update(['status' => 'expired']);
+                throw ValidationException::withMessages(['approval' => 'This request has expired.']);
             }
             if ($locked->responses()->where('approver_id', $approver->id)->exists()) {
                 throw ValidationException::withMessages(['approval' => 'You have already responded to this request.']);

@@ -59,9 +59,13 @@ class LoanService
             return 0;
         }
 
+        // Only genuine inflows count toward credit history. Loan disbursements,
+        // reversals, and admin credits are not real earned volume and would
+        // otherwise let a disbursed loan inflate the next borrowing limit.
         return (int) Transaction::whereIn('wallet_id', $walletIds)
             ->where('direction', 'credit')
             ->where('status', 'successful')
+            ->whereNotIn('type', ['loan_disbursement', 'reversal', 'admin_credit'])
             ->where('created_at', '>=', now()->subDays(90))
             ->sum('amount');
     }
@@ -140,13 +144,6 @@ class LoanService
         if ($principalKobo <= 0) {
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero']);
         }
-        if ($this->hasOpenLoan($user)) {
-            throw ValidationException::withMessages(['loan' => 'You already have an active or pending loan']);
-        }
-        if ($principalKobo > $this->maxEligibleKobo($user)) {
-            throw ValidationException::withMessages(['amount' => 'Amount exceeds your eligible limit']);
-        }
-
         // If a disbursement wallet is named it must belong to the borrower.
         $disburseWallet = null;
         if ($disburseWalletId !== null) {
@@ -162,37 +159,51 @@ class LoanService
         $fee = 0;
         $totalRepayable = $principalKobo + $interest + $fee;
 
-        $loan = Loan::create([
-            'reference' => Loan::generateReference(),
-            'user_id' => $user->id,
-            'category' => $category,
-            'purpose' => $purpose,
-            'principal' => $principalKobo,
-            'interest_bps' => self::INTEREST_BPS,
-            'fee' => $fee,
-            'total_repayable' => $totalRepayable,
-            'outstanding' => $totalRepayable,
-            'penalty_accrued' => 0,
-            'tenor_days' => $tenorDays,
-            'repayment_frequency' => $frequency,
-            'status' => 'pending',
-            'disbursed_wallet_id' => $disburseWallet?->id,
-        ]);
+        // Serialize per-user: lock the user row so two concurrent applications can't
+        // both pass the one-open-loan guard. The open-loan + eligibility checks are
+        // re-evaluated inside the lock, and creation (+ auto-disburse) happens atomically.
+        return DB::transaction(function () use ($user, $category, $purpose, $principalKobo, $interest, $fee, $totalRepayable, $tenorDays, $frequency, $disburseWallet) {
+            User::whereKey($user->id)->lockForUpdate()->first();
 
-        $this->notifications->push(
-            $user,
-            'loan_submitted',
-            'Loan application received',
-            'Your ₦' . $this->naira($principalKobo) . " {$category} loan is being reviewed.",
-            ['loan_id' => $loan->id, 'loan_reference' => $loan->reference],
-        );
+            if ($this->hasOpenLoan($user)) {
+                throw ValidationException::withMessages(['loan' => 'You already have an active or pending loan']);
+            }
+            if ($principalKobo > $this->maxEligibleKobo($user)) {
+                throw ValidationException::withMessages(['amount' => 'Amount exceeds your eligible limit']);
+            }
 
-        // Auto-approve small, wallet-targeted loans.
-        if ($principalKobo <= self::AUTO_APPROVE_MAX_KOBO && $disburseWallet !== null) {
-            return $this->approveAndDisburse($loan, null);
-        }
+            $loan = Loan::create([
+                'reference' => Loan::generateReference(),
+                'user_id' => $user->id,
+                'category' => $category,
+                'purpose' => $purpose,
+                'principal' => $principalKobo,
+                'interest_bps' => self::INTEREST_BPS,
+                'fee' => $fee,
+                'total_repayable' => $totalRepayable,
+                'outstanding' => $totalRepayable,
+                'penalty_accrued' => 0,
+                'tenor_days' => $tenorDays,
+                'repayment_frequency' => $frequency,
+                'status' => 'pending',
+                'disbursed_wallet_id' => $disburseWallet?->id,
+            ]);
 
-        return $loan;
+            $this->notifications->push(
+                $user,
+                'loan_submitted',
+                'Loan application received',
+                'Your ₦' . $this->naira($principalKobo) . " {$category} loan is being reviewed.",
+                ['loan_id' => $loan->id, 'loan_reference' => $loan->reference],
+            );
+
+            // Auto-approve small, wallet-targeted loans.
+            if ($principalKobo <= self::AUTO_APPROVE_MAX_KOBO && $disburseWallet !== null) {
+                return $this->approveAndDisburse($loan, null);
+            }
+
+            return $loan;
+        });
     }
 
     /**

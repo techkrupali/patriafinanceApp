@@ -100,6 +100,7 @@ Route::prefix('v1')->group(function () {
         Route::get('projects', [ProjectController::class, 'index']);
         Route::post('projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
         Route::get('projects/{project}', [ProjectController::class, 'show']);
+        Route::post('projects/{project}/cancel', [ProjectController::class, 'cancel'])->middleware('throttle:30,1');
         Route::post('projects/{project}/vendor', [ProjectController::class, 'assignVendor'])->middleware('throttle:30,1');
         Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1');
         Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1');
@@ -136,6 +137,7 @@ Route::prefix('v1')->group(function () {
             Route::post('loans/{loan}/approve', [AdminController::class, 'approveLoan']);
             Route::post('loans/{loan}/reject', [AdminController::class, 'rejectLoan']);
             Route::post('loans/{loan}/default', [AdminController::class, 'defaultLoan']);
+            Route::post('loans/{loan}/recover', [AdminController::class, 'recoverLoan']);
 
             // Projects (Vendor & Project System)
             Route::get('projects', [AdminController::class, 'projects']);

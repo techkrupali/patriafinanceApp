@@ -33,6 +33,11 @@ class KycController extends ApiController
             ->latest()
             ->first();
 
+        $lastRejected = KycSubmission::where('user_id', $user->id)
+            ->where('status', 'rejected')
+            ->latest()
+            ->first();
+
         $status = $pending ? 'pending' : ($tier >= 1 ? 'verified' : 'unverified');
 
         return $this->ok('KYC status fetched', [
@@ -40,6 +45,7 @@ class KycController extends ApiController
             'max_tier' => KycService::MAX_TIER,
             'status' => $status,
             'pending_submission' => $pending ? $this->serializeKycSubmission($pending) : null,
+            'last_rejected' => $lastRejected ? $this->serializeKycSubmission($lastRejected) : null,
             'limits' => $this->presentLimits($svc->limits($tier)),
             'next_tier' => $tier < KycService::MAX_TIER ? [
                 'tier' => $tier + 1,

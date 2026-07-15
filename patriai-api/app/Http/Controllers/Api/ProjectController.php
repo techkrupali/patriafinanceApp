@@ -144,6 +144,21 @@ class ProjectController extends ApiController
         ], 201);
     }
 
+    // POST /projects/{project}/cancel  (owner)
+    public function cancel(Request $request, Project $project): JsonResponse
+    {
+        $user = $request->user();
+        if ($guard = $this->ownerGuard($project, $user)) {
+            return $guard;
+        }
+
+        $project = ProjectService::make()->cancel($project, $user);
+
+        return $this->ok('Project cancelled', [
+            'project' => $this->serializeProject($project->load(['wallet', 'owner', 'vendor']), $user),
+        ]);
+    }
+
     // DELETE /milestones/{milestone}
     public function removeMilestone(Request $request, Milestone $milestone): JsonResponse
     {

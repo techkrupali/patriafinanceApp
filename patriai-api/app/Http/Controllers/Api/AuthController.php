@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Models\WalletInvitation;
+use App\Services\NotificationService;
 use App\Services\OtpService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +48,33 @@ class AuthController extends ApiController
 
         // Main wallet + funding virtual account on the banking rails.
         WalletService::make()->createWallet($user, 'main', 'Main Wallet');
+
+        // Link any invitations that were addressed to this person before they had an
+        // account (by email or phone) so they surface immediately under /invitations.
+        $pendingInvites = WalletInvitation::where('status', 'pending')
+            ->whereNull('invitee_user_id')
+            ->where(function ($q) use ($user) {
+                $q->where('invitee_identifier', strtolower($user->email))
+                    ->orWhere('invitee_identifier', $user->phone);
+            })
+            ->get();
+
+        foreach ($pendingInvites as $invite) {
+            $invite->update(['invitee_user_id' => $user->id]);
+            $invite->load(['wallet', 'inviter']);
+            NotificationService::make()->push(
+                $user,
+                'invitation_received',
+                'Invitation to join ' . ($invite->wallet?->name ?? 'a wallet'),
+                ($invite->inviter?->fullName() ?: 'Someone') . ' invited you to join ' . ($invite->wallet?->name ?? 'a wallet') . " as {$invite->role}.",
+                [
+                    'invitation_id' => $invite->id,
+                    'wallet_id' => $invite->wallet_id,
+                    'wallet_name' => $invite->wallet?->name,
+                    'role' => $invite->role,
+                ],
+            );
+        }
 
         $user->refresh(); // pick up DB-level defaults (role, status, kyc_tier)
         $this->registerDevice($request, $user);

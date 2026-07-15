@@ -164,9 +164,22 @@ class WalletController extends ApiController
         app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
         $amountKobo = $this->toKobo($data['amount']);
+        $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
 
-        if ($wallet->approvalRequiredFor($amountKobo)) {
-            $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
+        // Per-tier daily withdrawal/transfer limit.
+        if ($err = $this->dailyTransferLimitError($user, $amountKobo)) {
+            return $err;
+        }
+
+        // Cannot commit more than is genuinely available: pending approvals and
+        // (for project wallets) milestone reservations are subtracted here.
+        if ($amountKobo + $feeKobo > $wallet->availableToSpend()) {
+            return $this->fail('Amount exceeds available balance (funds are reserved for pending approvals/milestones).', 422);
+        }
+
+        // Only route to approval when at least one eligible approver exists; otherwise
+        // the initiator is the sole controller, so the spend executes directly.
+        if ($wallet->approvalRequiredFor($amountKobo) && $wallet->eligibleApprovers($user->id)->isNotEmpty()) {
             $req = ApprovalService::make()->create(
                 $wallet,
                 $user,

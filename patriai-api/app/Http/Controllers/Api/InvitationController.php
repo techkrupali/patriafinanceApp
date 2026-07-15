@@ -39,6 +39,11 @@ class InvitationController extends ApiController
         $inviteRole = $data['role'] ?? 'contributor';
         $canApprove = $request->boolean('can_approve');
 
+        // A viewer is read-only and must never be granted approval rights.
+        if ($inviteRole === 'viewer' && $canApprove) {
+            return $this->fail('A viewer cannot be given approval rights', 422);
+        }
+
         $invitee = str_contains($identifier, '@')
             ? User::where('email', strtolower($identifier))->first()
             : User::where('phone', $identifier)->first();

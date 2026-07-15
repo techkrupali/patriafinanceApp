@@ -51,8 +51,25 @@ class TransferController extends ApiController
         $amountKobo = $this->toKobo($data['amount']);
         $service = WalletService::make();
         $dest = $data['destination'];
-        $needsApproval = $from->approvalRequiredFor($amountKobo);
         $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
+
+        // Fee only applies to external (bank) transfers; wallet/user moves are free.
+        $spendKobo = $amountKobo + ($dest['kind'] === 'bank' ? $feeKobo : 0);
+
+        // Per-tier daily transfer limit (money leaving the wallet).
+        if ($err = $this->dailyTransferLimitError($user, $amountKobo)) {
+            return $err;
+        }
+
+        // Cannot commit more than is genuinely available: pending approvals and
+        // (for project wallets) milestone reservations are subtracted here.
+        if ($spendKobo > $from->availableToSpend()) {
+            return $this->fail('Amount exceeds available balance (funds are reserved for pending approvals/milestones).', 422);
+        }
+
+        // Only route to approval when at least one eligible approver exists; otherwise
+        // the initiator is the sole controller, so the spend executes directly.
+        $needsApproval = $from->approvalRequiredFor($amountKobo) && $from->eligibleApprovers($user->id)->isNotEmpty();
 
         switch ($dest['kind']) {
             case 'wallet':

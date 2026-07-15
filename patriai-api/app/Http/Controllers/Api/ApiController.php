@@ -15,10 +15,45 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
+use App\Services\KycService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 abstract class ApiController extends Controller
 {
+    /**
+     * Kobo the user has already moved OUT today (transfer_out + withdrawal,
+     * successful or still-pending). Used to enforce the per-KYC-tier daily limit.
+     */
+    protected function todaysOutgoingKobo(User $user): int
+    {
+        return (int) Transaction::where('user_id', $user->id)
+            ->where('direction', 'debit')
+            ->whereIn('type', ['transfer_out', 'withdrawal'])
+            ->whereIn('status', ['successful', 'pending'])
+            ->where('created_at', '>=', now()->startOfDay())
+            ->sum(DB::raw('amount + fee'));
+    }
+
+    /**
+     * Guard an outgoing spend of $amountKobo against the user's daily transfer
+     * limit for their KYC tier. Returns a 422 JsonResponse if it would be exceeded,
+     * or null when allowed (limit null = unlimited, e.g. tier 3).
+     */
+    protected function dailyTransferLimitError(User $user, int $amountKobo): ?JsonResponse
+    {
+        $limit = KycService::make()->limits((int) $user->kyc_tier)['daily_transfer_limit'];
+        if ($limit === null) {
+            return null;
+        }
+
+        if ($this->todaysOutgoingKobo($user) + $amountKobo > $limit) {
+            return $this->fail('This exceeds your daily transfer limit for your verification tier. Verify a higher tier to raise it.', 422);
+        }
+
+        return null;
+    }
+
     protected function ok(string $message, mixed $data = null, int $code = 200): JsonResponse
     {
         $payload = ['status' => true, 'message' => $message];

@@ -77,6 +77,7 @@ class AdminController extends ApiController
     public function users(Request $request): JsonResponse
     {
         $users = User::query()
+            ->where('role', 'user')
             ->when($request->query('search'), function ($q, $s) {
                 $q->where(fn ($w) => $w
                     ->where('email', 'ilike', "%{$s}%")
@@ -380,6 +381,30 @@ class AdminController extends ApiController
     public function runDueLoans(): JsonResponse
     {
         return $this->ok('Overdue loans processed', LoanService::make()->accrueOverdue());
+    }
+
+    // POST /admin/loans/{loan}/recover  { wallet_id, amount, reason? }
+    public function recoverLoan(Request $request, Loan $loan): JsonResponse
+    {
+        $data = $request->validate([
+            'wallet_id' => ['required', 'integer'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        // The recovery wallet must belong to the borrower — funds are pulled from
+        // the borrower to settle their own loan.
+        $wallet = Wallet::where('id', $data['wallet_id'])
+            ->where('user_id', $loan->user_id)
+            ->first();
+        if (!$wallet) {
+            return $this->fail('Wallet does not belong to the borrower', 422);
+        }
+
+        // Overdraft-guarded, row-locked debit inside LoanService/WalletService.
+        $result = LoanService::make()->recover($loan, $request->user(), $wallet, $this->toKobo($data['amount']));
+
+        return $this->ok('Loan recovery successful', ['loan' => $this->serializeLoan($result['loan'])]);
     }
 
     // GET /admin/projects?status=

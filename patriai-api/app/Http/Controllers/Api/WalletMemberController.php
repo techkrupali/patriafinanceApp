@@ -59,6 +59,16 @@ class WalletMemberController extends ApiController
             return $this->fail('Nothing to update', 422);
         }
 
+        // A viewer must never be an approver. If the resulting role is viewer,
+        // reject an explicit can_approve=true and force the flag off.
+        $resultingRole = $update['role'] ?? $member->role;
+        if ($resultingRole === 'viewer') {
+            if (($update['can_approve'] ?? false) === true) {
+                return $this->fail('A viewer cannot be given approval rights', 422);
+            }
+            $update['can_approve'] = false;
+        }
+
         $member->update($update);
 
         return $this->ok('Member updated', ['member' => $this->serializeMember($member->fresh('user'))]);
