@@ -33,6 +33,7 @@ import {
   frequencyLabel,
   installmentCount,
   loanCategoryLabel,
+  loanCategoryOption,
 } from '../../lib/loans';
 import type { LoanCategory, LoanDetailData, RepaymentFrequency, Wallet } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -68,16 +69,21 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
   const elig = eligibility.data;
   const maxKobo = elig?.max_amount_kobo ?? 0;
 
-  // Only surface categories the backend says this user is eligible for.
+  // Only surface categories the backend says this user is eligible for — but
+  // never blank the grid: if the allow-list has slugs we don't recognize, build
+  // tiles straight from it so the flow can always proceed.
   const categories = useMemo(() => {
     const allowed = elig?.categories;
     if (!allowed || allowed.length === 0) return LOAN_CATEGORIES;
-    return LOAN_CATEGORIES.filter((c) => allowed.includes(c.value));
+    const filtered = LOAN_CATEGORIES.filter((c) => allowed.includes(c.value));
+    return filtered.length > 0 ? filtered : allowed.map((slug) => loanCategoryOption(slug));
   }, [elig]);
 
   const amountNum = parseFloat(amount);
   const amountKobo = Number.isFinite(amountNum) ? Math.round(amountNum * 100) : 0;
-  const overMax = maxKobo > 0 && amountKobo > maxKobo;
+  // A zero cap means "cannot borrow": any positive amount is over the limit so
+  // Review stays disabled (the ineligibility screen below explains why).
+  const overMax = amountKobo > maxKobo;
   const amountOk = Number.isFinite(amountNum) && amountNum > 0 && !overMax;
 
   const tenorNum = parseInt(tenor, 10);
@@ -190,6 +196,47 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
         </View>
       ) : eligibility.error ? (
         <LoadError message={(eligibility.error as Error).message} onRetry={() => eligibility.refetch()} />
+      ) : elig && (maxKobo <= 0 || elig.has_active_loan) ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-lav-soft">
+            <LinearGradient
+              colors={gradients.navy}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ height: 84, width: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons
+                name={elig.has_active_loan ? 'time-outline' : 'shield-checkmark-outline'}
+                size={40}
+                color={colors.brandGlow}
+              />
+            </LinearGradient>
+          </View>
+          <Text className="mt-6 text-center text-2xl font-extrabold tracking-tight text-ink">
+            {elig.has_active_loan ? 'You already have a loan' : 'Verification required'}
+          </Text>
+          <Text className="mt-2 text-center text-sm leading-6 text-muted">
+            {elig.has_active_loan
+              ? 'Repay your current loan before applying for a new one.'
+              : `Loans unlock at Tier ${elig.requires_tier ?? 3} (Source of Funds). You're on Tier ${elig.tier}. Verify to start borrowing.`}
+          </Text>
+          {elig.has_active_loan ? (
+            <Button
+              title="View my loans"
+              icon="arrow-forward"
+              onPress={() => navigation.navigate('Loans')}
+              className="mt-8 self-stretch"
+            />
+          ) : (
+            <Button
+              title="Verify my identity"
+              icon="arrow-forward"
+              onPress={() => navigation.navigate('Kyc')}
+              className="mt-8 self-stretch"
+            />
+          )}
+          <Button title="Go back" variant="ghost" onPress={() => navigation.goBack()} className="mt-2 self-stretch" />
+        </View>
       ) : elig ? (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
           <ScrollView

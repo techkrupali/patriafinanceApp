@@ -535,6 +535,8 @@ export interface LoanEligibility {
   /** Same limit in integer kobo, for exact validation. */
   max_amount_kobo: number;
   tier: number;
+  /** When the user's tier is too low to borrow, the tier they must reach (e.g. 3). */
+  requires_tier?: number;
   categories: string[];
   has_active_loan: boolean;
 }

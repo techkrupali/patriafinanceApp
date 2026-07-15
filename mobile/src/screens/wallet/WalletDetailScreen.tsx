@@ -279,7 +279,10 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 <Card className="mt-3 py-1">
                   {members.map((m, i) => {
                     const isOwner = m.role === 'owner';
-                    const tappable = canManage && !isOwner;
+                    // Only advertise a row as tappable once the rich member list
+                    // (which carries the id needed to manage it) has loaded —
+                    // otherwise the tap silently no-ops.
+                    const tappable = canManage && !isOwner && richMembers.isSuccess;
                     const Row = tappable ? Pressable : View;
                     return (
                       <View key={m.user_id}>
