@@ -36,6 +36,31 @@ export const TIER_SHORT_NAMES: Record<number, string> = {
   3: 'Source',
 };
 
+// ---- Tier requirements ----
+
+/**
+ * Human labels for the raw requirement field names the API lists on a tier
+ * (e.g. `source_of_funds` → "Source of funds"). `occupation`/`business_name`
+ * are the same choice on the form, so both read "Occupation / Business name".
+ */
+const REQUIREMENT_LABELS: Record<string, string> = {
+  bvn: 'BVN',
+  nin: 'NIN',
+  id_type: 'ID type',
+  id_number: 'ID number',
+  address: 'Address',
+  city: 'City',
+  state: 'State',
+  source_of_funds: 'Source of funds',
+  occupation: 'Occupation / Business name',
+  business_name: 'Occupation / Business name',
+  monthly_income: 'Monthly income',
+};
+
+export function kycRequirementLabel(req: string): string {
+  return REQUIREMENT_LABELS[req] ?? humanize(req);
+}
+
 // ---- ID types (Tier 1) ----
 
 export interface IdTypeOption {

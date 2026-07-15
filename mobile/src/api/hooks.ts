@@ -669,6 +669,15 @@ export function useCreateProject() {
   });
 }
 
+export function useCancelProject(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<ProjectMutatedData>(`/projects/${projectId}/cancel`, { method: 'POST' }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
 export function useAssignVendor(projectId: number) {
   const qc = useQueryClient();
   return useMutation({

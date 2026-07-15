@@ -324,34 +324,13 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               </Pressable>
             ) : null}
 
-            {/* AI teaser */}
-            <Pressable
-              onPress={() => navigation.navigate('AI')}
-              className="mt-6 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
-              style={shadow.card}
-            >
-              <LinearGradient
-                colors={gradients.avatar}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Ionicons name="sparkles" size={20} color={colors.brandGlow} />
-              </LinearGradient>
-              <View className="ml-3 flex-1">
-                <Text className="text-[15px] font-bold text-ink">Smart suggestions</Text>
-                <Text className="mt-0.5 text-[13px] text-muted">Ask Patriai AI about your money</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.faded} />
-            </Pressable>
-
             {/* Patria Lending entry point */}
             <Pressable
               onPress={() => {
                 selection();
                 navigation.navigate('Loans');
               }}
-              className="mt-3 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
+              className="mt-6 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
               style={shadow.card}
             >
               <LinearGradient

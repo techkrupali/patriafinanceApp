@@ -167,7 +167,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           <View className="mt-4 flex-row items-center rounded-full bg-success-soft px-3.5 py-1.5">
             <Ionicons name="ribbon-outline" size={13} color={colors.brand} style={{ marginRight: 5 }} />
             <Text className="text-[11px] font-bold uppercase tracking-widest text-brand">
-              KYC Tier {user?.kyc_tier ?? 0}
+              KYC Tier {kycTier}
             </Text>
           </View>
         </Card>

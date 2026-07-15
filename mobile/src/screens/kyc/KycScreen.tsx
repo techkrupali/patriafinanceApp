@@ -13,6 +13,7 @@ import { statusIconColor } from '../../lib/governance';
 import { dayLabel, formatMoney } from '../../lib/format';
 import {
   TIER_SHORT_NAMES,
+  kycRequirementLabel,
   kycStatusVisual,
   submissionStatusVisual,
   tierName,
@@ -108,6 +109,9 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
   const status = kyc ? kycStatusVisual(kyc.status) : null;
   const next = kyc?.next_tier ?? null;
   const pending = kyc?.status === 'pending' ? kyc.pending_submission : null;
+  // Surface the last rejection only when the user isn't mid-review, so they know
+  // why a tier was rejected and can resubmit.
+  const rejected = !pending ? (kyc?.last_rejected ?? null) : null;
 
   return (
     <Screen withBottomInset>
@@ -158,6 +162,33 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
 
           {/* Current limits */}
           <LimitsCard limits={kyc.limits} title="Your current limits" />
+
+          {/* Rejected submission — surfaced so the user knows why & can resubmit */}
+          {rejected ? (
+            <Card className="mt-8 border border-danger-soft">
+              <View className="flex-row items-center">
+                <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-danger-soft">
+                  <Ionicons name="close-circle" size={22} color={colors.danger} />
+                </View>
+                <View className="flex-1 pr-2">
+                  <Text className="text-[15px] font-bold text-ink">
+                    Tier {rejected.target_tier} verification was rejected
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-muted">
+                    Reviewed {dayLabel(rejected.reviewed_at ?? rejected.created_at)}
+                  </Text>
+                </View>
+              </View>
+              <View className="mt-4 flex-row items-start rounded-2xl bg-danger-soft p-3.5">
+                <Ionicons name="information-circle" size={17} color={colors.danger} style={{ marginRight: 8, marginTop: 1 }} />
+                <Text className="flex-1 text-[13px] leading-5 text-ink">
+                  {rejected.review_note?.trim()
+                    ? rejected.review_note
+                    : 'Your submission couldn’t be verified. Please check your details and resubmit below.'}
+                </Text>
+              </View>
+            </Card>
+          ) : null}
 
           {/* Verification state */}
           {pending ? (
@@ -213,7 +244,7 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
                   {next.requirements.map((req) => (
                     <View key={req} className="flex-row items-start">
                       <Ionicons name="ellipse-outline" size={18} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
-                      <Text className="flex-1 text-[14px] leading-5 text-ink">{req}</Text>
+                      <Text className="flex-1 text-[14px] leading-5 text-ink">{kycRequirementLabel(req)}</Text>
                     </View>
                   ))}
                 </View>

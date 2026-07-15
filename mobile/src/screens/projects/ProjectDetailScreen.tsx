@@ -26,6 +26,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { colors, gradients, shadow } from '../../theme';
 import {
   useApproveMilestone,
+  useCancelProject,
   useProject,
   useRejectMilestone,
   useRemoveMilestone,
@@ -182,11 +183,14 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
   const remove = useRemoveMilestone(projectId);
   const submit = useSubmitMilestone(projectId);
   const removeVendor = useRemoveVendor(projectId);
+  const cancelProject = useCancelProject(projectId);
 
   const [copied, setCopied] = useState(false);
   const [sheet, setSheet] = useState<{ kind: SheetKind; milestone: Milestone } | null>(null);
   const [sheetText, setSheetText] = useState('');
   const [sheetError, setSheetError] = useState<string | null>(null);
+  // Only the milestone being approved/removed should show a spinner, not all cards.
+  const [busyMilestoneId, setBusyMilestoneId] = useState<number | null>(null);
 
   const data = query.data;
   const project = data?.project;
@@ -197,6 +201,13 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
   const isVendor = role === 'vendor';
   const vendorContact = data?.vendor;
   const status = project ? projectStatusVisual(project.status) : null;
+
+  // The owner can cancel an active project only while nothing is in-flight
+  // (submitted/approved) or already released from escrow.
+  const hasBlockingMilestones = milestones.some(
+    (m) => m.status === 'submitted' || m.status === 'approved' || m.status === 'released',
+  );
+  const canCancel = isOwner && project?.status === 'active' && !hasBlockingMilestones;
 
   const copyAccount = async () => {
     if (!wallet?.virtual_account) return;
@@ -214,8 +225,13 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve & pay',
-          onPress: () =>
-            approve.mutate(m.id, { onError: (e) => Alert.alert('Could not approve', e.message) }),
+          onPress: () => {
+            setBusyMilestoneId(m.id);
+            approve.mutate(m.id, {
+              onError: (e) => Alert.alert('Could not approve', e.message),
+              onSettled: () => setBusyMilestoneId(null),
+            });
+          },
         },
       ],
     );
@@ -230,8 +246,13 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () =>
-            remove.mutate(m.id, { onError: (e) => Alert.alert('Could not remove', e.message) }),
+          onPress: () => {
+            setBusyMilestoneId(m.id);
+            remove.mutate(m.id, {
+              onError: (e) => Alert.alert('Could not remove', e.message),
+              onSettled: () => setBusyMilestoneId(null),
+            });
+          },
         },
       ],
     );
@@ -249,6 +270,25 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
           }),
       },
     ]);
+  };
+
+  const confirmCancel = () => {
+    Alert.alert(
+      'Cancel project',
+      'Cancel this project? Any funds in escrow stay in the project wallet for you to withdraw. This can’t be undone.',
+      [
+        { text: 'Keep project', style: 'cancel' },
+        {
+          text: 'Cancel project',
+          style: 'destructive',
+          onPress: () =>
+            cancelProject.mutate(undefined, {
+              onSuccess: () => navigation.goBack(),
+              onError: (e) => Alert.alert('Could not cancel', e.message),
+            }),
+        },
+      ],
+    );
   };
 
   const openSheet = (kind: SheetKind, milestone: Milestone) => {
@@ -455,11 +495,24 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                   onReject={(ms) => openSheet('reject', ms)}
                   onRemove={confirmRemove}
                   onSubmit={(ms) => openSheet('submit', ms)}
-                  busy={approve.isPending || remove.isPending}
+                  busy={busyMilestoneId === m.id}
                 />
               ))
             )}
           </View>
+
+          {/* Cancel project (owner, active, nothing in-flight/released) */}
+          {canCancel ? (
+            <Button
+              title="Cancel project"
+              variant="danger"
+              icon="close-circle-outline"
+              iconPosition="left"
+              onPress={confirmCancel}
+              loading={cancelProject.isPending}
+              className="mt-8"
+            />
+          ) : null}
         </ScrollView>
       ) : null}
 

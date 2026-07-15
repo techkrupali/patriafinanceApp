@@ -172,7 +172,10 @@ export type NotificationType =
   | 'invitation_received'
   | 'invitation_accepted'
   | 'transfer_received'
-  | 'wallet_member_removed';
+  | 'wallet_member_removed'
+  | 'admin_message'
+  | 'transaction_reversed'
+  | 'admin_adjustment';
 
 export interface AppNotification {
   id: number;
@@ -775,6 +778,8 @@ export interface KycState {
   max_tier: number;
   status: KycStatus;
   pending_submission: KycSubmission | null;
+  /** The most recent rejected submission, so the user can see why & resubmit. */
+  last_rejected: KycSubmission | null;
   limits: KycLimits;
   next_tier: KycNextTier | null;
 }

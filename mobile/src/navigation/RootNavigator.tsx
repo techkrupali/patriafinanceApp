@@ -19,7 +19,6 @@ import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 // Tab screens
 import { HomeScreen } from '../screens/HomeScreen';
 import { WalletsScreen } from '../screens/WalletsScreen';
-import { AiScreen } from '../screens/AiScreen';
 import { ActivityScreen } from '../screens/ActivityScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 
@@ -59,7 +58,6 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const TAB_ICONS: Record<keyof MainTabParamList, { on: IconName; off: IconName }> = {
   Home: { on: 'home', off: 'home-outline' },
   Wallets: { on: 'wallet', off: 'wallet-outline' },
-  AI: { on: 'sparkles', off: 'sparkles-outline' },
   Activity: { on: 'time', off: 'time-outline' },
   Profile: { on: 'person', off: 'person-outline' },
 };
@@ -105,7 +103,6 @@ function MainTabs() {
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Wallets" component={WalletsScreen} />
-      <Tabs.Screen name="AI" component={AiScreen} options={{ tabBarLabel: 'AI' }} />
       <Tabs.Screen name="Activity" component={ActivityScreen} />
       <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>

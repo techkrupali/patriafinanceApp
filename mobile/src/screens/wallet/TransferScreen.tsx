@@ -77,6 +77,8 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
   const amountNum = parseFloat(amount);
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
+  const balanceNum = from ? parseFloat(from.balance) : 0;
+  const exceedsBalance = amountOk && from != null && amountNum > balanceNum;
 
   const destination: TransferDestination | null = useMemo(() => {
     if (kind === 'wallet') {
@@ -97,7 +99,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
     return null;
   }, [kind, destWalletId, identifier, bank, accountNumber, verified]);
 
-  const canContinue = Boolean(from && destination && amountOk);
+  const canContinue = Boolean(from && destination && amountOk && !exceedsBalance);
 
   const recipientLabel = useMemo(() => {
     if (kind === 'wallet') return destWallets.find((w) => w.id === destWalletId)?.name;
@@ -195,7 +197,11 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 />
               </View>
               {from ? (
-                <Text className="mt-2 text-xs text-faded">Available in {from.name}: {formatMoney(from.balance)}</Text>
+                <Text className={`mt-2 text-xs ${exceedsBalance ? 'font-semibold text-danger' : 'text-faded'}`}>
+                  {exceedsBalance
+                    ? `Amount exceeds your ${from.name} balance (${formatMoney(from.balance)})`
+                    : `Available in ${from.name}: ${formatMoney(from.balance)}`}
+                </Text>
               ) : null}
             </View>
 
