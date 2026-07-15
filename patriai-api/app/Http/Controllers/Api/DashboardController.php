@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\ApprovalRequest;
+use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -63,6 +64,11 @@ class DashboardController extends ApiController
             ->where('created_at', '>=', now()->subDays(30))
             ->sum('amount');
 
+        $activeLoan = Loan::where('user_id', $user->id)
+            ->whereIn('status', Loan::OWED_STATUSES)
+            ->latest()
+            ->first();
+
         return $this->ok('Dashboard fetched', [
             'total_balance' => number_format($totalBalance / 100, 2, '.', ''),
             'inflow_30d' => number_format($inflow / 100, 2, '.', ''),
@@ -71,6 +77,12 @@ class DashboardController extends ApiController
             'recent_transactions' => $recent->map(fn ($t) => $this->serializeTransaction($t)),
             'pending_approvals' => $this->pendingApprovalsCount($user),
             'unread_notifications' => $user->notificationsFeed()->whereNull('read_at')->count(),
+            'active_loan' => $activeLoan ? [
+                'has_active_loan' => true,
+                'outstanding' => number_format(($activeLoan->outstanding + $activeLoan->penalty_accrued) / 100, 2, '.', ''),
+                'loan_id' => $activeLoan->id,
+                'reference' => $activeLoan->reference,
+            ] : null,
         ]);
     }
 }

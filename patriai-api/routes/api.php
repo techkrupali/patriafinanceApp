@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\TransferController;
@@ -80,6 +81,14 @@ Route::prefix('v1')->group(function () {
         Route::get('banks', [BankController::class, 'index']);
         Route::post('banks/verify-account', [BankController::class, 'verifyAccount'])->middleware('throttle:20,1');
 
+        // Loans (Patria Lending)
+        Route::get('loans', [LoanController::class, 'index']);
+        Route::get('loans/eligibility', [LoanController::class, 'eligibility']);
+        Route::post('loans', [LoanController::class, 'store'])->middleware('throttle:20,1');
+        Route::get('loans/{loan}', [LoanController::class, 'show']);
+        Route::post('loans/{loan}/repay', [LoanController::class, 'repay'])->middleware('throttle:15,1');
+        Route::post('loans/{loan}/cancel', [LoanController::class, 'cancel'])->middleware('throttle:30,1');
+
         // ---- Admin ----
         Route::prefix('admin')->middleware('admin')->group(function () {
             Route::get('stats', [AdminController::class, 'stats']);
@@ -90,6 +99,14 @@ Route::prefix('v1')->group(function () {
             Route::get('wallets/{wallet}', [AdminController::class, 'walletDetail']);
             Route::get('transactions', [AdminController::class, 'transactions']);
             Route::get('approvals', [AdminController::class, 'approvals']);
+
+            // Loans
+            Route::get('loans', [AdminController::class, 'loans']);
+            Route::post('loans/run-due', [AdminController::class, 'runDueLoans']);
+            Route::get('loans/{loan}', [AdminController::class, 'loanShow']);
+            Route::post('loans/{loan}/approve', [AdminController::class, 'approveLoan']);
+            Route::post('loans/{loan}/reject', [AdminController::class, 'rejectLoan']);
+            Route::post('loans/{loan}/default', [AdminController::class, 'defaultLoan']);
         });
     });
 });

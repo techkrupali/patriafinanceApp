@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ApprovalRequest;
 use App\Models\AppNotification;
+use App\Models\Loan;
+use App\Models\LoanRepayment;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -185,6 +187,43 @@ abstract class ApiController extends Controller
             'read' => $notification->read_at !== null,
             'read_at' => $notification->read_at?->toIso8601String(),
             'created_at' => $notification->created_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeLoan(Loan $loan): array
+    {
+        return [
+            'id' => $loan->id,
+            'reference' => $loan->reference,
+            'category' => $loan->category,
+            'purpose' => $loan->purpose,
+            'principal' => number_format($loan->principal / 100, 2, '.', ''),
+            'interest_bps' => (int) $loan->interest_bps,
+            'fee' => number_format($loan->fee / 100, 2, '.', ''),
+            'total_repayable' => number_format($loan->total_repayable / 100, 2, '.', ''),
+            'outstanding' => number_format($loan->outstanding / 100, 2, '.', ''),
+            'penalty_accrued' => number_format($loan->penalty_accrued / 100, 2, '.', ''),
+            'tenor_days' => (int) $loan->tenor_days,
+            'repayment_frequency' => $loan->repayment_frequency,
+            'status' => $loan->status,
+            'disbursed_wallet_id' => $loan->disbursed_wallet_id,
+            'disbursed_at' => $loan->disbursed_at?->toIso8601String(),
+            'due_at' => $loan->due_at?->toIso8601String(),
+            'progress_pct' => $loan->progressPct(),
+            'created_at' => $loan->created_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeLoanRepayment(LoanRepayment $repayment): array
+    {
+        return [
+            'id' => $repayment->id,
+            'sequence' => (int) $repayment->sequence,
+            'due_date' => $repayment->due_date?->toDateString(),
+            'amount_due' => number_format($repayment->amount_due / 100, 2, '.', ''),
+            'amount_paid' => number_format($repayment->amount_paid / 100, 2, '.', ''),
+            'status' => $repayment->status,
+            'paid_at' => $repayment->paid_at?->toIso8601String(),
         ];
     }
 

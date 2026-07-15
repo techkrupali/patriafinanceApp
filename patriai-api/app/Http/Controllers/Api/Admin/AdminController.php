@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\ApprovalRequest;
+use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\LoanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminController extends ApiController
 {
@@ -38,6 +41,14 @@ class AdminController extends ApiController
             ],
             'approvals' => [
                 'pending' => ApprovalRequest::where('status', 'pending')->count(),
+            ],
+            'loans' => [
+                'active' => Loan::where('status', 'active')->count(),
+                'pending' => Loan::where('status', 'pending')->count(),
+                'outstanding' => number_format(
+                    (int) Loan::whereIn('status', Loan::OWED_STATUSES)->sum(DB::raw('outstanding + penalty_accrued')) / 100,
+                    2, '.', ''
+                ),
             ],
         ]);
     }
@@ -205,5 +216,84 @@ class AdminController extends ApiController
             'recent_transactions' => $wallet->transactions()->latest()->limit(15)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
+    }
+
+    // GET /admin/loans?status=
+    public function loans(Request $request): JsonResponse
+    {
+        $loans = Loan::with('user')
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return $this->ok('Loans fetched', [
+            'loans' => collect($loans->items())->map(fn ($l) => [
+                'id' => $l->id,
+                'reference' => $l->reference,
+                'user' => $l->user ? ['name' => $l->user->fullName(), 'email' => $l->user->email] : null,
+                'category' => $l->category,
+                'principal' => number_format($l->principal / 100, 2, '.', ''),
+                'total_repayable' => number_format($l->total_repayable / 100, 2, '.', ''),
+                'outstanding' => number_format($l->outstanding / 100, 2, '.', ''),
+                'status' => $l->status,
+                'created_at' => $l->created_at?->toIso8601String(),
+            ]),
+            'pagination' => [
+                'page' => $loans->currentPage(),
+                'per_page' => $loans->perPage(),
+                'total' => $loans->total(),
+                'last_page' => $loans->lastPage(),
+            ],
+        ]);
+    }
+
+    // GET /admin/loans/{loan}
+    public function loanShow(Loan $loan): JsonResponse
+    {
+        $loan->load('user');
+
+        return $this->ok('Loan fetched', [
+            'loan' => $this->serializeLoan($loan),
+            'user' => $loan->user ? [
+                'id' => $loan->user->id,
+                'name' => $loan->user->fullName(),
+                'email' => $loan->user->email,
+                'kyc_tier' => $loan->user->kyc_tier,
+            ] : null,
+            'repayments' => $loan->repayments()->orderBy('sequence')->get()
+                ->map(fn ($r) => $this->serializeLoanRepayment($r)),
+        ]);
+    }
+
+    // POST /admin/loans/{loan}/approve
+    public function approveLoan(Request $request, Loan $loan): JsonResponse
+    {
+        $loan = LoanService::make()->approveAndDisburse($loan, $request->user());
+
+        return $this->ok('Loan approved and disbursed', ['loan' => $this->serializeLoan($loan)]);
+    }
+
+    // POST /admin/loans/{loan}/reject  { reason }
+    public function rejectLoan(Request $request, Loan $loan): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:200']]);
+
+        $loan = LoanService::make()->reject($loan, $request->user(), $data['reason']);
+
+        return $this->ok('Loan rejected', ['loan' => $this->serializeLoan($loan)]);
+    }
+
+    // POST /admin/loans/{loan}/default
+    public function defaultLoan(Request $request, Loan $loan): JsonResponse
+    {
+        $loan = LoanService::make()->markDefaulted($loan, $request->user());
+
+        return $this->ok('Loan marked as defaulted', ['loan' => $this->serializeLoan($loan)]);
+    }
+
+    // POST /admin/loans/run-due
+    public function runDueLoans(): JsonResponse
+    {
+        return $this->ok('Overdue loans processed', LoanService::make()->accrueOverdue());
     }
 }
