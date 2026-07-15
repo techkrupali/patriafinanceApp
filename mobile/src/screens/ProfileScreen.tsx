@@ -202,14 +202,30 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           />
         </Card>
 
-        {/* Preferences */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Preferences</Text>
+        {/* Collaboration */}
+        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Collaboration</Text>
         <Card className="mt-2 py-1">
+          <Row
+            icon="shield-checkmark-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Approvals"
+            subtitle="Spends waiting on approval"
+            onPress={() => navigation.navigate('Approvals')}
+          />
+          <Divider />
+          <Row
+            icon="mail-open-outline"
+            title="Invitations"
+            subtitle="Wallets you've been invited to"
+            onPress={() => navigation.navigate('Invitations')}
+          />
+          <Divider />
           <Row
             icon="notifications-outline"
             title="Notifications"
-            subtitle="Transaction & security alerts"
-            right={<View className="rounded-full bg-lav-faint px-2.5 py-1"><Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Soon</Text></View>}
+            subtitle="Approvals, invites & transfers"
+            onPress={() => navigation.navigate('Notifications')}
           />
         </Card>
 

@@ -29,6 +29,12 @@ import { FundScreen } from '../screens/wallet/FundScreen';
 import { WithdrawScreen } from '../screens/wallet/WithdrawScreen';
 import { TransferScreen } from '../screens/wallet/TransferScreen';
 import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
+import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
+import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
+import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
+import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
+import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
+import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
 import { ChangePasswordScreen } from '../screens/profile/ChangePasswordScreen';
 import { ChangePinScreen } from '../screens/profile/ChangePinScreen';
 import { DevicesScreen } from '../screens/profile/DevicesScreen';
@@ -125,6 +131,12 @@ export function RootNavigator() {
       <RootStack.Screen name="Withdraw" component={WithdrawScreen} />
       <RootStack.Screen name="Transfer" component={TransferScreen} />
       <RootStack.Screen name="CreateWallet" component={CreateWalletScreen} />
+      <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
+      <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />
+      <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
+      <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
+      <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+      <RootStack.Screen name="Invitations" component={InvitationsScreen} />
       <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <RootStack.Screen name="ChangePin" component={ChangePinScreen} />
       <RootStack.Screen name="Devices" component={DevicesScreen} />

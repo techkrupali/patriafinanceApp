@@ -3,10 +3,11 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { Wallet, WalletType } from '../api/types';
+import type { Wallet } from '../api/types';
 import { colors, shadow } from '../theme';
 import { formatMoney } from '../lib/format';
 import { selection } from '../lib/haptics';
+import { walletVisual } from '../lib/walletVisual';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -18,19 +19,6 @@ interface WalletCardProps {
   onSend?: () => void;
   className?: string;
 }
-
-interface Style {
-  gradient: readonly [string, string];
-  onDark: boolean;
-  label: string;
-  icon: IconName;
-}
-
-const STYLES: Record<WalletType, Style> = {
-  main: { gradient: ['#0a1f44', '#12376e'], onDark: true, label: 'MAIN', icon: 'shield-checkmark' },
-  shared: { gradient: ['#1f6feb', '#1657c9'], onDark: true, label: 'SHARED', icon: 'people' },
-  project: { gradient: ['#e9f0ff', '#d3e4fe'], onDark: false, label: 'PROJECT', icon: 'flag' },
-};
 
 function MiniAction({
   icon,
@@ -64,7 +52,7 @@ function MiniAction({
 }
 
 export function WalletCard({ wallet, onPress, onFund, onWithdraw, onSend, className = '' }: WalletCardProps) {
-  const s = STYLES[wallet.type] ?? STYLES.main;
+  const s = walletVisual(wallet.type);
   const isMember = wallet.my_role && wallet.my_role !== 'owner';
   const primaryText = s.onDark ? 'text-white' : 'text-ink';
   const mutedText = s.onDark ? 'text-white/60' : 'text-muted';

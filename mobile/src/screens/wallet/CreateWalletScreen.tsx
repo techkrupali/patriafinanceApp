@@ -10,34 +10,41 @@ import { ErrorText } from '../../components/ErrorText';
 import { colors } from '../../theme';
 import { useCreateWallet } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
+import { walletVisual } from '../../lib/walletVisual';
+import type { CreatableWalletType } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+interface TypeOption {
+  value: CreatableWalletType;
+  title: string;
+  description: string;
+}
 
-const TYPES: { value: 'shared' | 'project'; title: string; description: string; icon: IconName; tint: string; iconColor: string }[] = [
-  {
-    value: 'shared',
-    title: 'Shared Wallet',
-    description: 'Pool money with family members. Everyone you invite can see and use it.',
-    icon: 'people',
-    tint: 'bg-success-soft',
-    iconColor: colors.brand,
-  },
-  {
-    value: 'project',
-    title: 'Project Wallet',
-    description: 'Save toward a goal — school fees, rent, a trip — separate from daily spending.',
-    icon: 'flag',
-    tint: 'bg-lav-soft',
-    iconColor: colors.navy,
-  },
+const TYPES: TypeOption[] = [
+  { value: 'shared', title: 'Shared', description: 'Pool money with people you invite. Everyone can see and use it together.' },
+  { value: 'savings', title: 'Savings', description: 'Set money aside and watch it grow toward a target you choose.' },
+  { value: 'goal', title: 'Goal', description: 'Save toward a specific goal amount — a trip, a gadget, a dream.' },
+  { value: 'project', title: 'Project', description: 'Ring-fence money for a specific project or bill, away from daily spending.' },
+  { value: 'emergency', title: 'Emergency', description: 'A rainy-day buffer set aside for the unexpected.' },
+  { value: 'giving', title: 'Giving', description: 'Set aside money for donations, tithes and causes you care about.' },
+  { value: 'joint', title: 'Joint', description: 'Shared with a partner — both of you manage it together.' },
+  { value: 'child', title: 'Child', description: 'Manage money on behalf of a child, with you in control.' },
+  { value: 'spending', title: 'Spending', description: 'Everyday spending, kept separate from your main balance.' },
 ];
 
+/** Types that save toward a number — show the optional target-amount field. */
+const TARGETED: CreatableWalletType[] = ['goal', 'savings'];
+
 export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet'>) {
-  const [type, setType] = useState<'shared' | 'project'>('shared');
+  const [type, setType] = useState<CreatableWalletType>('shared');
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [target, setTarget] = useState('');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateWallet();
+
+  const selected = TYPES.find((t) => t.value === type)!;
+  const showTarget = TARGETED.includes(type);
 
   const submit = () => {
     setError(null);
@@ -46,7 +53,12 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
       return;
     }
     create.mutate(
-      { type, name: name.trim() },
+      {
+        type,
+        name: name.trim(),
+        description: description.trim() || undefined,
+        target_amount: showTarget && target.trim() ? target.trim() : undefined,
+      },
       {
         onSuccess: (data) => navigation.replace('WalletDetail', { walletId: data.wallet.id }),
         onError: (e) => setError(e.message),
@@ -65,9 +77,10 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
         >
           <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Wallet type</Text>
 
-          <View className="mt-3" style={{ gap: 12 }}>
+          <View className="mt-3 flex-row flex-wrap justify-between">
             {TYPES.map((t) => {
               const active = type === t.value;
+              const v = walletVisual(t.value);
               return (
                 <Pressable
                   key={t.value}
@@ -75,26 +88,32 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
                     selection();
                     setType(t.value);
                   }}
-                  className={`flex-row items-start rounded-3xl border p-4 active:opacity-90 ${
+                  style={{ width: '31.5%', marginBottom: 12 }}
+                  className={`items-center rounded-3xl border px-2 py-4 active:opacity-90 ${
                     active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                   }`}
                 >
-                  <View className={`mr-3 h-11 w-11 items-center justify-center rounded-2xl ${t.tint}`}>
-                    <Ionicons name={t.icon} size={22} color={t.iconColor} />
+                  <View
+                    className="h-11 w-11 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: active ? colors.brand : colors.lavSoft }}
+                  >
+                    <Ionicons name={v.icon} size={21} color={active ? colors.white : colors.navy} />
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-[15px] font-bold text-ink">{t.title}</Text>
-                    <Text className="mt-1 text-[13px] leading-5 text-muted">{t.description}</Text>
-                  </View>
-                  <Ionicons
-                    name={active ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={22}
-                    color={active ? colors.brand : colors.faded}
-                    style={{ marginLeft: 8, marginTop: 2 }}
-                  />
+                  <Text
+                    className={`mt-2 text-[12px] font-bold ${active ? 'text-brand' : 'text-ink'}`}
+                    numberOfLines={1}
+                  >
+                    {t.title}
+                  </Text>
                 </Pressable>
               );
             })}
+          </View>
+
+          {/* Selected type explainer */}
+          <View className="mt-1 flex-row items-start rounded-2xl bg-lav-faint p-4">
+            <Ionicons name="information-circle" size={18} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
+            <Text className="flex-1 text-[13px] leading-5 text-muted">{selected.description}</Text>
           </View>
 
           <Input
@@ -102,10 +121,32 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
             icon="pricetag-outline"
             value={name}
             onChangeText={setName}
-            placeholder={type === 'shared' ? 'Family Upkeep' : 'School Fees 2026'}
+            placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Wallet`}
             maxLength={100}
             containerClassName="mt-6"
           />
+
+          <Input
+            label="Description (optional)"
+            icon="document-text-outline"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What's this wallet for?"
+            maxLength={200}
+            containerClassName="mt-5"
+          />
+
+          {showTarget ? (
+            <Input
+              label="Target amount (optional)"
+              icon="flag-outline"
+              value={target}
+              onChangeText={(t) => setTarget(t.replace(/[^0-9.]/g, ''))}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              containerClassName="mt-5"
+            />
+          ) : null}
 
           <ErrorText message={error} className="mt-4" />
 

@@ -18,7 +18,20 @@ export interface User {
   created_at: string | null;
 }
 
-export type WalletType = 'main' | 'shared' | 'project';
+export type WalletType =
+  | 'main'
+  | 'shared'
+  | 'project'
+  | 'savings'
+  | 'goal'
+  | 'emergency'
+  | 'giving'
+  | 'joint'
+  | 'child'
+  | 'spending';
+
+/** Types a user is allowed to create (everything except the system `main` wallet). */
+export type CreatableWalletType = Exclude<WalletType, 'main'>;
 
 export interface WalletOwner {
   id: number;
@@ -39,6 +52,14 @@ export interface Wallet {
   created_at: string | null;
   owner?: WalletOwner;
   my_role?: string;
+  // ---- Governance (Milestone 3) ----
+  description?: string | null;
+  /** Naira decimal string, or null when the wallet has no target. */
+  target_amount?: string | null;
+  approval_enabled?: boolean;
+  /** Naira decimal string. null = every spend needs approval. */
+  approval_threshold?: string | null;
+  required_approvals?: number;
 }
 
 export interface Transaction {
@@ -60,10 +81,108 @@ export interface Transaction {
 }
 
 export interface WalletMember {
+  /** Present on the members endpoint; absent on the wallet-detail embed. */
+  id?: number;
   user_id: number;
   name: string;
   email: string;
   role: string;
+  can_approve: boolean;
+  /** Present on the members endpoint. */
+  status?: string;
+}
+
+// ---- Governance (Milestone 3) ----
+
+export type MemberRole = 'owner' | 'co_owner' | 'admin' | 'contributor' | 'viewer';
+
+export interface WalletRef {
+  id: number;
+  name: string;
+  type: WalletType;
+}
+
+export interface PersonRef {
+  id: number;
+  name: string;
+}
+
+export interface WalletInvitation {
+  id: number;
+  role: string;
+  can_approve: boolean;
+  status?: string;
+  /** The email/phone the invite was sent to (wallet-scoped list). */
+  identifier?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  /** Present on the "my invitations" list. */
+  wallet?: WalletRef;
+  inviter?: PersonRef;
+  created_at?: string | null;
+  expires_at?: string | null;
+}
+
+export type ApprovalAction = 'withdrawal' | 'transfer_wallet' | 'transfer_user' | 'transfer_bank';
+
+export type ApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'expired'
+  | 'executed'
+  | 'failed'
+  | 'cancelled';
+
+export interface ApprovalResponse {
+  approver: PersonRef | null;
+  decision: 'approve' | 'reject';
+  note: string | null;
+  created_at: string | null;
+}
+
+export interface ApprovalRequest {
+  id: number;
+  wallet: WalletRef;
+  initiator: PersonRef;
+  action: ApprovalAction;
+  /** Naira decimal string */
+  amount: string;
+  /** Naira decimal string */
+  fee: string;
+  description: string | null;
+  status: ApprovalStatus;
+  approvals_count: number;
+  required_approvals: number;
+  executed_transaction_reference: string | null;
+  fail_reason: string | null;
+  expires_at: string | null;
+  created_at: string | null;
+  /** Whether the current user has already responded. */
+  my_responded?: boolean;
+  /** Only on the detail endpoint. */
+  responses?: ApprovalResponse[];
+}
+
+export type NotificationType =
+  | 'approval_requested'
+  | 'approval_rejected'
+  | 'approval_executed'
+  | 'approval_failed'
+  | 'invitation_received'
+  | 'invitation_accepted'
+  | 'transfer_received'
+  | 'wallet_member_removed';
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  data: Record<string, unknown> | null;
+  read: boolean;
+  read_at: string | null;
+  created_at: string | null;
 }
 
 export interface Pagination {
@@ -109,6 +228,8 @@ export interface DashboardData {
   outflow_30d: string;
   wallets: Wallet[];
   recent_transactions: Transaction[];
+  pending_approvals?: number;
+  unread_notifications?: number;
 }
 
 export interface WalletsData {
@@ -119,10 +240,68 @@ export interface WalletCreatedData {
   wallet: Wallet;
 }
 
+export interface WalletApprovalConfig {
+  enabled: boolean;
+  /** Naira decimal string, or null when every spend needs approval. */
+  threshold: string | null;
+  required_approvals: number;
+}
+
 export interface WalletDetailData {
   wallet: Wallet;
   members: WalletMember[];
+  my_role: string;
+  approval: WalletApprovalConfig;
+  /** Naira decimal string held against pending approvals. */
+  held_amount: string;
+  pending_approvals: number;
   recent_transactions: Transaction[];
+}
+
+export interface WalletUpdatedData {
+  wallet: Wallet;
+}
+
+export interface WalletMembersData {
+  members: WalletMember[];
+}
+
+export interface MemberUpdatedData {
+  member: WalletMember;
+}
+
+export interface InvitationCreatedData {
+  invitation: WalletInvitation;
+}
+
+export interface InvitationsData {
+  invitations: WalletInvitation[];
+}
+
+export interface InvitationAcceptData {
+  wallet: Wallet;
+  member: WalletMember;
+}
+
+export interface ApprovalsData {
+  approvals: ApprovalRequest[];
+}
+
+export interface ApprovalDetailData {
+  approval: ApprovalRequest;
+}
+
+export interface NotificationsPageData {
+  notifications: AppNotification[];
+  pagination: Pagination;
+}
+
+export interface UnreadCountData {
+  count: number;
+}
+
+export interface NotificationReadData {
+  notification: AppNotification;
 }
 
 export interface TransactionsPageData {
@@ -137,15 +316,32 @@ export interface FundingDetailsData {
   note: string;
 }
 
-export interface WithdrawData {
+/** A spend that was queued for approval instead of executing immediately. */
+export interface PendingApprovalData {
+  pending_approval: true;
+  approval: ApprovalRequest;
+}
+
+export interface WithdrawSuccessData {
   transaction: Transaction;
 }
 
-export interface TransferData {
+export type WithdrawData = WithdrawSuccessData | PendingApprovalData;
+
+export interface TransferSuccessData {
   reference: string;
   /** Source wallet balance after transfer (naira decimal string) */
   balance: string;
   recipient: { name: string; email: string } | null;
+}
+
+export type TransferData = TransferSuccessData | PendingApprovalData;
+
+/** Narrows a withdraw/transfer response to the queued-for-approval branch. */
+export function isPendingApproval(
+  data: WithdrawData | TransferData,
+): data is PendingApprovalData {
+  return 'pending_approval' in data && data.pending_approval === true;
 }
 
 export interface BanksData {
@@ -214,4 +410,40 @@ export interface WithdrawPayload {
   bank_name: string;
   pin: string;
   description?: string;
+}
+
+// ---- Governance request payloads (Milestone 3) ----
+
+export interface CreateWalletPayload {
+  type: CreatableWalletType;
+  name: string;
+  description?: string;
+  /** Naira decimal string */
+  target_amount?: string;
+}
+
+export interface UpdateWalletPayload {
+  name?: string;
+  description?: string;
+  approval_enabled?: boolean;
+  /** Naira decimal string, or null to require approval on every spend. */
+  approval_threshold?: string | null;
+  required_approvals?: number;
+}
+
+export interface UpdateMemberPayload {
+  role?: string;
+  can_approve?: boolean;
+}
+
+export interface CreateInvitationPayload {
+  /** Email or phone of the person to invite. */
+  identifier: string;
+  role?: string;
+  can_approve?: boolean;
+}
+
+export interface RespondApprovalPayload {
+  decision: 'approve' | 'reject';
+  note?: string;
 }

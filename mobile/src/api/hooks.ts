@@ -8,27 +8,45 @@ import {
 import { api } from './client';
 import { getDeviceMeta } from '../lib/device';
 import type {
+  ApprovalDetailData,
+  ApprovalsData,
   AuthSessionData,
   BanksData,
+  CreateInvitationPayload,
+  CreateWalletPayload,
   DashboardData,
   DevicesData,
   FundingDetailsData,
+  InvitationAcceptData,
+  InvitationCreatedData,
+  InvitationsData,
   LoginPayload,
   MeData,
+  MemberUpdatedData,
+  NotificationReadData,
+  NotificationsPageData,
   OtpRequestData,
   RegisterData,
   RegisterPayload,
+  RespondApprovalPayload,
   Transaction,
   TransactionsPageData,
   TransferData,
   TransferPayload,
+  UnreadCountData,
+  UpdateMemberPayload,
+  UpdateWalletPayload,
   VerifyAccountData,
   WalletCreatedData,
   WalletDetailData,
+  WalletMembersData,
   WalletsData,
+  WalletUpdatedData,
   WithdrawData,
   WithdrawPayload,
 } from './types';
+
+type ApprovalScope = 'to_me' | 'mine';
 
 // ---------- Query keys ----------
 
@@ -37,10 +55,18 @@ export const keys = {
   wallets: ['wallets'] as const,
   wallet: (id: number) => ['wallets', id] as const,
   walletTransactions: (id: number) => ['wallets', id, 'transactions'] as const,
+  walletMembers: (id: number) => ['wallets', id, 'members'] as const,
+  walletInvitations: (id: number) => ['wallets', id, 'invitations'] as const,
   funding: (id: number) => ['wallets', id, 'funding'] as const,
   banks: ['banks'] as const,
   devices: ['devices'] as const,
   me: ['me'] as const,
+  myInvitations: ['invitations'] as const,
+  approvals: (scope: ApprovalScope, status?: string) =>
+    ['approvals', scope, status ?? 'all'] as const,
+  approval: (id: number) => ['approvals', 'detail', id] as const,
+  notifications: ['notifications'] as const,
+  unreadCount: ['notifications', 'unread-count'] as const,
 };
 
 // ---------- Queries ----------
@@ -221,7 +247,7 @@ export function useLogoutApi() {
 export function useCreateWallet() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { type: 'shared' | 'project'; name: string }) =>
+    mutationFn: (input: CreateWalletPayload) =>
       api<WalletCreatedData>('/wallets', { method: 'POST', body: input }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
@@ -237,7 +263,9 @@ export function useWithdraw(walletId: number) {
       api<WithdrawData>(`/wallets/${walletId}/withdraw`, { method: 'POST', body: input }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
   });
 }
@@ -250,6 +278,7 @@ export function useTransfer() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
   });
 }
@@ -274,5 +303,224 @@ export function useChangePin() {
   return useMutation({
     mutationFn: (input: { current_pin?: string; new_pin: string; password: string }) =>
       api('/profile/change-pin', { method: 'POST', body: input }),
+  });
+}
+
+// ---------- Wallet settings & members (Milestone 3) ----------
+
+export function useUpdateWallet(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateWalletPayload) =>
+      api<WalletUpdatedData>(`/wallets/${walletId}`, { method: 'PATCH', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+export function useWalletMembers(walletId: number, enabled = true) {
+  return useQuery({
+    queryKey: keys.walletMembers(walletId),
+    queryFn: () => api<WalletMembersData>(`/wallets/${walletId}/members`),
+    select: (d) => d.members,
+    enabled,
+  });
+}
+
+export function useUpdateMember(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { memberId: number; body: UpdateMemberPayload }) =>
+      api<MemberUpdatedData>(`/wallets/${walletId}/members/${input.memberId}`, {
+        method: 'PATCH',
+        body: input.body,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.walletMembers(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    },
+  });
+}
+
+export function useRemoveMember(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: number) =>
+      api(`/wallets/${walletId}/members/${memberId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.walletMembers(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    },
+  });
+}
+
+// ---------- Invitations ----------
+
+export function useWalletInvitations(walletId: number) {
+  return useQuery({
+    queryKey: keys.walletInvitations(walletId),
+    queryFn: () => api<InvitationsData>(`/wallets/${walletId}/invitations`),
+    select: (d) => d.invitations,
+  });
+}
+
+export function useCreateInvitation(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateInvitationPayload) =>
+      api<InvitationCreatedData>(`/wallets/${walletId}/invitations`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.walletInvitations(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    },
+  });
+}
+
+export function useCancelInvitation(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: number) =>
+      api(`/wallets/${walletId}/invitations/${invitationId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.walletInvitations(walletId) });
+    },
+  });
+}
+
+export function useMyInvitations() {
+  return useQuery({
+    queryKey: keys.myInvitations,
+    queryFn: () => api<InvitationsData>('/invitations'),
+    select: (d) => d.invitations,
+  });
+}
+
+export function useAcceptInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: number) =>
+      api<InvitationAcceptData>(`/invitations/${invitationId}/accept`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.myInvitations });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
+  });
+}
+
+export function useDeclineInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: number) =>
+      api(`/invitations/${invitationId}/decline`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.myInvitations });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
+  });
+}
+
+// ---------- Approvals ----------
+
+export function useApprovals(scope: ApprovalScope, status?: string) {
+  return useQuery({
+    queryKey: keys.approvals(scope, status),
+    queryFn: () =>
+      api<ApprovalsData>(
+        `/approvals?scope=${scope}${status ? `&status=${status}` : ''}`,
+      ),
+    select: (d) => d.approvals,
+  });
+}
+
+export function useApproval(id: number) {
+  return useQuery({
+    queryKey: keys.approval(id),
+    queryFn: () => api<ApprovalDetailData>(`/approvals/${id}`),
+    select: (d) => d.approval,
+  });
+}
+
+export function useRespondApproval(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RespondApprovalPayload) =>
+      api<ApprovalDetailData>(`/approvals/${id}/respond`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.approval(id) });
+      void qc.invalidateQueries({ queryKey: ['approvals'] });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
+  });
+}
+
+export function useCancelApproval(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<ApprovalDetailData>(`/approvals/${id}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.approval(id) });
+      void qc.invalidateQueries({ queryKey: ['approvals'] });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+// ---------- Notifications ----------
+
+export function useNotifications() {
+  return useInfiniteQuery({
+    queryKey: keys.notifications,
+    queryFn: ({ pageParam }) =>
+      api<NotificationsPageData>(`/notifications?page=${pageParam}&per_page=20`),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.pagination.page < last.pagination.last_page ? last.pagination.page + 1 : undefined,
+  });
+}
+
+export function useUnreadCount() {
+  return useQuery({
+    queryKey: keys.unreadCount,
+    queryFn: () => api<UnreadCountData>('/notifications/unread-count'),
+    select: (d) => d.count,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<NotificationReadData>(`/notifications/${id}/read`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api('/notifications/read-all', { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
   });
 }

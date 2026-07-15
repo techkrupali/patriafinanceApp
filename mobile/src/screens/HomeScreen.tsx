@@ -8,7 +8,7 @@ import { TxnRow } from '../components/TxnRow';
 import { EmptyState } from '../components/EmptyState';
 import { LoadError } from '../components/LoadError';
 import { colors, gradients, shadow } from '../theme';
-import { useDashboard } from '../api/hooks';
+import { useDashboard, useMyInvitations } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { formatMoney, initials } from '../lib/format';
 import { selection } from '../lib/haptics';
@@ -54,12 +54,17 @@ function QuickAction({
 export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
   const user = useAuth((s) => s.user);
   const { data, isLoading, error, refetch, isRefetching } = useDashboard();
+  const { data: invitations } = useMyInvitations();
   const [hidden, setHidden] = useState(false);
 
   const mainWallet = useMemo(
     () => data?.wallets.find((w) => w.type === 'main') ?? data?.wallets[0],
     [data],
   );
+
+  const unread = data?.unread_notifications ?? 0;
+  const pendingApprovals = data?.pending_approvals ?? 0;
+  const inviteCount = invitations?.length ?? 0;
 
   const inflow = parseFloat(data?.inflow_30d ?? '0');
   const outflow = parseFloat(data?.outflow_30d ?? '0');
@@ -93,11 +98,16 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             </View>
           </View>
           <Pressable
-            onPress={() => navigation.navigate('Activity')}
+            onPress={() => navigation.navigate('Notifications')}
             className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-80"
             style={shadow.soft}
           >
             <Ionicons name="notifications-outline" size={22} color={colors.ink} />
+            {unread > 0 ? (
+              <View className="absolute -right-1 -top-1 h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1">
+                <Text className="text-[10px] font-bold text-white">{unread > 99 ? '99+' : unread}</Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
 
@@ -198,6 +208,51 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                 onPress={() => navigation.navigate('CreateWallet')}
               />
             </View>
+
+            {/* Governance surfaces */}
+            {pendingApprovals > 0 ? (
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('Approvals', { scope: 'to_me' });
+                }}
+                className="mt-6 flex-row items-center rounded-3xl bg-navy p-4 active:opacity-90"
+                style={shadow.card}
+              >
+                <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
+                  <Ionicons name="shield-checkmark" size={22} color={colors.brandGlow} />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-[15px] font-bold text-white">
+                    {pendingApprovals} approval{pendingApprovals === 1 ? '' : 's'} waiting
+                  </Text>
+                  <Text className="mt-0.5 text-[13px] text-white/60">Review spends that need your sign-off</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.brandGlow} />
+              </Pressable>
+            ) : null}
+
+            {inviteCount > 0 ? (
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('Invitations');
+                }}
+                className="mt-3 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
+                style={shadow.card}
+              >
+                <View className="h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                  <Ionicons name="mail-open-outline" size={22} color={colors.navy} />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-[15px] font-bold text-ink">
+                    {inviteCount} wallet invitation{inviteCount === 1 ? '' : 's'}
+                  </Text>
+                  <Text className="mt-0.5 text-[13px] text-muted">Someone invited you to collaborate</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.faded} />
+              </Pressable>
+            ) : null}
 
             {/* AI teaser */}
             <Pressable

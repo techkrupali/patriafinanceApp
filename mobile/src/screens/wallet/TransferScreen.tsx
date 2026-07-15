@@ -11,12 +11,20 @@ import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
+import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
 import { colors } from '../../theme';
 import { useTransfer, useVerifyAccount, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
-import type { Bank, TransferData, TransferDestination, Wallet } from '../../api/types';
+import { isPendingApproval } from '../../api/types';
+import type {
+  ApprovalRequest,
+  Bank,
+  TransferDestination,
+  TransferSuccessData,
+  Wallet,
+} from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 type DestKind = 'wallet' | 'user' | 'bank';
@@ -38,7 +46,8 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
   const [description, setDescription] = useState('');
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<TransferData | null>(null);
+  const [receipt, setReceipt] = useState<TransferSuccessData | null>(null);
+  const [pending, setPending] = useState<ApprovalRequest | null>(null);
   const [receiptAmount, setReceiptAmount] = useState('');
 
   const verify = useVerifyAccount();
@@ -111,12 +120,28 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
         onSuccess: (data) => {
           setPinOpen(false);
           setReceiptAmount(amount);
-          setReceipt(data);
+          if (isPendingApproval(data)) {
+            setPending(data.approval);
+          } else {
+            setReceipt(data);
+          }
         },
         onError: (e) => setPinError(e.message),
       },
     );
   };
+
+  if (pending) {
+    return (
+      <Screen withBottomInset>
+        <PendingApprovalNotice
+          approval={pending}
+          onViewApprovals={() => navigation.navigate('Approvals', { scope: 'mine' })}
+          onDone={() => navigation.goBack()}
+        />
+      </Screen>
+    );
+  }
 
   if (receipt) {
     const recipientName = receipt.recipient?.name ?? recipientLabel;

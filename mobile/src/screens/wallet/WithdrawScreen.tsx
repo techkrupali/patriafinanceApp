@@ -10,10 +10,12 @@ import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
+import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { colors } from '../../theme';
 import { useVerifyAccount, useWithdraw } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
-import type { Bank, Transaction } from '../../api/types';
+import { isPendingApproval } from '../../api/types';
+import type { ApprovalRequest, Bank, Transaction } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'>) {
@@ -29,6 +31,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
+  const [pending, setPending] = useState<ApprovalRequest | null>(null);
 
   const verify = useVerifyAccount();
   const withdraw = useWithdraw(walletId);
@@ -67,12 +70,28 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
       {
         onSuccess: (data) => {
           setPinOpen(false);
-          setReceipt(data.transaction);
+          if (isPendingApproval(data)) {
+            setPending(data.approval);
+          } else {
+            setReceipt(data.transaction);
+          }
         },
         onError: (e) => setPinError(e.message),
       },
     );
   };
+
+  if (pending) {
+    return (
+      <Screen withBottomInset>
+        <PendingApprovalNotice
+          approval={pending}
+          onViewApprovals={() => navigation.navigate('Approvals', { scope: 'mine' })}
+          onDone={() => navigation.goBack()}
+        />
+      </Screen>
+    );
+  }
 
   if (receipt) {
     return (

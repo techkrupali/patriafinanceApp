@@ -29,6 +29,13 @@ export type RootStackParamList = {
   ChangePassword: undefined;
   ChangePin: undefined;
   Devices: undefined;
+  // ---- Collaboration & governance (Milestone 3) ----
+  InviteMember: { walletId: number };
+  WalletSettings: { walletId: number };
+  Approvals: { scope?: 'to_me' | 'mine' } | undefined;
+  ApprovalDetail: { approvalId: number };
+  Notifications: undefined;
+  Invitations: undefined;
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<
