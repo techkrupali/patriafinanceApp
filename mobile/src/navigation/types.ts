@@ -36,6 +36,11 @@ export type RootStackParamList = {
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;
   Invitations: undefined;
+  // ---- Loans (Milestone 4 — Patria Lending) ----
+  Loans: undefined;
+  LoanApply: undefined;
+  LoanDetail: { loanId: number };
+  Repay: { loanId: number };
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<

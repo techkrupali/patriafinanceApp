@@ -230,6 +230,8 @@ export interface DashboardData {
   recent_transactions: Transaction[];
   pending_approvals?: number;
   unread_notifications?: number;
+  /** Milestone 4 — the borrower's current active loan, or null. */
+  active_loan?: ActiveLoanSummary | null;
 }
 
 export interface WalletsData {
@@ -446,4 +448,142 @@ export interface CreateInvitationPayload {
 export interface RespondApprovalPayload {
   decision: 'approve' | 'reject';
   note?: string;
+}
+
+// ============================================================================
+// Milestone 4 — Loan System (Patria Lending)
+// ============================================================================
+
+export type LoanCategory =
+  | 'rent'
+  | 'mortgage'
+  | 'car'
+  | 'school_fees'
+  | 'family_emergency'
+  | 'business'
+  | 'feeding'
+  | 'child_allowance'
+  | 'short_term';
+
+export type RepaymentFrequency = 'once' | 'weekly' | 'monthly';
+
+export type LoanStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'disbursed'
+  | 'active'
+  | 'repaid'
+  | 'defaulted'
+  | 'cancelled';
+
+export type RepaymentStatus = 'pending' | 'partial' | 'paid' | 'overdue';
+
+export interface Loan {
+  id: number;
+  reference: string;
+  category: LoanCategory | string;
+  purpose: string | null;
+  /** Naira decimal string */
+  principal: string;
+  /** Interest in basis points, e.g. 500 = 5%. */
+  interest_bps: number;
+  /** Naira decimal string */
+  fee: string;
+  /** Naira decimal string */
+  total_repayable: string;
+  /** Naira decimal string still owed */
+  outstanding: string;
+  /** Naira decimal string of accrued penalties */
+  penalty_accrued: string;
+  tenor_days: number;
+  repayment_frequency: RepaymentFrequency | string;
+  status: LoanStatus | string;
+  disbursed_wallet_id: number | null;
+  disbursed_at: string | null;
+  due_at: string | null;
+  /** 0–100 */
+  progress_pct: number;
+  created_at: string | null;
+}
+
+export interface LoanRepayment {
+  id: number;
+  sequence: number;
+  /** "YYYY-MM-DD" */
+  due_date: string;
+  /** Naira decimal string */
+  amount_due: string;
+  /** Naira decimal string */
+  amount_paid: string;
+  status: RepaymentStatus | string;
+  paid_at: string | null;
+}
+
+export interface LoanEligibility {
+  /** Naira decimal string of the max the user may borrow. */
+  max_amount: string;
+  /** Same limit in integer kobo, for exact validation. */
+  max_amount_kobo: number;
+  tier: number;
+  categories: string[];
+  has_active_loan: boolean;
+}
+
+export interface LoanSummary {
+  /** Naira decimal string */
+  active_outstanding: string;
+  /** Naira decimal string */
+  total_borrowed: string;
+  has_active_loan: boolean;
+}
+
+/** Compact active-loan surfaced on the dashboard. */
+export interface ActiveLoanSummary {
+  has_active_loan: boolean;
+  /** Naira decimal string */
+  outstanding: string;
+  loan_id: number;
+  reference: string;
+}
+
+// ---- Loan response payloads ----
+
+export interface LoansData {
+  loans: Loan[];
+  summary: LoanSummary;
+}
+
+/** Both GET /loans/{id} and POST /loans return this shape. */
+export interface LoanDetailData {
+  loan: Loan;
+  repayments: LoanRepayment[];
+}
+
+export interface LoanRepayResultData {
+  loan: Loan;
+  transaction: Transaction;
+}
+
+export interface LoanCancelData {
+  loan: Loan;
+}
+
+// ---- Loan request payloads ----
+
+export interface ApplyLoanPayload {
+  category: LoanCategory | string;
+  /** Naira decimal string */
+  amount: string;
+  tenor_days: number;
+  repayment_frequency: RepaymentFrequency;
+  purpose?: string;
+  disburse_wallet_id?: number;
+}
+
+export interface RepayLoanPayload {
+  /** Naira decimal string */
+  amount: string;
+  wallet_id: number;
+  pin: string;
 }

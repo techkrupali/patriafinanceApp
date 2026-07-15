@@ -8,6 +8,7 @@ import {
 import { api } from './client';
 import { getDeviceMeta } from '../lib/device';
 import type {
+  ApplyLoanPayload,
   ApprovalDetailData,
   ApprovalsData,
   AuthSessionData,
@@ -20,6 +21,11 @@ import type {
   InvitationAcceptData,
   InvitationCreatedData,
   InvitationsData,
+  LoanCancelData,
+  LoanDetailData,
+  LoanEligibility,
+  LoanRepayResultData,
+  LoansData,
   LoginPayload,
   MeData,
   MemberUpdatedData,
@@ -28,6 +34,7 @@ import type {
   OtpRequestData,
   RegisterData,
   RegisterPayload,
+  RepayLoanPayload,
   RespondApprovalPayload,
   Transaction,
   TransactionsPageData,
@@ -67,6 +74,10 @@ export const keys = {
   approval: (id: number) => ['approvals', 'detail', id] as const,
   notifications: ['notifications'] as const,
   unreadCount: ['notifications', 'unread-count'] as const,
+  // ---- Loans (Milestone 4) ----
+  loans: ['loans'] as const,
+  loanEligibility: ['loans', 'eligibility'] as const,
+  loan: (id: number) => ['loans', id] as const,
 };
 
 // ---------- Queries ----------
@@ -521,6 +532,78 @@ export function useMarkAllNotificationsRead() {
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+// ---------- Loans (Milestone 4 — Patria Lending) ----------
+
+export function useLoans() {
+  return useQuery({
+    queryKey: keys.loans,
+    queryFn: () => api<LoansData>('/loans'),
+  });
+}
+
+export function useLoanEligibility() {
+  return useQuery({
+    queryKey: keys.loanEligibility,
+    queryFn: () => api<LoanEligibility>('/loans/eligibility'),
+  });
+}
+
+export function useLoan(id: number) {
+  return useQuery({
+    queryKey: keys.loan(id),
+    queryFn: () => api<LoanDetailData>(`/loans/${id}`),
+  });
+}
+
+/**
+ * Loan mutations all move money and change eligibility, so they invalidate the
+ * loans list (which, by prefix, also refreshes eligibility + any loan detail),
+ * the dashboard, the wallets list and the affected wallet.
+ */
+export function useApplyLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ApplyLoanPayload) =>
+      api<LoanDetailData>('/loans', { method: 'POST', body: input }),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: keys.loans });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      if (data.loan.disbursed_wallet_id != null) {
+        void qc.invalidateQueries({ queryKey: keys.wallet(data.loan.disbursed_wallet_id) });
+      }
+    },
+  });
+}
+
+export function useRepayLoan(loanId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RepayLoanPayload) =>
+      api<LoanRepayResultData>(`/loans/${loanId}/repay`, { method: 'POST', body: input }),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: keys.loans });
+      void qc.invalidateQueries({ queryKey: keys.loan(loanId) });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.wallet(data.transaction.wallet_id) });
+    },
+  });
+}
+
+export function useCancelLoan(loanId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<LoanCancelData>(`/loans/${loanId}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.loans });
+      void qc.invalidateQueries({ queryKey: keys.loan(loanId) });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
     },
   });
 }

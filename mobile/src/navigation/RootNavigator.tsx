@@ -38,6 +38,10 @@ import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
 import { ChangePasswordScreen } from '../screens/profile/ChangePasswordScreen';
 import { ChangePinScreen } from '../screens/profile/ChangePinScreen';
 import { DevicesScreen } from '../screens/profile/DevicesScreen';
+import { LoansScreen } from '../screens/loans/LoansScreen';
+import { LoanApplyScreen } from '../screens/loans/LoanApplyScreen';
+import { LoanDetailScreen } from '../screens/loans/LoanDetailScreen';
+import { RepayScreen } from '../screens/loans/RepayScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -140,6 +144,10 @@ export function RootNavigator() {
       <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <RootStack.Screen name="ChangePin" component={ChangePinScreen} />
       <RootStack.Screen name="Devices" component={DevicesScreen} />
+      <RootStack.Screen name="Loans" component={LoansScreen} />
+      <RootStack.Screen name="LoanApply" component={LoanApplyScreen} />
+      <RootStack.Screen name="LoanDetail" component={LoanDetailScreen} />
+      <RootStack.Screen name="Repay" component={RepayScreen} />
     </RootStack.Navigator>
   );
 }

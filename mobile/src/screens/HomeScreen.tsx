@@ -70,6 +70,9 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
   const outflow = parseFloat(data?.outflow_30d ?? '0');
   const maxFlow = Math.max(inflow, outflow, 1);
 
+  const activeLoan =
+    data?.active_loan && data.active_loan.has_active_loan ? data.active_loan : null;
+
   return (
     <Screen>
       <ScrollView
@@ -209,6 +212,45 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               />
             </View>
 
+            {/* Active loan */}
+            {activeLoan ? (
+              <View className="mt-6 rounded-3xl bg-navy p-4" style={shadow.card}>
+                <View className="flex-row items-center">
+                  <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
+                    <Ionicons name="cash-outline" size={22} color={colors.brandGlow} />
+                  </View>
+                  <View className="ml-3 flex-1">
+                    <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
+                      Loan outstanding
+                    </Text>
+                    <Text className="mt-0.5 text-xl font-extrabold text-white">
+                      {formatMoney(activeLoan.outstanding)}
+                    </Text>
+                  </View>
+                </View>
+                <View className="mt-3 flex-row" style={{ gap: 8 }}>
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('Repay', { loanId: activeLoan.loan_id });
+                    }}
+                    className="flex-1 items-center rounded-2xl bg-brand py-3 active:opacity-80"
+                  >
+                    <Text className="text-[13px] font-bold text-white">Repay</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('LoanDetail', { loanId: activeLoan.loan_id });
+                    }}
+                    className="flex-1 items-center rounded-2xl bg-white/15 py-3 active:opacity-80"
+                  >
+                    <Text className="text-[13px] font-bold text-white">View</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
             {/* Governance surfaces */}
             {pendingApprovals > 0 ? (
               <Pressable
@@ -271,6 +313,30 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               <View className="ml-3 flex-1">
                 <Text className="text-[15px] font-bold text-ink">Smart suggestions</Text>
                 <Text className="mt-0.5 text-[13px] text-muted">Ask Patriai AI about your money</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.faded} />
+            </Pressable>
+
+            {/* Patria Lending entry point */}
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.navigate('Loans');
+              }}
+              className="mt-3 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
+              style={shadow.card}
+            >
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="cash-outline" size={20} color={colors.white} />
+              </LinearGradient>
+              <View className="ml-3 flex-1">
+                <Text className="text-[15px] font-bold text-ink">Patria Lending</Text>
+                <Text className="mt-0.5 text-[13px] text-muted">Borrow for rent, school fees & more</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.faded} />
             </Pressable>
