@@ -92,6 +92,11 @@ export interface StatsData {
   approvals: {
     pending: number;
   };
+  loans: {
+    active: number;
+    pending: number;
+    outstanding: string; // naira string
+  };
 }
 
 export type ApprovalAction =
@@ -177,4 +182,87 @@ export interface WalletDetailData {
     required_approvals: number;
   };
   recent_transactions: ApiTransaction[];
+}
+
+export type LoanStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "disbursed"
+  | "active"
+  | "repaid"
+  | "defaulted"
+  | "cancelled";
+
+export type LoanCategory =
+  | "rent"
+  | "mortgage"
+  | "car"
+  | "school_fees"
+  | "family_emergency"
+  | "business"
+  | "feeding"
+  | "child_allowance"
+  | "short_term";
+
+export type RepaymentStatus = "pending" | "partial" | "paid" | "overdue";
+
+export interface LoanListItem {
+  id: number;
+  reference: string;
+  user: { name: string; email: string };
+  category: LoanCategory;
+  principal: string; // naira string
+  total_repayable: string; // naira string
+  outstanding: string; // naira string
+  status: LoanStatus;
+  created_at: string | null;
+}
+
+export interface LoansData {
+  loans: LoanListItem[];
+  pagination: Pagination;
+}
+
+export interface LoanRepayment {
+  id: number;
+  sequence: number;
+  due_date: string | null;
+  amount_due: string; // naira string
+  amount_paid: string; // naira string
+  status: RepaymentStatus;
+  paid_at: string | null;
+}
+
+export interface LoanDetail {
+  id: number;
+  reference: string;
+  category: LoanCategory;
+  purpose: string | null;
+  principal: string; // naira string
+  interest_bps: number;
+  fee: string; // naira string
+  total_repayable: string; // naira string
+  outstanding: string; // naira string
+  penalty_accrued: string; // naira string
+  tenor_days: number;
+  repayment_frequency: string;
+  status: LoanStatus;
+  disbursed_wallet_id: number | null;
+  disbursed_at: string | null;
+  due_at: string | null;
+  progress_pct: number;
+  created_at: string | null;
+}
+
+export interface LoanDetailData {
+  loan: LoanDetail;
+  user: { id: number; name: string; email: string; kyc_tier: number };
+  repayments: LoanRepayment[];
+}
+
+export interface RunDueResult {
+  loans_processed: number;
+  loans_penalized: number;
+  penalty_charged: string; // naira string
 }

@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isPending ? (
-          Array.from({ length: 8 }).map((_, i) => <StatCardSkeleton key={i} />)
+          Array.from({ length: 11 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
             <StatCard label="Total Users" value={data.users.total.toLocaleString()} />
@@ -65,6 +65,22 @@ export default function DashboardPage() {
               label="Failed Transactions"
               value={data.transactions.failed.toLocaleString()}
               accent="red"
+            />
+            <StatCard
+              label="Active Loans"
+              value={data.loans.active.toLocaleString()}
+              accent="green"
+            />
+            <StatCard
+              label="Pending Loans"
+              value={data.loans.pending.toLocaleString()}
+              accent="amber"
+              hint="Awaiting approval"
+            />
+            <StatCard
+              label="Loan Outstanding"
+              value={naira(data.loans.outstanding)}
+              hint="Unrecovered principal + interest"
             />
           </>
         )}

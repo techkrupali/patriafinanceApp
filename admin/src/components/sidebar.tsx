@@ -9,6 +9,7 @@ import { useAuth } from "@/stores/auth";
 import {
   IconApprovals,
   IconDashboard,
+  IconLoans,
   IconLogout,
   IconTransactions,
   IconUsers,
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/wallets", label: "Wallets", icon: IconWallet, exact: false },
   { href: "/transactions", label: "Transactions", icon: IconTransactions, exact: false },
   { href: "/approvals", label: "Approvals", icon: IconApprovals, exact: false },
+  { href: "/loans", label: "Loans", icon: IconLoans, exact: false },
 ] as const;
 
 export function Sidebar() {

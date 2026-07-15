@@ -54,10 +54,41 @@ const LABELS: Record<string, string> = {
   expired: "Expired",
   executed: "Executed",
   cancelled: "Cancelled",
+  // Loan + repayment statuses
+  disbursed: "Disbursed",
+  repaid: "Repaid",
+  defaulted: "Defaulted",
+  overdue: "Overdue",
+  partial: "Partial",
+  paid: "Paid",
 };
 
 export function label(value: string): string {
   return LABELS[value] ?? value;
+}
+
+// Loan category labels are kept separate from `label()` so their human
+// wording (e.g. "School fees", "Family emergency") stays self-contained.
+const LOAN_CATEGORIES: Record<string, string> = {
+  rent: "Rent",
+  mortgage: "Mortgage",
+  car: "Car",
+  school_fees: "School fees",
+  family_emergency: "Family emergency",
+  business: "Business",
+  feeding: "Feeding",
+  child_allowance: "Child allowance",
+  short_term: "Short term",
+};
+
+export function loanCategoryLabel(category: string): string {
+  return LOAN_CATEGORIES[category] ?? label(category);
+}
+
+/** Basis points -> percentage string, e.g. 1500 -> "15%". */
+export function bpsToPercent(bps: number): string {
+  const pct = (bps ?? 0) / 100;
+  return `${Number(pct.toFixed(2))}%`;
 }
 
 // Approval action labels are kept separate from `label()` so the shared

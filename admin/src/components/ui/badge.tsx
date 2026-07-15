@@ -41,6 +41,14 @@ const STATUS_TONES: Record<string, Tone> = {
   closed: "gray",
   expired: "gray",
   cancelled: "gray",
+  // Loan statuses
+  disbursed: "blue",
+  repaid: "green",
+  defaulted: "red",
+  // Repayment statuses
+  paid: "green",
+  partial: "blue",
+  overdue: "red",
 };
 
 /** Badge that picks its tone from a known status string. */
