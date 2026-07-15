@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -518,6 +518,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
 
       {/* Submit-proof / reject-note sheet */}
       <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
           <View className="flex-1 justify-end bg-black/50">
             <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
@@ -573,6 +574,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             </View>
           </View>
         </KeyboardAvoidingView>
+        </GestureHandlerRootView>
       </Modal>
     </Screen>
   );

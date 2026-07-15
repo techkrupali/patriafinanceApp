@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -374,6 +374,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
 
       {/* Review sheet */}
       <Modal visible={reviewOpen} transparent animationType="slide" onRequestClose={() => setReviewOpen(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
           <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
@@ -419,6 +420,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             />
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </Screen>
   );

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PinPad } from './PinPad';
@@ -109,7 +109,10 @@ export function PinSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/50">
+      {/* RNGH gestures don't reach into a Modal's separate view tree without its
+          own root — without this the PIN pad / buttons are dead. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View className="flex-1 justify-end bg-black/50">
         <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
           <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
 
@@ -198,6 +201,7 @@ export function PinSheet({
           )}
         </View>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

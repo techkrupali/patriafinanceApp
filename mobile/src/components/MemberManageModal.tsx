@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Switch, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorText } from './ErrorText';
@@ -69,6 +69,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
 
   return (
     <Modal visible={member !== null} transparent animationType="slide" onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="flex-1 justify-end bg-black/50">
         <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
           <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
@@ -176,6 +177,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
           ) : null}
         </View>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

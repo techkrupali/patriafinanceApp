@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, Switch, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -291,6 +291,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
 
       {/* Transaction PIN capture (for biometric authorize) */}
       <Modal visible={pinModal} transparent animationType="slide" onRequestClose={() => setPinModal(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
           <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
@@ -312,6 +313,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             <PinPad value={capturePin} onChange={(v) => void onCaptureChange(v)} />
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </Screen>
   );

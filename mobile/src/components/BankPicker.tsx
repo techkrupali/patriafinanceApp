@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Text, TextInput, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Bank } from '../api/types';
@@ -30,6 +30,7 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="flex-1 bg-page" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <View className="flex-row items-center px-5 py-3">
           <Text className="flex-1 text-xl font-extrabold text-ink">Select bank</Text>
@@ -98,6 +99,7 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
           />
         )}
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
