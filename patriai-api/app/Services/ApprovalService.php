@@ -53,9 +53,11 @@ class ApprovalService
     {
         $approvers = $wallet->eligibleApprovers($initiator->id);
 
-        // Need at least one approver; clamp the wallet's configured requirement
-        // down to how many eligible approvers actually exist (excluding initiator).
-        $required = max(1, min((int) $wallet->required_approvals, $approvers->count()));
+        // Store the wallet's configured requirement verbatim. Do NOT clamp it down
+        // to the current eligible-approver count — clamping would let a required=2
+        // request be satisfied by a single sign-off. (Config-time validation
+        // guarantees required never exceeds the possible approver count.)
+        $required = max(1, (int) $wallet->required_approvals);
 
         $request = ApprovalRequest::create([
             'wallet_id' => $wallet->id,

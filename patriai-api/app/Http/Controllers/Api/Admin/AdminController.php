@@ -665,10 +665,16 @@ class AdminController extends ApiController
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:200']]);
 
-        if ($transaction->status !== 'successful') {
+        $meta = $transaction->meta ?? [];
+
+        // A withdrawal left 'pending' with needs_reconciliation is a stuck payout
+        // (banking timeout, outcome unknown). Reversing it refunds the wallet and
+        // marks the txn failed — the manual counterpart to banking:reconcile.
+        $isStuckPayout = $transaction->status === 'pending' && !empty($meta['needs_reconciliation']);
+
+        if ($transaction->status !== 'successful' && !$isStuckPayout) {
             return $this->fail('Only successful transactions can be reversed', 422);
         }
-        $meta = $transaction->meta ?? [];
         if (!empty($meta['reversed'])) {
             return $this->fail('Transaction has already been reversed', 422);
         }
@@ -688,7 +694,7 @@ class AdminController extends ApiController
 
         // Reversal-first (doc §16.3): original row preserved, a compensating entry is written.
         // Both the compensating money move and the meta stamp are atomic.
-        $reversal = DB::transaction(function () use ($transaction, $wallet, $admin, $reason, $counterparty, $meta) {
+        $reversal = DB::transaction(function () use ($transaction, $wallet, $admin, $reason, $counterparty, $meta, $isStuckPayout) {
             if ($transaction->direction === 'debit') {
                 $rev = WalletService::make()->credit(
                     $wallet,
@@ -713,6 +719,9 @@ class AdminController extends ApiController
             }
 
             $transaction->update([
+                // A reversed stuck payout is now definitively failed; a reversed
+                // successful txn keeps its original status (reversal-first ledger).
+                'status' => $isStuckPayout ? 'failed' : $transaction->status,
                 'meta' => array_merge($meta, [
                     'reversed' => true,
                     'reversal_reference' => $rev->reference,

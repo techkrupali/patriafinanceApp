@@ -54,7 +54,7 @@ class AuthController extends ApiController
         $pendingInvites = WalletInvitation::where('status', 'pending')
             ->whereNull('invitee_user_id')
             ->where(function ($q) use ($user) {
-                $q->where('invitee_identifier', strtolower($user->email))
+                $q->whereRaw('lower(invitee_identifier) = ?', [mb_strtolower($user->email)])
                     ->orWhere('invitee_identifier', $user->phone);
             })
             ->get();

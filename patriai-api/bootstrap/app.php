@@ -27,4 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule) {
         // Sweep stale pending approval requests into 'expired' once an hour.
         $schedule->command('approvals:expire')->hourly();
+
+        // Accrue overdue-loan penalties and notify borrowers once a day.
+        $schedule->command('loans:accrue-overdue')->dailyAt('00:05');
+
+        // Reconcile wallet balances against the banking ledger every half hour.
+        $schedule->command('banking:reconcile')->everyThirtyMinutes();
     })->create();

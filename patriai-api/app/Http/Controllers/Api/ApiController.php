@@ -22,17 +22,65 @@ use Illuminate\Support\Facades\DB;
 abstract class ApiController extends Controller
 {
     /**
-     * Kobo the user has already moved OUT today (transfer_out + withdrawal,
-     * successful or still-pending). Used to enforce the per-KYC-tier daily limit.
+     * Kobo the user has committed to sending OUT to third parties today. Used to
+     * enforce the per-KYC-tier daily limit. This counts money genuinely leaving to
+     * others — both executed/pending ledger debits AND still-open approval-gated
+     * spends the user initiated today — but NEVER internal own-wallet moves or
+     * escrow/milestone payouts.
      */
     protected function todaysOutgoingKobo(User $user): int
     {
-        return (int) Transaction::where('user_id', $user->id)
+        $startOfDay = now()->startOfDay();
+
+        // Wallets this user OWNS — used to exclude internal own-wallet-to-own-wallet moves.
+        $ownWalletIds = $user->wallets()->pluck('id')->all();
+
+        // 1. Executed/pending ledger debits initiated by this user today. Only money
+        //    leaving to third parties counts:
+        //      - withdrawal:   payout to an external bank account (always counts)
+        //      - transfer_out: internal wallet move — counts ONLY when it lands in a
+        //        wallet the user does NOT own and is not an escrow/milestone release
+        //        (those originate from a 'project' wallet).
+        $rows = Transaction::where('user_id', $user->id)
             ->where('direction', 'debit')
             ->whereIn('type', ['transfer_out', 'withdrawal'])
             ->whereIn('status', ['successful', 'pending'])
-            ->where('created_at', '>=', now()->startOfDay())
+            ->where('created_at', '>=', $startOfDay)
+            ->with('wallet:id,type')
+            ->get();
+
+        $total = 0;
+        foreach ($rows as $row) {
+            if ($row->type === 'withdrawal') {
+                $total += $row->amount + $row->fee;
+                continue;
+            }
+
+            // transfer_out: skip escrow/milestone payouts (sourced from a project wallet).
+            if ($row->wallet && $row->wallet->type === 'project') {
+                continue;
+            }
+
+            // Skip internal moves into another wallet the same user owns.
+            $destWalletId = $row->counterparty['wallet_id'] ?? null;
+            if ($destWalletId !== null && in_array((int) $destWalletId, $ownWalletIds, true)) {
+                continue;
+            }
+
+            $total += $row->amount + $row->fee;
+        }
+
+        // 2. Still-open (pending/approved, not yet executed/failed/rejected/expired)
+        //    approval-gated outgoing spends this user initiated today. These have not
+        //    hit the ledger yet, so counting them here stops many concurrent
+        //    approval-gated transfers from collectively blowing past the daily cap.
+        $total += (int) ApprovalRequest::where('initiator_id', $user->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereIn('action', ['withdrawal', 'transfer_bank', 'transfer_wallet', 'transfer_user'])
+            ->where('created_at', '>=', $startOfDay)
             ->sum(DB::raw('amount + fee'));
+
+        return $total;
     }
 
     /**

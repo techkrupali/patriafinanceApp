@@ -39,6 +39,14 @@ class InvitationController extends ApiController
         $inviteRole = $data['role'] ?? 'contributor';
         $canApprove = $request->boolean('can_approve');
 
+        // Role ceiling: an inviter may never grant a role that outranks (or
+        // equals) their own. The owner sits above every invitable role, so this
+        // only ever constrains co_owner/admin inviters.
+        $ranks = ['owner' => 5, 'co_owner' => 4, 'admin' => 3, 'contributor' => 2, 'viewer' => 1];
+        if (($ranks[$inviteRole] ?? 0) >= ($ranks[$role] ?? 0)) {
+            return $this->fail('You cannot invite someone at or above your own role', 403);
+        }
+
         // A viewer is read-only and must never be granted approval rights.
         if ($inviteRole === 'viewer' && $canApprove) {
             return $this->fail('A viewer cannot be given approval rights', 422);

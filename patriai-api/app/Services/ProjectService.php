@@ -130,8 +130,8 @@ class ProjectService
         if (!$project->vendor_id) {
             throw ValidationException::withMessages(['vendor' => 'No vendor is assigned to this project']);
         }
-        if ($project->milestones()->whereIn('status', ['submitted', 'approved'])->exists()) {
-            throw ValidationException::withMessages(['vendor' => 'Cannot remove the vendor while milestones are submitted or approved']);
+        if ($project->milestones()->whereIn('status', ['submitted', 'approved', 'released'])->exists()) {
+            throw ValidationException::withMessages(['vendor' => 'Cannot remove the vendor after milestones have been submitted, approved, or released']);
         }
 
         $project->update(['vendor_id' => null]);
@@ -188,6 +188,9 @@ class ProjectService
         if (!$project || $project->vendor_id !== $vendor->id) {
             throw ValidationException::withMessages(['milestone' => 'Only the assigned vendor can submit this milestone']);
         }
+        if ($project->status !== 'active') {
+            throw ValidationException::withMessages(['project' => 'Project is not active.']);
+        }
         if (!in_array($milestone->status, ['funded', 'rejected'], true)) {
             throw ValidationException::withMessages(['milestone' => 'This milestone cannot be submitted in its current state']);
         }
@@ -225,6 +228,9 @@ class ProjectService
         if (!$project || $project->owner_id !== $owner->id) {
             throw ValidationException::withMessages(['milestone' => 'Only the project owner can approve this milestone']);
         }
+        if ($project->status !== 'active') {
+            throw ValidationException::withMessages(['project' => 'Project is not active.']);
+        }
         if ($milestone->status !== 'submitted') {
             throw ValidationException::withMessages(['milestone' => 'Only a submitted milestone can be approved']);
         }
@@ -240,25 +246,35 @@ class ProjectService
         $projectWallet = $project->wallet;
 
         return DB::transaction(function () use ($milestone, $project, $owner, $vendor, $vendorWallet, $projectWallet) {
+            // Re-validate the milestone under a row lock so two concurrent approvals
+            // cannot both pay out. The second request finds status != 'submitted' and
+            // aborts, rolling back before any transfer or status write happens.
+            $fresh = Milestone::whereKey($milestone->id)->lockForUpdate()->first();
+            if (!$fresh || $fresh->status !== 'submitted') {
+                throw ValidationException::withMessages(['milestone' => 'This milestone has already been processed']);
+            }
+
             // Overdraft-guarded, row-locked escrow payout. Throws ValidationException if
             // the escrow wallet was drained below the milestone amount — which rolls back
             // this transaction so the milestone stays 'submitted'.
             $result = $this->wallets->transferBetweenWallets(
                 $projectWallet,
                 $vendorWallet,
-                $milestone->amount,
+                $fresh->amount,
                 $owner,
-                "Milestone payout: {$milestone->title}",
+                "Milestone payout: {$fresh->title}",
             );
 
-            $milestone->update([
+            $fresh->update([
                 'status' => 'released',
                 'released_at' => now(),
                 'released_transaction_reference' => $result['reference'],
             ]);
 
-            // Auto-complete the project once every milestone has been released.
-            if ($project->milestones()->count() > 0
+            // Auto-complete the project once every milestone has been released. Only from
+            // an 'active' state — never overwrite a terminal status such as 'cancelled'.
+            if ($project->status === 'active'
+                && $project->milestones()->count() > 0
                 && !$project->milestones()->where('status', '!=', 'released')->exists()) {
                 $project->update(['status' => 'completed']);
             }
@@ -267,11 +283,11 @@ class ProjectService
                 $vendor,
                 'milestone_released',
                 'Milestone payment released',
-                '₦' . $this->naira($milestone->amount) . " was released to your wallet for \"{$milestone->title}\".",
+                '₦' . $this->naira($fresh->amount) . " was released to your wallet for \"{$fresh->title}\".",
                 [
                     'project_id' => $project->id,
-                    'milestone_id' => $milestone->id,
-                    'amount' => $this->naira($milestone->amount),
+                    'milestone_id' => $fresh->id,
+                    'amount' => $this->naira($fresh->amount),
                     'reference' => $result['reference'],
                 ],
             );
@@ -280,15 +296,15 @@ class ProjectService
                 $owner,
                 'milestone_released',
                 'Milestone approved and paid',
-                "You approved \"{$milestone->title}\" and released ₦" . $this->naira($milestone->amount) . " to {$vendor->fullName()}.",
+                "You approved \"{$fresh->title}\" and released ₦" . $this->naira($fresh->amount) . " to {$vendor->fullName()}.",
                 [
                     'project_id' => $project->id,
-                    'milestone_id' => $milestone->id,
+                    'milestone_id' => $fresh->id,
                     'reference' => $result['reference'],
                 ],
             );
 
-            return ['milestone' => $milestone->refresh(), 'reference' => $result['reference']];
+            return ['milestone' => $fresh->refresh(), 'reference' => $result['reference']];
         });
     }
 

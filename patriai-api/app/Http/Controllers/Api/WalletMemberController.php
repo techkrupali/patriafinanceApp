@@ -45,6 +45,7 @@ class WalletMemberController extends ApiController
         $data = $request->validate([
             'role' => ['sometimes', 'in:co_owner,admin,contributor,viewer'],
             'can_approve' => ['sometimes', 'boolean'],
+            'can_spend' => ['sometimes', 'boolean'],
         ]);
 
         $update = [];
@@ -55,8 +56,28 @@ class WalletMemberController extends ApiController
             $update['can_approve'] = $request->boolean('can_approve');
         }
 
-        if (!$update) {
+        $changingSpend = $request->exists('can_spend');
+
+        if (!$update && !$changingSpend) {
             return $this->fail('Nothing to update', 422);
+        }
+
+        // On approval-enabled wallets, the approver set (who can approve, and
+        // roles that confer approval eligibility) is owner-only territory — a
+        // co_owner must not be able to manufacture or reshape approvers.
+        if ($wallet->approval_enabled === true
+            && (array_key_exists('role', $update) || array_key_exists('can_approve', $update))
+            && $role !== 'owner') {
+            return $this->fail('Only the owner can change approvers on an approval-enabled wallet', 403);
+        }
+
+        // Role ceiling: a member may never be promoted to a role that outranks
+        // (or equals) the acting user's own role.
+        if (array_key_exists('role', $update)) {
+            $ranks = ['owner' => 5, 'co_owner' => 4, 'admin' => 3, 'contributor' => 2, 'viewer' => 1];
+            if (($ranks[$update['role']] ?? 0) >= ($ranks[$role] ?? 0)) {
+                return $this->fail('You cannot set a member to a role at or above your own', 403);
+            }
         }
 
         // A viewer must never be an approver. If the resulting role is viewer,
@@ -67,6 +88,14 @@ class WalletMemberController extends ApiController
                 return $this->fail('A viewer cannot be given approval rights', 422);
             }
             $update['can_approve'] = false;
+        }
+
+        // Owners may grant explicit spend rights to a contributor/admin by
+        // writing can_spend into the member's permissions JSON (CONTRACT A).
+        if ($changingSpend) {
+            $permissions = $member->permissions ?? [];
+            $permissions['can_spend'] = $request->boolean('can_spend');
+            $update['permissions'] = $permissions;
         }
 
         $member->update($update);
@@ -91,6 +120,12 @@ class WalletMemberController extends ApiController
         }
         if ($member->role === 'owner' || $member->user_id === $wallet->user_id) {
             return $this->fail('The wallet owner cannot be removed', 422);
+        }
+
+        // On approval-enabled wallets, removing a member can shrink the approver
+        // set, so it is owner-only (a co_owner must not remove approvers).
+        if ($wallet->approval_enabled === true && $role !== 'owner') {
+            return $this->fail('Only the owner can remove members on an approval-enabled wallet', 403);
         }
 
         $removedUser = $member->user;

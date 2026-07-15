@@ -131,13 +131,13 @@ class WalletService
     }
 
     /** Debit a wallet with an overdraft guard. */
-    public function debit(Wallet $wallet, int $amountKobo, int $feeKobo, string $type, array $counterparty = [], ?string $description = null, ?int $userId = null, ?string $bankingReference = null, string $status = 'successful'): Transaction
+    public function debit(Wallet $wallet, int $amountKobo, int $feeKobo, string $type, array $counterparty = [], ?string $description = null, ?int $userId = null, ?string $bankingReference = null, string $status = 'successful', bool $adminOverride = false): Transaction
     {
-        return DB::transaction(function () use ($wallet, $amountKobo, $feeKobo, $type, $counterparty, $description, $userId, $bankingReference, $status) {
+        return DB::transaction(function () use ($wallet, $amountKobo, $feeKobo, $type, $counterparty, $description, $userId, $bankingReference, $status, $adminOverride) {
             $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
             $total = $amountKobo + $feeKobo;
 
-            if ($locked->status !== 'active') {
+            if (!$adminOverride && $locked->status !== 'active') {
                 throw ValidationException::withMessages(['wallet' => 'Wallet is not active']);
             }
             if ($locked->balance < $total) {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Wallet;
+use App\Services\NotificationService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class WebhookController extends ApiController
             return $this->ok('Ignored');
         }
 
-        WalletService::make()->credit(
+        $txn = WalletService::make()->credit(
             $wallet,
             (int) round(((float) $amount) * 100),
             'fund',
@@ -64,6 +65,23 @@ class WebhookController extends ApiController
             $sessionId,
             $payload['narration'] ?? 'Wallet funding',
         );
+
+        // Notify the owner only on a genuinely new credit. Duplicate/retried
+        // deliveries (idempotent by sessionId) return the existing row and must
+        // not fire a second notification.
+        if ($txn->wasRecentlyCreated) {
+            NotificationService::make()->push(
+                $wallet->owner,
+                'money_received',
+                'Money received',
+                'You received ₦' . number_format($txn->amount / 100, 2, '.', '') . " in {$wallet->name}.",
+                [
+                    'wallet_id' => $wallet->id,
+                    'transaction_reference' => $txn->reference,
+                    'amount' => $txn->amount,
+                ],
+            );
+        }
 
         return $this->ok('Wallet credited');
     }

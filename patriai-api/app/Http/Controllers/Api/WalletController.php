@@ -236,9 +236,35 @@ class WalletController extends ApiController
             'required_approvals' => ['sometimes', 'integer', 'min:1'],
         ]);
 
+        // Approval-governance fields are owner-only. Co-owners may edit
+        // name/description but must not be able to change who can spend how much.
+        $governanceFields = ['approval_enabled', 'approval_threshold', 'required_approvals'];
+        $touchesGovernance = false;
+        foreach ($governanceFields as $field) {
+            if ($request->exists($field)) {
+                $touchesGovernance = true;
+                break;
+            }
+        }
+        if ($touchesGovernance && $role !== 'owner') {
+            return $this->fail('Only the owner can change approval governance settings', 403);
+        }
+
         // Main wallets cannot use spend-approval governance.
         if ($wallet->type === 'main' && $request->boolean('approval_enabled')) {
             return $this->fail('Approval controls are not available on your main wallet', 422);
+        }
+
+        // A required-approvals count higher than the number of people who could ever
+        // approve would make every gated spend unreachable (stuck state). Reject it.
+        $effectiveApprovalEnabled = $request->exists('approval_enabled')
+            ? $request->boolean('approval_enabled')
+            : (bool) $wallet->approval_enabled;
+        if ($request->exists('required_approvals') && $effectiveApprovalEnabled) {
+            $maxApprovers = $wallet->eligibleApprovers()->count();
+            if ((int) $data['required_approvals'] > $maxApprovers) {
+                return $this->fail("Required approvals cannot exceed the number of people who can approve on this wallet ({$maxApprovers}).", 422);
+            }
         }
 
         $update = [];

@@ -38,6 +38,22 @@ class KycController extends ApiController
             ->latest()
             ->first();
 
+        // Suppress the rejected banner once it has been superseded: either the
+        // user already reached (or passed) that tier, or a later submission for
+        // the same tier was approved. Otherwise the banner nags forever.
+        if ($lastRejected) {
+            $superseded = $tier >= $lastRejected->target_tier
+                || KycSubmission::where('user_id', $user->id)
+                    ->where('status', 'approved')
+                    ->where('target_tier', $lastRejected->target_tier)
+                    ->where('created_at', '>', $lastRejected->created_at)
+                    ->exists();
+
+            if ($superseded) {
+                $lastRejected = null;
+            }
+        }
+
         $status = $pending ? 'pending' : ($tier >= 1 ? 'verified' : 'unverified');
 
         return $this->ok('KYC status fetched', [

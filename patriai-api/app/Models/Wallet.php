@@ -11,8 +11,8 @@ class Wallet extends Model
 {
     public const TYPES = ['main', 'shared', 'project', 'savings', 'goal', 'emergency', 'giving', 'joint', 'child', 'spending'];
 
-    /** Roles allowed to move money out of a wallet. Viewers are read-only. */
-    public const SPENDING_ROLES = ['owner', 'co_owner', 'admin', 'contributor'];
+    /** Roles that may move money out UNCONDITIONALLY. Others need an explicit can_spend grant. */
+    public const SPENDING_ROLES = ['owner', 'co_owner'];
 
     protected $fillable = [
         'user_id',
@@ -88,11 +88,26 @@ class Wallet extends Model
             return true;
         }
 
-        return $this->members()
+        $member = $this->members()
             ->where('user_id', $user->id)
             ->where('status', 'active')
-            ->whereIn('role', self::SPENDING_ROLES)
-            ->exists();
+            ->first();
+
+        if (!$member) {
+            return false;
+        }
+
+        // owner/co_owner spend unconditionally.
+        if (in_array($member->role, self::SPENDING_ROLES, true)) {
+            return true;
+        }
+
+        // admin/contributor may spend only with an explicit grant; viewer/vendor/child never.
+        if (in_array($member->role, ['admin', 'contributor'], true)) {
+            return ($member->permissions['can_spend'] ?? false) === true;
+        }
+
+        return false;
     }
 
     /** 'owner' if the wallet owner, else the active member role, else null. */

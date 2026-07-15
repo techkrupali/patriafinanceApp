@@ -10,6 +10,7 @@ use App\Services\NotificationService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class TransferController extends ApiController
 {
@@ -27,6 +28,7 @@ class TransferController extends ApiController
             'amount' => ['required', 'numeric', 'min:1'],
             'pin' => ['required', 'digits:4'],
             'description' => ['nullable', 'string', 'max:200'],
+            'idempotency_key' => ['nullable', 'string', 'max:100'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],
             'destination.wallet_id' => ['required_if:destination.kind,wallet', 'nullable', 'integer'],
             'destination.identifier' => ['required_if:destination.kind,user', 'nullable', 'string'],
@@ -38,6 +40,74 @@ class TransferController extends ApiController
 
         $user = $request->user();
 
+        // --- Idempotency / double-submit protection -------------------------------
+        // 1. Explicit client key: replay the original response for ~5 minutes and
+        //    lock out concurrent duplicates carrying the same (user, key).
+        $idempotencyKey = $data['idempotency_key'] ?? null;
+        $cacheKey = $idempotencyKey !== null
+            ? 'transfer:idem:' . $user->id . ':' . sha1($idempotencyKey)
+            : null;
+
+        if ($cacheKey !== null) {
+            if ($cached = Cache::get($cacheKey)) {
+                return response()->json($cached['body'], $cached['code']);
+            }
+            if (!Cache::add($cacheKey . ':lock', 1, now()->addSeconds(30))) {
+                return $this->fail('A transfer with this idempotency key is already being processed.', 409);
+            }
+        }
+
+        // 2. Even without a key: reject a byte-identical transfer intent from the
+        //    same user within ~10 seconds (accidental double tap). Cache::add is
+        //    atomic, so of two concurrent taps exactly one proceeds.
+        $fingerprint = 'transfer:dedupe:' . $user->id . ':' . sha1(json_encode([
+            'from' => $data['from_wallet_id'],
+            'amount' => $data['amount'],
+            'destination' => $data['destination'],
+        ]));
+        if (!Cache::add($fingerprint, 1, now()->addSeconds(10))) {
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            return $this->fail('Duplicate transfer ignored — this looks like a double submission. Please wait a moment before retrying.', 409);
+        }
+
+        try {
+            $response = $this->performTransfer($user, $data);
+        } catch (\Throwable $e) {
+            // A failed attempt must be retryable immediately: drop the short-window
+            // dedupe marker (and any idempotency lock) so a corrected retry is allowed.
+            Cache::forget($fingerprint);
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            throw $e;
+        }
+
+        if ($cacheKey !== null) {
+            Cache::forget($cacheKey . ':lock');
+        }
+
+        if ($response->getStatusCode() >= 300) {
+            // Non-success (e.g. 404/403/422): allow an immediate corrected retry.
+            Cache::forget($fingerprint);
+        } elseif ($cacheKey !== null) {
+            // Store the successful outcome for idempotent replay within the window.
+            Cache::put($cacheKey, [
+                'body' => $response->getData(true),
+                'code' => $response->getStatusCode(),
+            ], now()->addMinutes(5));
+        }
+
+        return $response;
+    }
+
+    /**
+     * Execute a validated transfer. Split out of store() so the surrounding
+     * idempotency/double-submit guard never runs a second debit for a replay.
+     */
+    private function performTransfer(User $user, array $data): JsonResponse
+    {
         app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
         $from = Wallet::find($data['from_wallet_id']);

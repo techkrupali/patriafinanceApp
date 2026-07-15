@@ -59,13 +59,15 @@ class LoanService
             return 0;
         }
 
-        // Only genuine inflows count toward credit history. Loan disbursements,
-        // reversals, and admin credits are not real earned volume and would
-        // otherwise let a disbursed loan inflate the next borrowing limit.
+        // Only genuine external inflows count toward credit history. Loan
+        // disbursements, reversals, admin credits, and internal transfers between
+        // the user's own wallets are not real earned volume — counting transfer_in
+        // would let a user loop their own money to inflate the next borrowing limit.
+        // Genuine external deposits (type 'fund' from the banking webhook) still count.
         return (int) Transaction::whereIn('wallet_id', $walletIds)
             ->where('direction', 'credit')
             ->where('status', 'successful')
-            ->whereNotIn('type', ['loan_disbursement', 'reversal', 'admin_credit'])
+            ->whereNotIn('type', ['loan_disbursement', 'reversal', 'admin_credit', 'transfer_in'])
             ->where('created_at', '>=', now()->subDays(90))
             ->sum('amount');
     }
@@ -108,12 +110,28 @@ class LoanService
      */
     public function eligibility(User $user): array
     {
+        // PRD 8.9: loans require KYC Tier 3 (Source of Funds). Below that the
+        // borrowing limit is 0 and the app should prompt a Tier-3 upgrade.
+        if ((int) $user->kyc_tier < 3) {
+            return [
+                'max_amount' => $this->naira(0),
+                'max_amount_kobo' => 0,
+                'tier' => (int) $user->kyc_tier,
+                'kyc_tier' => (int) $user->kyc_tier,
+                'requires_tier' => 3,
+                'reason' => 'Tier 3 verification (Source of Funds) is required to access loans.',
+                'categories' => Loan::CATEGORIES,
+                'has_active_loan' => $this->hasOpenLoan($user),
+            ];
+        }
+
         $maxKobo = $this->maxEligibleKobo($user);
 
         return [
             'max_amount' => $this->naira($maxKobo),
             'max_amount_kobo' => $maxKobo,
             'tier' => (int) $user->kyc_tier,
+            'kyc_tier' => (int) $user->kyc_tier,
             'categories' => Loan::CATEGORIES,
             'has_active_loan' => $this->hasOpenLoan($user),
         ];
@@ -132,6 +150,11 @@ class LoanService
         ?string $purpose,
         ?int $disburseWalletId,
     ): Loan {
+        // PRD 8.9: loan access requires KYC Tier 3 (Source of Funds). This gate is
+        // authoritative and runs before any eligibility/creation logic.
+        if ((int) $user->kyc_tier < 3) {
+            throw ValidationException::withMessages(['kyc' => 'Tier 3 verification (Source of Funds) is required to access loans.']);
+        }
         if (!in_array($category, Loan::CATEGORIES, true)) {
             throw ValidationException::withMessages(['category' => 'Invalid loan category']);
         }
@@ -339,6 +362,17 @@ class LoanService
      */
     public function recover(Loan $loan, User $admin, Wallet $wallet, int $amountKobo): array
     {
+        // The recovery target must be the borrower's own wallet — funds are pulled
+        // from the borrower to settle their own loan.
+        if ($wallet->user_id !== $loan->user_id) {
+            throw ValidationException::withMessages(['wallet' => 'Recovery wallet does not belong to the borrower']);
+        }
+        // Never recover from wallets that hold reserved/escrowed funds (project
+        // milestones, goal targets) — those balances are committed elsewhere.
+        if (in_array($wallet->type, ['project', 'goal'], true)) {
+            throw ValidationException::withMessages(['wallet' => 'Funds in this wallet type cannot be recovered']);
+        }
+
         return $this->applyPayment($loan, $loan->user, $wallet, $amountKobo, $loan->user_id, true, $admin);
     }
 
@@ -373,6 +407,7 @@ class LoanService
                 ['kind' => 'loan', 'loan_reference' => $loan->reference],
                 "Loan repayment ({$loan->reference})",
                 $debitUserId,
+                adminOverride: $recovery,
             );
 
             // Apply to penalty first, then to principal outstanding.
@@ -460,14 +495,66 @@ class LoanService
             throw ValidationException::withMessages(['loan' => 'Only an active loan can be defaulted']);
         }
 
-        $loan->update(['status' => 'defaulted']);
+        $recovered = DB::transaction(function () use ($loan) {
+            $loan->update(['status' => 'defaulted']);
+
+            // Freeze the borrower's own active wallets so they can't drain funds
+            // that could otherwise settle the defaulted loan.
+            Wallet::where('user_id', $loan->user_id)
+                ->where('status', 'active')
+                ->update(['status' => 'frozen']);
+
+            // Best-effort auto-recovery from the borrower's MAIN wallet, up to the
+            // still-available balance and never more than what is outstanding. The
+            // debit uses adminOverride so the just-frozen wallet is still recoverable.
+            $recovered = 0;
+            $mainWallet = $loan->user->mainWallet();
+            if ($mainWallet) {
+                $mainWallet->refresh();
+                $available = $mainWallet->availableToSpend();
+                $outstanding = $loan->outstanding + $loan->penalty_accrued;
+                $pull = min($available, $outstanding);
+
+                if ($pull > 0) {
+                    $this->wallets->debit(
+                        $mainWallet,
+                        $pull,
+                        0,
+                        'loan_repayment',
+                        ['kind' => 'loan', 'loan_reference' => $loan->reference, 'auto_recovery' => true],
+                        "Loan default recovery ({$loan->reference})",
+                        $loan->user_id,
+                        adminOverride: true,
+                    );
+
+                    // Apply to penalty first, then to principal outstanding.
+                    $penaltyPay = min($pull, $loan->penalty_accrued);
+                    $loan->penalty_accrued -= $penaltyPay;
+                    $loan->outstanding = max(0, $loan->outstanding - ($pull - $penaltyPay));
+
+                    $meta = $loan->meta ?? [];
+                    $meta['auto_recovered'] = ($meta['auto_recovered'] ?? 0) + $pull;
+                    $meta['auto_recovered_at'] = now()->toIso8601String();
+                    $loan->meta = $meta;
+
+                    if ($loan->outstanding <= 0 && $loan->penalty_accrued <= 0) {
+                        $loan->status = 'repaid';
+                    }
+
+                    $loan->save();
+                    $recovered = $pull;
+                }
+            }
+
+            return $recovered;
+        });
 
         $this->notifications->push(
             $loan->user,
             'loan_defaulted',
             'Loan marked as defaulted',
             "Your ₦" . $this->naira($loan->total_repayable) . " {$loan->category} loan has been marked as defaulted. Please repay ₦" . $this->naira($loan->outstanding + $loan->penalty_accrued) . ' to settle it.',
-            ['loan_id' => $loan->id, 'loan_reference' => $loan->reference],
+            ['loan_id' => $loan->id, 'loan_reference' => $loan->reference, 'auto_recovered' => $recovered],
         );
 
         return $loan->refresh();
@@ -499,15 +586,21 @@ class LoanService
 
                 $loansProcessed++;
 
+                $newlyOverdue = false;
                 foreach ($overdueRows as $row) {
                     if ($row->status !== 'overdue') {
                         $row->update(['status' => 'overdue']);
+                        $newlyOverdue = true;
                     }
                 }
 
                 $meta = $loan->meta ?? [];
                 if (($meta['last_overdue_run'] ?? null) === $today) {
-                    continue; // already penalised today
+                    // Already penalised today. Still notify if a row just tipped overdue.
+                    if ($newlyOverdue) {
+                        $this->notifyOverdue($loan, 0);
+                    }
+                    continue;
                 }
 
                 $penalty = 0;
@@ -526,6 +619,10 @@ class LoanService
                     $loansPenalized++;
                     $penaltyCharged += $penalty;
                 }
+
+                if ($newlyOverdue || $penalty > 0) {
+                    $this->notifyOverdue($loan, $penalty);
+                }
             }
         });
 
@@ -534,5 +631,21 @@ class LoanService
             'loans_penalized' => $loansPenalized,
             'penalty_charged' => $this->naira($penaltyCharged),
         ];
+    }
+
+    /** Notify the borrower that their loan is overdue (and any penalty just added). */
+    private function notifyOverdue(Loan $loan, int $penaltyKobo): void
+    {
+        $body = $penaltyKobo > 0
+            ? 'Your ₦' . $this->naira($loan->total_repayable) . " {$loan->category} loan is overdue. A late penalty of ₦" . $this->naira($penaltyKobo) . ' has been applied. Outstanding: ₦' . $this->naira($loan->outstanding + $loan->penalty_accrued) . '.'
+            : 'Your ₦' . $this->naira($loan->total_repayable) . " {$loan->category} loan is overdue. Please repay ₦" . $this->naira($loan->outstanding + $loan->penalty_accrued) . ' to settle it.';
+
+        $this->notifications->push(
+            $loan->user,
+            'loan_overdue',
+            'Loan payment overdue',
+            $body,
+            ['loan_id' => $loan->id, 'loan_reference' => $loan->reference, 'penalty' => $penaltyKobo],
+        );
     }
 }
