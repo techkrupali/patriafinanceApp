@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
@@ -80,6 +81,10 @@ Route::prefix('v1')->group(function () {
 
         Route::post('transfers', [TransferController::class, 'store'])->middleware('throttle:20,1');
 
+        // KYC & Compliance (tier verification)
+        Route::get('kyc', [KycController::class, 'show']);
+        Route::post('kyc/submit', [KycController::class, 'submit'])->middleware('throttle:10,1');
+
         Route::get('banks', [BankController::class, 'index']);
         Route::post('banks/verify-account', [BankController::class, 'verifyAccount'])->middleware('throttle:20,1');
 
@@ -125,6 +130,12 @@ Route::prefix('v1')->group(function () {
             // Projects (Vendor & Project System)
             Route::get('projects', [AdminController::class, 'projects']);
             Route::get('projects/{project}', [AdminController::class, 'projectShow']);
+
+            // KYC & Compliance (tier verification)
+            Route::get('kyc', [AdminController::class, 'kyc']);
+            Route::get('kyc/{submission}', [AdminController::class, 'kycShow']);
+            Route::post('kyc/{submission}/approve', [AdminController::class, 'approveKyc']);
+            Route::post('kyc/{submission}/reject', [AdminController::class, 'rejectKyc']);
         });
     });
 });

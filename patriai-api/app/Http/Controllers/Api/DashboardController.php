@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\ApprovalRequest;
+use App\Models\KycSubmission;
 use App\Models\Loan;
 use App\Models\Milestone;
 use App\Models\Project;
@@ -71,6 +72,8 @@ class DashboardController extends ApiController
             ->latest()
             ->first();
 
+        $kycPending = KycSubmission::where('user_id', $user->id)->where('status', 'pending')->exists();
+
         return $this->ok('Dashboard fetched', [
             'total_balance' => number_format($totalBalance / 100, 2, '.', ''),
             'inflow_30d' => number_format($inflow / 100, 2, '.', ''),
@@ -92,6 +95,11 @@ class DashboardController extends ApiController
                 'loan_id' => $activeLoan->id,
                 'reference' => $activeLoan->reference,
             ] : null,
+            'kyc' => [
+                'tier' => (int) $user->kyc_tier,
+                'status' => $kycPending ? 'pending' : ((int) $user->kyc_tier >= 1 ? 'verified' : 'unverified'),
+                'can_upgrade' => (int) $user->kyc_tier < 3 && !$kycPending,
+            ],
         ]);
     }
 }

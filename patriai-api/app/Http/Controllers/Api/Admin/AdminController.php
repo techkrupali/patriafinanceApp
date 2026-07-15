@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\ApprovalRequest;
+use App\Models\KycSubmission;
 use App\Models\Loan;
 use App\Models\Milestone;
 use App\Models\Project;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\KycService;
 use App\Services\LoanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,6 +62,9 @@ class AdminController extends ApiController
                         ->sum('amount') / 100,
                     2, '.', ''
                 ),
+            ],
+            'kyc' => [
+                'pending' => KycSubmission::where('status', 'pending')->count(),
             ],
         ]);
     }
@@ -359,5 +364,65 @@ class AdminController extends ApiController
             'wallet' => $this->serializeWallet($project->wallet, withOwner: true),
             'milestones' => $project->milestones->map(fn ($m) => $this->serializeMilestone($m))->values(),
         ]);
+    }
+
+    // GET /admin/kyc?status=
+    public function kyc(Request $request): JsonResponse
+    {
+        $submissions = KycSubmission::with('user')
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return $this->ok('KYC submissions fetched', [
+            'submissions' => collect($submissions->items())->map(fn ($s) => [
+                'id' => $s->id,
+                'user' => $s->user ? ['name' => $s->user->fullName(), 'email' => $s->user->email] : null,
+                'target_tier' => (int) $s->target_tier,
+                'type' => $s->type,
+                'status' => $s->status,
+                'created_at' => $s->created_at?->toIso8601String(),
+            ]),
+            'pagination' => [
+                'page' => $submissions->currentPage(),
+                'per_page' => $submissions->perPage(),
+                'total' => $submissions->total(),
+                'last_page' => $submissions->lastPage(),
+            ],
+        ]);
+    }
+
+    // GET /admin/kyc/{submission}
+    public function kycShow(KycSubmission $submission): JsonResponse
+    {
+        $submission->load('user');
+
+        return $this->ok('KYC submission fetched', [
+            'submission' => $this->serializeKycSubmission($submission, withPayload: true),
+            'user' => $submission->user ? [
+                'id' => $submission->user->id,
+                'name' => $submission->user->fullName(),
+                'email' => $submission->user->email,
+                'kyc_tier' => (int) $submission->user->kyc_tier,
+            ] : null,
+        ]);
+    }
+
+    // POST /admin/kyc/{submission}/approve
+    public function approveKyc(Request $request, KycSubmission $submission): JsonResponse
+    {
+        $submission = KycService::make()->approve($submission, $request->user());
+
+        return $this->ok('KYC approved', ['submission' => $this->serializeKycSubmission($submission)]);
+    }
+
+    // POST /admin/kyc/{submission}/reject  { note? }
+    public function rejectKyc(Request $request, KycSubmission $submission): JsonResponse
+    {
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:200']]);
+
+        $submission = KycService::make()->reject($submission, $request->user(), $data['note'] ?? null);
+
+        return $this->ok('KYC rejected', ['submission' => $this->serializeKycSubmission($submission)]);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ApprovalRequest;
 use App\Models\AppNotification;
+use App\Models\KycSubmission;
 use App\Models\Loan;
 use App\Models\LoanRepayment;
 use App\Models\Milestone;
@@ -266,6 +267,25 @@ abstract class ApiController extends Controller
             'released_transaction_reference' => $milestone->released_transaction_reference,
             'created_at' => $milestone->created_at?->toIso8601String(),
         ];
+    }
+
+    protected function serializeKycSubmission(KycSubmission $s, bool $withPayload = false): array
+    {
+        $data = [
+            'id' => $s->id,
+            'target_tier' => (int) $s->target_tier,
+            'type' => $s->type,
+            'status' => $s->status,
+            'review_note' => $s->review_note,
+            'reviewed_at' => $s->reviewed_at?->toIso8601String(),
+            'created_at' => $s->created_at?->toIso8601String(),
+        ];
+
+        if ($withPayload) {
+            $data['payload'] = $s->payload;
+        }
+
+        return $data;
     }
 
     /** Parse a naira amount ("1500" / "1500.50") into kobo int. */

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Wallet;
 use App\Services\ApprovalService;
+use App\Services\KycService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,15 @@ class WalletController extends ApiController
             'target_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $user = $request->user();
+
+        // KYC tier wallet-count guard. Caps are generous (5/10/25) so existing
+        // users are unaffected — verifying a higher tier unlocks more wallets.
+        $maxWallets = KycService::make()->limits((int) $user->kyc_tier)['max_wallets'];
+        if ($user->wallets()->count() >= $maxWallets) {
+            return $this->fail('Wallet limit reached for your verification tier. Verify a higher KYC tier to create more wallets.', 422);
+        }
+
         $opts = [];
         if (($data['description'] ?? null) !== null) {
             $opts['description'] = $data['description'];
@@ -44,7 +54,7 @@ class WalletController extends ApiController
             $opts['target_amount'] = $this->toKobo($data['target_amount']);
         }
 
-        $wallet = WalletService::make()->createWallet($request->user(), $data['type'], $data['name'], $opts);
+        $wallet = WalletService::make()->createWallet($user, $data['type'], $data['name'], $opts);
 
         return $this->ok('Wallet created', ['wallet' => $this->serializeWallet($wallet)], 201);
     }
