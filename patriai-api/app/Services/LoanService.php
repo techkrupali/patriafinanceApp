@@ -407,7 +407,10 @@ class LoanService
                 ['kind' => 'loan', 'loan_reference' => $loan->reference],
                 "Loan repayment ({$loan->reference})",
                 $debitUserId,
-                adminOverride: $recovery,
+                // A defaulted loan freezes the borrower's wallets, but the borrower
+                // must still be able to repay from them (the default notice tells
+                // them to). Overdraft/balance guards in debit() still apply.
+                adminOverride: $recovery || $loan->status === 'defaulted',
             );
 
             // Apply to penalty first, then to principal outstanding.
@@ -462,6 +465,12 @@ class LoanService
 
             $loan->save();
 
+            // Once a (previously defaulted) loan is fully settled, restore any
+            // wallets the default had frozen.
+            if ($fullyRepaid) {
+                $this->unfreezeLoanWallets($loan);
+            }
+
             $this->notifications->push(
                 $loan->user,
                 $fullyRepaid ? 'loan_repaid_full' : 'loan_repaid_partial',
@@ -488,6 +497,26 @@ class LoanService
         return $loan->refresh();
     }
 
+    /**
+     * Restore wallets that a default froze, once the loan is fully settled. Only
+     * touches the exact wallet ids recorded at default time (so wallets frozen for
+     * any other reason are left alone) and clears the marker.
+     */
+    private function unfreezeLoanWallets(Loan $loan): void
+    {
+        $ids = $loan->meta['frozen_wallet_ids'] ?? [];
+        if (empty($ids)) {
+            return;
+        }
+
+        Wallet::whereIn('id', $ids)->where('status', 'frozen')->update(['status' => 'active']);
+
+        $meta = $loan->meta ?? [];
+        unset($meta['frozen_wallet_ids']);
+        $loan->meta = $meta;
+        $loan->save();
+    }
+
     /** Mark an active loan as defaulted (admin). */
     public function markDefaulted(Loan $loan, User $admin): Loan
     {
@@ -498,11 +527,25 @@ class LoanService
         $recovered = DB::transaction(function () use ($loan) {
             $loan->update(['status' => 'defaulted']);
 
-            // Freeze the borrower's own active wallets so they can't drain funds
-            // that could otherwise settle the defaulted loan.
-            Wallet::where('user_id', $loan->user_id)
+            // Freeze only wallets the borrower SOLELY controls so their own funds
+            // can't be drained ahead of settlement. Never collaterally freeze a
+            // project escrow or a collaborative wallet that has OTHER active
+            // members — co-members legitimately spend from those.
+            $freezeIds = Wallet::where('user_id', $loan->user_id)
                 ->where('status', 'active')
-                ->update(['status' => 'frozen']);
+                ->where('type', '!=', 'project')
+                ->whereDoesntHave('members', function ($q) use ($loan) {
+                    $q->where('status', 'active')->where('user_id', '!=', $loan->user_id);
+                })
+                ->pluck('id');
+
+            if ($freezeIds->isNotEmpty()) {
+                Wallet::whereIn('id', $freezeIds)->update(['status' => 'frozen']);
+                $meta = $loan->meta ?? [];
+                $meta['frozen_wallet_ids'] = $freezeIds->all();
+                $loan->meta = $meta;
+                $loan->save();
+            }
 
             // Best-effort auto-recovery from the borrower's MAIN wallet, up to the
             // still-available balance and never more than what is outstanding. The
@@ -544,6 +587,12 @@ class LoanService
                     $loan->save();
                     $recovered = $pull;
                 }
+            }
+
+            // If auto-recovery fully settled the loan, lift the freeze we just set
+            // (the borrower could clear it outright, so keep no wallets locked).
+            if ($loan->status === 'repaid') {
+                $this->unfreezeLoanWallets($loan);
             }
 
             return $recovered;

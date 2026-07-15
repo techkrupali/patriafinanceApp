@@ -694,11 +694,27 @@ class AdminController extends ApiController
 
         // Reversal-first (doc §16.3): original row preserved, a compensating entry is written.
         // Both the compensating money move and the meta stamp are atomic.
-        $reversal = DB::transaction(function () use ($transaction, $wallet, $admin, $reason, $counterparty, $meta, $isStuckPayout) {
-            if ($transaction->direction === 'debit') {
+        $reversal = DB::transaction(function () use ($transaction, $admin, $reason, $counterparty) {
+            // Re-load under a row lock and re-assert the guards INSIDE the critical
+            // section so a concurrent banking:reconcile (or a duplicate reverse)
+            // cannot double-refund the same stuck payout.
+            $locked = Transaction::whereKey($transaction->id)->lockForUpdate()->first();
+            $lockedMeta = $locked->meta ?? [];
+            $stuck = $locked->status === 'pending' && !empty($lockedMeta['needs_reconciliation']);
+
+            if ($locked->status !== 'successful' && !$stuck) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['transaction' => 'Transaction is no longer reversible.']);
+            }
+            if (!empty($lockedMeta['reversed']) || !empty($lockedMeta['refunded'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['transaction' => 'Transaction has already been reversed.']);
+            }
+
+            $wallet = $locked->wallet;
+
+            if ($locked->direction === 'debit') {
                 $rev = WalletService::make()->credit(
                     $wallet,
-                    $transaction->amount + $transaction->fee,
+                    $locked->amount + $locked->fee,
                     'reversal',
                     $counterparty,
                     null,
@@ -709,7 +725,7 @@ class AdminController extends ApiController
                 // May throw ValidationException (422) if the credited funds were already spent.
                 $rev = WalletService::make()->debit(
                     $wallet,
-                    $transaction->amount,
+                    $locked->amount,
                     0,
                     'reversal',
                     $counterparty,
@@ -718,11 +734,11 @@ class AdminController extends ApiController
                 );
             }
 
-            $transaction->update([
+            $locked->update([
                 // A reversed stuck payout is now definitively failed; a reversed
                 // successful txn keeps its original status (reversal-first ledger).
-                'status' => $isStuckPayout ? 'failed' : $transaction->status,
-                'meta' => array_merge($meta, [
+                'status' => $stuck ? 'failed' : $locked->status,
+                'meta' => array_merge($lockedMeta, [
                     'reversed' => true,
                     'reversal_reference' => $rev->reference,
                     'reversed_by' => $admin->id,

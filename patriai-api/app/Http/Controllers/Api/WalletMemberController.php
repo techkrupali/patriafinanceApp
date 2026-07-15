@@ -128,6 +128,17 @@ class WalletMemberController extends ApiController
             return $this->fail('Only the owner can remove members on an approval-enabled wallet', 403);
         }
 
+        // Removing an approver must not strand required_approvals (the initiator is
+        // always excluded, so at most approvers-1 sign-offs are collectable). Block
+        // the removal if it would make gated spends permanently unreachable.
+        if ($wallet->approval_enabled === true) {
+            $remaining = $wallet->eligibleApprovers()->reject(fn ($id) => $id === $member->user_id)->count();
+            $required = (int) $wallet->required_approvals;
+            if ($required > max(1, $remaining - 1)) {
+                return $this->fail("Removing this member would leave too few approvers for the required approvals ({$required}). Lower the required approvals first.", 422);
+            }
+        }
+
         $removedUser = $member->user;
         $member->delete();
 

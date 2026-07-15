@@ -74,11 +74,30 @@ abstract class ApiController extends Controller
         //    approval-gated outgoing spends this user initiated today. These have not
         //    hit the ledger yet, so counting them here stops many concurrent
         //    approval-gated transfers from collectively blowing past the daily cap.
-        $total += (int) ApprovalRequest::where('initiator_id', $user->id)
+        //    Apply the SAME exclusions as part 1 (escrow payouts + internal
+        //    own-wallet moves) so the pending accounting stays symmetric with the
+        //    executed accounting and can't wrongly inflate the daily total.
+        $openApprovals = ApprovalRequest::where('initiator_id', $user->id)
             ->whereIn('status', ['pending', 'approved'])
             ->whereIn('action', ['withdrawal', 'transfer_bank', 'transfer_wallet', 'transfer_user'])
             ->where('created_at', '>=', $startOfDay)
-            ->sum(DB::raw('amount + fee'));
+            ->with('wallet:id,type')
+            ->get();
+
+        foreach ($openApprovals as $req) {
+            // Skip escrow/milestone payouts (sourced from a project wallet).
+            if ($req->wallet && $req->wallet->type === 'project') {
+                continue;
+            }
+            // Skip internal moves into another wallet the same user owns.
+            if ($req->action === 'transfer_wallet') {
+                $destWalletId = $req->payload['wallet_id'] ?? null;
+                if ($destWalletId !== null && in_array((int) $destWalletId, $ownWalletIds, true)) {
+                    continue;
+                }
+            }
+            $total += $req->amount + $req->fee;
+        }
 
         return $total;
     }
@@ -199,6 +218,8 @@ abstract class ApiController extends Controller
             'email' => $member->user?->email,
             'role' => $member->role,
             'can_approve' => (bool) $member->can_approve,
+            'can_spend' => in_array($member->role, ['owner', 'co_owner'], true)
+                || ($member->permissions['can_spend'] ?? false) === true,
             'status' => $member->status,
         ];
     }

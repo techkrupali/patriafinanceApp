@@ -55,9 +55,17 @@ class ApprovalService
 
         // Store the wallet's configured requirement verbatim. Do NOT clamp it down
         // to the current eligible-approver count — clamping would let a required=2
-        // request be satisfied by a single sign-off. (Config-time validation
-        // guarantees required never exceeds the possible approver count.)
+        // request be satisfied by a single sign-off.
         $required = max(1, (int) $wallet->required_approvals);
+
+        // Guard against a stuck request: if fewer OTHER members can approve than the
+        // requirement demands (e.g. an approver was removed after config), reject the
+        // spend now instead of creating a request that can never reach its count.
+        if ($approvers->count() < $required) {
+            throw ValidationException::withMessages([
+                'approval' => "This wallet requires {$required} approval(s), but only {$approvers->count()} other member(s) can approve. Ask the owner to add approvers or lower the requirement.",
+            ]);
+        }
 
         $request = ApprovalRequest::create([
             'wallet_id' => $wallet->id,

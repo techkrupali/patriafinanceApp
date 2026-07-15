@@ -80,6 +80,7 @@ class WalletController extends ApiController
             'wallet' => $this->serializeWallet($wallet, withOwner: true),
             'members' => $members,
             'my_role' => $wallet->roleOf($user),
+            'my_can_spend' => $wallet->canSpend($user),
             'approval' => [
                 'enabled' => (bool) $wallet->approval_enabled,
                 'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
@@ -261,9 +262,14 @@ class WalletController extends ApiController
             ? $request->boolean('approval_enabled')
             : (bool) $wallet->approval_enabled;
         if ($request->exists('required_approvals') && $effectiveApprovalEnabled) {
+            // The initiator is always excluded from approving their own request, and
+            // the owner (a guaranteed approver) is a possible initiator, so at most
+            // (approvers - 1) sign-offs are ever collectable. Cap the requirement
+            // there so a gated spend can never become permanently unreachable.
             $maxApprovers = $wallet->eligibleApprovers()->count();
-            if ((int) $data['required_approvals'] > $maxApprovers) {
-                return $this->fail("Required approvals cannot exceed the number of people who can approve on this wallet ({$maxApprovers}).", 422);
+            $maxRequired = max(1, $maxApprovers - 1);
+            if ((int) $data['required_approvals'] > $maxRequired) {
+                return $this->fail("With {$maxApprovers} eligible approver(s), a spend can require at most {$maxRequired} approval(s) — the initiator can't approve their own request.", 422);
             }
         }
 
