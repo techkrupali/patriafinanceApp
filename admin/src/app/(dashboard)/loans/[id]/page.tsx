@@ -409,6 +409,12 @@ export default function LoanDetailPage({
             // Recovery debits the borrower's wallet — refresh balances too.
             queryClient.invalidateQueries({ queryKey: ["admin", "wallets"] });
             queryClient.invalidateQueries({ queryKey: ["admin", "transactions"] });
+            // The debited wallet's own detail page caches a now-stale balance.
+            if (loan.disbursed_wallet_id != null) {
+              queryClient.invalidateQueries({
+                queryKey: ["admin", "wallet", String(loan.disbursed_wallet_id)],
+              });
+            }
             if (data?.user?.id != null) {
               queryClient.invalidateQueries({
                 queryKey: ["admin", "user", String(data.user.id)],
