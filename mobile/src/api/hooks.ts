@@ -24,6 +24,8 @@ import type {
   InvitationAcceptData,
   InvitationCreatedData,
   InvitationsData,
+  KycState,
+  KycSubmitData,
   LoanCancelData,
   LoanDetailData,
   LoanEligibility,
@@ -46,6 +48,7 @@ import type {
   RegisterPayload,
   RepayLoanPayload,
   RespondApprovalPayload,
+  SubmitKycPayload,
   Transaction,
   TransactionsPageData,
   TransferData,
@@ -91,6 +94,8 @@ export const keys = {
   // ---- Projects (Milestone 5) ----
   projects: ['projects'] as const,
   project: (id: number) => ['projects', id] as const,
+  // ---- KYC (Milestone 6) ----
+  kyc: ['kyc'] as const,
 };
 
 // ---------- Queries ----------
@@ -737,5 +742,30 @@ export function useRejectMilestone(projectId: number) {
         body: { note: input.note },
       }),
     onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+// ---------- KYC & compliance (Milestone 6 — progressive identity tiers) ----------
+
+export function useKyc() {
+  return useQuery({
+    queryKey: keys.kyc,
+    queryFn: () => api<KycState>('/kyc'),
+  });
+}
+
+/**
+ * Submitting a tier for review changes the KYC state and the dashboard's KYC
+ * snapshot (status flips to "pending", can_upgrade to false), so invalidate both.
+ */
+export function useSubmitKyc() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SubmitKycPayload) =>
+      api<KycSubmitData>('/kyc/submit', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.kyc });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
   });
 }

@@ -47,6 +47,9 @@ export type RootStackParamList = {
   ProjectDetail: { projectId: number };
   AssignVendor: { projectId: number };
   AddMilestone: { projectId: number };
+  // ---- KYC & compliance (Milestone 6) ----
+  Kyc: undefined;
+  KycSubmit: { targetTier: number };
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<

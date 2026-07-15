@@ -75,6 +75,9 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
   const pendingSubmissions = data?.projects?.pending_submissions ?? 0;
 
+  const canUpgradeKyc = data?.kyc?.can_upgrade ?? false;
+  const nextKycTier = (data?.kyc?.tier ?? 0) + 1;
+
   return (
     <Screen>
       <ScrollView
@@ -295,6 +298,29 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                   <Text className="mt-0.5 text-[13px] text-muted">Someone invited you to collaborate</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.faded} />
+              </Pressable>
+            ) : null}
+
+            {/* Verify identity prompt */}
+            {canUpgradeKyc ? (
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('Kyc');
+                }}
+                className="mt-6 flex-row items-center rounded-3xl bg-navy p-4 active:opacity-90"
+                style={shadow.card}
+              >
+                <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
+                  <Ionicons name="shield-checkmark" size={22} color={colors.brandGlow} />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-[15px] font-bold text-white">Verify your identity</Text>
+                  <Text className="mt-0.5 text-[13px] text-white/60">
+                    Verify Tier {nextKycTier} to raise your limits
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.brandGlow} />
               </Pressable>
             ) : null}
 

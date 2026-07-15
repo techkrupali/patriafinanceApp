@@ -10,9 +10,10 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { PinPad } from '../components/PinPad';
 import { colors, gradients } from '../theme';
-import { useLogoutApi } from '../api/hooks';
+import { useDashboard, useLogoutApi } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { initials } from '../lib/format';
+import { tierName } from '../lib/kyc';
 import {
   clearTxnPin,
   getBiometricSupport,
@@ -68,6 +69,16 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
   const logoutLocal = useAuth((s) => s.logout);
   const logoutApi = useLogoutApi();
   const qc = useQueryClient();
+  const { data: dashboard } = useDashboard();
+
+  const kyc = dashboard?.kyc;
+  const kycTier = kyc?.tier ?? user?.kyc_tier ?? 0;
+  const kycSubtitle =
+    kyc?.status === 'pending'
+      ? 'Verification under review'
+      : kyc?.can_upgrade
+        ? `Tier ${kycTier} · Verify to raise your limits`
+        : `Tier ${kycTier} · ${tierName(kycTier)}`;
 
   const [support, setSupport] = useState<BiometricSupport | null>(null);
   const [pinModal, setPinModal] = useState(false);
@@ -159,6 +170,29 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
               KYC Tier {user?.kyc_tier ?? 0}
             </Text>
           </View>
+        </Card>
+
+        {/* Identity */}
+        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Identity</Text>
+        <Card className="mt-2 py-1">
+          <Row
+            icon="shield-checkmark-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Identity verification"
+            subtitle={kycSubtitle}
+            onPress={() => navigation.navigate('Kyc')}
+            right={
+              kyc?.can_upgrade ? (
+                <View className="flex-row items-center">
+                  <View className="mr-2 rounded-full bg-success-soft px-2.5 py-1">
+                    <Text className="text-[11px] font-bold text-brand">Verify</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+                </View>
+              ) : undefined
+            }
+          />
         </Card>
 
         {/* Security */}

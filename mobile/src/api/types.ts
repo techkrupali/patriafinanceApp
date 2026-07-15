@@ -234,6 +234,8 @@ export interface DashboardData {
   active_loan?: ActiveLoanSummary | null;
   /** Milestone 5 — vendor/project counters. */
   projects?: DashboardProjects;
+  /** Milestone 6 — KYC snapshot for status chips & verify prompts. */
+  kyc?: DashboardKyc;
 }
 
 export interface WalletsData {
@@ -726,4 +728,88 @@ export interface SubmitMilestonePayload {
 
 export interface RejectMilestonePayload {
   note?: string;
+}
+
+// ============================================================================
+// Milestone 6 — KYC & Compliance (progressive identity tiers)
+// ============================================================================
+
+/** Overall verification state of the account. */
+export type KycStatus = 'unverified' | 'pending' | 'verified';
+
+/** Lifecycle of an individual tier submission. */
+export type KycSubmissionStatus = 'pending' | 'approved' | 'rejected';
+
+export type KycIdType = 'nin_slip' | 'drivers_license' | 'passport' | 'voters_card';
+
+export type KycSourceOfFunds = 'employment' | 'business' | 'investment' | 'other';
+
+export interface KycSubmission {
+  id: number;
+  target_tier: number;
+  type: string;
+  status: KycSubmissionStatus;
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+}
+
+/** The wallet/transfer/loan ceilings unlocked at a given tier. */
+export interface KycLimits {
+  max_wallets: number;
+  /** Naira decimal string, or null when there is no daily transfer cap. */
+  daily_transfer_limit: string | null;
+  /** Naira decimal string. */
+  loan_cap: string;
+}
+
+/** The next tier the user can work towards (null when at the max tier). */
+export interface KycNextTier {
+  tier: number;
+  requirements: string[];
+  benefits: KycLimits;
+}
+
+export interface KycState {
+  tier: number;
+  max_tier: number;
+  status: KycStatus;
+  pending_submission: KycSubmission | null;
+  limits: KycLimits;
+  next_tier: KycNextTier | null;
+}
+
+/** Compact KYC snapshot surfaced on the dashboard. */
+export interface DashboardKyc {
+  tier: number;
+  status: KycStatus;
+  can_upgrade: boolean;
+}
+
+// ---- KYC response payloads ----
+
+export interface KycSubmitData {
+  submission: KycSubmission;
+}
+
+// ---- KYC request payloads ----
+
+/** POST /kyc/submit — `target_tier` plus the fields required by that tier. */
+export interface SubmitKycPayload {
+  target_tier: number;
+  // Tier 1 — Identity
+  bvn?: string;
+  nin?: string;
+  id_type?: KycIdType;
+  id_number?: string;
+  // Tier 2 — Address
+  address?: string;
+  city?: string;
+  state?: string;
+  // Tier 3 — Source of Funds
+  source_of_funds?: KycSourceOfFunds;
+  occupation?: string;
+  business_name?: string;
+  /** Naira decimal string (optional). */
+  monthly_income?: string;
 }

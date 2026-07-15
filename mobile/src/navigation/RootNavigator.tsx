@@ -47,6 +47,8 @@ import { CreateProjectScreen } from '../screens/projects/CreateProjectScreen';
 import { ProjectDetailScreen } from '../screens/projects/ProjectDetailScreen';
 import { AssignVendorScreen } from '../screens/projects/AssignVendorScreen';
 import { AddMilestoneScreen } from '../screens/projects/AddMilestoneScreen';
+import { KycScreen } from '../screens/kyc/KycScreen';
+import { KycSubmitScreen } from '../screens/kyc/KycSubmitScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -158,6 +160,8 @@ export function RootNavigator() {
       <RootStack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
       <RootStack.Screen name="AssignVendor" component={AssignVendorScreen} />
       <RootStack.Screen name="AddMilestone" component={AddMilestoneScreen} />
+      <RootStack.Screen name="Kyc" component={KycScreen} />
+      <RootStack.Screen name="KycSubmit" component={KycSubmitScreen} />
     </RootStack.Navigator>
   );
 }
