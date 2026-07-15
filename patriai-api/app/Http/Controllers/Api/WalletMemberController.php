@@ -98,6 +98,16 @@ class WalletMemberController extends ApiController
             $update['permissions'] = $permissions;
         }
 
+        // A role that can never hold a spend grant must not keep a stale can_spend
+        // (else demote-then-repromote would silently reactivate spending).
+        if (!in_array($resultingRole, ['admin', 'contributor'], true)) {
+            $permissions = $update['permissions'] ?? $member->permissions ?? [];
+            if (($permissions['can_spend'] ?? false) !== false) {
+                $permissions['can_spend'] = false;
+                $update['permissions'] = $permissions;
+            }
+        }
+
         $member->update($update);
 
         return $this->ok('Member updated', ['member' => $this->serializeMember($member->fresh('user'))]);

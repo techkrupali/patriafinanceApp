@@ -407,10 +407,15 @@ class LoanService
                 ['kind' => 'loan', 'loan_reference' => $loan->reference],
                 "Loan repayment ({$loan->reference})",
                 $debitUserId,
-                // A defaulted loan freezes the borrower's wallets, but the borrower
-                // must still be able to repay from them (the default notice tells
-                // them to). Overdraft/balance guards in debit() still apply.
-                adminOverride: $recovery || $loan->status === 'defaulted',
+                // A defaulted loan freezes the wallets it locked; the borrower must
+                // still be able to repay FROM THOSE wallets (the default notice tells
+                // them to). Scope the override to exactly the ids this default froze
+                // so an admin's unrelated freeze/close on some other wallet is never
+                // bypassed. Overdraft/balance guards in debit() still apply.
+                adminOverride: $recovery || (
+                    $loan->status === 'defaulted'
+                    && in_array($wallet->id, $loan->meta['frozen_wallet_ids'] ?? [], true)
+                ),
             );
 
             // Apply to penalty first, then to principal outstanding.

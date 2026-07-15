@@ -218,8 +218,12 @@ abstract class ApiController extends Controller
             'email' => $member->user?->email,
             'role' => $member->role,
             'can_approve' => (bool) $member->can_approve,
+            // Mirror Wallet::canSpend exactly: owner/co_owner always; admin/contributor
+            // only with an explicit grant; every other role never (so a stale grant on
+            // a demoted viewer/child/vendor is not shown as spendable).
             'can_spend' => in_array($member->role, ['owner', 'co_owner'], true)
-                || ($member->permissions['can_spend'] ?? false) === true,
+                || (in_array($member->role, ['admin', 'contributor'], true)
+                    && ($member->permissions['can_spend'] ?? false) === true),
             'status' => $member->status,
         ];
     }
