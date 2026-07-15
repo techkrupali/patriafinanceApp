@@ -88,7 +88,7 @@ export default function UserDetailPage({
     queryFn: () => api<UserDetailData>(`/api/v1/admin/users/${id}`),
   });
 
-  const suspended = data?.user.status === "suspended";
+  const suspended = data?.user?.status === "suspended";
   const nextStatus = suspended ? "active" : "suspended";
 
   function invalidateUser() {

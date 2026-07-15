@@ -84,8 +84,8 @@ export default function ApprovalsPage() {
                     <TD className="font-mono text-xs text-muted">#{a.id}</TD>
                     <TD className="font-semibold">{a.wallet?.name ?? "—"}</TD>
                     <TD>
-                      <p className="font-medium">{a.initiator.name}</p>
-                      <p className="text-xs text-muted">{a.initiator.email}</p>
+                      <p className="font-medium">{a.initiator?.name ?? "—"}</p>
+                      <p className="text-xs text-muted">{a.initiator?.email ?? ""}</p>
                     </TD>
                     <TD>{approvalActionLabel(a.action)}</TD>
                     <TD className="text-right font-semibold">{naira(a.amount)}</TD>

@@ -42,6 +42,8 @@ const LABELS: Record<string, string> = {
   reversal: "Reversal",
   admin_credit: "Admin credit",
   admin_debit: "Admin debit",
+  loan_disbursement: "Loan disbursement",
+  loan_repayment: "Loan repayment",
   main: "Main",
   shared: "Shared",
   project: "Project",

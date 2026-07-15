@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
@@ -15,6 +15,8 @@ import type { LoanDetail, LoanDetailData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
+import { Toast, type ToastState } from "@/components/toast";
+import { RecoverLoanModal } from "@/components/admin/recover-loan-modal";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,8 +41,11 @@ export default function LoanDetailPage({
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState<"approve" | "default" | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const [reason, setReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["admin", "loan", id],
@@ -59,6 +64,7 @@ export default function LoanDetailPage({
     onSuccess: () => {
       setConfirm(null);
       setActionError(null);
+      setToast({ tone: "green", message: "Loan approved and disbursed." });
       refetch();
     },
     onError: (err: Error) => {
@@ -73,6 +79,7 @@ export default function LoanDetailPage({
     onSuccess: () => {
       setConfirm(null);
       setActionError(null);
+      setToast({ tone: "green", message: "Loan marked as defaulted." });
       refetch();
     },
     onError: (err: Error) => {
@@ -91,6 +98,7 @@ export default function LoanDetailPage({
       setRejecting(false);
       setReason("");
       setActionError(null);
+      setToast({ tone: "red", message: "Loan application rejected." });
       refetch();
     },
     onError: (err: Error) => {
@@ -114,6 +122,14 @@ export default function LoanDetailPage({
   const status = loan?.status;
   const isPendingReview = status === "pending";
   const isDefaultable = status === "active" || status === "disbursed";
+  // Once funds have actually left, the wallet is the disbursement target;
+  // before that it's only the requested destination.
+  const isDisbursed =
+    status === "active" ||
+    status === "repaid" ||
+    status === "defaulted" ||
+    !!loan?.disbursed_at;
+  const isRecoverable = status === "active" || status === "defaulted";
   const busy =
     approveMutation.isPending || defaultMutation.isPending || rejectMutation.isPending;
 
@@ -133,6 +149,11 @@ export default function LoanDetailPage({
               Reject
             </Button>
           </>
+        )}
+        {!isPending && isRecoverable && (
+          <Button variant="outline" onClick={() => setRecovering(true)} disabled={busy}>
+            Recover funds
+          </Button>
         )}
         {!isPending && isDefaultable && (
           <Button variant="danger" onClick={() => setConfirm("default")} disabled={busy}>
@@ -186,7 +207,7 @@ export default function LoanDetailPage({
                 </Field>
                 <Field name="Disbursed">{formatDateTime(loan!.disbursed_at)}</Field>
                 <Field name="Due">{formatDate(loan!.due_at)}</Field>
-                <Field name="Disbursed wallet">
+                <Field name={isDisbursed ? "Disbursed wallet" : "Requested wallet"}>
                   {loan!.disbursed_wallet_id ? (
                     <Link
                       href={`/wallets/${loan!.disbursed_wallet_id}`}
@@ -242,7 +263,7 @@ export default function LoanDetailPage({
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-2/3" />
               </div>
-            ) : (
+            ) : data!.user ? (
               <dl className="grid grid-cols-1 gap-y-5">
                 <Field name="Name">
                   <Link
@@ -259,6 +280,8 @@ export default function LoanDetailPage({
                   <Badge tone="blue">Tier {data!.user.kyc_tier}</Badge>
                 </Field>
               </dl>
+            ) : (
+              <p className="text-sm text-muted">Borrower unavailable.</p>
             )}
           </CardContent>
         </Card>
@@ -371,6 +394,31 @@ export default function LoanDetailPage({
           </div>
         </div>
       ) : null}
+
+      {recovering && loan ? (
+        <RecoverLoanModal
+          loanId={id}
+          userId={data?.user?.id ?? null}
+          reference={loan.reference}
+          outstanding={loan.outstanding}
+          onClose={() => setRecovering(false)}
+          onSuccess={(msg) => {
+            setRecovering(false);
+            setToast({ tone: "green", message: msg });
+            refetch();
+            // Recovery debits the borrower's wallet — refresh balances too.
+            queryClient.invalidateQueries({ queryKey: ["admin", "wallets"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "transactions"] });
+            if (data?.user?.id != null) {
+              queryClient.invalidateQueries({
+                queryKey: ["admin", "user", String(data.user.id)],
+              });
+            }
+          }}
+        />
+      ) : null}
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </>
   );
 }

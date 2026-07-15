@@ -317,6 +317,19 @@ export default function TransactionDetailPage({
             queryClient.invalidateQueries({ queryKey: ["admin", "transaction", id] });
             queryClient.invalidateQueries({ queryKey: ["admin", "transactions"] });
             queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+            // Refresh the affected wallet + its owner so balances don't show stale.
+            const walletId = data?.wallet?.id;
+            if (walletId != null) {
+              queryClient.invalidateQueries({
+                queryKey: ["admin", "wallet", String(walletId)],
+              });
+            }
+            const ownerId = data?.wallet?.owner?.id;
+            if (ownerId != null) {
+              queryClient.invalidateQueries({
+                queryKey: ["admin", "user", String(ownerId)],
+              });
+            }
           }}
         />
       ) : null}

@@ -81,6 +81,11 @@ export default function TransactionsPage() {
             <option value="withdrawal">Withdrawal</option>
             <option value="transfer_in">Transfer in</option>
             <option value="transfer_out">Transfer out</option>
+            <option value="reversal">Reversal</option>
+            <option value="admin_credit">Admin credit</option>
+            <option value="admin_debit">Admin debit</option>
+            <option value="loan_disbursement">Loan disbursement</option>
+            <option value="loan_repayment">Loan repayment</option>
           </Select>
         </div>
 

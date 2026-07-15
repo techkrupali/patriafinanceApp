@@ -77,8 +77,8 @@ export default function KycPage() {
                   >
                     <TD className="font-mono text-xs text-muted">#{s.id}</TD>
                     <TD>
-                      <p className="font-medium">{s.user.name}</p>
-                      <p className="text-xs text-muted">{s.user.email}</p>
+                      <p className="font-medium">{s.user?.name ?? "—"}</p>
+                      <p className="text-xs text-muted">{s.user?.email ?? ""}</p>
                     </TD>
                     <TD>{kycTierLabel(s.target_tier)}</TD>
                     <TD>{label(s.type)}</TD>

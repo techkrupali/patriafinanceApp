@@ -25,8 +25,13 @@ export interface ApiWallet {
   id: number;
   type: "main" | "shared" | "project";
   name: string;
+  description: string | null;
   currency: string;
   balance: string; // naira string
+  target_amount: string | null; // naira string
+  approval_enabled: boolean;
+  approval_threshold: string | null; // naira string
+  required_approvals: number;
   virtual_account: string | null;
   virtual_account_bank: string | null;
   status: "active" | "frozen" | "closed";
@@ -49,7 +54,9 @@ export interface ApiTransaction {
     | "transfer_out"
     | "reversal"
     | "admin_credit"
-    | "admin_debit";
+    | "admin_debit"
+    | "loan_disbursement"
+    | "loan_repayment";
   direction: "credit" | "debit";
   amount: string; // naira string
   fee: string;
@@ -130,8 +137,8 @@ export type ApprovalStatus =
 
 export interface ApiApproval {
   id: number;
-  wallet: { id: number; name: string };
-  initiator: { name: string; email: string };
+  wallet: { id: number; name: string } | null;
+  initiator: { name: string; email: string } | null;
   action: ApprovalAction;
   amount: string; // naira string
   fee: string; // naira string
@@ -194,14 +201,6 @@ export interface ApprovalsData {
   pagination: Pagination;
 }
 
-export interface WalletGovernance {
-  approval_enabled: boolean;
-  approval_threshold: string | null; // naira string
-  required_approvals: number;
-  description: string | null;
-  target_amount: string | null; // naira string
-}
-
 export interface WalletMember {
   name: string;
   email: string;
@@ -210,7 +209,7 @@ export interface WalletMember {
 }
 
 export interface WalletDetailData {
-  wallet: ApiWallet & { governance?: WalletGovernance };
+  wallet: ApiWallet;
   members: WalletMember[];
   approval: {
     enabled: boolean;
@@ -246,7 +245,7 @@ export type RepaymentStatus = "pending" | "partial" | "paid" | "overdue";
 export interface LoanListItem {
   id: number;
   reference: string;
-  user: { name: string; email: string };
+  user: { name: string; email: string } | null;
   category: LoanCategory;
   principal: string; // naira string
   total_repayable: string; // naira string
@@ -293,7 +292,7 @@ export interface LoanDetail {
 
 export interface LoanDetailData {
   loan: LoanDetail;
-  user: { id: number; name: string; email: string; kyc_tier: number };
+  user: { id: number; name: string; email: string; kyc_tier: number } | null;
   repayments: LoanRepayment[];
 }
 
@@ -375,7 +374,7 @@ export type KycStatus = "pending" | "approved" | "rejected";
 
 export interface KycListItem {
   id: number;
-  user: { name: string; email: string };
+  user: { name: string; email: string } | null;
   target_tier: number;
   type: string;
   status: KycStatus;
@@ -418,7 +417,7 @@ export interface KycSubmission {
 
 export interface KycDetailData {
   submission: KycSubmission;
-  user: { id: number; name: string; email: string; kyc_tier: number };
+  user: { id: number; name: string; email: string; kyc_tier: number } | null;
 }
 
 // ── Admin management: transaction detail ──────────────────────────────

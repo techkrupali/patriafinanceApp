@@ -83,7 +83,6 @@ export default function WalletDetailPage({
   }
 
   const wallet = data?.wallet;
-  const governance = wallet?.governance;
   const isFrozen = wallet?.status === "frozen";
   const isClosed = wallet?.status === "closed";
   const nextStatus: "active" | "frozen" = isFrozen ? "active" : "frozen";
@@ -148,13 +147,13 @@ export default function WalletDetailPage({
                   ) : null}
                 </Field>
                 <Field name="Created">{formatDate(wallet!.created_at)}</Field>
-                {governance?.description ? (
+                {wallet!.description ? (
                   <div className="col-span-2 sm:col-span-3">
-                    <Field name="Description">{governance.description}</Field>
+                    <Field name="Description">{wallet!.description}</Field>
                   </div>
                 ) : null}
-                {governance?.target_amount ? (
-                  <Field name="Target">{naira(governance.target_amount)}</Field>
+                {wallet!.target_amount ? (
+                  <Field name="Target">{naira(wallet!.target_amount)}</Field>
                 ) : null}
               </dl>
             )}

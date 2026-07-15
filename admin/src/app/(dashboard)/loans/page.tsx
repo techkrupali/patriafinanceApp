@@ -109,8 +109,8 @@ export default function LoansPage() {
                   >
                     <TD className="font-mono text-xs text-muted">{l.reference}</TD>
                     <TD>
-                      <p className="font-medium">{l.user.name}</p>
-                      <p className="text-xs text-muted">{l.user.email}</p>
+                      <p className="font-medium">{l.user?.name ?? "—"}</p>
+                      <p className="text-xs text-muted">{l.user?.email ?? ""}</p>
                     </TD>
                     <TD>{loanCategoryLabel(l.category)}</TD>
                     <TD className="text-right font-semibold">{naira(l.principal)}</TD>

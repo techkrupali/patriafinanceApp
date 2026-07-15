@@ -103,7 +103,7 @@ export default function KycDetailPage({
       setConfirmApprove(false);
       setToast({
         tone: "green",
-        message: `Approved — ${data!.user.name} raised to Tier ${data!.submission.target_tier}.`,
+        message: `Approved — ${data!.user?.name ?? "applicant"} raised to Tier ${data!.submission.target_tier}.`,
       });
       refetch();
     },
@@ -211,7 +211,7 @@ export default function KycDetailPage({
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-2/3" />
               </div>
-            ) : (
+            ) : data!.user ? (
               <dl className="grid grid-cols-1 gap-y-5">
                 <Field name="Name">
                   <Link
@@ -228,6 +228,8 @@ export default function KycDetailPage({
                   <Badge tone="blue">Tier {data!.user.kyc_tier}</Badge>
                 </Field>
               </dl>
+            ) : (
+              <p className="text-sm text-muted">Applicant unavailable.</p>
             )}
           </CardContent>
         </Card>
@@ -262,7 +264,7 @@ export default function KycDetailPage({
         title="Approve this KYC submission?"
         message={
           submission
-            ? `This raises ${data!.user.name} to Tier ${submission.target_tier}.`
+            ? `This raises ${data!.user?.name ?? "the applicant"} to Tier ${submission.target_tier}.`
             : ""
         }
         confirmLabel="Approve"
