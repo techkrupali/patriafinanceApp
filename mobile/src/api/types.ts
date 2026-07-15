@@ -260,6 +260,8 @@ export interface WalletDetailData {
   wallet: Wallet;
   members: WalletMember[];
   my_role: string;
+  /** Whether the current user may move money out of this wallet (server-derived). */
+  my_can_spend?: boolean;
   approval: WalletApprovalConfig;
   /** Naira decimal string held against pending approvals. */
   held_amount: string;

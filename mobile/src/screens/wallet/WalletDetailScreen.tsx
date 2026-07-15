@@ -57,10 +57,13 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
 
   const canManage = canManageWallet(role);
   const canInvite = canInviteMembers(role);
-  // Spend actions (Withdraw/Transfer) 403 for view-only roles — hide them so the
-  // user isn't sent into a flow the server will reject. Owner/co_owner/admin/
-  // contributor can spend; only surface the guard when the role is clearly no-spend.
-  const canSpend = role == null || !['viewer', 'child', 'vendor'].includes(role);
+  // Spend actions (Withdraw/Transfer) 403 unless the server says this member may
+  // spend. Owner/co_owner always can; admin/contributor only with an explicit
+  // can_spend grant. Trust the backend's my_can_spend flag and fall back to the
+  // role gate only if the field is absent (older payloads).
+  const canSpend =
+    detail.data?.my_can_spend ??
+    (role != null && ['owner', 'co_owner'].includes(role));
   // Members with ids (for management) — only fetched when the user can manage.
   const richMembers = useWalletMembers(walletId, canManage);
 
