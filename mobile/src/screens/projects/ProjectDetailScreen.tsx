@@ -32,6 +32,7 @@ import {
   useRemoveVendor,
   useSubmitMilestone,
 } from '../../api/hooks';
+import { statusIconColor } from '../../lib/governance';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import {
@@ -97,7 +98,7 @@ function MilestoneCard({
 
       <View className="mt-2 flex-row items-center">
         <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-          <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+          <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
       </View>
@@ -315,7 +316,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             <View className="flex-row items-center justify-between">
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">Escrow balance</Text>
               <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-                <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+                <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
               </View>
             </View>

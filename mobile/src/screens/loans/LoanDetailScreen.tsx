@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { colors, gradients, shadow } from '../../theme';
 import { useCancelLoan, useLoan } from '../../api/hooks';
+import { statusIconColor } from '../../lib/governance';
 import { dayLabel, formatMoney } from '../../lib/format';
 import {
   frequencyLabel,
@@ -37,7 +38,7 @@ function ScheduleRow({ item, last }: { item: LoanRepayment; last: boolean }) {
         <Text className="mt-0.5 text-xs text-faded">Due {scheduleDate(item.due_date)}</Text>
       </View>
       <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-        <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+        <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
         <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
       </View>
     </View>
@@ -102,7 +103,7 @@ export function LoanDetailScreen({ navigation, route }: RootScreenProps<'LoanDet
                 {loanCategoryLabel(loan.category)}
               </Text>
               <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-                <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+                <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
               </View>
             </View>

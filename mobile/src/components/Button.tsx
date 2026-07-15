@@ -90,7 +90,7 @@ export function Button({
         onPressIn={() => !isDisabled && animateTo(0.98)}
         onPressOut={() => animateTo(1)}
         disabled={isDisabled}
-        className={`w-full ${className}`}
+        className={`w-full active:opacity-90 ${className}`}
       >
         {variant === 'primary' ? (
           <LinearGradient

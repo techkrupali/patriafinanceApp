@@ -9,7 +9,12 @@ import { LoadError } from '../../components/LoadError';
 import { colors, shadow } from '../../theme';
 import { useApprovals } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
-import { approvalActionIcon, approvalActionLabel, approvalStatusVisual } from '../../lib/governance';
+import {
+  approvalActionIcon,
+  approvalActionLabel,
+  approvalStatusVisual,
+  statusIconColor,
+} from '../../lib/governance';
 import { selection } from '../../lib/haptics';
 import type { ApprovalRequest } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -45,7 +50,7 @@ function ApprovalCard({ approval, scope, onPress }: { approval: ApprovalRequest;
 
       <View className="mt-3 flex-row items-center justify-between">
         <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-          <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+          <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
         <Text className="text-xs font-semibold text-muted">

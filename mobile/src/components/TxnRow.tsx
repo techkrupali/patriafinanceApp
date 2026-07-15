@@ -30,11 +30,14 @@ function visuals(txn: Transaction): { icon: IconName; tile: string; tint: string
   return { icon: 'arrow-up-circle', tile: 'bg-lav', tint: colors.navy };
 }
 
+const FAILED_STATUSES = ['failed', 'reversed', 'declined', 'cancelled'];
+
 export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps) {
   const credit = txn.direction === 'credit';
   const title = txn.description || humanizeType(txn.type);
   const subtitleParts = [walletName, timeLabel(txn.created_at)].filter(Boolean);
   const v = visuals(txn);
+  const failed = FAILED_STATUSES.includes(txn.status.toLowerCase());
 
   const Container: typeof Pressable | typeof View = onPress ? Pressable : View;
 
@@ -63,8 +66,14 @@ export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps
           {formatMoney(txn.amount)}
         </Text>
         {txn.status !== 'successful' ? (
-          <View className="mt-1 rounded-full bg-lav-faint px-2 py-0.5">
-            <Text className="text-[10px] font-semibold uppercase tracking-wider text-muted">{txn.status}</Text>
+          <View className={`mt-1 rounded-full px-2 py-0.5 ${failed ? 'bg-danger-soft' : 'bg-lav-faint'}`}>
+            <Text
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                failed ? 'text-danger' : 'text-muted'
+              }`}
+            >
+              {txn.status}
+            </Text>
           </View>
         ) : null}
       </View>

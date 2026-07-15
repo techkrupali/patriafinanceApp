@@ -12,7 +12,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     <Screen withBottomInset>
       {/* Soft brand glow at the top */}
       <LinearGradient
-        colors={['#eaf1ff', '#f8f9ff']}
+        colors={gradients.glowSoft}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 420 }}
       />
 

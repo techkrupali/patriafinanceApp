@@ -37,6 +37,8 @@ export const gradients = {
   brand: ['#1f6feb', '#1657c9'] as const,
   mint: ['#2f7ff0', '#4f9bff'] as const,
   glow: ['#1f6feb', '#bcd7ff'] as const,
+  /** Barely-there blue haze that melts into the page background (hero backdrops). */
+  glowSoft: ['#eaf1ff', '#f8f9ff'] as const,
   lav: ['#e8f0fe', '#d7e5fb'] as const,
   avatar: ['#12376e', '#1f6feb'] as const,
 };

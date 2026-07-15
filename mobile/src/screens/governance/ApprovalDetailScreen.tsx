@@ -22,7 +22,7 @@ import { colors, shadow } from '../../theme';
 import { useApproval, useCancelApproval, useRespondApproval } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { formatMoney, timeLabel } from '../../lib/format';
-import { approvalActionLabel, approvalStatusVisual } from '../../lib/governance';
+import { approvalActionLabel, approvalStatusVisual, statusIconColor } from '../../lib/governance';
 import type { ApprovalResponse } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
@@ -138,7 +138,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
               {formatMoney(approval.amount)}
             </Text>
             <View className={`mt-3 flex-row items-center rounded-full px-3 py-1.5 ${status.bg}`}>
-              <Ionicons name={status.icon} size={13} color={colors.muted} style={{ marginRight: 5 }} />
+              <Ionicons name={status.icon} size={13} color={statusIconColor(status)} style={{ marginRight: 5 }} />
               <Text className={`text-[11px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
             </View>
             <Text className="mt-3 text-[13px] font-semibold text-brand-glow">

@@ -12,6 +12,7 @@ import { colors, gradients, shadow } from '../../theme';
 import { useLoans } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
+import { statusIconColor } from '../../lib/governance';
 import { isRepayable, loanCategoryOption, loanStatusVisual } from '../../lib/loans';
 import type { Loan } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -48,7 +49,7 @@ function LoanCard({ loan, onPress }: { loan: Loan; onPress: () => void }) {
 
       <View className="mt-3 flex-row items-center justify-between">
         <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
-          <Ionicons name={status.icon} size={12} color={colors.muted} style={{ marginRight: 4 }} />
+          <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
         {showProgress ? (

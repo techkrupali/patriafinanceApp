@@ -1,5 +1,6 @@
 import type React from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../theme';
 import type { ApprovalAction, ApprovalStatus, NotificationType } from '../api/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -81,6 +82,23 @@ const STATUS_VISUALS: Record<ApprovalStatus, StatusVisual> = {
 export function approvalStatusVisual(status: ApprovalStatus | string): StatusVisual {
   if (status in STATUS_VISUALS) return STATUS_VISUALS[status as ApprovalStatus];
   return { label: status, bg: 'bg-lav-faint', text: 'text-muted', icon: 'ellipse-outline' };
+}
+
+/**
+ * Hex icon colour that matches a status pill's text class, so the pill's icon
+ * and label always read as one colour (<Ionicons> needs a hex, not a class).
+ * Shared by every status pill across approvals, loans, projects and KYC.
+ */
+const PILL_ICON_HEX: Record<string, string> = {
+  'text-brand': colors.brand,
+  'text-danger': colors.danger,
+  'text-navy': colors.navy,
+  'text-faded': colors.faded,
+  'text-muted': colors.muted,
+};
+
+export function statusIconColor(v: StatusVisual): string {
+  return PILL_ICON_HEX[v.text] ?? colors.muted;
 }
 
 // ---- Notifications ----

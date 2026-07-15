@@ -38,20 +38,19 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Wallets'>) {
         ) : error ? (
           <LoadError message={(error as Error).message} onRetry={() => refetch()} />
         ) : (wallets ?? []).length === 0 ? (
-          <>
-            <EmptyState
-              title="No wallets yet"
-              message="Create a shared or project wallet to get started."
-              icon="wallet-outline"
-            />
-            <Button
-              title="New Wallet"
-              icon="add"
-              iconPosition="left"
-              onPress={() => navigation.navigate('CreateWallet')}
-              className="mt-2"
-            />
-          </>
+          <EmptyState
+            title="No wallets yet"
+            message="Create a shared or project wallet to get started."
+            icon="wallet-outline"
+            action={
+              <Button
+                title="New Wallet"
+                icon="add"
+                iconPosition="left"
+                onPress={() => navigation.navigate('CreateWallet')}
+              />
+            }
+          />
         ) : (
           <>
             <View className="mt-5 flex-row items-center rounded-2xl bg-lav-faint p-4">
