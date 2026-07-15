@@ -58,14 +58,16 @@ class TransferController extends ApiController
         }
 
         // 2. Even without a key: reject a byte-identical transfer intent from the
-        //    same user within ~10 seconds (accidental double tap). Cache::add is
-        //    atomic, so of two concurrent taps exactly one proceeds.
+        //    same user within ~5 seconds (accidental double tap / slow-network
+        //    retry). Short enough to still allow an intentional identical repeat
+        //    payment moments later. Cache::add is atomic, so of two concurrent
+        //    taps exactly one proceeds.
         $fingerprint = 'transfer:dedupe:' . $user->id . ':' . sha1(json_encode([
             'from' => $data['from_wallet_id'],
             'amount' => $data['amount'],
             'destination' => $data['destination'],
         ]));
-        if (!Cache::add($fingerprint, 1, now()->addSeconds(10))) {
+        if (!Cache::add($fingerprint, 1, now()->addSeconds(5))) {
             if ($cacheKey !== null) {
                 Cache::forget($cacheKey . ':lock');
             }
