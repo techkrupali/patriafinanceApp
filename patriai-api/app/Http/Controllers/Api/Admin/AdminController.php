@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\ApprovalRequest;
 use App\Models\Loan;
+use App\Models\Milestone;
+use App\Models\Project;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -47,6 +49,15 @@ class AdminController extends ApiController
                 'pending' => Loan::where('status', 'pending')->count(),
                 'outstanding' => number_format(
                     (int) Loan::whereIn('status', Loan::OWED_STATUSES)->sum(DB::raw('outstanding + penalty_accrued')) / 100,
+                    2, '.', ''
+                ),
+            ],
+            'projects' => [
+                'active' => Project::where('status', 'active')->count(),
+                'escrow' => number_format(
+                    (int) Milestone::whereIn('status', Project::RESERVED_MILESTONE_STATUSES)
+                        ->whereIn('project_id', Project::where('status', 'active')->select('id'))
+                        ->sum('amount') / 100,
                     2, '.', ''
                 ),
             ],
@@ -295,5 +306,58 @@ class AdminController extends ApiController
     public function runDueLoans(): JsonResponse
     {
         return $this->ok('Overdue loans processed', LoanService::make()->accrueOverdue());
+    }
+
+    // GET /admin/projects?status=
+    public function projects(Request $request): JsonResponse
+    {
+        $projects = Project::with(['owner', 'vendor', 'wallet'])
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return $this->ok('Projects fetched', [
+            'projects' => collect($projects->items())->map(fn ($p) => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'owner' => $p->owner ? ['name' => $p->owner->fullName()] : null,
+                'vendor' => $p->vendor ? ['name' => $p->vendor->fullName()] : null,
+                'budget' => number_format($p->budget / 100, 2, '.', ''),
+                'wallet_balance' => $p->wallet ? $p->wallet->balanceNaira() : number_format(0, 2, '.', ''),
+                'reserved' => number_format($p->reservedAmount() / 100, 2, '.', ''),
+                'released' => number_format($p->releasedAmount() / 100, 2, '.', ''),
+                'status' => $p->status,
+                'milestones_count' => (int) $p->milestones()->count(),
+                'created_at' => $p->created_at?->toIso8601String(),
+            ]),
+            'pagination' => [
+                'page' => $projects->currentPage(),
+                'per_page' => $projects->perPage(),
+                'total' => $projects->total(),
+                'last_page' => $projects->lastPage(),
+            ],
+        ]);
+    }
+
+    // GET /admin/projects/{project}
+    public function projectShow(Project $project): JsonResponse
+    {
+        $project->load(['owner', 'vendor', 'wallet', 'milestones' => fn ($q) => $q->orderBy('sequence')]);
+
+        return $this->ok('Project fetched', [
+            'project' => $this->serializeProject($project),
+            'owner' => $project->owner ? [
+                'id' => $project->owner->id,
+                'name' => $project->owner->fullName(),
+                'email' => $project->owner->email,
+            ] : null,
+            'vendor' => $project->vendor ? [
+                'id' => $project->vendor->id,
+                'name' => $project->vendor->fullName(),
+                'email' => $project->vendor->email,
+            ] : null,
+            'wallet' => $this->serializeWallet($project->wallet, withOwner: true),
+            'milestones' => $project->milestones->map(fn ($m) => $this->serializeMilestone($m))->values(),
+        ]);
     }
 }

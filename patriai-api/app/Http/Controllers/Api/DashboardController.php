@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\ApprovalRequest;
 use App\Models\Loan;
+use App\Models\Milestone;
+use App\Models\Project;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -77,6 +79,13 @@ class DashboardController extends ApiController
             'recent_transactions' => $recent->map(fn ($t) => $this->serializeTransaction($t)),
             'pending_approvals' => $this->pendingApprovalsCount($user),
             'unread_notifications' => $user->notificationsFeed()->whereNull('read_at')->count(),
+            'projects' => [
+                'as_owner' => Project::where('owner_id', $user->id)->where('status', 'active')->count(),
+                'as_vendor' => Project::where('vendor_id', $user->id)->count(),
+                'pending_submissions' => Milestone::where('status', 'submitted')
+                    ->whereIn('project_id', Project::where('owner_id', $user->id)->select('id'))
+                    ->count(),
+            ],
             'active_loan' => $activeLoan ? [
                 'has_active_loan' => true,
                 'outstanding' => number_format(($activeLoan->outstanding + $activeLoan->penalty_accrued) / 100, 2, '.', ''),

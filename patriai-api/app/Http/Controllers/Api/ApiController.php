@@ -7,6 +7,8 @@ use App\Models\ApprovalRequest;
 use App\Models\AppNotification;
 use App\Models\Loan;
 use App\Models\LoanRepayment;
+use App\Models\Milestone;
+use App\Models\Project;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -224,6 +226,45 @@ abstract class ApiController extends Controller
             'amount_paid' => number_format($repayment->amount_paid / 100, 2, '.', ''),
             'status' => $repayment->status,
             'paid_at' => $repayment->paid_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeProject(Project $project, ?User $viewer = null): array
+    {
+        return [
+            'id' => $project->id,
+            'title' => $project->title,
+            'description' => $project->description,
+            'wallet_id' => $project->wallet_id,
+            'wallet_balance' => $project->wallet ? $project->wallet->balanceNaira() : number_format(0, 2, '.', ''),
+            'budget' => number_format($project->budget / 100, 2, '.', ''),
+            'reserved' => number_format($project->reservedAmount() / 100, 2, '.', ''),
+            'available' => number_format($project->availableToAllocate() / 100, 2, '.', ''),
+            'released' => number_format($project->releasedAmount() / 100, 2, '.', ''),
+            'status' => $project->status,
+            'vendor' => $project->vendor ? ['id' => $project->vendor->id, 'name' => $project->vendor->fullName()] : null,
+            'owner' => $project->owner ? ['id' => $project->owner->id, 'name' => $project->owner->fullName()] : null,
+            'my_role' => $viewer !== null ? $project->roleOf($viewer) : null,
+            'milestones_total' => (int) $project->milestones()->count(),
+            'milestones_released' => (int) $project->milestones()->where('status', 'released')->count(),
+            'created_at' => $project->created_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeMilestone(Milestone $milestone): array
+    {
+        return [
+            'id' => $milestone->id,
+            'sequence' => (int) $milestone->sequence,
+            'title' => $milestone->title,
+            'description' => $milestone->description,
+            'amount' => number_format($milestone->amount / 100, 2, '.', ''),
+            'status' => $milestone->status,
+            'proof' => $milestone->proof,
+            'submitted_at' => $milestone->submitted_at?->toIso8601String(),
+            'released_at' => $milestone->released_at?->toIso8601String(),
+            'released_transaction_reference' => $milestone->released_transaction_reference,
+            'created_at' => $milestone->created_at?->toIso8601String(),
         ];
     }
 

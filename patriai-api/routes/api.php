@@ -7,8 +7,10 @@ use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\LoanController;
+use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TransferController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WalletMemberController;
@@ -89,6 +91,18 @@ Route::prefix('v1')->group(function () {
         Route::post('loans/{loan}/repay', [LoanController::class, 'repay'])->middleware('throttle:15,1');
         Route::post('loans/{loan}/cancel', [LoanController::class, 'cancel'])->middleware('throttle:30,1');
 
+        // Vendor & Project System (escrow-backed milestones)
+        Route::get('projects', [ProjectController::class, 'index']);
+        Route::post('projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
+        Route::get('projects/{project}', [ProjectController::class, 'show']);
+        Route::post('projects/{project}/vendor', [ProjectController::class, 'assignVendor'])->middleware('throttle:30,1');
+        Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1');
+        Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1');
+        Route::delete('milestones/{milestone}', [ProjectController::class, 'removeMilestone'])->middleware('throttle:30,1');
+        Route::post('milestones/{milestone}/submit', [MilestoneController::class, 'submit'])->middleware('throttle:20,1');
+        Route::post('milestones/{milestone}/approve', [MilestoneController::class, 'approve'])->middleware('throttle:20,1');
+        Route::post('milestones/{milestone}/reject', [MilestoneController::class, 'reject'])->middleware('throttle:30,1');
+
         // ---- Admin ----
         Route::prefix('admin')->middleware('admin')->group(function () {
             Route::get('stats', [AdminController::class, 'stats']);
@@ -107,6 +121,10 @@ Route::prefix('v1')->group(function () {
             Route::post('loans/{loan}/approve', [AdminController::class, 'approveLoan']);
             Route::post('loans/{loan}/reject', [AdminController::class, 'rejectLoan']);
             Route::post('loans/{loan}/default', [AdminController::class, 'defaultLoan']);
+
+            // Projects (Vendor & Project System)
+            Route::get('projects', [AdminController::class, 'projects']);
+            Route::get('projects/{project}', [AdminController::class, 'projectShow']);
         });
     });
 });
