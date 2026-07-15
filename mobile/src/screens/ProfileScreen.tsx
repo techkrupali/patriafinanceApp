@@ -213,6 +213,13 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             subtitle="Borrow & manage Patria Lending"
             onPress={() => navigation.navigate('Loans')}
           />
+          <Divider />
+          <Row
+            icon="briefcase-outline"
+            title="Projects"
+            subtitle="Escrow-backed milestone projects"
+            onPress={() => navigation.navigate('Projects')}
+          />
         </Card>
 
         {/* Collaboration */}

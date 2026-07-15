@@ -232,6 +232,8 @@ export interface DashboardData {
   unread_notifications?: number;
   /** Milestone 4 — the borrower's current active loan, or null. */
   active_loan?: ActiveLoanSummary | null;
+  /** Milestone 5 — vendor/project counters. */
+  projects?: DashboardProjects;
 }
 
 export interface WalletsData {
@@ -586,4 +588,142 @@ export interface RepayLoanPayload {
   amount: string;
   wallet_id: number;
   pin: string;
+}
+
+// ============================================================================
+// Milestone 5 — Vendor & Project System (escrow-backed milestones)
+// ============================================================================
+
+export type ProjectStatus = 'active' | 'completed' | 'cancelled';
+
+export type MilestoneStatus = 'funded' | 'submitted' | 'approved' | 'released' | 'rejected';
+
+/** The current user's relationship to a project. */
+export type ProjectRole = 'owner' | 'vendor';
+
+export interface Project {
+  id: number;
+  title: string;
+  description: string | null;
+  wallet_id: number;
+  /** Naira decimal string — total in the escrow wallet. */
+  wallet_balance: string;
+  /** Naira decimal string — the project budget. */
+  budget: string;
+  /** Naira decimal string — reserved against un-released milestones. */
+  reserved: string;
+  /** Naira decimal string — escrow not yet reserved by a milestone. */
+  available: string;
+  /** Naira decimal string — already paid out to the vendor. */
+  released: string;
+  status: ProjectStatus;
+  vendor: PersonRef | null;
+  owner: PersonRef | null;
+  my_role: ProjectRole | null;
+  milestones_total: number;
+  milestones_released: number;
+  created_at: string | null;
+}
+
+export interface Milestone {
+  id: number;
+  sequence: number;
+  title: string;
+  description: string | null;
+  /** Naira decimal string reserved for this milestone. */
+  amount: string;
+  status: MilestoneStatus;
+  /** Vendor-supplied proof of work, once submitted. */
+  proof: string | null;
+  submitted_at: string | null;
+  released_at: string | null;
+  released_transaction_reference: string | null;
+  created_at: string | null;
+}
+
+/** Dashboard project counters (Milestone 5). */
+export interface DashboardProjects {
+  as_owner: number;
+  as_vendor: number;
+  pending_submissions: number;
+}
+
+/** owner/vendor contact on the project detail (carries email). */
+export interface ProjectContact {
+  name: string;
+  email: string;
+}
+
+// ---- Project response payloads ----
+
+export interface ProjectsData {
+  projects: Project[];
+}
+
+export interface ProjectCreatedData {
+  project: Project;
+  /** The freshly-created escrow wallet, with a virtual_account to fund it. */
+  wallet: Wallet;
+}
+
+export interface ProjectDetailData {
+  project: Project;
+  wallet: Wallet;
+  owner: ProjectContact | null;
+  vendor: ProjectContact | null;
+  my_role: ProjectRole | null;
+  milestones: Milestone[];
+  /** Naira decimal strings (mirror the same fields on `project`). */
+  reserved: string;
+  available: string;
+  released: string;
+}
+
+/** Vendor assign/remove both return the updated project. */
+export interface ProjectMutatedData {
+  project: Project;
+}
+
+export interface MilestoneCreatedData {
+  milestone: Milestone;
+  project: Project;
+}
+
+export interface MilestoneData {
+  milestone: Milestone;
+}
+
+/** Approve pays the vendor and returns the disbursement reference. */
+export interface MilestoneApprovedData {
+  milestone: Milestone;
+  reference: string;
+}
+
+// ---- Project request payloads ----
+
+export interface CreateProjectPayload {
+  title: string;
+  description?: string;
+  /** Naira decimal string */
+  budget?: string;
+}
+
+export interface AssignVendorPayload {
+  /** Vendor's email or phone. */
+  identifier: string;
+}
+
+export interface AddMilestonePayload {
+  title: string;
+  description?: string;
+  /** Naira decimal string — must be ≤ the project's available escrow. */
+  amount: string;
+}
+
+export interface SubmitMilestonePayload {
+  proof: string;
+}
+
+export interface RejectMilestonePayload {
+  note?: string;
 }

@@ -41,6 +41,12 @@ export type RootStackParamList = {
   LoanApply: undefined;
   LoanDetail: { loanId: number };
   Repay: { loanId: number };
+  // ---- Projects & vendors (Milestone 5) ----
+  Projects: undefined;
+  CreateProject: undefined;
+  ProjectDetail: { projectId: number };
+  AssignVendor: { projectId: number };
+  AddMilestone: { projectId: number };
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<

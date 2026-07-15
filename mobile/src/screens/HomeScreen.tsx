@@ -73,6 +73,8 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
   const activeLoan =
     data?.active_loan && data.active_loan.has_active_loan ? data.active_loan : null;
 
+  const pendingSubmissions = data?.projects?.pending_submissions ?? 0;
+
   return (
     <Screen>
       <ScrollView
@@ -338,6 +340,35 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                 <Text className="text-[15px] font-bold text-ink">Patria Lending</Text>
                 <Text className="mt-0.5 text-[13px] text-muted">Borrow for rent, school fees & more</Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.faded} />
+            </Pressable>
+
+            {/* Projects & escrow */}
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.navigate('Projects');
+              }}
+              className="mt-3 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
+              style={shadow.card}
+            >
+              <LinearGradient
+                colors={gradients.navy}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="briefcase" size={20} color={colors.brandGlow} />
+              </LinearGradient>
+              <View className="ml-3 flex-1">
+                <Text className="text-[15px] font-bold text-ink">Projects</Text>
+                <Text className="mt-0.5 text-[13px] text-muted">Escrow-backed milestone projects</Text>
+              </View>
+              {pendingSubmissions > 0 ? (
+                <View className="mr-2 rounded-full bg-success-soft px-2.5 py-1">
+                  <Text className="text-[11px] font-bold text-brand">{pendingSubmissions} to review</Text>
+                </View>
+              ) : null}
               <Ionicons name="chevron-forward" size={20} color={colors.faded} />
             </Pressable>
 

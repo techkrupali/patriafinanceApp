@@ -8,12 +8,15 @@ import {
 import { api } from './client';
 import { getDeviceMeta } from '../lib/device';
 import type {
+  AddMilestonePayload,
   ApplyLoanPayload,
   ApprovalDetailData,
   ApprovalsData,
+  AssignVendorPayload,
   AuthSessionData,
   BanksData,
   CreateInvitationPayload,
+  CreateProjectPayload,
   CreateWalletPayload,
   DashboardData,
   DevicesData,
@@ -29,9 +32,16 @@ import type {
   LoginPayload,
   MeData,
   MemberUpdatedData,
+  MilestoneApprovedData,
+  MilestoneCreatedData,
+  MilestoneData,
   NotificationReadData,
   NotificationsPageData,
   OtpRequestData,
+  ProjectCreatedData,
+  ProjectDetailData,
+  ProjectMutatedData,
+  ProjectsData,
   RegisterData,
   RegisterPayload,
   RepayLoanPayload,
@@ -78,6 +88,9 @@ export const keys = {
   loans: ['loans'] as const,
   loanEligibility: ['loans', 'eligibility'] as const,
   loan: (id: number) => ['loans', id] as const,
+  // ---- Projects (Milestone 5) ----
+  projects: ['projects'] as const,
+  project: (id: number) => ['projects', id] as const,
 };
 
 // ---------- Queries ----------
@@ -605,5 +618,124 @@ export function useCancelLoan(loanId: number) {
       void qc.invalidateQueries({ queryKey: keys.dashboard });
       void qc.invalidateQueries({ queryKey: keys.wallets });
     },
+  });
+}
+
+// ---------- Projects & milestones (Milestone 5 — Vendor & Project System) ----------
+
+export function useProjects() {
+  return useQuery({
+    queryKey: keys.projects,
+    queryFn: () => api<ProjectsData>('/projects'),
+    select: (d) => d.projects,
+  });
+}
+
+export function useProject(id: number) {
+  return useQuery({
+    queryKey: keys.project(id),
+    queryFn: () => api<ProjectDetailData>(`/projects/${id}`),
+  });
+}
+
+/**
+ * Project mutations invalidate the affected project detail, the projects list
+ * and the dashboard (whose project counters move). Milestone approve/release
+ * also moves money, so it additionally invalidates every wallet query (the
+ * escrow wallet + the vendor's paid wallet) plus the wallets list.
+ */
+function invalidateProject(qc: ReturnType<typeof useQueryClient>, projectId: number) {
+  void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+  void qc.invalidateQueries({ queryKey: keys.projects });
+  void qc.invalidateQueries({ queryKey: keys.dashboard });
+}
+
+export function useCreateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProjectPayload) =>
+      api<ProjectCreatedData>('/projects', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      // A dedicated escrow wallet was created.
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+    },
+  });
+}
+
+export function useAssignVendor(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AssignVendorPayload) =>
+      api<ProjectMutatedData>(`/projects/${projectId}/vendor`, { method: 'POST', body: input }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+export function useRemoveVendor(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<ProjectMutatedData>(`/projects/${projectId}/vendor`, { method: 'DELETE' }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+export function useAddMilestone(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddMilestonePayload) =>
+      api<MilestoneCreatedData>(`/projects/${projectId}/milestones`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+export function useRemoveMilestone(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (milestoneId: number) =>
+      api(`/milestones/${milestoneId}`, { method: 'DELETE' }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+export function useSubmitMilestone(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { milestoneId: number; proof: string }) =>
+      api<MilestoneData>(`/milestones/${input.milestoneId}/submit`, {
+        method: 'POST',
+        body: { proof: input.proof },
+      }),
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
+export function useApproveMilestone(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (milestoneId: number) =>
+      api<MilestoneApprovedData>(`/milestones/${milestoneId}/approve`, { method: 'POST' }),
+    onSuccess: () => {
+      invalidateProject(qc, projectId);
+      // Escrow → vendor: balances moved, refresh every wallet query + the list.
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+    },
+  });
+}
+
+export function useRejectMilestone(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { milestoneId: number; note?: string }) =>
+      api<MilestoneData>(`/milestones/${input.milestoneId}/reject`, {
+        method: 'POST',
+        body: { note: input.note },
+      }),
+    onSuccess: () => invalidateProject(qc, projectId),
   });
 }

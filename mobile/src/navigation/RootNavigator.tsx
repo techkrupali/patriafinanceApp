@@ -42,6 +42,11 @@ import { LoansScreen } from '../screens/loans/LoansScreen';
 import { LoanApplyScreen } from '../screens/loans/LoanApplyScreen';
 import { LoanDetailScreen } from '../screens/loans/LoanDetailScreen';
 import { RepayScreen } from '../screens/loans/RepayScreen';
+import { ProjectsScreen } from '../screens/projects/ProjectsScreen';
+import { CreateProjectScreen } from '../screens/projects/CreateProjectScreen';
+import { ProjectDetailScreen } from '../screens/projects/ProjectDetailScreen';
+import { AssignVendorScreen } from '../screens/projects/AssignVendorScreen';
+import { AddMilestoneScreen } from '../screens/projects/AddMilestoneScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -148,6 +153,11 @@ export function RootNavigator() {
       <RootStack.Screen name="LoanApply" component={LoanApplyScreen} />
       <RootStack.Screen name="LoanDetail" component={LoanDetailScreen} />
       <RootStack.Screen name="Repay" component={RepayScreen} />
+      <RootStack.Screen name="Projects" component={ProjectsScreen} />
+      <RootStack.Screen name="CreateProject" component={CreateProjectScreen} />
+      <RootStack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+      <RootStack.Screen name="AssignVendor" component={AssignVendorScreen} />
+      <RootStack.Screen name="AddMilestone" component={AddMilestoneScreen} />
     </RootStack.Navigator>
   );
 }
