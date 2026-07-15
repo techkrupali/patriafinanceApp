@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ApprovalRequest;
+use App\Models\AppNotification;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\WalletInvitation;
+use App\Models\WalletMember;
 use Illuminate\Http\JsonResponse;
 
 abstract class ApiController extends Controller
@@ -56,8 +60,13 @@ abstract class ApiController extends Controller
             'id' => $wallet->id,
             'type' => $wallet->type,
             'name' => $wallet->name,
+            'description' => $wallet->description,
             'currency' => $wallet->currency,
             'balance' => $wallet->balanceNaira(),
+            'target_amount' => $wallet->target_amount !== null ? number_format($wallet->target_amount / 100, 2, '.', '') : null,
+            'approval_enabled' => (bool) $wallet->approval_enabled,
+            'approval_threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
+            'required_approvals' => (int) $wallet->required_approvals,
             'virtual_account' => $wallet->virtual_account,
             'virtual_account_bank' => $wallet->virtual_account_bank,
             'status' => $wallet->status,
@@ -90,6 +99,92 @@ abstract class ApiController extends Controller
             'description' => $txn->description,
             'counterparty' => $txn->counterparty,
             'created_at' => $txn->created_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeMember(WalletMember $member): array
+    {
+        return [
+            'id' => $member->id,
+            'user_id' => $member->user_id,
+            'name' => $member->user?->fullName(),
+            'email' => $member->user?->email,
+            'role' => $member->role,
+            'can_approve' => (bool) $member->can_approve,
+            'status' => $member->status,
+        ];
+    }
+
+    protected function serializeInvitation(WalletInvitation $invitation): array
+    {
+        return [
+            'id' => $invitation->id,
+            'wallet_id' => $invitation->wallet_id,
+            'wallet' => $invitation->relationLoaded('wallet') && $invitation->wallet ? [
+                'id' => $invitation->wallet->id,
+                'name' => $invitation->wallet->name,
+                'type' => $invitation->wallet->type,
+            ] : null,
+            'inviter' => $invitation->relationLoaded('inviter') && $invitation->inviter ? [
+                'id' => $invitation->inviter->id,
+                'name' => $invitation->inviter->fullName(),
+            ] : null,
+            'invitee_identifier' => $invitation->invitee_identifier,
+            'invitee_user_id' => $invitation->invitee_user_id,
+            'role' => $invitation->role,
+            'can_approve' => (bool) $invitation->can_approve,
+            'status' => $invitation->status,
+            'expires_at' => $invitation->expires_at?->toIso8601String(),
+            'responded_at' => $invitation->responded_at?->toIso8601String(),
+            'created_at' => $invitation->created_at?->toIso8601String(),
+        ];
+    }
+
+    protected function serializeApprovalRequest(ApprovalRequest $request, ?User $viewer = null): array
+    {
+        $data = [
+            'id' => $request->id,
+            'wallet_id' => $request->wallet_id,
+            'wallet' => $request->relationLoaded('wallet') && $request->wallet ? [
+                'id' => $request->wallet->id,
+                'name' => $request->wallet->name,
+                'type' => $request->wallet->type,
+            ] : null,
+            'initiator' => $request->relationLoaded('initiator') && $request->initiator ? [
+                'id' => $request->initiator->id,
+                'name' => $request->initiator->fullName(),
+            ] : null,
+            'action' => $request->action,
+            'amount' => number_format($request->amount / 100, 2, '.', ''),
+            'fee' => number_format($request->fee / 100, 2, '.', ''),
+            'description' => $request->description,
+            'status' => $request->status,
+            'approvals_count' => (int) $request->approvals_count,
+            'required_approvals' => (int) $request->required_approvals,
+            'executed_transaction_reference' => $request->executed_transaction_reference,
+            'fail_reason' => $request->fail_reason,
+            'expires_at' => $request->expires_at?->toIso8601String(),
+            'created_at' => $request->created_at?->toIso8601String(),
+        ];
+
+        if ($viewer !== null) {
+            $data['my_responded'] = $request->responses()->where('approver_id', $viewer->id)->exists();
+        }
+
+        return $data;
+    }
+
+    protected function serializeNotification(AppNotification $notification): array
+    {
+        return [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'title' => $notification->title,
+            'body' => $notification->body,
+            'data' => $notification->data,
+            'read' => $notification->read_at !== null,
+            'read_at' => $notification->read_at?->toIso8601String(),
+            'created_at' => $notification->created_at?->toIso8601String(),
         ];
     }
 

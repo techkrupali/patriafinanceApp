@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Wallet;
+use App\Services\ApprovalService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class WalletController extends ApiController
 {
+    /** Wallet types a user may create directly (main is auto-provisioned). */
+    private const CREATABLE_TYPES = ['shared', 'project', 'savings', 'goal', 'emergency', 'giving', 'joint', 'child', 'spending'];
+
     // GET /wallets
     public function index(Request $request): JsonResponse
     {
@@ -22,15 +26,25 @@ class WalletController extends ApiController
         return $this->ok('Wallets fetched', ['wallets' => $own->concat($member)->values()]);
     }
 
-    // POST /wallets  { type: shared|project, name }
+    // POST /wallets  { type, name, description?, target_amount? }
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'in:shared,project'],
+            'type' => ['required', 'in:' . implode(',', self::CREATABLE_TYPES)],
             'name' => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:200'],
+            'target_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $wallet = WalletService::make()->createWallet($request->user(), $data['type'], $data['name']);
+        $opts = [];
+        if (($data['description'] ?? null) !== null) {
+            $opts['description'] = $data['description'];
+        }
+        if (($data['target_amount'] ?? null) !== null) {
+            $opts['target_amount'] = $this->toKobo($data['target_amount']);
+        }
+
+        $wallet = WalletService::make()->createWallet($request->user(), $data['type'], $data['name'], $opts);
 
         return $this->ok('Wallet created', ['wallet' => $this->serializeWallet($wallet)], 201);
     }
@@ -42,16 +56,27 @@ class WalletController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
 
+        $user = $request->user();
+
         $members = $wallet->members()->with('user')->where('status', 'active')->get()->map(fn ($m) => [
             'user_id' => $m->user_id,
-            'name' => $m->user->fullName(),
-            'email' => $m->user->email,
+            'name' => $m->user?->fullName(),
+            'email' => $m->user?->email,
             'role' => $m->role,
+            'can_approve' => (bool) $m->can_approve,
         ]);
 
         return $this->ok('Wallet fetched', [
             'wallet' => $this->serializeWallet($wallet, withOwner: true),
             'members' => $members,
+            'my_role' => $wallet->roleOf($user),
+            'approval' => [
+                'enabled' => (bool) $wallet->approval_enabled,
+                'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
+                'required_approvals' => (int) $wallet->required_approvals,
+            ],
+            'held_amount' => number_format($wallet->heldAmount() / 100, 2, '.', ''),
+            'pending_approvals' => $wallet->approvalRequests()->where('status', 'pending')->count(),
             'recent_transactions' => $wallet->transactions()->latest()->limit(10)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
@@ -128,10 +153,36 @@ class WalletController extends ApiController
         $user = $request->user();
         app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
+        $amountKobo = $this->toKobo($data['amount']);
+
+        if ($wallet->approvalRequiredFor($amountKobo)) {
+            $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
+            $req = ApprovalService::make()->create(
+                $wallet,
+                $user,
+                'withdrawal',
+                $amountKobo,
+                $feeKobo,
+                $data['description'] ?? null,
+                [
+                    'bank_code' => $data['bank_code'],
+                    'account_number' => $data['account_number'],
+                    'account_name' => $data['account_name'],
+                    'bank_name' => $data['bank_name'],
+                    'description' => $data['description'] ?? null,
+                ],
+            );
+
+            return $this->ok('Withdrawal submitted for approval', [
+                'pending_approval' => true,
+                'approval' => $this->serializeApprovalRequest($req->load(['wallet', 'initiator']), $user),
+            ]);
+        }
+
         $txn = WalletService::make()->withdrawToBank(
             $wallet,
             $user,
-            $this->toKobo($data['amount']),
+            $amountKobo,
             $data['bank_code'],
             $data['account_number'],
             $data['account_name'],
@@ -140,5 +191,52 @@ class WalletController extends ApiController
         );
 
         return $this->ok('Withdrawal successful', ['transaction' => $this->serializeTransaction($txn)]);
+    }
+
+    // PATCH /wallets/{wallet}  { name?, description?, approval_enabled?, approval_threshold?, required_approvals? }
+    public function updateSettings(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$wallet->isAccessibleBy($request->user())) {
+            return $this->fail('Wallet not found', 404);
+        }
+
+        $role = $wallet->roleOf($request->user());
+        if (!in_array($role, ['owner', 'co_owner'], true)) {
+            return $this->fail('Only the owner or a co-owner can change wallet settings', 403);
+        }
+
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:200'],
+            'approval_enabled' => ['sometimes', 'boolean'],
+            'approval_threshold' => ['nullable', 'numeric', 'min:0'],
+            'required_approvals' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        // Main wallets cannot use spend-approval governance.
+        if ($wallet->type === 'main' && $request->boolean('approval_enabled')) {
+            return $this->fail('Approval controls are not available on your main wallet', 422);
+        }
+
+        $update = [];
+        if ($request->exists('name') && $data['name'] !== null) {
+            $update['name'] = $data['name'];
+        }
+        if ($request->exists('description')) {
+            $update['description'] = $data['description'];
+        }
+        if ($request->exists('approval_enabled')) {
+            $update['approval_enabled'] = $request->boolean('approval_enabled');
+        }
+        if ($request->exists('approval_threshold')) {
+            $update['approval_threshold'] = $data['approval_threshold'] !== null ? $this->toKobo($data['approval_threshold']) : null;
+        }
+        if ($request->exists('required_approvals')) {
+            $update['required_approvals'] = (int) $data['required_approvals'];
+        }
+
+        $wallet->update($update);
+
+        return $this->ok('Wallet settings updated', ['wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true)]);
     }
 }

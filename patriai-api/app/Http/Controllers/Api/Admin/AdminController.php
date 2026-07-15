@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\ApprovalRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -34,6 +35,9 @@ class AdminController extends ApiController
                 'volume_out_30d' => number_format((clone $volume30d)->where('direction', 'debit')->sum('amount') / 100, 2, '.', ''),
                 'pending' => Transaction::where('status', 'pending')->count(),
                 'failed' => Transaction::where('status', 'failed')->count(),
+            ],
+            'approvals' => [
+                'pending' => ApprovalRequest::where('status', 'pending')->count(),
             ],
         ]);
     }
@@ -145,6 +149,61 @@ class AdminController extends ApiController
                 'total' => $txns->total(),
                 'last_page' => $txns->lastPage(),
             ],
+        ]);
+    }
+
+    // GET /admin/approvals?status=
+    public function approvals(Request $request): JsonResponse
+    {
+        $requests = ApprovalRequest::with(['wallet', 'initiator'])
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return $this->ok('Approvals fetched', [
+            'approvals' => collect($requests->items())->map(fn ($r) => [
+                'id' => $r->id,
+                'wallet' => $r->wallet ? ['id' => $r->wallet->id, 'name' => $r->wallet->name] : null,
+                'initiator' => $r->initiator ? ['name' => $r->initiator->fullName(), 'email' => $r->initiator->email] : null,
+                'action' => $r->action,
+                'amount' => number_format($r->amount / 100, 2, '.', ''),
+                'fee' => number_format($r->fee / 100, 2, '.', ''),
+                'status' => $r->status,
+                'approvals_count' => (int) $r->approvals_count,
+                'required_approvals' => (int) $r->required_approvals,
+                'created_at' => $r->created_at?->toIso8601String(),
+            ]),
+            'pagination' => [
+                'page' => $requests->currentPage(),
+                'per_page' => $requests->perPage(),
+                'total' => $requests->total(),
+                'last_page' => $requests->lastPage(),
+            ],
+        ]);
+    }
+
+    // GET /admin/wallets/{wallet}
+    public function walletDetail(Wallet $wallet): JsonResponse
+    {
+        $members = $wallet->members()->with('user')->get()->map(fn ($m) => [
+            'user_id' => $m->user_id,
+            'name' => $m->user?->fullName(),
+            'email' => $m->user?->email,
+            'role' => $m->role,
+            'can_approve' => (bool) $m->can_approve,
+            'status' => $m->status,
+        ]);
+
+        return $this->ok('Wallet fetched', [
+            'wallet' => $this->serializeWallet($wallet, withOwner: true),
+            'members' => $members,
+            'approval' => [
+                'enabled' => (bool) $wallet->approval_enabled,
+                'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
+                'required_approvals' => (int) $wallet->required_approvals,
+            ],
+            'recent_transactions' => $wallet->transactions()->latest()->limit(15)->get()
+                ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
     }
 }

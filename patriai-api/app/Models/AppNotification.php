@@ -5,29 +5,25 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class WalletMember extends Model
+class AppNotification extends Model
 {
+    protected $table = 'app_notifications';
+
     protected $fillable = [
-        'wallet_id',
         'user_id',
-        'role',
-        'can_approve',
-        'permissions',
-        'status',
-        'invited_by',
+        'type',
+        'title',
+        'body',
+        'data',
+        'read_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'can_approve' => 'boolean',
-            'permissions' => 'array',
+            'data' => 'array',
+            'read_at' => 'datetime',
         ];
-    }
-
-    public function wallet(): BelongsTo
-    {
-        return $this->belongsTo(Wallet::class);
     }
 
     public function user(): BelongsTo

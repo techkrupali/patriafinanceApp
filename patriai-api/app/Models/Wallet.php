@@ -5,17 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Wallet extends Model
 {
-    public const TYPES = ['main', 'shared', 'project'];
+    public const TYPES = ['main', 'shared', 'project', 'savings', 'goal', 'emergency', 'giving', 'joint', 'child', 'spending'];
+
+    /** Roles allowed to move money out of a wallet. Viewers are read-only. */
+    public const SPENDING_ROLES = ['owner', 'co_owner', 'admin', 'contributor'];
 
     protected $fillable = [
         'user_id',
         'type',
         'name',
+        'description',
         'currency',
         'balance',
+        'target_amount',
+        'approval_enabled',
+        'approval_threshold',
+        'required_approvals',
         'virtual_account',
         'virtual_account_bank',
         'status',
@@ -26,6 +35,10 @@ class Wallet extends Model
     {
         return [
             'balance' => 'integer',
+            'target_amount' => 'integer',
+            'approval_enabled' => 'boolean',
+            'approval_threshold' => 'integer',
+            'required_approvals' => 'integer',
             'meta' => 'array',
         ];
     }
@@ -45,8 +58,15 @@ class Wallet extends Model
         return $this->hasMany(Transaction::class);
     }
 
-    /** Roles allowed to move money out of a wallet. Viewers are read-only. */
-    public const SPENDING_ROLES = ['owner', 'contributor'];
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(WalletInvitation::class);
+    }
+
+    public function approvalRequests(): HasMany
+    {
+        return $this->hasMany(ApprovalRequest::class);
+    }
 
     /** Can the given user VIEW this wallet (owner or any active member)? */
     public function isAccessibleBy(User $user): bool
@@ -73,6 +93,86 @@ class Wallet extends Model
             ->where('status', 'active')
             ->whereIn('role', self::SPENDING_ROLES)
             ->exists();
+    }
+
+    /** 'owner' if the wallet owner, else the active member role, else null. */
+    public function roleOf(User $user): ?string
+    {
+        if ($this->user_id === $user->id) {
+            return 'owner';
+        }
+
+        $member = $this->members()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        return $member?->role;
+    }
+
+    /** Does a spend of this amount require approval on this wallet? */
+    public function approvalRequiredFor(int $amountKobo): bool
+    {
+        if (!$this->approval_enabled) {
+            return false;
+        }
+        if ($this->approval_threshold === null) {
+            return true;
+        }
+
+        return $amountKobo >= $this->approval_threshold;
+    }
+
+    /** Can the given user APPROVE requests on this wallet? Owner always true. */
+    public function canApprove(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        $member = $this->members()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$member || $member->role === 'viewer') {
+            return false;
+        }
+
+        return in_array($member->role, ['owner', 'co_owner', 'admin'], true) || $member->can_approve;
+    }
+
+    /** User ids that can approve on this wallet, optionally excluding one (the initiator). */
+    public function eligibleApprovers(?int $excludeUserId = null): Collection
+    {
+        $ids = collect();
+
+        // Owner is always an eligible approver.
+        $ids->push($this->user_id);
+
+        $members = $this->members()
+            ->where('status', 'active')
+            ->where('user_id', '!=', $this->user_id)
+            ->where('role', '!=', 'viewer')
+            ->get();
+
+        foreach ($members as $member) {
+            if (in_array($member->role, ['owner', 'co_owner', 'admin'], true) || $member->can_approve) {
+                $ids->push($member->user_id);
+            }
+        }
+
+        return $ids->unique()
+            ->when($excludeUserId !== null, fn ($c) => $c->reject(fn ($id) => $id === $excludeUserId))
+            ->values();
+    }
+
+    /** Sum(amount + fee) of this wallet's still-pending approval requests. */
+    public function heldAmount(): int
+    {
+        return (int) $this->approvalRequests()
+            ->where('status', 'pending')
+            ->sum(\Illuminate\Support\Facades\DB::raw('amount + fee'));
     }
 
     /** Naira string, e.g. "1500.00" */

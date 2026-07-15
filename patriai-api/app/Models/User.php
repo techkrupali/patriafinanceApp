@@ -67,6 +67,12 @@ class User extends Authenticatable
         return $this->hasMany(Transaction::class);
     }
 
+    /** In-app notifications feed (app_notifications table). Distinct from Notifiable's notifications(). */
+    public function notificationsFeed(): HasMany
+    {
+        return $this->hasMany(AppNotification::class);
+    }
+
     public function mainWallet(): ?Wallet
     {
         return $this->wallets()->where('type', 'main')->first();

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\ApprovalRequest;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\ApprovalService;
+use App\Services\NotificationService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,12 +51,22 @@ class TransferController extends ApiController
         $amountKobo = $this->toKobo($data['amount']);
         $service = WalletService::make();
         $dest = $data['destination'];
+        $needsApproval = $from->approvalRequiredFor($amountKobo);
+        $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
 
         switch ($dest['kind']) {
             case 'wallet':
                 $to = Wallet::find($dest['wallet_id']);
                 if (!$to || !$to->isAccessibleBy($user)) {
                     return $this->fail('Destination wallet not found', 404);
+                }
+                if ($needsApproval) {
+                    $req = ApprovalService::make()->create($from, $user, 'transfer_wallet', $amountKobo, 0, $data['description'] ?? null, [
+                        'wallet_id' => $to->id,
+                        'description' => $data['description'] ?? null,
+                    ]);
+
+                    return $this->pendingApproval($req, $user);
                 }
                 $result = $service->transferBetweenWallets($from, $to, $amountKobo, $user, $data['description'] ?? null);
                 break;
@@ -70,6 +83,14 @@ class TransferController extends ApiController
                 if (!$to) {
                     return $this->fail('Recipient has no active wallet', 422);
                 }
+                if ($needsApproval) {
+                    $req = ApprovalService::make()->create($from, $user, 'transfer_user', $amountKobo, 0, $data['description'] ?? null, [
+                        'identifier' => $dest['identifier'],
+                        'description' => $data['description'] ?? null,
+                    ]);
+
+                    return $this->pendingApproval($req, $user);
+                }
                 $result = $service->transferBetweenWallets(
                     $from,
                     $to,
@@ -78,9 +99,32 @@ class TransferController extends ApiController
                     $data['description'] ?? "Transfer to {$recipient->fullName()}",
                 );
                 $result['recipient'] = ['name' => $recipient->fullName(), 'email' => $recipient->email];
+
+                NotificationService::make()->push(
+                    $recipient,
+                    'transfer_received',
+                    'You received ₦' . number_format($amountKobo / 100, 2, '.', ''),
+                    "{$user->fullName()} sent you ₦" . number_format($amountKobo / 100, 2, '.', '') . '.',
+                    [
+                        'amount' => number_format($amountKobo / 100, 2, '.', ''),
+                        'reference' => $result['reference'],
+                        'from' => $user->fullName(),
+                    ],
+                );
                 break;
 
             default: // bank
+                if ($needsApproval) {
+                    $req = ApprovalService::make()->create($from, $user, 'transfer_bank', $amountKobo, $feeKobo, $data['description'] ?? null, [
+                        'bank_code' => $dest['bank_code'],
+                        'account_number' => $dest['account_number'],
+                        'account_name' => $dest['account_name'],
+                        'bank_name' => $dest['bank_name'],
+                        'description' => $data['description'] ?? null,
+                    ]);
+
+                    return $this->pendingApproval($req, $user);
+                }
                 $txn = $service->withdrawToBank(
                     $from,
                     $user,
@@ -100,6 +144,14 @@ class TransferController extends ApiController
             'reference' => $result['reference'],
             'balance' => $from->balanceNaira(),
             'recipient' => $result['recipient'] ?? null,
+        ]);
+    }
+
+    private function pendingApproval(ApprovalRequest $req, User $user): JsonResponse
+    {
+        return $this->ok('Transfer submitted for approval', [
+            'pending_approval' => true,
+            'approval' => $this->serializeApprovalRequest($req->load(['wallet', 'initiator']), $user),
         ]);
     }
 }

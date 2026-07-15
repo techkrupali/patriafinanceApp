@@ -26,8 +26,11 @@ class WalletService
         return new self(MatrixBankingService::make());
     }
 
-    /** Create a wallet and register its funding virtual account on the banking rails. */
-    public function createWallet(User $user, string $type, string $name): Wallet
+    /**
+     * Create a wallet and register its funding virtual account on the banking rails.
+     * $opts may carry 'description' (string) and 'target_amount' (kobo int).
+     */
+    public function createWallet(User $user, string $type, string $name, array $opts = []): Wallet
     {
         if (!in_array($type, Wallet::TYPES, true)) {
             throw ValidationException::withMessages(['type' => 'Invalid wallet type']);
@@ -41,6 +44,8 @@ class WalletService
             'user_id' => $user->id,
             'type' => $type,
             'name' => $name,
+            'description' => $opts['description'] ?? null,
+            'target_amount' => $opts['target_amount'] ?? null,
             'balance' => 0,
         ]);
 
