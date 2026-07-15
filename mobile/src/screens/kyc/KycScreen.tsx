@@ -110,8 +110,11 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
   const next = kyc?.next_tier ?? null;
   const pending = kyc?.status === 'pending' ? kyc.pending_submission : null;
   // Surface the last rejection only when the user isn't mid-review, so they know
-  // why a tier was rejected and can resubmit.
-  const rejected = !pending ? (kyc?.last_rejected ?? null) : null;
+  // why a tier was rejected and can resubmit. Hide it once the user has reached
+  // (or passed) that tier — a stale rejection for an already-achieved tier is noise.
+  const lastRejected = !pending ? (kyc?.last_rejected ?? null) : null;
+  const rejected =
+    lastRejected && kyc && lastRejected.target_tier > kyc.tier ? lastRejected : null;
 
   return (
     <Screen withBottomInset>

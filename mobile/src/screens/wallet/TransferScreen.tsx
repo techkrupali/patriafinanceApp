@@ -29,6 +29,9 @@ import type { RootScreenProps } from '../../navigation/types';
 
 type DestKind = 'wallet' | 'user' | 'bank';
 
+/** Flat fee charged on outbound bank transfers (₦). Wallet/user transfers are free. */
+const BANK_TRANSFER_FEE = 20;
+
 export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'>) {
   const initialWalletId = route.params?.walletId;
   const { data: wallets, isLoading: walletsLoading, error: walletsError, refetch } = useWallets();
@@ -78,7 +81,11 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
   const amountNum = parseFloat(amount);
   const amountOk = Number.isFinite(amountNum) && amountNum > 0;
   const balanceNum = from ? parseFloat(from.balance) : 0;
-  const exceedsBalance = amountOk && from != null && amountNum > balanceNum;
+  // Bank (external) transfers carry a flat fee that's debited on top of the amount;
+  // wallet/user transfers are free. The balance guard must count the fee, or the
+  // server rejects an amount+fee that overshoots the balance.
+  const fee = kind === 'bank' ? BANK_TRANSFER_FEE : 0;
+  const exceedsBalance = amountOk && from != null && amountNum + fee > balanceNum;
 
   const destination: TransferDestination | null = useMemo(() => {
     if (kind === 'wallet') {
@@ -199,8 +206,12 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
               {from ? (
                 <Text className={`mt-2 text-xs ${exceedsBalance ? 'font-semibold text-danger' : 'text-faded'}`}>
                   {exceedsBalance
-                    ? `Amount exceeds your ${from.name} balance (${formatMoney(from.balance)})`
-                    : `Available in ${from.name}: ${formatMoney(from.balance)}`}
+                    ? fee > 0
+                      ? `Amount + ${formatMoney(fee)} fee exceeds your ${from.name} balance (${formatMoney(from.balance)})`
+                      : `Amount exceeds your ${from.name} balance (${formatMoney(from.balance)})`
+                    : fee > 0
+                      ? `Available in ${from.name}: ${formatMoney(from.balance)} · incl. ${formatMoney(fee)} transfer fee`
+                      : `Available in ${from.name}: ${formatMoney(from.balance)}`}
                 </Text>
               ) : null}
             </View>

@@ -57,6 +57,10 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
 
   const canManage = canManageWallet(role);
   const canInvite = canInviteMembers(role);
+  // Spend actions (Withdraw/Transfer) 403 for view-only roles — hide them so the
+  // user isn't sent into a flow the server will reject. Owner/co_owner/admin/
+  // contributor can spend; only surface the guard when the role is clearly no-spend.
+  const canSpend = role == null || !['viewer', 'child', 'vendor'].includes(role);
   // Members with ids (for management) — only fetched when the user can manage.
   const richMembers = useWalletMembers(walletId, canManage);
 
@@ -230,12 +234,21 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             </Pressable>
           ) : null}
 
-          {/* Actions */}
+          {/* Actions — spend buttons are hidden for view-only roles (they 403). */}
           <View className="mt-6 flex-row" style={{ gap: 8 }}>
             <ActionButton icon="add" label="Fund" onPress={() => navigation.navigate('Fund', { walletId })} />
-            <ActionButton icon="arrow-down" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId })} />
-            <ActionButton icon="paper-plane" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId })} />
+            {canSpend ? (
+              <>
+                <ActionButton icon="arrow-down" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId })} />
+                <ActionButton icon="paper-plane" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId })} />
+              </>
+            ) : null}
           </View>
+          {!canSpend ? (
+            <Text className="mt-3 text-xs text-muted">
+              You have view-only access to this wallet — withdrawals and transfers are disabled for your role.
+            </Text>
+          ) : null}
 
           {/* Members */}
           {wallet.type !== 'main' ? (
