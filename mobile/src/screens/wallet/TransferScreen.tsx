@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
@@ -14,7 +15,7 @@ import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
-import { colors } from '../../theme';
+import { colors, gradients, shadow } from '../../theme';
 import { useTransfer, useVerifyAccount, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -190,30 +191,51 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
           showsVerticalScrollIndicator={false}
         >
             {/* Amount hero */}
-            <View className="items-center rounded-3xl bg-lav-faint py-8">
-              <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
-              <View className="mt-2 flex-row items-center justify-center">
-                <Text className="text-4xl font-extrabold text-faded">₦</Text>
-                <TextInput
-                  value={amount}
-                  onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.faded}
-                  keyboardType="decimal-pad"
-                  className="ml-1 min-w-[120px] text-center text-5xl font-extrabold text-ink"
-                />
-              </View>
-              {from ? (
-                <Text className={`mt-2 text-xs ${exceedsBalance ? 'font-semibold text-danger' : 'text-faded'}`}>
-                  {exceedsBalance
-                    ? fee > 0
-                      ? `Amount + ${formatMoney(fee)} fee exceeds your ${from.name} balance (${formatMoney(from.balance)})`
-                      : `Amount exceeds your ${from.name} balance (${formatMoney(from.balance)})`
-                    : fee > 0
-                      ? `Available in ${from.name}: ${formatMoney(from.balance)} · incl. ${formatMoney(fee)} transfer fee`
-                      : `Available in ${from.name}: ${formatMoney(from.balance)}`}
+            <View className="overflow-hidden rounded-3xl" style={shadow.hero}>
+              <LinearGradient
+                colors={gradients.navy}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 34, paddingHorizontal: 24, alignItems: 'center' }}
+              >
+                <Text className="text-[11px] font-semibold uppercase tracking-wider text-brand-glow">
+                  You're sending
                 </Text>
-              ) : null}
+                <View className="mt-3 flex-row items-end justify-center">
+                  <Text className="mb-1.5 mr-1 text-3xl font-extrabold text-brand-glow">₦</Text>
+                  <TextInput
+                    value={amount}
+                    onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                    placeholder="0.00"
+                    placeholderTextColor="rgba(188,215,255,0.45)"
+                    keyboardType="decimal-pad"
+                    className="min-w-[140px] text-center text-5xl font-extrabold tracking-tight"
+                    style={{ color: colors.white, fontWeight: '800' }}
+                  />
+                </View>
+                {from ? (
+                  <View
+                    className="mt-4 rounded-full px-4 py-2"
+                    style={{
+                      backgroundColor: exceedsBalance ? 'rgba(239,91,110,0.16)' : 'rgba(255,255,255,0.10)',
+                    }}
+                  >
+                    <Text
+                      className={`text-center text-xs ${
+                        exceedsBalance ? 'font-semibold text-rose' : 'text-brand-glow'
+                      }`}
+                    >
+                      {exceedsBalance
+                        ? fee > 0
+                          ? `Amount + ${formatMoney(fee)} fee exceeds your ${from.name} balance (${formatMoney(from.balance)})`
+                          : `Amount exceeds your ${from.name} balance (${formatMoney(from.balance)})`
+                        : fee > 0
+                          ? `Available in ${from.name}: ${formatMoney(from.balance)} · incl. ${formatMoney(fee)} transfer fee`
+                          : `Available in ${from.name}: ${formatMoney(from.balance)}`}
+                    </Text>
+                  </View>
+                ) : null}
+              </LinearGradient>
             </View>
 
             {/* Source wallet */}
@@ -230,12 +252,13 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                         setFromId(w.id);
                         setDestWalletId(undefined);
                       }}
-                      className={`rounded-2xl px-4 py-3 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
+                      className={`min-w-[128px] rounded-2xl px-4 py-3.5 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
+                      style={active ? shadow.soft : shadow.card}
                     >
                       <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                         {w.name}
                       </Text>
-                      <Text className={`mt-0.5 text-xs ${active ? 'text-brand-glow' : 'text-muted'}`}>
+                      <Text className={`mt-1 text-sm font-bold ${active ? 'text-brand-glow' : 'text-ink'}`}>
                         {formatMoney(w.balance)}
                       </Text>
                     </Pressable>
@@ -306,8 +329,8 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Bank</Text>
                 <Pressable
                   onPress={() => setBankPickerOpen(true)}
-                  className="mt-2 flex-row items-center rounded-2xl bg-lav-faint px-4"
-                  style={{ minHeight: 52 }}
+                  className="mt-2 flex-row items-center rounded-2xl border border-transparent bg-lav-faint px-4 active:opacity-80"
+                  style={{ minHeight: 54 }}
                 >
                   <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
                   <Text className={`flex-1 text-[15px] ${bank ? 'text-ink' : 'text-faded'}`}>

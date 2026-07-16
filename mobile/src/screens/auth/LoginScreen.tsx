@@ -3,12 +3,13 @@ import { Alert, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { Header } from '../../components/Header';
-import { colors } from '../../theme';
+import { colors, gradients, shadow } from '../../theme';
 import { useLogin } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import {
@@ -98,9 +99,22 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   return (
     <Screen withBottomInset>
       <Header />
-      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 4 }}>
-          <Text className="text-3xl font-extrabold tracking-tight text-ink">Welcome back</Text>
-          <Text className="mt-2 text-[15px] text-muted">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
+          <LinearGradient
+            colors={gradients.navy}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              { height: 60, width: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+              shadow.card,
+            ]}
+          >
+            <Ionicons name="shield-checkmark" size={28} color={colors.brandGlow} />
+          </LinearGradient>
+
+          <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-brand">Patriai</Text>
+          <Text className="mt-1.5 text-4xl font-extrabold tracking-tight text-ink">Welcome back</Text>
+          <Text className="mt-2.5 text-[15px] leading-6 text-muted">
             Sign in to continue managing your family finances.
           </Text>
 
@@ -108,14 +122,8 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             <Pressable
               onPress={() => void biometricSignIn()}
               disabled={bioBusy}
-              className="mt-7 flex-row items-center rounded-3xl bg-white p-5 active:opacity-90"
-              style={{
-                shadowColor: colors.navy,
-                shadowOpacity: 0.06,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 3,
-              }}
+              className="mt-8 flex-row items-center rounded-3xl bg-white p-5 active:opacity-90"
+              style={shadow.card}
             >
               <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-success-soft">
                 <Ionicons name={support?.icon ?? 'finger-print'} size={26} color={colors.brand} />
@@ -130,7 +138,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             </Pressable>
           ) : null}
 
-          <View className="mt-7">
+          <View className="mt-8">
             <Input
               label="Email or phone"
               icon="mail-outline"
@@ -159,7 +167,8 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             <Button title="Log In" icon="arrow-forward" onPress={submit} loading={login.isPending} className="mt-6" />
           </View>
 
-          <View className="mt-8 flex-row justify-center">
+          <View className="mt-10 h-px w-full bg-border" />
+          <View className="mt-6 flex-row justify-center">
             <Text className="text-sm text-muted">New to Patriai? </Text>
             <Pressable onPress={() => navigation.navigate('Register')} hitSlop={6}>
               <Text className="text-sm font-semibold text-brand">Create one</Text>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -85,19 +86,43 @@ function MainTabs() {
         ),
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.faded,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-        tabBarItemStyle: { paddingTop: 8 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: 4, letterSpacing: 0.2 },
+        tabBarItemStyle: { paddingTop: 10 },
         tabBarStyle: {
-          backgroundColor: colors.white,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          height: 62 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-          paddingTop: 6,
-          ...shadow.tab,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 68 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+          paddingTop: 8,
+          paddingHorizontal: 8,
         },
+        tabBarBackground: () => (
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colors.white,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              borderTopWidth: 1,
+              borderColor: colors.border,
+              ...shadow.tab,
+            }}
+          />
+        ),
         tabBarIcon: ({ focused, color }) => (
-          <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
+          <View
+            style={{
+              width: 52,
+              height: 34,
+              borderRadius: 17,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: focused ? colors.lavSoft : 'transparent',
+            }}
+          >
+            <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
+          </View>
         ),
       })}
     >

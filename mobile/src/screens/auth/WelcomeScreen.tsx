@@ -17,27 +17,46 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
       />
 
       <View className="flex-1 items-center justify-center px-8">
-        <LinearGradient
-          colors={gradients.avatar}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[{ height: 88, width: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }, shadow.hero]}
-        >
-          <MaterialCommunityIcons name="bank" size={42} color={colors.brandGlow} />
-        </LinearGradient>
+        {/* Layered glow halo behind the mark for a premium, lit-from-within feel */}
+        <View className="items-center justify-center">
+          <View
+            className="absolute rounded-full bg-brand-glow"
+            style={{ height: 220, width: 220, opacity: 0.35 }}
+          />
+          <View
+            className="absolute rounded-full bg-lav-soft"
+            style={{ height: 148, width: 148, opacity: 0.9 }}
+          />
+          <LinearGradient
+            colors={gradients.avatar}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              { height: 92, width: 92, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+              shadow.hero,
+            ]}
+          >
+            <MaterialCommunityIcons name="bank" size={44} color={colors.brandGlow} />
+          </LinearGradient>
+        </View>
 
-        <Text className="mt-9 text-5xl font-extrabold tracking-tight text-ink">Patriai</Text>
-        <Text className="mt-4 text-center text-[15px] leading-6 text-muted">
+        <Text className="mt-11 text-[52px] font-extrabold leading-none tracking-tight text-ink">
+          Patriai
+        </Text>
+        <Text className="mt-5 max-w-[300px] text-center text-[15px] leading-7 text-muted">
           A structured approach to institutional wealth and effortless digital movement.
         </Text>
 
-        <View className="mt-8 flex-row items-center rounded-full bg-lav-faint px-4 py-2">
-          <Ionicons name="lock-closed" size={13} color={colors.brand} style={{ marginRight: 6 }} />
+        <View
+          className="mt-8 flex-row items-center rounded-full border border-lav bg-white px-4 py-2.5"
+          style={shadow.soft}
+        >
+          <Ionicons name="shield-checkmark" size={14} color={colors.brand} style={{ marginRight: 7 }} />
           <Text className="text-[11px] font-bold uppercase tracking-widest text-navy">Secure Portal</Text>
         </View>
       </View>
 
-      <View className="px-6 pb-4" style={{ gap: 12 }}>
+      <View className="px-6 pb-4" style={{ gap: 14 }}>
         <Button title="Get Started" icon="arrow-forward" onPress={() => navigation.navigate('Register')} />
         <Button title="Log In" variant="secondary" onPress={() => navigation.navigate('Login')} />
       </View>

@@ -11,7 +11,7 @@ import { TxnRow } from '../../components/TxnRow';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
-import { colors, shadow } from '../../theme';
+import { colors, gradients, shadow } from '../../theme';
 import { useWallet, useWalletMembers, useWalletTransactions } from '../../api/hooks';
 import { formatMoney, initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -22,7 +22,17 @@ import type { RootScreenProps } from '../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-function ActionButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+function ActionButton({
+  icon,
+  label,
+  onPress,
+  primary,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+}) {
   return (
     <Pressable
       onPress={() => {
@@ -31,10 +41,27 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
       }}
       className="flex-1 items-center active:opacity-70"
     >
-      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-lav">
-        <Ionicons name={icon} size={22} color={colors.navy} />
-      </View>
-      <Text className="mt-2 text-xs font-semibold text-ink">{label}</Text>
+      {primary ? (
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            { height: 56, width: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+            shadow.soft,
+          ]}
+        >
+          <Ionicons name={icon} size={22} color={colors.white} />
+        </LinearGradient>
+      ) : (
+        <View
+          className="h-14 w-14 items-center justify-center rounded-2xl bg-lav-soft"
+          style={[shadow.soft, { borderRadius: 18 }]}
+        >
+          <Ionicons name={icon} size={22} color={colors.navy} />
+        </View>
+      )}
+      <Text className="mt-2 text-[12px] font-semibold text-ink">{label}</Text>
     </Pressable>
   );
 }
@@ -135,16 +162,24 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
           >
             <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                {visual.label} Wallet
-              </Text>
+              <View className="flex-row items-center">
+                <View className="mr-2.5 h-8 w-8 items-center justify-center rounded-xl bg-white/15">
+                  <Ionicons name={visual.icon} size={16} color={colors.white} />
+                </View>
+                <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
+                  {visual.label} Wallet
+                </Text>
+              </View>
               <View className="rounded-full bg-white/20 px-2.5 py-1">
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-brand-glow">
                   {wallet.status}
                 </Text>
               </View>
             </View>
-            <Text className="mt-2 text-[40px] font-extrabold leading-tight tracking-tight text-white">
+            <Text className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-white/50">
+              Available balance
+            </Text>
+            <Text className="mt-1 text-[40px] font-extrabold leading-tight tracking-tight text-white">
               {formatMoney(wallet.balance)}
             </Text>
 
@@ -221,8 +256,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 selection();
                 navigation.navigate('Approvals', { scope: 'to_me' });
               }}
-              className="mt-4 flex-row items-center rounded-2xl bg-navy p-4 active:opacity-90"
-              style={shadow.soft}
+              className="mt-4 flex-row items-center rounded-3xl bg-navy p-4 active:opacity-90"
+              style={shadow.card}
             >
               <View className="mr-3 h-9 w-9 items-center justify-center rounded-2xl bg-white/20">
                 <Ionicons name="hourglass-outline" size={18} color={colors.brandGlow} />
@@ -238,8 +273,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {/* Actions — spend buttons are hidden for view-only roles (they 403). */}
-          <View className="mt-6 flex-row" style={{ gap: 8 }}>
-            <ActionButton icon="add" label="Fund" onPress={() => navigation.navigate('Fund', { walletId })} />
+          <View className="mt-6 flex-row rounded-3xl bg-white px-2 py-5" style={[shadow.card, { gap: 8 }]}>
+            <ActionButton icon="add" label="Fund" primary onPress={() => navigation.navigate('Fund', { walletId })} />
             {canSpend ? (
               <>
                 <ActionButton icon="arrow-down" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId })} />
@@ -248,9 +283,12 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             ) : null}
           </View>
           {!canSpend ? (
-            <Text className="mt-3 text-xs text-muted">
-              You have view-only access to this wallet — withdrawals and transfers are disabled for your role.
-            </Text>
+            <View className="mt-3 flex-row items-start rounded-2xl bg-lav-faint px-4 py-3">
+              <Ionicons name="eye-outline" size={15} color={colors.muted} style={{ marginRight: 8, marginTop: 1 }} />
+              <Text className="flex-1 text-xs text-muted">
+                You have view-only access to this wallet — withdrawals and transfers are disabled for your role.
+              </Text>
+            </View>
           ) : null}
 
           {/* Members */}
@@ -290,9 +328,21 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                           onPress={tappable ? () => openManage(m) : undefined}
                           className={`flex-row items-center py-3 ${tappable ? 'active:opacity-70' : ''}`}
                         >
-                          <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-lav-soft">
-                            <Text className="text-xs font-bold text-navy">{initials(m.name)}</Text>
-                          </View>
+                          <LinearGradient
+                            colors={gradients.avatar}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                              height: 40,
+                              width: 40,
+                              borderRadius: 20,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 12,
+                            }}
+                          >
+                            <Text className="text-xs font-bold text-white">{initials(m.name)}</Text>
+                          </LinearGradient>
                           <View className="flex-1 pr-2">
                             <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
                               {m.name}
@@ -357,7 +407,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   <Pressable
                     onPress={() => void txns.fetchNextPage()}
                     disabled={txns.isFetchingNextPage}
-                    className="items-center rounded-2xl bg-lav py-3.5 active:opacity-80"
+                    className="items-center rounded-2xl bg-lav-soft py-3.5 active:opacity-80"
                   >
                     {txns.isFetchingNextPage ? (
                       <ActivityIndicator color={colors.navy} />

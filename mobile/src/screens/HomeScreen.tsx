@@ -42,11 +42,11 @@ function QuickAction({
         colors={tint}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[{ height: 56, width: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, shadow.soft]}
+        style={[{ height: 58, width: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, shadow.soft]}
       >
         <Ionicons name={icon} size={23} color={colors.white} />
       </LinearGradient>
-      <Text className="mt-2 text-xs font-semibold text-ink">{label}</Text>
+      <Text className="mt-2.5 text-xs font-semibold text-ink">{label}</Text>
     </Pressable>
   );
 }
@@ -132,8 +132,36 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               colors={gradients.navy}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: 28, marginTop: 20, padding: 24 }, shadow.hero]}
+              style={[{ borderRadius: 28, marginTop: 20, padding: 24, overflow: 'hidden' }, shadow.hero]}
             >
+              {/* Ambient glow */}
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: -70,
+                  right: -46,
+                  height: 200,
+                  width: 200,
+                  borderRadius: 100,
+                  backgroundColor: colors.brand,
+                  opacity: 0.3,
+                }}
+              />
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  bottom: -84,
+                  left: -60,
+                  height: 180,
+                  width: 180,
+                  borderRadius: 90,
+                  backgroundColor: colors.brandMint,
+                  opacity: 0.12,
+                }}
+              />
+
               <View className="flex-row items-center justify-between">
                 <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                   Total Balance
@@ -144,50 +172,60 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                     setHidden((h) => !h);
                   }}
                   hitSlop={8}
-                  className="flex-row items-center active:opacity-70"
+                  className="flex-row items-center rounded-full bg-white/10 px-3 py-1.5 active:opacity-70"
                 >
-                  <Ionicons name={hidden ? 'eye-off-outline' : 'eye-outline'} size={16} color={colors.brandGlow} />
+                  <Ionicons name={hidden ? 'eye-off-outline' : 'eye-outline'} size={14} color={colors.brandGlow} />
                   <Text className="ml-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-glow">
                     {hidden ? 'Show' : 'Hide'}
                   </Text>
                 </Pressable>
               </View>
-              <Text className="mt-2 text-[40px] font-extrabold leading-tight tracking-tight text-white">
+              <Text className="mt-3 text-[44px] font-extrabold leading-tight tracking-tight text-white">
                 {hidden ? '₦ • • • • • •' : formatMoney(data.total_balance)}
               </Text>
+              {mainWallet ? (
+                <View className="mt-2 flex-row items-center">
+                  <Ionicons name="wallet-outline" size={13} color={colors.brandGlow} />
+                  <Text className="ml-1.5 text-[13px] font-medium text-white/70">{mainWallet.name}</Text>
+                </View>
+              ) : null}
 
               {/* Inflow / outflow bars */}
-              <View className="mt-5" style={{ gap: 12 }}>
-                <View className="flex-row items-center">
-                  <Ionicons name="arrow-down" size={13} color={colors.brandGlow} />
-                  <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                    <View
-                      className="h-1.5 rounded-full bg-brand-mint"
-                      style={{ width: `${Math.max((inflow / maxFlow) * 100, 3)}%` }}
-                    />
+              <View className="mt-6 rounded-2xl bg-white/5 px-4 py-4" style={{ gap: 14 }}>
+                <Text className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                  Inflow vs outflow · last 30 days
+                </Text>
+                <View style={{ gap: 12 }}>
+                  <View className="flex-row items-center">
+                    <Ionicons name="arrow-down" size={13} color={colors.brandGlow} />
+                    <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <View
+                        className="h-1.5 rounded-full bg-brand-mint"
+                        style={{ width: `${Math.max((inflow / maxFlow) * 100, 3)}%` }}
+                      />
+                    </View>
+                    <Text className="text-xs font-semibold text-brand-glow">
+                      {hidden ? '••••' : `+${formatMoney(data.inflow_30d)}`}
+                    </Text>
                   </View>
-                  <Text className="text-xs font-semibold text-brand-glow">
-                    {hidden ? '••••' : `+${formatMoney(data.inflow_30d)}`}
-                  </Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="arrow-up" size={13} color={colors.rose} />
-                  <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                    <View
-                      className="h-1.5 rounded-full"
-                      style={{ width: `${Math.max((outflow / maxFlow) * 100, 3)}%`, backgroundColor: colors.rose }}
-                    />
+                  <View className="flex-row items-center">
+                    <Ionicons name="arrow-up" size={13} color={colors.rose} />
+                    <View className="mx-2 h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <View
+                        className="h-1.5 rounded-full"
+                        style={{ width: `${Math.max((outflow / maxFlow) * 100, 3)}%`, backgroundColor: colors.rose }}
+                      />
+                    </View>
+                    <Text className="text-xs font-semibold" style={{ color: colors.rose }}>
+                      {hidden ? '••••' : `-${formatMoney(data.outflow_30d)}`}
+                    </Text>
                   </View>
-                  <Text className="text-xs font-semibold" style={{ color: colors.rose }}>
-                    {hidden ? '••••' : `-${formatMoney(data.outflow_30d)}`}
-                  </Text>
                 </View>
               </View>
-              <Text className="mt-3 text-[10px] text-white/40">Inflow vs outflow · last 30 days</Text>
             </LinearGradient>
 
             {/* Quick actions */}
-            <View className="mt-6 flex-row" style={{ gap: 8 }}>
+            <View className="mt-7 flex-row" style={{ gap: 12 }}>
               <QuickAction
                 icon="paper-plane"
                 label="Send"
@@ -378,10 +416,20 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             </Pressable>
 
             {/* Recent activity */}
-            <View className="mt-7 flex-row items-center justify-between">
-              <Text className="text-lg font-bold text-ink">Recent activity</Text>
-              <Pressable onPress={() => navigation.navigate('Activity')} className="active:opacity-70" hitSlop={6}>
+            <View className="mt-8 flex-row items-end justify-between">
+              <View>
+                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  Overview
+                </Text>
+                <Text className="mt-1 text-xl font-bold text-ink">Recent activity</Text>
+              </View>
+              <Pressable
+                onPress={() => navigation.navigate('Activity')}
+                className="flex-row items-center active:opacity-70"
+                hitSlop={6}
+              >
                 <Text className="text-sm font-semibold text-brand">View all</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.brand} />
               </Pressable>
             </View>
 

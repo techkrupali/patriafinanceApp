@@ -44,7 +44,18 @@ export function Input({
       ) : null}
       <View
         className={`w-full flex-row items-center rounded-2xl border bg-lav-faint px-4 ${borderClass}`}
-        style={{ minHeight: 52 }}
+        style={[
+          { minHeight: 54 },
+          focused
+            ? {
+                shadowColor: colors.brand,
+                shadowOpacity: 0.16,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 2,
+              }
+            : undefined,
+        ]}
       >
         {icon ? (
           <Ionicons
