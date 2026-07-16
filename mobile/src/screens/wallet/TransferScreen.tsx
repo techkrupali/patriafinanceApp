@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
@@ -183,12 +184,11 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
       ) : walletsError ? (
         <LoadError message={(walletsError as Error).message} onRetry={() => refetch()} />
       ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView
-            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
             {/* Amount hero */}
             <View className="items-center rounded-3xl bg-lav-faint py-8">
               <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
@@ -363,8 +363,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
               disabled={!canContinue}
               className="mt-7"
             />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       )}
 
       <BankPicker

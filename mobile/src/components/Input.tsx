@@ -56,7 +56,11 @@ export function Input({
         ) : null}
         <TextInput
           placeholderTextColor={colors.faded}
+          selectionColor={colors.brand}
+          cursorColor={colors.brand}
           secureTextEntry={isPassword && !reveal}
+          className="flex-1 py-3.5 text-[15px]"
+          {...rest}
           onFocus={(e) => {
             setFocused(true);
             rest.onFocus?.(e);
@@ -65,8 +69,9 @@ export function Input({
             setFocused(false);
             rest.onBlur?.(e);
           }}
-          className="flex-1 py-3.5 text-[15px] text-ink"
-          {...rest}
+          // Explicit color: NativeWind doesn't reliably apply text color to
+          // TextInput via className, which left typed text invisible.
+          style={[{ color: colors.ink, fontWeight: '600' }, (rest as { style?: unknown }).style as object]}
         />
         {rightAdornment ??
           (isPassword ? (

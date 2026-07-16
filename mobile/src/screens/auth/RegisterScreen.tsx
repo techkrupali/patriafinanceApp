@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
@@ -213,8 +214,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
 
       {phase === 'form' ? <ProgressBar step={step} /> : null}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24 }}>
           {phase === 'form' && step === 1 ? (
             <>
               <Text className="text-3xl font-extrabold tracking-tight text-ink">Personal details</Text>
@@ -327,8 +327,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
               <ErrorText message={error} className="mt-4" />
             </View>
           ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

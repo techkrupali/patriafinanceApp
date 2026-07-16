@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -58,8 +59,7 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
   return (
     <Screen withBottomInset>
       <Header title="Change PIN" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
           <Text className="text-[15px] leading-6 text-muted">
             Your PIN authorizes every transfer and withdrawal. Keep it secret.
           </Text>
@@ -107,8 +107,7 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
           </View>
           <ErrorText message={error} className="mt-4" />
           <Button title="Update PIN" icon="checkmark" onPress={submit} loading={change.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

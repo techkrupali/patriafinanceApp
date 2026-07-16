@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -34,12 +35,11 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
   return (
     <Screen withBottomInset>
       <Header title="Assign vendor" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
           <Text className="text-[15px] leading-5 text-muted">
             The vendor is the person who does the work and gets paid from escrow as you approve milestones.
             Add them by the email or phone number tied to their Patriai account.
@@ -67,8 +67,7 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Assign vendor" icon="person-add" onPress={submit} loading={assign.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

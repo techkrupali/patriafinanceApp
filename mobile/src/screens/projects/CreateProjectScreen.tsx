@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -53,12 +54,11 @@ export function CreateProjectScreen({ navigation }: RootScreenProps<'CreateProje
   return (
     <Screen withBottomInset>
       <Header title="New project" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
           {/* How escrow works */}
           <View className="rounded-3xl bg-lav-faint p-5" style={{ gap: 16 }}>
             <InfoRow
@@ -109,8 +109,7 @@ export function CreateProjectScreen({ navigation }: RootScreenProps<'CreateProje
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Create project" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -45,8 +46,7 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
   return (
     <Screen withBottomInset>
       <Header title="Change Password" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
           <Text className="text-[15px] leading-6 text-muted">
             Choose a strong password you don't use anywhere else.
           </Text>
@@ -78,8 +78,7 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
           </View>
           <ErrorText message={error} className="mt-4" />
           <Button title="Update Password" icon="checkmark" onPress={submit} loading={change.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

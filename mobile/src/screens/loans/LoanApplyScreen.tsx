@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -22,6 +20,7 @@ import { Card } from '../../components/Card';
 import { ErrorText } from '../../components/ErrorText';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { LoadError } from '../../components/LoadError';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { colors, gradients, shadow } from '../../theme';
 import { useApplyLoan, useLoanEligibility, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
@@ -238,12 +237,11 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
           <Button title="Go back" variant="ghost" onPress={() => navigation.goBack()} className="mt-2 self-stretch" />
         </View>
       ) : elig ? (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView
-            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
             {/* Eligibility hero */}
             <LinearGradient
               colors={gradients.navy}
@@ -415,8 +413,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               disabled={!canReview}
               className="mt-7"
             />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       ) : null}
 
       {/* Review sheet */}

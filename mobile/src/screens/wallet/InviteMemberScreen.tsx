@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
+import { Switch, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
@@ -58,12 +59,11 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
   return (
     <Screen withBottomInset>
       <Header title="Invite member" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
           <Text className="text-[15px] leading-5 text-muted">
             Invite someone by email or phone. They'll get a pending invitation to accept.
           </Text>
@@ -127,8 +127,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Send invitation" icon="paper-plane" onPress={submit} loading={invite.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

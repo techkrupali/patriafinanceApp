@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import { PinSheet } from '../../components/PinSheet';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { LoadError } from '../../components/LoadError';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { colors } from '../../theme';
 import { useLoan, useRepayLoan, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
@@ -118,12 +119,11 @@ export function RepayScreen({ navigation, route }: RootScreenProps<'Repay'>) {
       ) : loanQuery.error ? (
         <LoadError message={(loanQuery.error as Error).message} onRetry={() => loanQuery.refetch()} />
       ) : loan ? (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView
-            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
             {/* Amount hero */}
             <View className="items-center rounded-3xl bg-lav-faint py-8">
               <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Repay amount</Text>
@@ -196,8 +196,7 @@ export function RepayScreen({ navigation, route }: RootScreenProps<'Repay'>) {
               disabled={!canPay}
               className="mt-7"
             />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       ) : null}
 
       <PinSheet

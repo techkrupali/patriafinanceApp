@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
@@ -76,12 +77,11 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
       ) : detail.error ? (
         <LoadError message={(detail.error as Error).message} onRetry={() => detail.refetch()} />
       ) : wallet ? (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView
-            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
             <Input
               label="Wallet name"
               icon="pricetag-outline"
@@ -194,8 +194,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
             <ErrorText message={error} className="mt-5" />
 
             <Button title="Save changes" icon="checkmark" onPress={save} loading={update.isPending} className="mt-6" />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       ) : null}
     </Screen>
   );

@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -69,12 +62,11 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
       ) : query.error ? (
         <LoadError message={(query.error as Error).message} onRetry={() => query.refetch()} />
       ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <ScrollView
-            contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
             <Text className="text-[15px] leading-5 text-muted">
               A milestone reserves part of the escrow. It stays locked until you approve the vendor’s work, then
               pays out automatically.
@@ -131,8 +123,7 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
               disabled={!canAdd}
               className="mt-6"
             />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       )}
     </Screen>
   );

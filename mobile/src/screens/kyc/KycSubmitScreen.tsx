@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -193,12 +194,11 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
   return (
     <Screen withBottomInset>
       <Header title={`Verify Tier ${targetTier}`} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
           <Card className="flex-row items-center">
             <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
               <Ionicons name="shield-checkmark-outline" size={22} color={colors.navy} />
@@ -339,8 +339,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           <Text className="mt-3 text-center text-[11px] leading-4 text-faded">
             Your details are used only to verify your identity and are handled securely.
           </Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
@@ -69,12 +70,11 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
   return (
     <Screen withBottomInset>
       <Header title="New Wallet" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
           <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Wallet type</Text>
 
           <View className="mt-3 flex-row flex-wrap justify-between">
@@ -151,8 +151,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Create Wallet" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

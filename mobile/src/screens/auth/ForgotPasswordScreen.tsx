@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
@@ -70,8 +71,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
   return (
     <Screen withBottomInset>
       <Header title="Reset password" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
           {phase === 'request' ? (
             <>
               <Text className="text-3xl font-extrabold tracking-tight text-ink">Forgot your password?</Text>
@@ -135,8 +135,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
               <Button title="Reset Password" icon="checkmark" onPress={submitReset} loading={reset.isPending} className="mt-6" />
             </>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

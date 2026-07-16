@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Input } from '../../components/Input';
@@ -97,8 +98,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   return (
     <Screen withBottomInset>
       <Header />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 4 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 4 }}>
           <Text className="text-3xl font-extrabold tracking-tight text-ink">Welcome back</Text>
           <Text className="mt-2 text-[15px] text-muted">
             Sign in to continue managing your family finances.
@@ -165,8 +165,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
               <Text className="text-sm font-semibold text-brand">Create one</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
