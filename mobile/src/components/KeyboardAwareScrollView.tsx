@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Keyboard,
   Platform,
@@ -13,61 +13,50 @@ interface Props extends ScrollViewProps {
 }
 
 /**
- * A dependency-free, New-Architecture-safe keyboard-aware scroll view.
+ * Dependency-free, New-Architecture-safe keyboard-aware scroll view.
  *
- * On keyboard open it (1) measures the currently-focused TextInput and scrolls
- * it comfortably above the keyboard, and (2) pads the bottom by the keyboard
- * height so even the last field has room to scroll up. Replaces the fragile
- * `KeyboardAvoidingView + ScrollView` combo (which did nothing on Android).
+ * - iOS: `automaticallyAdjustKeyboardInsets` lets the OS inset the content.
+ * - Android (windowSoftInputMode=adjustResize): on keyboard open we scroll the
+ *   currently-focused field just above the keyboard. No component state is used
+ *   (so there is no re-render/flicker on focus), and we do NOT use
+ *   `keyboardDismissMode="interactive"` — programmatic scrolling with that mode
+ *   was dismissing the keyboard the instant it opened.
  */
 export function KeyboardAwareScrollView({
   children,
   extraOffset = 24,
-  contentContainerStyle,
   ...props
 }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const offsetRef = useRef(0);
-  const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    if (Platform.OS !== 'android') return;
 
-    const onShow = Keyboard.addListener(showEvt, (e) => {
-      const kbTop = e.endCoordinates.screenY;
-      setKbHeight(e.endCoordinates.height ?? 0);
-
+    const sub = Keyboard.addListener('keyboardDidShow', (e) => {
       const focused = TextInput.State.currentlyFocusedInput?.() as
         | { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void }
         | null;
       const scroll = scrollRef.current;
       if (!focused?.measureInWindow || !scroll) return;
 
-      // Let the resize settle before measuring (Android adjustResize).
-      requestAnimationFrame(() => {
-        focused.measureInWindow?.((_x, y, _w, h) => {
-          const inputBottom = y + h + extraOffset;
-          if (inputBottom > kbTop) {
-            scroll.scrollTo({ y: offsetRef.current + (inputBottom - kbTop), animated: true });
-          }
-        });
+      const kbTop = e.endCoordinates.screenY;
+      focused.measureInWindow?.((_x, y, _w, h) => {
+        const inputBottom = y + h + extraOffset;
+        if (inputBottom > kbTop) {
+          scroll.scrollTo({ y: offsetRef.current + (inputBottom - kbTop), animated: true });
+        }
       });
     });
 
-    const onHide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
-
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
+    return () => sub.remove();
   }, [extraOffset]);
 
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
       showsVerticalScrollIndicator={false}
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       scrollEventThrottle={16}
       {...props}
       ref={scrollRef}
@@ -75,7 +64,6 @@ export function KeyboardAwareScrollView({
         offsetRef.current = e.nativeEvent.contentOffset.y;
         props.onScroll?.(e);
       }}
-      contentContainerStyle={[contentContainerStyle, { paddingBottom: kbHeight }]}
     >
       {children}
     </ScrollView>
