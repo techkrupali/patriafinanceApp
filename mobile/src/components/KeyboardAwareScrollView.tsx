@@ -1,69 +1,42 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  Keyboard,
-  Platform,
-  ScrollView,
-  TextInput,
-  type ScrollViewProps,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Keyboard, Platform, ScrollView, type ScrollViewProps } from 'react-native';
 
 interface Props extends ScrollViewProps {
-  /** Gap to keep between the focused field's bottom and the keyboard top. */
+  /** Kept for API compatibility with callers; no longer used. */
   extraOffset?: number;
 }
 
 /**
- * Dependency-free, New-Architecture-safe keyboard-aware scroll view.
+ * Scroll container for forms that keeps every field reachable when the keyboard
+ * is open.
  *
- * - iOS: `automaticallyAdjustKeyboardInsets` lets the OS inset the content.
- * - Android (windowSoftInputMode=adjustResize): on keyboard open we scroll the
- *   currently-focused field just above the keyboard. No component state is used
- *   (so there is no re-render/flicker on focus), and we do NOT use
- *   `keyboardDismissMode="interactive"` — programmatic scrolling with that mode
- *   was dismissing the keyboard the instant it opened.
+ * RN 0.86 runs edge-to-edge, which disables the window's `adjustResize`, so the
+ * keyboard overlays the app instead of shrinking it. We compensate purely with
+ * bottom padding equal to the keyboard height — that gives the ScrollView room
+ * to scroll any covered field/button above the keyboard. We deliberately do NOT
+ * call `scrollTo` here: on edge-to-edge that fought the IME inset animation and
+ * made the keyboard flicker open/closed. Padding-only is smooth and loop-free.
  */
-export function KeyboardAwareScrollView({
-  children,
-  extraOffset = 24,
-  ...props
-}: Props) {
-  const scrollRef = useRef<ScrollView>(null);
-  const offsetRef = useRef(0);
+export function KeyboardAwareScrollView({ children, contentContainerStyle, ...props }: Props) {
+  const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    const sub = Keyboard.addListener('keyboardDidShow', (e) => {
-      const focused = TextInput.State.currentlyFocusedInput?.() as
-        | { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void }
-        | null;
-      const scroll = scrollRef.current;
-      if (!focused?.measureInWindow || !scroll) return;
-
-      const kbTop = e.endCoordinates.screenY;
-      focused.measureInWindow?.((_x, y, _w, h) => {
-        const inputBottom = y + h + extraOffset;
-        if (inputBottom > kbTop) {
-          scroll.scrollTo({ y: offsetRef.current + (inputBottom - kbTop), animated: true });
-        }
-      });
-    });
-
-    return () => sub.remove();
-  }, [extraOffset]);
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates?.height ?? 0));
+    const onHide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
 
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-      scrollEventThrottle={16}
       {...props}
-      ref={scrollRef}
-      onScroll={(e) => {
-        offsetRef.current = e.nativeEvent.contentOffset.y;
-        props.onScroll?.(e);
-      }}
+      contentContainerStyle={[contentContainerStyle, { paddingBottom: kbHeight }]}
     >
       {children}
     </ScrollView>
