@@ -1,41 +1,79 @@
-import React, { useEffect, useState } from 'react';
-import { Keyboard, Platform, ScrollView, type ScrollViewProps } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Keyboard,
+  Platform,
+  ScrollView,
+  TextInput,
+  type ScrollViewProps,
+} from 'react-native';
 
 interface Props extends ScrollViewProps {
-  /** Kept for API compatibility with callers; no longer used. */
+  /** Gap kept between the focused field's bottom and the keyboard top. */
   extraOffset?: number;
 }
 
 /**
- * Scroll container for forms that keeps every field reachable when the keyboard
- * is open.
+ * Form scroll container that keeps the focused field visible above the keyboard.
  *
- * RN 0.86 runs edge-to-edge, which disables the window's `adjustResize`, so the
- * keyboard overlays the app instead of shrinking it. We compensate purely with
- * bottom padding equal to the keyboard height — that gives the ScrollView room
- * to scroll any covered field/button above the keyboard. We deliberately do NOT
- * call `scrollTo` here: on edge-to-edge that fought the IME inset animation and
- * made the keyboard flicker open/closed. Padding-only is smooth and loop-free.
+ * RN 0.86 runs edge-to-edge, which disables `adjustResize`, so we (1) pad the
+ * bottom by the keyboard height to create scroll room, and (2) auto-scroll the
+ * focused field above the keyboard. The scroll is DELAYED past the IME inset
+ * animation — doing it synchronously in `keyboardDidShow` fought the animation
+ * and made the keyboard flicker. (The other historic flicker cause — a dynamic
+ * elevation on the focused Input — was removed separately.)
  */
-export function KeyboardAwareScrollView({ children, contentContainerStyle, ...props }: Props) {
+export function KeyboardAwareScrollView({
+  children,
+  contentContainerStyle,
+  extraOffset = 24,
+  ...props
+}: Props) {
+  const scrollRef = useRef<ScrollView>(null);
+  const offsetRef = useRef(0);
   const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates?.height ?? 0));
-    const onHide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    const onShow = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKbHeight(e.endCoordinates?.height ?? 0);
+
+      if (Platform.OS !== 'android') return;
+      const focused = TextInput.State.currentlyFocusedInput?.() as
+        | { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void }
+        | null;
+      const scroll = scrollRef.current;
+      if (!focused?.measureInWindow || !scroll) return;
+
+      const kbTop = e.endCoordinates.screenY;
+      // Let the IME inset animation + our padding re-layout settle first.
+      setTimeout(() => {
+        focused.measureInWindow?.((_x, y, _w, h) => {
+          const inputBottom = y + h + extraOffset;
+          if (inputBottom > kbTop) {
+            scroll.scrollTo({ y: offsetRef.current + (inputBottom - kbTop), animated: true });
+          }
+        });
+      }, 160);
+    });
+
+    const onHide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
     return () => {
       onShow.remove();
       onHide.remove();
     };
-  }, []);
+  }, [extraOffset]);
 
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+      scrollEventThrottle={16}
       {...props}
+      ref={scrollRef}
+      onScroll={(e) => {
+        offsetRef.current = e.nativeEvent.contentOffset.y;
+        props.onScroll?.(e);
+      }}
       contentContainerStyle={[contentContainerStyle, { paddingBottom: kbHeight }]}
     >
       {children}
