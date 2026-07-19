@@ -4,6 +4,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 
 export type AuthStackParamList = {
+  Walkthrough: undefined;
   Welcome: undefined;
   Login: undefined;
   Register: undefined;

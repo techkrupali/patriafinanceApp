@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from '../../config';
 import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
 import { Logo } from '../../components/Logo';
@@ -60,6 +62,21 @@ function AnimatedGreeting() {
 }
 
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
+  // First run only: show the feature tour before anything else.
+  useEffect(() => {
+    let alive = true;
+    void SecureStore.getItemAsync(STORAGE_KEYS.walkthroughSeen)
+      .then((seen) => {
+        if (alive && !seen) navigation.replace('Walkthrough');
+      })
+      .catch(() => {
+        // Storage hiccup — skip the tour rather than block the app.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [navigation]);
+
   // Gentle logo entrance.
   const logoScale = useRef(new Animated.Value(0.85)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;

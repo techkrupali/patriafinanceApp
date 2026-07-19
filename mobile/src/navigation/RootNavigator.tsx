@@ -11,6 +11,7 @@ import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
 // Auth screens
+import { WalkthroughScreen } from '../screens/auth/WalkthroughScreen';
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
@@ -166,6 +167,7 @@ export function RootNavigator() {
     return (
       <AuthStack.Navigator screenOptions={{ headerShown: false }}>
         <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+        <AuthStack.Screen name="Walkthrough" component={WalkthroughScreen} />
         <AuthStack.Screen name="Login" component={LoginScreen} />
         <AuthStack.Screen name="Register" component={RegisterScreen} />
         <AuthStack.Screen name="Otp" component={OtpScreen} />
