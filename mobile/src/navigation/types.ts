@@ -35,6 +35,11 @@ export type RootStackParamList = {
   // ---- Family Hub & Spousal Sync ----
   FamilyHub: undefined;
   SpousalSync: undefined;
+  // ---- Wallet governance (Audit / Lock / Automation) ----
+  WalletAuditLog: { walletId: number };
+  WalletLock: { walletId: number };
+  Automations: undefined;
+  CreateAutomation: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;

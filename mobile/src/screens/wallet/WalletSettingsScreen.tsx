@@ -194,6 +194,55 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
             <ErrorText message={error} className="mt-5" />
 
             <Button title="Save changes" icon="checkmark" onPress={save} loading={update.isPending} className="mt-6" />
+
+            {!isMain ? (
+              <>
+                <Text className="mt-9 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  Wallet controls
+                </Text>
+                <View className="mt-2 overflow-hidden rounded-2xl bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('WalletLock', { walletId });
+                    }}
+                    className="flex-row items-center p-4 active:opacity-70"
+                  >
+                    <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                      <Ionicons name="lock-closed-outline" size={19} color={colors.navy} />
+                    </View>
+                    <View className="flex-1 pr-2">
+                      <Text className="text-[15px] font-semibold text-ink">Freeze &amp; scheduled access</Text>
+                      <Text className="mt-0.5 text-[13px] text-muted">
+                        {wallet.status === 'frozen'
+                          ? 'Frozen — spending blocked'
+                          : wallet.access_schedule
+                            ? 'Spending allowed only in a time window'
+                            : 'Freeze the wallet or set a spend window'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+                  </Pressable>
+                  <View style={{ height: 1, backgroundColor: colors.border }} />
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('WalletAuditLog', { walletId });
+                    }}
+                    className="flex-row items-center p-4 active:opacity-70"
+                  >
+                    <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                      <Ionicons name="receipt-outline" size={19} color={colors.navy} />
+                    </View>
+                    <View className="flex-1 pr-2">
+                      <Text className="text-[15px] font-semibold text-ink">Audit log</Text>
+                      <Text className="mt-0.5 text-[13px] text-muted">Every change to this wallet</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
         </KeyboardAwareScrollView>
       ) : null}
     </Screen>

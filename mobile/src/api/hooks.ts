@@ -16,12 +16,19 @@ import type {
   AuthSessionData,
   BanksData,
   CreateInvitationPayload,
+  AuditLogPageData,
+  AutomationMutatedData,
+  AutomationRunData,
+  AutomationsData,
+  CreateAutomationPayload,
   CreateProjectPayload,
   CreateSyncPayload,
   CreateWalletPayload,
   DashboardData,
   DevicesData,
   FamilyData,
+  SetAccessSchedulePayload,
+  UpdateAutomationPayload,
   FundingDetailsData,
   InvitationAcceptData,
   InvitationCreatedData,
@@ -103,6 +110,10 @@ export const keys = {
   // ---- Family Hub & Spousal Sync ----
   family: ['family'] as const,
   sync: ['sync'] as const,
+  // ---- Automation & Audit ----
+  automations: ['automations'] as const,
+  automation: (id: number) => ['automations', id] as const,
+  walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
 };
 
 // ---------- Queries ----------
@@ -857,4 +868,96 @@ export function useSyncLifecycle(syncId: number) {
     onSuccess: done,
   });
   return { pause, resume, end };
+}
+
+// ---------- Automation / Smart Rules ----------
+
+export function useAutomations() {
+  return useQuery({
+    queryKey: keys.automations,
+    queryFn: () => api<AutomationsData>('/automations'),
+    select: (d) => d.automations,
+  });
+}
+
+export function useCreateAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAutomationPayload) =>
+      api<AutomationMutatedData>('/automations', { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+  });
+}
+
+export function useUpdateAutomation(ruleId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateAutomationPayload) =>
+      api<AutomationMutatedData>(`/automations/${ruleId}`, { method: 'PATCH', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+  });
+}
+
+export function useDeleteAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ruleId: number) => api(`/automations/${ruleId}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+  });
+}
+
+/** Manually run a rule now ("Run now"). Moves money → refresh wallets/dashboard too. */
+export function useRunAutomation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ruleId: number) =>
+      api<AutomationRunData>(`/automations/${ruleId}/run`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.automations });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+    },
+  });
+}
+
+// ---------- Wallet Audit Log ----------
+
+export function useWalletAuditLog(walletId: number) {
+  return useInfiniteQuery({
+    queryKey: keys.walletAuditLog(walletId),
+    queryFn: ({ pageParam }) =>
+      api<AuditLogPageData>(`/wallets/${walletId}/audit-log?page=${pageParam}&per_page=20`),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.pagination.page < last.pagination.last_page ? last.pagination.page + 1 : undefined,
+  });
+}
+
+// ---------- Wallet Lock / Scheduled Access ----------
+
+/** Freeze / unfreeze / set-schedule for a wallet — all invalidate the wallet + list. */
+export function useWalletLock(walletId: number) {
+  const qc = useQueryClient();
+  const done = () => {
+    void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.wallets });
+    void qc.invalidateQueries({ queryKey: keys.walletAuditLog(walletId) });
+  };
+  const freeze = useMutation({
+    mutationFn: () => api<WalletUpdatedData>(`/wallets/${walletId}/freeze`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const unfreeze = useMutation({
+    mutationFn: () => api<WalletUpdatedData>(`/wallets/${walletId}/unfreeze`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const setSchedule = useMutation({
+    mutationFn: (input: SetAccessSchedulePayload | null) =>
+      api<WalletUpdatedData>(`/wallets/${walletId}/access-schedule`, {
+        method: 'PATCH',
+        body: input ?? {},
+      }),
+    onSuccess: done,
+  });
+  return { freeze, unfreeze, setSchedule };
 }

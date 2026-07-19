@@ -49,6 +49,8 @@ export interface Wallet {
   virtual_account: string | null;
   virtual_account_bank: string | null;
   status: string;
+  /** Scheduled-access window (Wallet Lock feature); null when unrestricted. */
+  access_schedule?: AccessSchedule | null;
   created_at: string | null;
   owner?: WalletOwner;
   my_role?: string;
@@ -937,4 +939,118 @@ export interface CreateSyncPayload {
 export interface UpdateSyncTransparencyPayload {
   transparency: SyncTransparency;
   wallet_ids?: number[];
+}
+
+// ============================================================================
+// Wallet Lock / Scheduled Access
+// ============================================================================
+
+export interface AccessSchedule {
+  /** ISO weekdays allowed for spending, 1 (Mon) – 7 (Sun). */
+  days: number[];
+  /** "HH:MM" 24h window start. */
+  start: string;
+  /** "HH:MM" 24h window end. */
+  end: string;
+  /** IANA tz, e.g. "Africa/Lagos". */
+  tz: string;
+}
+
+export interface SetAccessSchedulePayload {
+  days: number[];
+  start: string;
+  end: string;
+  tz?: string;
+}
+
+// ============================================================================
+// Wallet Audit Log
+// ============================================================================
+
+export type AuditEvent =
+  | 'member_added'
+  | 'member_removed'
+  | 'member_role_changed'
+  | 'permissions_changed'
+  | 'wallet_frozen'
+  | 'wallet_unfrozen'
+  | 'access_schedule_set'
+  | 'settings_changed'
+  | 'wallet_created'
+  | 'large_spend'
+  | string;
+
+export interface AuditLogEntry {
+  id: number;
+  event: AuditEvent;
+  description: string;
+  actor: { id: number; name: string } | null;
+  meta: Record<string, unknown> | null;
+  created_at: string | null;
+}
+
+export interface AuditLogPageData {
+  audit_log: AuditLogEntry[];
+  pagination: { page: number; per_page: number; total: number; last_page: number };
+}
+
+// ============================================================================
+// Automation / Smart Rules
+// ============================================================================
+
+export type AutomationFrequency = 'daily' | 'weekly' | 'monthly';
+
+export interface AutomationRule {
+  id: number;
+  name: string;
+  from_wallet: { id: number; name: string };
+  to_wallet: { id: number; name: string };
+  /** Naira decimal string. */
+  amount: string;
+  frequency: AutomationFrequency;
+  /** 1 (Mon) – 7 (Sun), for weekly rules. */
+  day_of_week: number | null;
+  /** 1 – 28, for monthly rules. */
+  day_of_month: number | null;
+  /** Naira decimal string, or null. */
+  min_balance: string | null;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_hint: string;
+}
+
+export interface AutomationsData {
+  automations: AutomationRule[];
+}
+
+export interface AutomationMutatedData {
+  automation: AutomationRule;
+}
+
+export interface AutomationRunData {
+  result: { rule_id: number; status: string; reference?: string; amount?: string; period?: string; reason?: string };
+  automation: AutomationRule;
+}
+
+export interface CreateAutomationPayload {
+  name: string;
+  from_wallet_id: number;
+  to_wallet_id: number;
+  /** Naira number (the API accepts numeric naira and stores kobo). */
+  amount: number;
+  frequency: AutomationFrequency;
+  day_of_week?: number | null;
+  day_of_month?: number | null;
+  min_balance?: number | null;
+  enabled?: boolean;
+}
+
+export interface UpdateAutomationPayload {
+  name?: string;
+  amount?: number;
+  frequency?: AutomationFrequency;
+  day_of_week?: number | null;
+  day_of_month?: number | null;
+  min_balance?: number | null;
+  enabled?: boolean;
 }

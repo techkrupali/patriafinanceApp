@@ -254,6 +254,15 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             subtitle="Escrow-backed milestone projects"
             onPress={() => navigation.navigate('Projects')}
           />
+          <Divider />
+          <Row
+            icon="flash-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Automations"
+            subtitle="Smart rules & scheduled auto-transfers"
+            onPress={() => navigation.navigate('Automations')}
+          />
         </Card>
 
         {/* Family */}
