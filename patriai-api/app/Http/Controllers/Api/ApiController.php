@@ -248,6 +248,10 @@ abstract class ApiController extends Controller
             'fund' => $elevated ? true : (($perms['fund'] ?? true) !== false),
             'request' => $elevated ? true : (($perms['request'] ?? true) !== false),
             'withdraw' => $elevated ? true : ($canSpend && (($perms['withdraw'] ?? true) !== false)),
+            // Per-member spend-request cap: naira decimal string, or null when unset.
+            'request_limit' => ($perms['request_limit'] ?? null) !== null
+                ? number_format(((int) $perms['request_limit']) / 100, 2, '.', '')
+                : null,
         ];
     }
 

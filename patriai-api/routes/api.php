@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\SpendRequestController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
 use App\Http\Controllers\Api\WalletAuditLogController;
@@ -91,6 +92,9 @@ Route::prefix('v1')->group(function () {
         Route::get('wallets/{wallet}/members', [WalletMemberController::class, 'index']);
         Route::patch('wallets/{wallet}/members/{member}', [WalletMemberController::class, 'update'])->middleware('throttle:30,1');
         Route::delete('wallets/{wallet}/members/{member}', [WalletMemberController::class, 'destroy'])->middleware('throttle:30,1');
+
+        // Spend requests (a request-only member asks the owner/co-owners to approve a spend)
+        Route::post('wallets/{wallet}/spend-requests', [SpendRequestController::class, 'store'])->middleware('throttle:20,1');
 
         // Wallet invitations
         Route::get('wallets/{wallet}/invitations', [InvitationController::class, 'walletIndex']);

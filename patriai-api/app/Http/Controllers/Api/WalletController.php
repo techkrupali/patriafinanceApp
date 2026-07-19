@@ -81,6 +81,7 @@ class WalletController extends ApiController
             'members' => $members,
             'my_role' => $wallet->roleOf($user),
             'my_can_spend' => $wallet->canSpend($user),
+            'my_can_request' => $wallet->canRequest($user),
             'approval' => [
                 'enabled' => (bool) $wallet->approval_enabled,
                 'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,

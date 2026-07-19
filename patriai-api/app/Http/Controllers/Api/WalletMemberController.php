@@ -53,6 +53,8 @@ class WalletMemberController extends ApiController
             'permissions.fund' => ['sometimes', 'boolean'],
             'permissions.request' => ['sometimes', 'boolean'],
             'permissions.withdraw' => ['sometimes', 'boolean'],
+            // Per-member spend-request cap (naira, nullable = no limit); stored as kobo.
+            'permissions.request_limit' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
         $update = [];
@@ -118,6 +120,13 @@ class WalletMemberController extends ApiController
                 }
                 if (array_key_exists('withdraw', $data['permissions'])) {
                     $permissions['can_spend'] = (bool) $data['permissions']['withdraw'];
+                }
+                // Per-member spend-request cap: store in KOBO, or null to clear it.
+                if (array_key_exists('request_limit', $data['permissions'])) {
+                    $limit = $data['permissions']['request_limit'];
+                    $permissions['request_limit'] = ($limit === null || $limit === '')
+                        ? null
+                        : (int) round(((float) $limit) * 100);
                 }
             }
 
