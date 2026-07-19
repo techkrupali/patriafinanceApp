@@ -25,8 +25,12 @@ import type {
   DisputesPageData,
   PendingApprovalData,
   RaiseDisputePayload,
+  MyVendorProfileData,
   ReferralData,
   SpendRequestPayload,
+  UpsertVendorPayload,
+  VendorDetailData,
+  VendorsPageData,
   CreateAutomationPayload,
   CreateProjectPayload,
   CreateSyncPayload,
@@ -125,6 +129,10 @@ export const keys = {
   disputes: ['disputes'] as const,
   // ---- Referrals ----
   referrals: ['referrals'] as const,
+  // ---- Vendors ----
+  vendors: (q: string, category: string) => ['vendors', q, category] as const,
+  vendor: (id: number) => ['vendors', 'detail', id] as const,
+  myVendorProfile: ['vendors', 'me'] as const,
 };
 
 // ---------- Queries ----------
@@ -1015,6 +1023,52 @@ export function useApplyReferral() {
     mutationFn: (input: ApplyReferralPayload) =>
       api<ReferralData>('/referrals/apply', { method: 'POST', body: input }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.referrals }),
+  });
+}
+
+// ---------- Vendor Discovery ----------
+
+/** Paginated vendor directory with search + category filter. */
+export function useVendors(q: string, category: string) {
+  return useInfiniteQuery({
+    queryKey: keys.vendors(q, category),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ page: String(pageParam), per_page: '20' });
+      if (q.trim()) params.set('q', q.trim());
+      if (category && category !== 'all') params.set('category', category);
+      return api<VendorsPageData>(`/vendors?${params.toString()}`);
+    },
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.pagination.page < last.pagination.last_page ? last.pagination.page + 1 : undefined,
+  });
+}
+
+export function useVendor(profileId: number) {
+  return useQuery({
+    queryKey: keys.vendor(profileId),
+    queryFn: () => api<VendorDetailData>(`/vendors/${profileId}`),
+    select: (d) => d.vendor,
+  });
+}
+
+export function useMyVendorProfile() {
+  return useQuery({
+    queryKey: keys.myVendorProfile,
+    queryFn: () => api<MyVendorProfileData>('/vendors/me'),
+  });
+}
+
+/** Create or update the user's own vendor profile ("Become a vendor"). */
+export function useUpsertVendorProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpsertVendorPayload) =>
+      api<MyVendorProfileData>('/vendors/me', { method: 'PUT', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.myVendorProfile });
+      void qc.invalidateQueries({ queryKey: ['vendors'] });
+    },
   });
 }
 

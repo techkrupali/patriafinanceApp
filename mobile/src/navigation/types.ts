@@ -51,6 +51,10 @@ export type RootStackParamList = {
   // ---- Savings goals ----
   Goals: undefined;
   CreateGoal: undefined;
+  // ---- Vendor discovery ----
+  VendorDirectory: undefined;
+  VendorProfile: { profileId: number };
+  BecomeVendor: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;

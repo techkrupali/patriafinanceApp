@@ -1145,3 +1145,60 @@ export interface SpendRequestPayload {
   description?: string;
   destination: TransferDestination;
 }
+
+// ============================================================================
+// Vendor Discovery (directory of vendor profiles; assignment stays in Projects)
+// ============================================================================
+
+export type VendorCategory =
+  | 'construction'
+  | 'events'
+  | 'catering'
+  | 'education'
+  | 'tech'
+  | 'logistics'
+  | 'fashion'
+  | 'health'
+  | 'other';
+
+export interface VendorListing {
+  /** VendorProfile id (route param for the detail screen). */
+  id: number;
+  user_id: number;
+  business_name: string;
+  category: VendorCategory | string;
+  bio: string | null;
+  location: string | null;
+  verified: boolean;
+  /** The vendor's personal name. */
+  name: string;
+  initials: string;
+  projects_completed: number;
+  member_since: string | null;
+}
+
+export interface VendorDetail extends VendorListing {
+  /** Contact identifiers — used to assign this vendor to a project. */
+  email: string;
+  phone: string | null;
+}
+
+export interface VendorsPageData {
+  vendors: VendorListing[];
+  pagination: Pagination;
+}
+
+export interface VendorDetailData {
+  vendor: VendorDetail;
+}
+
+export interface MyVendorProfileData {
+  profile: VendorListing | null;
+}
+
+export interface UpsertVendorPayload {
+  business_name: string;
+  category: VendorCategory | string;
+  bio?: string | null;
+  location?: string | null;
+}

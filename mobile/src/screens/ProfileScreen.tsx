@@ -256,6 +256,13 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           />
           <Divider />
           <Row
+            icon="storefront-outline"
+            title="Vendor directory"
+            subtitle="Find trusted vendors for your projects"
+            onPress={() => navigation.navigate('VendorDirectory')}
+          />
+          <Divider />
+          <Row
             icon="flag-outline"
             title="Savings goals"
             subtitle="Set targets & auto-save toward them"
