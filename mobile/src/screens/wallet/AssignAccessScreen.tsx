@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Switch, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -134,7 +135,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
       ) : error ? (
         <LoadError message={(error as Error).message} onRetry={refetch} />
       ) : (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -275,7 +276,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
               );
             })
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
     </Screen>
   );

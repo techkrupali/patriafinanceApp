@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
@@ -136,7 +137,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
       ) : q.error ? (
         <LoadError message={(q.error as Error).message} onRetry={q.refetch} />
       ) : (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -466,7 +467,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
               </Card>
             </>
           ) : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
     </Screen>
   );

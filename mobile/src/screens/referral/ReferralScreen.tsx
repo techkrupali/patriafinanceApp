@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Share, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { Screen } from '../../components/Screen';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
@@ -88,7 +89,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
       ) : q.error || !data ? (
         <LoadError message={(q.error as Error)?.message} onRetry={q.refetch} />
       ) : (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -246,7 +247,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
               </Text>
             </Card>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
     </Screen>
   );
