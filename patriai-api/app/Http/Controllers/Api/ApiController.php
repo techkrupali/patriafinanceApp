@@ -236,7 +236,7 @@ abstract class ApiController extends Controller
     }
 
     /** Effective view/fund/request/withdraw booleans for a member (see serializeMember). */
-    private function serializeMemberPermissions(WalletMember $member): array
+    protected function serializeMemberPermissions(WalletMember $member): array
     {
         $elevated = in_array($member->role, ['owner', 'co_owner'], true);
         $perms = $member->permissions ?? [];

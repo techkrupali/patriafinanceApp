@@ -1202,3 +1202,37 @@ export interface UpsertVendorPayload {
   bio?: string | null;
   location?: string | null;
 }
+
+// ============================================================================
+// Family member detail (Child Dashboard / Overview)
+// ============================================================================
+
+export interface FamilyMemberMembership {
+  wallet_id: number;
+  wallet_name: string;
+  wallet_type: string;
+  role: string;
+  can_approve: boolean;
+  permissions: MemberPermissions;
+  /** WalletMember row id (null when this person owns the wallet). */
+  member_row_id: number | null;
+}
+
+export interface FamilyMemberDetailData {
+  person: {
+    id: number;
+    name: string;
+    email: string;
+    avatar: string;
+    role: string;
+    member_since: string | null;
+  };
+  memberships: FamilyMemberMembership[];
+  /** Spend requests this person raised on wallets you manage. */
+  recent_requests: ApprovalRequest[];
+  stats: {
+    shared_wallets: number;
+    pending_requests: number;
+    approved_requests_30d: number;
+  };
+}

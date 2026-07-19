@@ -27,10 +27,10 @@ function StatTile({ value, label }: { value: number; label: string }) {
   );
 }
 
-function MemberRow({ member }: { member: FamilyMember }) {
+function MemberRow({ member, onPress }: { member: FamilyMember; onPress?: () => void }) {
   const approver = member.memberships.some((ms) => ms.can_approve);
   return (
-    <View className="flex-row items-center py-3">
+    <Pressable onPress={onPress} disabled={!onPress} className="flex-row items-center py-3 active:opacity-70">
       <LinearGradient
         colors={gradients.avatar}
         start={{ x: 0, y: 0 }}
@@ -70,7 +70,7 @@ function MemberRow({ member }: { member: FamilyMember }) {
           </View>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -178,7 +178,13 @@ export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
             <Card className="mt-3 py-1">
               {members.map((m, i) => (
                 <View key={m.id}>
-                  <MemberRow member={m} />
+                  <MemberRow
+                    member={m}
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('FamilyMember', { memberId: m.id });
+                    }}
+                  />
                   {i < members.length - 1 ? (
                     <View style={{ height: 1, backgroundColor: colors.border }} />
                   ) : null}

@@ -36,6 +36,7 @@ export type RootStackParamList = {
   AssignAccess: { walletId: number };
   // ---- Family Hub & Spousal Sync ----
   FamilyHub: undefined;
+  FamilyMember: { memberId: number };
   SpousalSync: undefined;
   // ---- Wallet governance (Audit / Lock / Automation) ----
   WalletAuditLog: { walletId: number };

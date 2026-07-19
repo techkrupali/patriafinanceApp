@@ -23,6 +23,7 @@ import type {
   AutomationsData,
   DisputeCreatedData,
   DisputesPageData,
+  FamilyMemberDetailData,
   PendingApprovalData,
   RaiseDisputePayload,
   MyVendorProfileData,
@@ -1023,6 +1024,15 @@ export function useApplyReferral() {
     mutationFn: (input: ApplyReferralPayload) =>
       api<ReferralData>('/referrals/apply', { method: 'POST', body: input }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.referrals }),
+  });
+}
+
+// ---------- Family member detail (Child Dashboard / Overview) ----------
+
+export function useFamilyMember(memberId: number) {
+  return useQuery({
+    queryKey: ['family', 'member', memberId] as const,
+    queryFn: () => api<FamilyMemberDetailData>(`/family/${memberId}`),
   });
 }
 

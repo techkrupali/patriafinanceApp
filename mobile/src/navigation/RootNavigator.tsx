@@ -37,6 +37,7 @@ import { AssignAccessScreen } from '../screens/wallet/AssignAccessScreen';
 import { WalletAuditLogScreen } from '../screens/wallet/WalletAuditLogScreen';
 import { WalletLockScreen } from '../screens/wallet/WalletLockScreen';
 import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
+import { FamilyMemberScreen } from '../screens/family/FamilyMemberScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
 import { AutomationsScreen } from '../screens/automation/AutomationsScreen';
 import { CreateAutomationScreen } from '../screens/automation/CreateAutomationScreen';
@@ -191,6 +192,7 @@ export function RootNavigator() {
       <RootStack.Screen name="WalletAuditLog" component={WalletAuditLogScreen} />
       <RootStack.Screen name="WalletLock" component={WalletLockScreen} />
       <RootStack.Screen name="FamilyHub" component={FamilyHubScreen} />
+      <RootStack.Screen name="FamilyMember" component={FamilyMemberScreen} />
       <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />
       <RootStack.Screen name="Automations" component={AutomationsScreen} />
       <RootStack.Screen name="CreateAutomation" component={CreateAutomationScreen} />

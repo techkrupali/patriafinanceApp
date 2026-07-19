@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
@@ -48,6 +48,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
   const update = useUpdateMember(walletId);
 
   const [edits, setEdits] = useState<Record<number, AccessToggles>>({});
+  const [limits, setLimits] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<Record<number, string | null>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
 
@@ -67,10 +68,35 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
       }
       return changed ? next : prev;
     });
+    setLimits((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const m of data) {
+        if (m.id === undefined || isFullAccess(m.role)) continue;
+        if (!(m.id in next)) {
+          next[m.id] = m.permissions?.request_limit ?? '';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [data]);
 
   const setPerm = (memberId: number, key: keyof AccessToggles, value: boolean) => {
     setEdits((prev) => ({ ...prev, [memberId]: { ...prev[memberId], [key]: value } }));
+  };
+
+  /** Naira number or null from a limit input string ('' = no cap). */
+  const limitNum = (s: string | undefined): number | null => {
+    const t = (s ?? '').trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const limitDirty = (m: WalletMember): boolean => {
+    if (m.id === undefined) return false;
+    return limitNum(limits[m.id]) !== limitNum(m.permissions?.request_limit ?? '');
   };
 
   const save = (m: WalletMember) => {
@@ -81,7 +107,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
     setErrors((e) => ({ ...e, [memberId]: null }));
     setSavingId(memberId);
     update.mutate(
-      { memberId, body: { permissions: perms } },
+      { memberId, body: { permissions: { ...perms, request_limit: limitNum(limits[memberId]) } } },
       {
         onSuccess: () => {
           notifySuccess();
@@ -131,7 +157,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
             manageable.map((m) => {
               const full = isFullAccess(m.role);
               const local = edits[m.id!] ?? baselinePerms(m);
-              const dirty = !full && !permsEqual(local, baselinePerms(m));
+              const dirty = !full && (!permsEqual(local, baselinePerms(m)) || limitDirty(m));
               const saving = savingId === m.id && update.isPending;
 
               return (
@@ -208,6 +234,30 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
                           );
                         })}
                       </View>
+
+                      {local.request ? (
+                        <View className="mt-1 rounded-2xl bg-lav-faint p-3">
+                          <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            Request limit (₦, optional)
+                          </Text>
+                          <TextInput
+                            value={limits[m.id!] ?? ''}
+                            onChangeText={(t) =>
+                              setLimits((prev) => ({ ...prev, [m.id!]: t.replace(/[^0-9.]/g, '') }))
+                            }
+                            placeholder="No cap"
+                            placeholderTextColor={colors.faded}
+                            keyboardType="decimal-pad"
+                            selectionColor={colors.brand}
+                            cursorColor={colors.brand}
+                            className="mt-1 text-[15px]"
+                            style={{ color: colors.ink, fontWeight: '600', minHeight: 40 }}
+                          />
+                          <Text className="mt-0.5 text-[11px] text-faded">
+                            The most this member can ask for in a single spend request.
+                          </Text>
+                        </View>
+                      ) : null}
 
                       <ErrorText message={errors[m.id!]} className="mt-3" />
 

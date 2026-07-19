@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\FamilyController;
+use App\Http\Controllers\Api\FamilyMemberController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
@@ -57,6 +58,8 @@ Route::prefix('v1')->group(function () {
 
         // Family Hub (aggregated people/invitations/stats across the user's wallets)
         Route::get('family', [FamilyController::class, 'index']);
+        // Family member detail ({member} implicitly binds App\Models\User by id)
+        Route::get('family/{member}', [FamilyMemberController::class, 'show']);
 
         // Spousal Sync (two-person financial-transparency link)
         Route::get('sync', [SpousalSyncController::class, 'show']);
