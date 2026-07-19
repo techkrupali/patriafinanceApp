@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\SpendRequestController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
+use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\WalletAuditLogController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WalletLockController;
@@ -141,6 +142,13 @@ Route::prefix('v1')->group(function () {
         Route::get('loans/{loan}', [LoanController::class, 'show']);
         Route::post('loans/{loan}/repay', [LoanController::class, 'repay'])->middleware('throttle:15,1');
         Route::post('loans/{loan}/cancel', [LoanController::class, 'cancel'])->middleware('throttle:30,1');
+
+        // Vendor Directory (browse/search vendors, then assign via projects/{project}/vendor).
+        // NOTE: vendors/me MUST come before vendors/{vendorProfile} (route-model-binding).
+        Route::get('vendors', [VendorController::class, 'index']);
+        Route::get('vendors/me', [VendorController::class, 'me']);
+        Route::put('vendors/me', [VendorController::class, 'upsert'])->middleware('throttle:20,1');
+        Route::get('vendors/{vendorProfile}', [VendorController::class, 'show']);
 
         // Vendor & Project System (escrow-backed milestones)
         Route::get('projects', [ProjectController::class, 'index']);
