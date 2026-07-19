@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WalletMemberController;
@@ -45,6 +47,18 @@ Route::prefix('v1')->group(function () {
         Route::get('devices', [ProfileController::class, 'devices']);
 
         Route::get('dashboard', [DashboardController::class, 'index']);
+
+        // Family Hub (aggregated people/invitations/stats across the user's wallets)
+        Route::get('family', [FamilyController::class, 'index']);
+
+        // Spousal Sync (two-person financial-transparency link)
+        Route::get('sync', [SpousalSyncController::class, 'show']);
+        Route::post('sync', [SpousalSyncController::class, 'store'])->middleware('throttle:20,1');
+        Route::post('sync/{spousalSync}/respond', [SpousalSyncController::class, 'respond'])->middleware('throttle:30,1');
+        Route::patch('sync/{spousalSync}', [SpousalSyncController::class, 'updateTransparency'])->middleware('throttle:30,1');
+        Route::post('sync/{spousalSync}/pause', [SpousalSyncController::class, 'pause'])->middleware('throttle:30,1');
+        Route::post('sync/{spousalSync}/resume', [SpousalSyncController::class, 'resume'])->middleware('throttle:30,1');
+        Route::post('sync/{spousalSync}/end', [SpousalSyncController::class, 'end'])->middleware('throttle:30,1');
 
         Route::get('wallets', [WalletController::class, 'index']);
         Route::post('wallets', [WalletController::class, 'store']);

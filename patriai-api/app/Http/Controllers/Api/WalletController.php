@@ -150,6 +150,12 @@ class WalletController extends ApiController
         if (!$wallet->canSpend($request->user())) {
             return $this->fail('You do not have permission to move money out of this wallet', 403);
         }
+        // Additive granular gate: an explicit permissions[withdraw]=false blocks a
+        // member who otherwise holds a spend grant. Never loosens canSpend, so
+        // owner/co_owner behaviour is unchanged.
+        if (!$wallet->canWithdraw($request->user())) {
+            return $this->fail('You do not have permission to withdraw from this wallet', 403);
+        }
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],

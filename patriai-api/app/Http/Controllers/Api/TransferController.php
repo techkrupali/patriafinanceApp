@@ -203,6 +203,12 @@ class TransferController extends ApiController
                 break;
 
             default: // bank
+                // Additive granular gate on external payouts: an explicit
+                // permissions[withdraw]=false blocks a member who otherwise holds a
+                // spend grant. Never loosens canSpend (owner/co_owner unchanged).
+                if (!$from->canWithdraw($user)) {
+                    return $this->fail('You do not have permission to withdraw from this wallet', 403);
+                }
                 if ($needsApproval) {
                     $req = ApprovalService::make()->create($from, $user, 'transfer_bank', $amountKobo, $feeKobo, $data['description'] ?? null, [
                         'bank_code' => $dest['bank_code'],

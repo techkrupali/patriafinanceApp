@@ -46,6 +46,13 @@ class WalletMemberController extends ApiController
             'role' => ['sometimes', 'in:co_owner,admin,contributor,viewer'],
             'can_approve' => ['sometimes', 'boolean'],
             'can_spend' => ['sometimes', 'boolean'],
+            // Granular access matrix ("Assign Wallet Access & Roles"): per-member
+            // toggles merged into the member's permissions JSON (all optional).
+            'permissions' => ['sometimes', 'array'],
+            'permissions.view' => ['sometimes', 'boolean'],
+            'permissions.fund' => ['sometimes', 'boolean'],
+            'permissions.request' => ['sometimes', 'boolean'],
+            'permissions.withdraw' => ['sometimes', 'boolean'],
         ]);
 
         $update = [];
@@ -57,8 +64,9 @@ class WalletMemberController extends ApiController
         }
 
         $changingSpend = $request->exists('can_spend');
+        $changingPermissions = $request->exists('permissions');
 
-        if (!$update && !$changingSpend) {
+        if (!$update && !$changingSpend && !$changingPermissions) {
             return $this->fail('Nothing to update', 422);
         }
 
@@ -90,20 +98,40 @@ class WalletMemberController extends ApiController
             $update['can_approve'] = false;
         }
 
-        // Owners may grant explicit spend rights to a contributor/admin by
-        // writing can_spend into the member's permissions JSON (CONTRACT A).
-        if ($changingSpend) {
+        // Merge the explicit spend grant and the granular access matrix
+        // (view/fund/request/withdraw) into the member's permissions JSON,
+        // preserving every existing key (incl. can_spend). withdraw is the same
+        // gate as spending, so it is mirrored onto can_spend to keep canSpend()
+        // and canWithdraw() in agreement — both keys are stored (CONTRACT A).
+        if ($changingSpend || $changingPermissions) {
             $permissions = $member->permissions ?? [];
-            $permissions['can_spend'] = $request->boolean('can_spend');
+
+            if ($changingSpend) {
+                $permissions['can_spend'] = $request->boolean('can_spend');
+            }
+
+            if ($changingPermissions) {
+                foreach (['view', 'fund', 'request', 'withdraw'] as $key) {
+                    if (array_key_exists($key, $data['permissions'])) {
+                        $permissions[$key] = (bool) $data['permissions'][$key];
+                    }
+                }
+                if (array_key_exists('withdraw', $data['permissions'])) {
+                    $permissions['can_spend'] = (bool) $data['permissions']['withdraw'];
+                }
+            }
+
             $update['permissions'] = $permissions;
         }
 
         // A role that can never hold a spend grant must not keep a stale can_spend
-        // (else demote-then-repromote would silently reactivate spending).
+        // (else demote-then-repromote would silently reactivate spending). Clear the
+        // mirrored withdraw switch alongside it so the two never drift.
         if (!in_array($resultingRole, ['admin', 'contributor'], true)) {
             $permissions = $update['permissions'] ?? $member->permissions ?? [];
-            if (($permissions['can_spend'] ?? false) !== false) {
+            if (($permissions['can_spend'] ?? false) !== false || ($permissions['withdraw'] ?? false) !== false) {
                 $permissions['can_spend'] = false;
+                $permissions['withdraw'] = false;
                 $update['permissions'] = $permissions;
             }
         }

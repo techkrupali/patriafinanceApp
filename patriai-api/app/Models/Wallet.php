@@ -110,6 +110,106 @@ class Wallet extends Model
         return false;
     }
 
+    /** The active membership row for a user, or null (never matches the owner). */
+    private function activeMemberFor(User $user): ?WalletMember
+    {
+        return $this->members()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+    }
+
+    /**
+     * Can the given user VIEW this wallet? Owner/co_owner always; every other
+     * active member by default (viewers exist to view), unless their permissions
+     * matrix explicitly turns 'view' off. Non-members: false.
+     */
+    public function canView(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        $member = $this->activeMemberFor($user);
+        if (!$member) {
+            return false;
+        }
+        if (in_array($member->role, self::SPENDING_ROLES, true)) {
+            return true;
+        }
+
+        return ($member->permissions['view'] ?? true) !== false;
+    }
+
+    /**
+     * Can the given user FUND (pay money INTO) this wallet? Owner/co_owner always;
+     * every other active member by default (anyone in the wallet can fund), unless
+     * their permissions matrix explicitly turns 'fund' off. Non-members: false.
+     */
+    public function canFund(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        $member = $this->activeMemberFor($user);
+        if (!$member) {
+            return false;
+        }
+        if (in_array($member->role, self::SPENDING_ROLES, true)) {
+            return true;
+        }
+
+        return ($member->permissions['fund'] ?? true) !== false;
+    }
+
+    /**
+     * Can the given user REQUEST money / raise a spend request on this wallet?
+     * Owner/co_owner always; every other active member by default, unless their
+     * permissions matrix explicitly turns 'request' off. Non-members: false.
+     */
+    public function canRequest(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        $member = $this->activeMemberFor($user);
+        if (!$member) {
+            return false;
+        }
+        if (in_array($member->role, self::SPENDING_ROLES, true)) {
+            return true;
+        }
+
+        return ($member->permissions['request'] ?? true) !== false;
+    }
+
+    /**
+     * Can the given user WITHDRAW / move money OUT of this wallet? This is the
+     * spend gate (canSpend) with an ADDITIONAL, opt-in withdraw switch: owner/
+     * co_owner keep their unconditional spend, admin/contributor still need the
+     * can_spend grant, and either may be further blocked by an explicit
+     * permissions['withdraw'] === false. Never loosens canSpend.
+     */
+    public function canWithdraw(User $user): bool
+    {
+        if (!$this->canSpend($user)) {
+            return false;
+        }
+
+        // Owner/co_owner spend unconditionally — never gated by the matrix.
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+        $member = $this->activeMemberFor($user);
+        if ($member && in_array($member->role, self::SPENDING_ROLES, true)) {
+            return true;
+        }
+
+        return ($member?->permissions['withdraw'] ?? true) !== false;
+    }
+
     /** 'owner' if the wallet owner, else the active member role, else null. */
     public function roleOf(User $user): ?string
     {
