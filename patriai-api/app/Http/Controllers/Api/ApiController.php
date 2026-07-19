@@ -177,6 +177,8 @@ abstract class ApiController extends Controller
             'virtual_account' => $wallet->virtual_account,
             'virtual_account_bank' => $wallet->virtual_account_bank,
             'status' => $wallet->status,
+            // Scheduled-access window (Wallet Lock feature); null when unrestricted.
+            'access_schedule' => $wallet->access_schedule,
             'created_at' => $wallet->created_at?->toIso8601String(),
         ];
 
