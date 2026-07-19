@@ -224,7 +224,28 @@ abstract class ApiController extends Controller
             'can_spend' => in_array($member->role, ['owner', 'co_owner'], true)
                 || (in_array($member->role, ['admin', 'contributor'], true)
                     && ($member->permissions['can_spend'] ?? false) === true),
+            // Effective granular access matrix ("Assign Wallet Access & Roles"),
+            // mirroring Wallet::canView/canFund/canRequest/canWithdraw so the app can
+            // render each toggle's true state. Owner/co_owner => all on; view/fund/
+            // request default on unless explicitly disabled; withdraw follows can_spend.
+            'permissions' => $this->serializeMemberPermissions($member),
             'status' => $member->status,
+        ];
+    }
+
+    /** Effective view/fund/request/withdraw booleans for a member (see serializeMember). */
+    private function serializeMemberPermissions(WalletMember $member): array
+    {
+        $elevated = in_array($member->role, ['owner', 'co_owner'], true);
+        $perms = $member->permissions ?? [];
+        $canSpend = $elevated
+            || (in_array($member->role, ['admin', 'contributor'], true) && ($perms['can_spend'] ?? false) === true);
+
+        return [
+            'view' => $elevated ? true : (($perms['view'] ?? true) !== false),
+            'fund' => $elevated ? true : (($perms['fund'] ?? true) !== false),
+            'request' => $elevated ? true : (($perms['request'] ?? true) !== false),
+            'withdraw' => $elevated ? true : ($canSpend && (($perms['withdraw'] ?? true) !== false)),
         ];
     }
 
