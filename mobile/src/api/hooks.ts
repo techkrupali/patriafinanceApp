@@ -16,6 +16,7 @@ import type {
   AuthSessionData,
   BanksData,
   CreateInvitationPayload,
+  ApplyReferralPayload,
   AuditLogPageData,
   AutomationMutatedData,
   AutomationRunData,
@@ -23,6 +24,7 @@ import type {
   DisputeCreatedData,
   DisputesPageData,
   RaiseDisputePayload,
+  ReferralData,
   CreateAutomationPayload,
   CreateProjectPayload,
   CreateSyncPayload,
@@ -119,6 +121,8 @@ export const keys = {
   walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
   // ---- Disputes ----
   disputes: ['disputes'] as const,
+  // ---- Referrals ----
+  referrals: ['referrals'] as const,
 };
 
 // ---------- Queries ----------
@@ -990,5 +994,24 @@ export function useRaiseDispute() {
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
     },
+  });
+}
+
+// ---------- Referral & Rewards ----------
+
+export function useReferrals() {
+  return useQuery({
+    queryKey: keys.referrals,
+    queryFn: () => api<ReferralData>('/referrals'),
+  });
+}
+
+/** Apply someone else's referral code post-signup. */
+export function useApplyReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ApplyReferralPayload) =>
+      api<ReferralData>('/referrals/apply', { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.referrals }),
   });
 }

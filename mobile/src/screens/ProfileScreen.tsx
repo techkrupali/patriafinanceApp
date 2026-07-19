@@ -263,6 +263,15 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
             subtitle="Smart rules & scheduled auto-transfers"
             onPress={() => navigation.navigate('Automations')}
           />
+          <Divider />
+          <Row
+            icon="gift-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Refer & earn"
+            subtitle="Invite friends, earn rewards"
+            onPress={() => navigation.navigate('Referral')}
+          />
         </Card>
 
         {/* Family */}

@@ -45,6 +45,8 @@ export type RootStackParamList = {
   RaiseDispute: { reference?: string; category?: string } | undefined;
   HelpFaq: undefined;
   SecurityCenter: undefined;
+  // ---- Referral & rewards ----
+  Referral: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;

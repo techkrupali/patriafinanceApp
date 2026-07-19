@@ -1089,3 +1089,33 @@ export interface RaiseDisputePayload {
   reference?: string | null;
   description: string;
 }
+
+// ============================================================================
+// Referral & Rewards (Affiliate & Referral Center) — tracking only
+// ============================================================================
+
+export interface ReferralStats {
+  total_referred: number;
+  verified_referred: number;
+  /** Naira decimal string (display-only, tracked). */
+  rewards_earned: string;
+  /** Naira decimal string. */
+  reward_per_referral: string;
+}
+
+export interface ReferredPerson {
+  name: string;
+  joined_at: string | null;
+  verified: boolean;
+}
+
+export interface ReferralData {
+  code: string;
+  share_url: string;
+  stats: ReferralStats;
+  referred: ReferredPerson[];
+}
+
+export interface ApplyReferralPayload {
+  code: string;
+}
