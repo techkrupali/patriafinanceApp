@@ -298,19 +298,34 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 <Text className="text-lg font-bold text-ink">
                   Members{members.length > 0 ? ` · ${members.length}` : ''}
                 </Text>
-                {canInvite ? (
-                  <Pressable
-                    onPress={() => {
-                      selection();
-                      navigation.navigate('InviteMember', { walletId });
-                    }}
-                    hitSlop={6}
-                    className="flex-row items-center rounded-full bg-lav px-3.5 py-1.5 active:opacity-80"
-                  >
-                    <Ionicons name="person-add-outline" size={14} color={colors.navy} style={{ marginRight: 5 }} />
-                    <Text className="text-[12px] font-bold text-navy">Invite</Text>
-                  </Pressable>
-                ) : null}
+                <View className="flex-row items-center" style={{ gap: 8 }}>
+                  {canManage && members.length > 1 ? (
+                    <Pressable
+                      onPress={() => {
+                        selection();
+                        navigation.navigate('AssignAccess', { walletId });
+                      }}
+                      hitSlop={6}
+                      className="flex-row items-center rounded-full bg-lav px-3.5 py-1.5 active:opacity-80"
+                    >
+                      <Ionicons name="options-outline" size={14} color={colors.navy} style={{ marginRight: 5 }} />
+                      <Text className="text-[12px] font-bold text-navy">Access</Text>
+                    </Pressable>
+                  ) : null}
+                  {canInvite ? (
+                    <Pressable
+                      onPress={() => {
+                        selection();
+                        navigation.navigate('InviteMember', { walletId });
+                      }}
+                      hitSlop={6}
+                      className="flex-row items-center rounded-full bg-lav px-3.5 py-1.5 active:opacity-80"
+                    >
+                      <Ionicons name="person-add-outline" size={14} color={colors.navy} style={{ marginRight: 5 }} />
+                      <Text className="text-[12px] font-bold text-navy">Invite</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
 
               {members.length > 0 ? (

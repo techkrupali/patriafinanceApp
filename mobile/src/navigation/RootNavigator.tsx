@@ -31,6 +31,9 @@ import { TransferScreen } from '../screens/wallet/TransferScreen';
 import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
 import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
+import { AssignAccessScreen } from '../screens/wallet/AssignAccessScreen';
+import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
+import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
 import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
@@ -166,6 +169,9 @@ export function RootNavigator() {
       <RootStack.Screen name="CreateWallet" component={CreateWalletScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
       <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />
+      <RootStack.Screen name="AssignAccess" component={AssignAccessScreen} />
+      <RootStack.Screen name="FamilyHub" component={FamilyHubScreen} />
+      <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />
       <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />

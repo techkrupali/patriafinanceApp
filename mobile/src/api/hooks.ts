@@ -17,9 +17,11 @@ import type {
   BanksData,
   CreateInvitationPayload,
   CreateProjectPayload,
+  CreateSyncPayload,
   CreateWalletPayload,
   DashboardData,
   DevicesData,
+  FamilyData,
   FundingDetailsData,
   InvitationAcceptData,
   InvitationCreatedData,
@@ -49,6 +51,8 @@ import type {
   RepayLoanPayload,
   RespondApprovalPayload,
   SubmitKycPayload,
+  SyncData,
+  SyncMutatedData,
   Transaction,
   TransactionsPageData,
   TransferData,
@@ -96,6 +100,9 @@ export const keys = {
   project: (id: number) => ['projects', id] as const,
   // ---- KYC (Milestone 6) ----
   kyc: ['kyc'] as const,
+  // ---- Family Hub & Spousal Sync ----
+  family: ['family'] as const,
+  sync: ['sync'] as const,
 };
 
 // ---------- Queries ----------
@@ -777,4 +784,77 @@ export function useSubmitKyc() {
       void qc.invalidateQueries({ queryKey: keys.dashboard });
     },
   });
+}
+
+// ---------- Family Hub ----------
+
+/** Aggregated people, pending invitations and stats across the user's wallets. */
+export function useFamily() {
+  return useQuery({
+    queryKey: keys.family,
+    queryFn: () => api<FamilyData>('/family'),
+  });
+}
+
+// ---------- Spousal Sync (two-person financial-transparency link) ----------
+
+export function useSync() {
+  return useQuery({
+    queryKey: keys.sync,
+    queryFn: () => api<SyncData>('/sync'),
+  });
+}
+
+export function useCreateSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSyncPayload) =>
+      api<SyncMutatedData>('/sync', { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.sync }),
+  });
+}
+
+/** Accept or decline a pending sync request addressed to the current user. */
+export function useRespondSync(syncId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (accept: boolean) =>
+      api<SyncMutatedData>(`/sync/${syncId}/respond`, { method: 'POST', body: { accept } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.sync });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
+  });
+}
+
+export function useUpdateSyncTransparency(syncId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { transparency: string; wallet_ids?: number[] }) =>
+      api<SyncMutatedData>(`/sync/${syncId}`, { method: 'PATCH', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.sync }),
+  });
+}
+
+/** Pause / resume / end a sync — each hits its own endpoint but invalidates the same query. */
+export function useSyncLifecycle(syncId: number) {
+  const qc = useQueryClient();
+  const done = () => {
+    void qc.invalidateQueries({ queryKey: keys.sync });
+    void qc.invalidateQueries({ queryKey: keys.notifications });
+  };
+  const pause = useMutation({
+    mutationFn: () => api<SyncMutatedData>(`/sync/${syncId}/pause`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const resume = useMutation({
+    mutationFn: () => api<SyncMutatedData>(`/sync/${syncId}/resume`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const end = useMutation({
+    mutationFn: () => api<SyncMutatedData>(`/sync/${syncId}/end`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  return { pause, resume, end };
 }

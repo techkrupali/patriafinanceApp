@@ -256,6 +256,28 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           />
         </Card>
 
+        {/* Family */}
+        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Family</Text>
+        <Card className="mt-2 py-1">
+          <Row
+            icon="people-outline"
+            tint="bg-lav-soft"
+            iconColor={colors.navy}
+            title="Family Hub"
+            subtitle="Everyone across your shared wallets"
+            onPress={() => navigation.navigate('FamilyHub')}
+          />
+          <Divider />
+          <Row
+            icon="heart-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Spousal Sync"
+            subtitle="Share your finances with a partner"
+            onPress={() => navigation.navigate('SpousalSync')}
+          />
+        </Card>
+
         {/* Collaboration */}
         <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Collaboration</Text>
         <Card className="mt-2 py-1">

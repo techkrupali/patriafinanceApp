@@ -31,6 +31,10 @@ export type RootStackParamList = {
   // ---- Collaboration & governance (Milestone 3) ----
   InviteMember: { walletId: number };
   WalletSettings: { walletId: number };
+  AssignAccess: { walletId: number };
+  // ---- Family Hub & Spousal Sync ----
+  FamilyHub: undefined;
+  SpousalSync: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;

@@ -80,6 +80,14 @@ export interface Transaction {
   created_at: string | null;
 }
 
+/** Per-member granular access matrix ("Assign Wallet Access & Roles"). */
+export interface MemberPermissions {
+  view: boolean;
+  fund: boolean;
+  request: boolean;
+  withdraw: boolean;
+}
+
 export interface WalletMember {
   /** Present on the members endpoint; absent on the wallet-detail embed. */
   id?: number;
@@ -88,6 +96,10 @@ export interface WalletMember {
   email: string;
   role: string;
   can_approve: boolean;
+  /** Present on the members endpoint. */
+  can_spend?: boolean;
+  /** Effective granular access matrix; present on the members endpoint. */
+  permissions?: MemberPermissions;
   /** Present on the members endpoint. */
   status?: string;
 }
@@ -445,6 +457,9 @@ export interface UpdateWalletPayload {
 export interface UpdateMemberPayload {
   role?: string;
   can_approve?: boolean;
+  can_spend?: boolean;
+  /** Granular access matrix toggles (all optional, merged server-side). */
+  permissions?: Partial<MemberPermissions>;
 }
 
 export interface CreateInvitationPayload {
@@ -821,4 +836,105 @@ export interface SubmitKycPayload {
   business_name?: string;
   /** Naira decimal string (optional). */
   monthly_income?: string;
+}
+
+// ============================================================================
+// Family Hub — aggregated people & invitations across the user's wallets
+// ============================================================================
+
+export interface FamilyMembership {
+  wallet_id: number;
+  wallet_name: string;
+  role: string;
+  can_approve: boolean;
+}
+
+export interface FamilyMember {
+  id: number;
+  name: string;
+  email: string;
+  /** Uppercase initials. */
+  avatar: string;
+  /** Highest role held across shared wallets. */
+  role: string;
+  status: string;
+  memberships: FamilyMembership[];
+}
+
+export interface FamilyInvitation {
+  id: number;
+  direction: 'sent' | 'received';
+  wallet_id: number;
+  wallet_name: string | null;
+  invited_identifier: string;
+  role: string;
+  status: string;
+  inviter: { id: number; name: string } | null;
+  expires_at: string | null;
+  created_at: string | null;
+}
+
+export interface FamilyStats {
+  total_members: number;
+  shared_wallets: number;
+  pending_invites: number;
+  child_wallets: number;
+  vendor_members: number;
+}
+
+export interface FamilyData {
+  members: FamilyMember[];
+  pending_invitations: {
+    sent: FamilyInvitation[];
+    received: FamilyInvitation[];
+  };
+  stats: FamilyStats;
+}
+
+// ============================================================================
+// Spousal Sync — two-person financial-transparency link
+// ============================================================================
+
+export type SyncTransparency = 'minimal' | 'selective' | 'full';
+export type SyncStatus = 'pending' | 'active' | 'paused' | 'ended';
+
+export interface SyncWalletSummary {
+  id: number;
+  name: string;
+  type: string;
+  /** Naira decimal string. */
+  balance: string;
+}
+
+export interface SpousalSync {
+  id: number;
+  /** True when the current user initiated the sync. */
+  is_initiator: boolean;
+  /** The other party — a resolved user, or just the raw invited identifier. */
+  partner: { name: string; email: string } | { identifier: string };
+  transparency: SyncTransparency;
+  status: SyncStatus;
+  shared_wallet_ids: number[];
+  /** Shared wallet summaries (selective transparency only). */
+  wallets: SyncWalletSummary[];
+  responded_at: string | null;
+  created_at: string | null;
+}
+
+export interface SyncData {
+  sync: SpousalSync | null;
+  history: SpousalSync[];
+}
+
+export interface SyncMutatedData {
+  sync: SpousalSync;
+}
+
+export interface CreateSyncPayload {
+  identifier: string;
+}
+
+export interface UpdateSyncTransparencyPayload {
+  transparency: SyncTransparency;
+  wallet_ids?: number[];
 }
