@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
 use App\Http\Controllers\Api\WalletAuditLogController;
@@ -119,6 +120,10 @@ Route::prefix('v1')->group(function () {
 
         Route::get('banks', [BankController::class, 'index']);
         Route::post('banks/verify-account', [BankController::class, 'verifyAccount'])->middleware('throttle:20,1');
+
+        // Referral & Rewards (Affiliate & Referral Center — tracking only, no money)
+        Route::get('referrals', [ReferralController::class, 'index']);
+        Route::post('referrals/apply', [ReferralController::class, 'apply'])->middleware('throttle:10,1');
 
         // Dispute Center (report a problem with a payment/project)
         Route::get('disputes', [DisputeController::class, 'index']);

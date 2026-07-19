@@ -30,6 +30,7 @@ class AuthController extends ApiController
             'device_id' => ['nullable', 'string', 'max:120'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'in:android,ios,web'],
+            'referral_code' => ['nullable', 'string', 'max:64'],
         ]);
 
         $user = DB::transaction(function () use ($data) {
@@ -45,6 +46,28 @@ class AuthController extends ApiController
 
             return $user;
         });
+
+        // Referral: link the new account to the owner of a valid code, if supplied.
+        // Tracking only — no money is credited here.
+        if (!empty($data['referral_code'])) {
+            $referrer = User::whereRaw('lower(referral_code) = ?', [strtolower(trim($data['referral_code']))])
+                ->where('id', '!=', $user->id)
+                ->first();
+            if ($referrer) {
+                $user->referred_by = $referrer->id;
+                $user->save();
+                NotificationService::make()->push(
+                    $referrer,
+                    'referral_joined',
+                    'New referral',
+                    "{$user->fullName()} joined with your code.",
+                    ['user_id' => $user->id],
+                );
+            }
+        }
+
+        // Give the new account its own shareable referral code.
+        $user->ensureReferralCode();
 
         // Main wallet + funding virtual account on the banking rails.
         WalletService::make()->createWallet($user, 'main', 'Main Wallet');
