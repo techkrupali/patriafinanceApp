@@ -29,6 +29,7 @@ class Wallet extends Model
         'virtual_account_bank',
         'status',
         'meta',
+        'access_schedule',
     ];
 
     protected function casts(): array
@@ -40,6 +41,7 @@ class Wallet extends Model
             'approval_threshold' => 'integer',
             'required_approvals' => 'integer',
             'meta' => 'array',
+            'access_schedule' => 'array',
         ];
     }
 
@@ -81,9 +83,70 @@ class Wallet extends Model
             ->exists();
     }
 
+    /** Is this wallet frozen (spending blocked for everyone)? */
+    public function isFrozen(): bool
+    {
+        return $this->status === 'frozen';
+    }
+
+    /** Does this wallet have a weekly scheduled-access window configured? */
+    public function hasAccessSchedule(): bool
+    {
+        $schedule = $this->access_schedule;
+
+        return is_array($schedule)
+            && !empty($schedule['days'])
+            && !empty($schedule['start'])
+            && !empty($schedule['end']);
+    }
+
+    /**
+     * Is "now" inside this wallet's weekly spend-allowed window? True when there is
+     * no schedule (always spendable). Otherwise the current weekday (ISO 1=Mon..7=Sun,
+     * in the schedule tz) must be in `days` AND the current time must fall within
+     * [start, end] in that same tz. An overnight window (end <= start) wraps midnight.
+     */
+    public function withinAccessWindow(?\Carbon\Carbon $now = null): bool
+    {
+        if (!$this->hasAccessSchedule()) {
+            return true;
+        }
+
+        $schedule = $this->access_schedule;
+        $tz = $schedule['tz'] ?? config('app.timezone', 'UTC');
+
+        $now = $now ? $now->copy() : \Illuminate\Support\Carbon::now();
+        $now = $now->setTimezone($tz);
+
+        $days = array_map('intval', (array) $schedule['days']);
+        if (!in_array($now->isoWeekday(), $days, true)) {
+            return false;
+        }
+
+        $current = $now->format('H:i');
+        $start = (string) $schedule['start'];
+        $end = (string) $schedule['end'];
+
+        // Overnight window (e.g. 20:00 -> 06:00) wraps past midnight.
+        if ($end <= $start) {
+            return $current >= $start || $current <= $end;
+        }
+
+        return $current >= $start && $current <= $end;
+    }
+
     /** Can the given user MOVE MONEY out (withdraw/transfer)? Excludes viewers. */
     public function canSpend(User $user): bool
     {
+        // Money can never leave a frozen wallet or one that is currently outside its
+        // scheduled-access window — this blocks EVERYONE, including the owner/co_owner.
+        if ($this->isFrozen()) {
+            return false;
+        }
+        if (!$this->withinAccessWindow()) {
+            return false;
+        }
+
         if ($this->user_id === $user->id) {
             return true;
         }

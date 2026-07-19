@@ -33,4 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Reconcile wallet balances against the banking ledger every half hour.
         $schedule->command('banking:reconcile')->everyThirtyMinutes();
+
+        // Run due automation rules (scheduled auto-transfers). Idempotent per period,
+        // so an hourly cadence safely fires daily/weekly/monthly rules.
+        $schedule->command('automations:run')->hourly();
     })->create();

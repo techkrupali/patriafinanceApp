@@ -138,6 +138,13 @@ class WalletMemberController extends ApiController
 
         $member->update($update);
 
+        if (array_key_exists('role', $update)) {
+            \App\Services\AuditService::make()->log($wallet, $request->user(), 'member_role_changed', ($member->user?->fullName() ?? 'Member') . " role changed to {$member->role}", ['member_id' => $member->id, 'user_id' => $member->user_id, 'role' => $member->role]);
+        }
+        if ($changingSpend || $changingPermissions) {
+            \App\Services\AuditService::make()->log($wallet, $request->user(), 'permissions_changed', 'Permissions updated for ' . ($member->user?->fullName() ?? 'member'), ['member_id' => $member->id, 'user_id' => $member->user_id, 'permissions' => $member->permissions]);
+        }
+
         return $this->ok('Member updated', ['member' => $this->serializeMember($member->fresh('user'))]);
     }
 
@@ -179,6 +186,8 @@ class WalletMemberController extends ApiController
 
         $removedUser = $member->user;
         $member->delete();
+
+        \App\Services\AuditService::make()->log($wallet, $request->user(), 'member_removed', ($removedUser ? $removedUser->fullName() : 'A member') . ' was removed from the wallet', ['user_id' => $member->user_id, 'role' => $member->role]);
 
         if ($removedUser) {
             NotificationService::make()->push(

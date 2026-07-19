@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FamilyController;
@@ -15,7 +16,9 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
+use App\Http\Controllers\Api\WalletAuditLogController;
 use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\WalletLockController;
 use App\Http\Controllers\Api\WalletMemberController;
 use App\Http\Controllers\Api\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +63,14 @@ Route::prefix('v1')->group(function () {
         Route::post('sync/{spousalSync}/resume', [SpousalSyncController::class, 'resume'])->middleware('throttle:30,1');
         Route::post('sync/{spousalSync}/end', [SpousalSyncController::class, 'end'])->middleware('throttle:30,1');
 
+        // Automation / Smart Rules (V1: scheduled auto-transfer between own wallets)
+        Route::get('automations', [AutomationController::class, 'index']);
+        Route::post('automations', [AutomationController::class, 'store'])->middleware('throttle:20,1');
+        Route::get('automations/{automationRule}', [AutomationController::class, 'show']);
+        Route::patch('automations/{automationRule}', [AutomationController::class, 'update'])->middleware('throttle:30,1');
+        Route::delete('automations/{automationRule}', [AutomationController::class, 'destroy'])->middleware('throttle:30,1');
+        Route::post('automations/{automationRule}/run', [AutomationController::class, 'run'])->middleware('throttle:10,1');
+
         Route::get('wallets', [WalletController::class, 'index']);
         Route::post('wallets', [WalletController::class, 'store']);
         Route::get('wallets/{wallet}', [WalletController::class, 'show']);
@@ -67,6 +78,12 @@ Route::prefix('v1')->group(function () {
         Route::get('wallets/{wallet}/transactions', [WalletController::class, 'transactions']);
         Route::get('wallets/{wallet}/funding-details', [WalletController::class, 'fundingDetails']);
         Route::post('wallets/{wallet}/withdraw', [WalletController::class, 'withdraw'])->middleware('throttle:10,1');
+
+        // Wallet audit log + lock / scheduled access
+        Route::get('wallets/{wallet}/audit-log', [WalletAuditLogController::class, 'index']);
+        Route::post('wallets/{wallet}/freeze', [WalletLockController::class, 'freeze'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/unfreeze', [WalletLockController::class, 'unfreeze'])->middleware('throttle:30,1');
+        Route::patch('wallets/{wallet}/access-schedule', [WalletLockController::class, 'setSchedule'])->middleware('throttle:30,1');
 
         // Wallet members
         Route::get('wallets/{wallet}/members', [WalletMemberController::class, 'index']);

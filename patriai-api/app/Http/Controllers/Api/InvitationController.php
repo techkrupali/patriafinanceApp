@@ -180,6 +180,8 @@ class InvitationController extends ApiController
 
         $invitation->update(['status' => 'accepted', 'responded_at' => now()]);
 
+        \App\Services\AuditService::make()->log($invitation->wallet, $request->user(), 'member_added', $request->user()->fullName() . " joined as {$member->role}", ['member_id' => $member->id, 'user_id' => $member->user_id, 'role' => $member->role, 'invited_by' => $invitation->inviter_id]);
+
         if ($invitation->inviter) {
             NotificationService::make()->push(
                 $invitation->inviter,
