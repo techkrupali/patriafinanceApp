@@ -88,6 +88,8 @@ export interface MemberPermissions {
   fund: boolean;
   request: boolean;
   withdraw: boolean;
+  /** Max amount this member may request in one spend request (naira string), or null = no cap. */
+  request_limit?: string | null;
 }
 
 export interface WalletMember {
@@ -276,6 +278,8 @@ export interface WalletDetailData {
   my_role: string;
   /** Whether the current user may move money out of this wallet (server-derived). */
   my_can_spend?: boolean;
+  /** Whether the current user may request a spend (routed to owner approval). */
+  my_can_request?: boolean;
   approval: WalletApprovalConfig;
   /** Naira decimal string held against pending approvals. */
   held_amount: string;
@@ -460,8 +464,18 @@ export interface UpdateMemberPayload {
   role?: string;
   can_approve?: boolean;
   can_spend?: boolean;
-  /** Granular access matrix toggles (all optional, merged server-side). */
-  permissions?: Partial<MemberPermissions>;
+  /**
+   * Granular access matrix toggles (all optional, merged server-side).
+   * `request_limit` is sent as a naira NUMBER (or null to clear), unlike the
+   * read model which serializes it as a naira string.
+   */
+  permissions?: {
+    view?: boolean;
+    fund?: boolean;
+    request?: boolean;
+    withdraw?: boolean;
+    request_limit?: number | null;
+  };
 }
 
 export interface CreateInvitationPayload {
@@ -1118,4 +1132,16 @@ export interface ReferralData {
 
 export interface ApplyReferralPayload {
   code: string;
+}
+
+// ============================================================================
+// Spend Requests (member requests a spend → owner approves → executes)
+// ============================================================================
+
+export interface SpendRequestPayload {
+  /** Naira decimal string. */
+  amount: string;
+  pin: string;
+  description?: string;
+  destination: TransferDestination;
 }

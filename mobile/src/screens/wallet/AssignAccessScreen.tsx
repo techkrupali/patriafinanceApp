@@ -14,12 +14,15 @@ import { useWalletMembers, useUpdateMember } from '../../api/hooks';
 import { initials } from '../../lib/format';
 import { roleLabel } from '../../lib/governance';
 import { notifySuccess } from '../../lib/haptics';
-import type { MemberPermissions, WalletMember } from '../../api/types';
+import type { WalletMember } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const MATRIX: { key: keyof MemberPermissions; label: string; hint: string; icon: IconName }[] = [
+/** The four boolean access toggles this screen edits (the read model's request_limit is not toggled here). */
+type AccessToggles = { view: boolean; fund: boolean; request: boolean; withdraw: boolean };
+
+const MATRIX: { key: keyof AccessToggles; label: string; hint: string; icon: IconName }[] = [
   { key: 'view', label: 'View', hint: 'See balance & activity', icon: 'eye-outline' },
   { key: 'fund', label: 'Fund', hint: 'Add money to this wallet', icon: 'add-circle-outline' },
   { key: 'request', label: 'Request', hint: 'Request a spend or approval', icon: 'hand-left-outline' },
@@ -27,13 +30,13 @@ const MATRIX: { key: keyof MemberPermissions; label: string; hint: string; icon:
 ];
 
 /** The permissions a member's toggles are seeded from (server value, or role defaults). */
-function baselinePerms(m: WalletMember): MemberPermissions {
+function baselinePerms(m: WalletMember): AccessToggles {
   const p = m.permissions;
   if (p) return { view: p.view, fund: p.fund, request: p.request, withdraw: p.withdraw };
   return { view: true, fund: true, request: true, withdraw: m.role !== 'viewer' };
 }
 
-function permsEqual(a: MemberPermissions, b: MemberPermissions): boolean {
+function permsEqual(a: AccessToggles, b: AccessToggles): boolean {
   return a.view === b.view && a.fund === b.fund && a.request === b.request && a.withdraw === b.withdraw;
 }
 
@@ -44,7 +47,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
   const { data, isLoading, error, refetch, isRefetching } = useWalletMembers(walletId);
   const update = useUpdateMember(walletId);
 
-  const [edits, setEdits] = useState<Record<number, MemberPermissions>>({});
+  const [edits, setEdits] = useState<Record<number, AccessToggles>>({});
   const [errors, setErrors] = useState<Record<number, string | null>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
 
@@ -66,7 +69,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
     });
   }, [data]);
 
-  const setPerm = (memberId: number, key: keyof MemberPermissions, value: boolean) => {
+  const setPerm = (memberId: number, key: keyof AccessToggles, value: boolean) => {
     setEdits((prev) => ({ ...prev, [memberId]: { ...prev[memberId], [key]: value } }));
   };
 

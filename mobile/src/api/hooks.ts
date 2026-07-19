@@ -23,8 +23,10 @@ import type {
   AutomationsData,
   DisputeCreatedData,
   DisputesPageData,
+  PendingApprovalData,
   RaiseDisputePayload,
   ReferralData,
+  SpendRequestPayload,
   CreateAutomationPayload,
   CreateProjectPayload,
   CreateSyncPayload,
@@ -1013,5 +1015,21 @@ export function useApplyReferral() {
     mutationFn: (input: ApplyReferralPayload) =>
       api<ReferralData>('/referrals/apply', { method: 'POST', body: input }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.referrals }),
+  });
+}
+
+// ---------- Spend Requests (member requests a spend → owner approves → executes) ----------
+
+export function useSpendRequest(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SpendRequestPayload) =>
+      api<PendingApprovalData>(`/wallets/${walletId}/spend-requests`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: ['approvals'] });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
   });
 }

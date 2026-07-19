@@ -24,6 +24,7 @@ export type RootStackParamList = {
   Fund: { walletId: number };
   Withdraw: { walletId: number };
   Transfer: { walletId?: number } | undefined;
+  RequestSpend: { walletId: number };
   CreateWallet: undefined;
   ChangePassword: undefined;
   ChangePin: undefined;

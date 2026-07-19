@@ -28,6 +28,7 @@ import { WalletDetailScreen } from '../screens/wallet/WalletDetailScreen';
 import { FundScreen } from '../screens/wallet/FundScreen';
 import { WithdrawScreen } from '../screens/wallet/WithdrawScreen';
 import { TransferScreen } from '../screens/wallet/TransferScreen';
+import { RequestSpendScreen } from '../screens/wallet/RequestSpendScreen';
 import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
 import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
@@ -175,6 +176,7 @@ export function RootNavigator() {
       <RootStack.Screen name="Fund" component={FundScreen} />
       <RootStack.Screen name="Withdraw" component={WithdrawScreen} />
       <RootStack.Screen name="Transfer" component={TransferScreen} />
+      <RootStack.Screen name="RequestSpend" component={RequestSpendScreen} />
       <RootStack.Screen name="CreateWallet" component={CreateWalletScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
       <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />

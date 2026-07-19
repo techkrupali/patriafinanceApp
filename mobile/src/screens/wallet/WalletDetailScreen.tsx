@@ -91,6 +91,9 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const canSpend =
     detail.data?.my_can_spend ??
     (role != null && ['owner', 'co_owner'].includes(role));
+  // Members who can't spend directly but hold the "Request" permission can raise
+  // a spend request that the owner approves.
+  const canRequest = detail.data?.my_can_request ?? false;
   // Members with ids (for management) — only fetched when the user can manage.
   const richMembers = useWalletMembers(walletId, canManage);
 
@@ -272,7 +275,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             </Pressable>
           ) : null}
 
-          {/* Actions — spend buttons are hidden for view-only roles (they 403). */}
+          {/* Actions — spend buttons are hidden for view-only roles (they 403).
+              Members who can't spend but can request see a "Request" action. */}
           <View className="mt-6 flex-row rounded-3xl bg-white px-2 py-5" style={[shadow.card, { gap: 8 }]}>
             <ActionButton icon="add" label="Fund" primary onPress={() => navigation.navigate('Fund', { walletId })} />
             {canSpend ? (
@@ -280,13 +284,22 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 <ActionButton icon="arrow-down" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId })} />
                 <ActionButton icon="paper-plane" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId })} />
               </>
+            ) : canRequest ? (
+              <ActionButton icon="hand-left" label="Request" onPress={() => navigation.navigate('RequestSpend', { walletId })} />
             ) : null}
           </View>
           {!canSpend ? (
             <View className="mt-3 flex-row items-start rounded-2xl bg-lav-faint px-4 py-3">
-              <Ionicons name="eye-outline" size={15} color={colors.muted} style={{ marginRight: 8, marginTop: 1 }} />
+              <Ionicons
+                name={canRequest ? 'hand-left-outline' : 'eye-outline'}
+                size={15}
+                color={colors.muted}
+                style={{ marginRight: 8, marginTop: 1 }}
+              />
               <Text className="flex-1 text-xs text-muted">
-                You have view-only access to this wallet — withdrawals and transfers are disabled for your role.
+                {canRequest
+                  ? 'You can request spends on this wallet — the owner reviews and approves them before money moves.'
+                  : 'You have view-only access to this wallet — withdrawals and transfers are disabled for your role.'}
               </Text>
             </View>
           ) : null}
