@@ -314,6 +314,33 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           />
         </Card>
 
+        {/* Support & security */}
+        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Support &amp; security</Text>
+        <Card className="mt-2 py-1">
+          <Row
+            icon="shield-outline"
+            tint="bg-success-soft"
+            iconColor={colors.brand}
+            title="Security Center"
+            subtitle="Your account safety at a glance"
+            onPress={() => navigation.navigate('SecurityCenter')}
+          />
+          <Divider />
+          <Row
+            icon="alert-circle-outline"
+            title="Dispute Center"
+            subtitle="Report a problem with a payment"
+            onPress={() => navigation.navigate('Disputes')}
+          />
+          <Divider />
+          <Row
+            icon="help-circle-outline"
+            title="Help & FAQ"
+            subtitle="Answers to common questions"
+            onPress={() => navigation.navigate('HelpFaq')}
+          />
+        </Card>
+
         <View className="mt-8">
           <Button title="Log Out" variant="danger" icon="log-out-outline" iconPosition="left" onPress={confirmLogout} loading={logoutApi.isPending} />
         </View>

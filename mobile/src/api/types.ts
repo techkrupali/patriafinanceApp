@@ -1054,3 +1054,38 @@ export interface UpdateAutomationPayload {
   min_balance?: number | null;
   enabled?: boolean;
 }
+
+// ============================================================================
+// Dispute Center
+// ============================================================================
+
+export type DisputeCategory = 'transaction' | 'project' | 'vendor' | 'account' | 'other';
+export type DisputeStatus = 'open' | 'under_review' | 'resolved' | 'rejected';
+
+export interface Dispute {
+  id: number;
+  subject: string;
+  category: DisputeCategory;
+  reference: string | null;
+  description: string;
+  status: DisputeStatus;
+  resolution: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+}
+
+export interface DisputesPageData {
+  disputes: Dispute[];
+  pagination: Pagination;
+}
+
+export interface DisputeCreatedData {
+  dispute: Dispute;
+}
+
+export interface RaiseDisputePayload {
+  subject: string;
+  category: DisputeCategory;
+  reference?: string | null;
+  description: string;
+}

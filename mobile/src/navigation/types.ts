@@ -40,6 +40,11 @@ export type RootStackParamList = {
   WalletLock: { walletId: number };
   Automations: undefined;
   CreateAutomation: undefined;
+  // ---- Support & compliance ----
+  Disputes: undefined;
+  RaiseDispute: { reference?: string; category?: string } | undefined;
+  HelpFaq: undefined;
+  SecurityCenter: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;

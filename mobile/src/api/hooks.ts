@@ -20,6 +20,9 @@ import type {
   AutomationMutatedData,
   AutomationRunData,
   AutomationsData,
+  DisputeCreatedData,
+  DisputesPageData,
+  RaiseDisputePayload,
   CreateAutomationPayload,
   CreateProjectPayload,
   CreateSyncPayload,
@@ -114,6 +117,8 @@ export const keys = {
   automations: ['automations'] as const,
   automation: (id: number) => ['automations', id] as const,
   walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
+  // ---- Disputes ----
+  disputes: ['disputes'] as const,
 };
 
 // ---------- Queries ----------
@@ -960,4 +965,30 @@ export function useWalletLock(walletId: number) {
     onSuccess: done,
   });
   return { freeze, unfreeze, setSchedule };
+}
+
+// ---------- Dispute Center ----------
+
+export function useDisputes() {
+  return useInfiniteQuery({
+    queryKey: keys.disputes,
+    queryFn: ({ pageParam }) =>
+      api<DisputesPageData>(`/disputes?page=${pageParam}&per_page=20`),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.pagination.page < last.pagination.last_page ? last.pagination.page + 1 : undefined,
+  });
+}
+
+export function useRaiseDispute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RaiseDisputePayload) =>
+      api<DisputeCreatedData>('/disputes', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.disputes });
+      void qc.invalidateQueries({ queryKey: keys.notifications });
+      void qc.invalidateQueries({ queryKey: keys.unreadCount });
+    },
+  });
 }

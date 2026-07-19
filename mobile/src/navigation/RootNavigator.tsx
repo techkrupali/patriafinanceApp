@@ -38,6 +38,10 @@ import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
 import { AutomationsScreen } from '../screens/automation/AutomationsScreen';
 import { CreateAutomationScreen } from '../screens/automation/CreateAutomationScreen';
+import { DisputesScreen } from '../screens/support/DisputesScreen';
+import { RaiseDisputeScreen } from '../screens/support/RaiseDisputeScreen';
+import { HelpFaqScreen } from '../screens/support/HelpFaqScreen';
+import { SecurityCenterScreen } from '../screens/support/SecurityCenterScreen';
 import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
@@ -180,6 +184,10 @@ export function RootNavigator() {
       <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />
       <RootStack.Screen name="Automations" component={AutomationsScreen} />
       <RootStack.Screen name="CreateAutomation" component={CreateAutomationScreen} />
+      <RootStack.Screen name="Disputes" component={DisputesScreen} />
+      <RootStack.Screen name="RaiseDispute" component={RaiseDisputeScreen} />
+      <RootStack.Screen name="HelpFaq" component={HelpFaqScreen} />
+      <RootStack.Screen name="SecurityCenter" component={SecurityCenterScreen} />
       <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
