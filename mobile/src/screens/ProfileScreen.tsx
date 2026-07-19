@@ -256,6 +256,13 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
           />
           <Divider />
           <Row
+            icon="flag-outline"
+            title="Savings goals"
+            subtitle="Set targets & auto-save toward them"
+            onPress={() => navigation.navigate('Goals')}
+          />
+          <Divider />
+          <Row
             icon="flash-outline"
             tint="bg-success-soft"
             iconColor={colors.brand}

@@ -44,6 +44,8 @@ import { RaiseDisputeScreen } from '../screens/support/RaiseDisputeScreen';
 import { HelpFaqScreen } from '../screens/support/HelpFaqScreen';
 import { SecurityCenterScreen } from '../screens/support/SecurityCenterScreen';
 import { ReferralScreen } from '../screens/referral/ReferralScreen';
+import { GoalsScreen } from '../screens/goals/GoalsScreen';
+import { CreateGoalScreen } from '../screens/goals/CreateGoalScreen';
 import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
@@ -192,6 +194,8 @@ export function RootNavigator() {
       <RootStack.Screen name="HelpFaq" component={HelpFaqScreen} />
       <RootStack.Screen name="SecurityCenter" component={SecurityCenterScreen} />
       <RootStack.Screen name="Referral" component={ReferralScreen} />
+      <RootStack.Screen name="Goals" component={GoalsScreen} />
+      <RootStack.Screen name="CreateGoal" component={CreateGoalScreen} />
       <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />

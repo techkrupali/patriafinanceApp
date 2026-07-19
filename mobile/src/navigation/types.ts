@@ -48,6 +48,9 @@ export type RootStackParamList = {
   SecurityCenter: undefined;
   // ---- Referral & rewards ----
   Referral: undefined;
+  // ---- Savings goals ----
+  Goals: undefined;
+  CreateGoal: undefined;
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;
