@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
-import { colors, shadow } from '../theme';
+import { colors, gradients, shadow } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
@@ -69,19 +70,34 @@ import { AssignVendorScreen } from '../screens/projects/AssignVendorScreen';
 import { AddMilestoneScreen } from '../screens/projects/AddMilestoneScreen';
 import { KycScreen } from '../screens/kyc/KycScreen';
 import { KycSubmitScreen } from '../screens/kyc/KycSubmitScreen';
+import { StewardScreen } from '../screens/steward/StewardScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+type MciName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-const TAB_ICONS: Record<keyof MainTabParamList, { on: IconName; off: IconName }> = {
+/**
+ * Client footer spec — Home · Family · Steward (raised gold AI button) ·
+ * Treasury · Rules · More. Material icons per the Curated Ledger design.
+ */
+const TAB_ICONS: Record<Exclude<keyof MainTabParamList, 'Steward'>, { on: MciName; off: MciName }> = {
   Home: { on: 'home', off: 'home-outline' },
-  Wallets: { on: 'wallet', off: 'wallet-outline' },
-  Activity: { on: 'time', off: 'time-outline' },
-  Profile: { on: 'person', off: 'person-outline' },
+  Family: { on: 'account-group', off: 'account-group-outline' },
+  Treasury: { on: 'bank', off: 'bank-outline' },
+  Rules: { on: 'tune-variant', off: 'tune-variant' },
+  More: { on: 'menu', off: 'menu' },
 };
+
+// Existing screens re-hosted as tabs (their inner navigation calls still work
+// through the composite navigator; they take no route params).
+const FamilyTab = (props: Record<string, unknown>) => (
+  <FamilyHubScreen {...(props as unknown as React.ComponentProps<typeof FamilyHubScreen>)} />
+);
+const RulesTab = (props: Record<string, unknown>) => (
+  <AutomationsScreen {...(props as unknown as React.ComponentProps<typeof AutomationsScreen>)} />
+);
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
@@ -104,52 +120,87 @@ function MainTabs() {
             {props.children}
           </GHPressable>
         ),
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.faded,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: 4, letterSpacing: 0.2 },
+        tabBarActiveTintColor: colors.goldDeep,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: {
+          fontSize: 9,
+          fontWeight: '800',
+          marginTop: 2,
+          letterSpacing: 0.8,
+          textTransform: 'uppercase',
+        },
         tabBarItemStyle: { paddingTop: 10 },
         tabBarStyle: {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 68 + insets.bottom,
+          height: 72 + insets.bottom,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          paddingTop: 8,
-          paddingHorizontal: 8,
+          paddingTop: 6,
+          paddingHorizontal: 2,
         },
         tabBarBackground: () => (
           <View
             style={{
               flex: 1,
               backgroundColor: colors.white,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              borderTopWidth: 1,
-              borderColor: colors.border,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               ...shadow.tab,
             }}
           />
         ),
-        tabBarIcon: ({ focused, color }) => (
-          <View
-            style={{
-              width: 52,
-              height: 34,
-              borderRadius: 17,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: focused ? colors.lavSoft : 'transparent',
-            }}
-          >
-            <Ionicons name={focused ? TAB_ICONS[route.name].on : TAB_ICONS[route.name].off} size={23} color={color} />
-          </View>
-        ),
+        tabBarIcon: ({ focused, color }) => {
+          if (route.name === 'Steward') {
+            // Raised metallic-gold AI button — the Ledger's centrepiece.
+            return (
+              <View style={{ marginTop: -26, alignItems: 'center' }}>
+                <LinearGradient
+                  colors={gradients.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[
+                    {
+                      height: 56,
+                      width: 56,
+                      borderRadius: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 4,
+                      borderColor: colors.white,
+                    },
+                    shadow.gold,
+                  ]}
+                >
+                  <MaterialCommunityIcons name="creation" size={26} color="#3D2F00" />
+                </LinearGradient>
+              </View>
+            );
+          }
+          const icons = TAB_ICONS[route.name as Exclude<keyof MainTabParamList, 'Steward'>];
+          return (
+            <View
+              style={{
+                width: 46,
+                height: 30,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: focused ? '#FFF3C4' : 'transparent',
+              }}
+            >
+              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={22} color={color} />
+            </View>
+          );
+        },
       })}
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
-      <Tabs.Screen name="Wallets" component={WalletsScreen} />
-      <Tabs.Screen name="Activity" component={ActivityScreen} />
-      <Tabs.Screen name="Profile" component={ProfileScreen} />
+      <Tabs.Screen name="Family" component={FamilyTab} />
+      <Tabs.Screen name="Steward" component={StewardScreen} options={{ tabBarLabel: 'Steward' }} />
+      <Tabs.Screen name="Treasury" component={WalletsScreen} />
+      <Tabs.Screen name="Rules" component={RulesTab} />
+      <Tabs.Screen name="More" component={ProfileScreen} />
     </Tabs.Navigator>
   );
 }
@@ -180,6 +231,7 @@ export function RootNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="Tabs" component={MainTabs} />
+      <RootStack.Screen name="Activity" component={ActivityScreen} />
       <RootStack.Screen name="WalletDetail" component={WalletDetailScreen} />
       <RootStack.Screen name="Fund" component={FundScreen} />
       <RootStack.Screen name="Withdraw" component={WithdrawScreen} />

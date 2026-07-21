@@ -26,22 +26,26 @@ const surface: Record<Exclude<Variant, 'primary'>, string> = {
   danger: 'bg-danger-soft',
 };
 
+// Primary sits on the metallic gold gradient, so its content is dark
+// on-primary-container brown per the Curated Ledger spec.
+const ON_GOLD = '#3D2F00';
+
 const textColor: Record<Variant, string> = {
-  primary: 'text-white',
+  primary: 'text-[#3D2F00]',
   secondary: 'text-navy',
   ghost: 'text-brand',
   danger: 'text-danger',
 };
 
 const iconColor: Record<Variant, string> = {
-  primary: colors.white,
+  primary: ON_GOLD,
   secondary: colors.navy,
   ghost: colors.brand,
   danger: colors.danger,
 };
 
 const spinnerColor: Record<Variant, string> = {
-  primary: colors.white,
+  primary: ON_GOLD,
   secondary: colors.navy,
   ghost: colors.brand,
   danger: colors.danger,
@@ -94,7 +98,7 @@ export function Button({
       >
         {variant === 'primary' ? (
           <LinearGradient
-            colors={gradients.navy}
+            colors={gradients.gold}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[
@@ -107,7 +111,7 @@ export function Button({
                 paddingHorizontal: 20,
                 paddingVertical: 16,
               },
-              !isDisabled ? shadow.soft : undefined,
+              !isDisabled ? shadow.gold : undefined,
               isDisabled ? { opacity: 0.5 } : undefined,
             ]}
           >

@@ -47,13 +47,13 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
     // The user was removed from this wallet — it's no longer accessible, so never
     // deep-link into it. Send them to their wallets list instead.
     if (type === 'wallet_member_removed') {
-      navigation.navigate('Tabs', { screen: 'Wallets' });
+      navigation.navigate('Tabs', { screen: 'Treasury' });
       return;
     }
     // A transfer landed: open the receiving wallet if we know it, else Activity.
     if (type === 'transfer_received') {
       if (walletId) navigation.navigate('WalletDetail', { walletId });
-      else navigation.navigate('Tabs', { screen: 'Activity' });
+      else navigation.navigate('Activity');
       return;
     }
     // admin_message / transaction_reversed / admin_adjustment and any other

@@ -11,7 +11,7 @@ import { useWallets } from '../api/hooks';
 import { formatMoney } from '../lib/format';
 import type { TabScreenProps } from '../navigation/types';
 
-export function WalletsScreen({ navigation }: TabScreenProps<'Wallets'>) {
+export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
   const { data: wallets, isLoading, error, refetch, isRefetching } = useWallets();
 
   const total = useMemo(
@@ -28,8 +28,8 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Wallets'>) {
           <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
         }
       >
-        <Text className="text-3xl font-extrabold tracking-tight text-ink">Wallets</Text>
-        <Text className="mt-1 text-[15px] text-muted">Your family's money, organized.</Text>
+        <Text className="text-3xl font-extrabold tracking-tight text-ink">Treasury</Text>
+        <Text className="mt-1 text-[15px] text-muted">All active wallets, one place.</Text>
 
         {isLoading ? (
           <View className="items-center py-24">

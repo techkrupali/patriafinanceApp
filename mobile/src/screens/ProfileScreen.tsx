@@ -61,7 +61,7 @@ function Divider() {
   return <View style={{ height: 1, backgroundColor: colors.border }} />;
 }
 
-export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
+export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
   const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
@@ -148,7 +148,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-        <Text className="text-3xl font-extrabold tracking-tight text-ink">Profile</Text>
+        <Text className="text-3xl font-extrabold tracking-tight text-ink">More</Text>
 
         {/* Identity card */}
         <Card className="mt-5 items-center py-7">

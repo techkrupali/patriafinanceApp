@@ -184,7 +184,7 @@ export function AutomationsScreen({ navigation }: RootScreenProps<'Automations'>
 
   return (
     <Screen withBottomInset>
-      <Header title="Automations" right={addAction} />
+      <Header title="Rules" right={addAction} />
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

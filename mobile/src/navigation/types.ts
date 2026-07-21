@@ -12,15 +12,22 @@ export type AuthStackParamList = {
   ForgotPassword: undefined;
 };
 
+/**
+ * Client footer spec: Home · Family · Steward (center AI) · Treasury · Rules · More.
+ */
 export type MainTabParamList = {
   Home: undefined;
-  Wallets: undefined;
-  Activity: undefined;
-  Profile: undefined;
+  Family: undefined;
+  Steward: undefined;
+  Treasury: undefined;
+  Rules: undefined;
+  More: undefined;
 };
 
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  /** Full transaction feed (was a tab; now reached from Home → View all). */
+  Activity: undefined;
   WalletDetail: { walletId: number };
   Fund: { walletId: number };
   Withdraw: { walletId: number };
