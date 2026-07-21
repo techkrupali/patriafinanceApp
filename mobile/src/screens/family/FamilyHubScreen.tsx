@@ -6,10 +6,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
+import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { colors, gradients, shadow } from '../../theme';
-import { useFamily } from '../../api/hooks';
+import { useFamily, useWallets } from '../../api/hooks';
 import { initials } from '../../lib/format';
 import { roleLabel } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
@@ -107,8 +108,78 @@ function InviteRow({
   );
 }
 
+/**
+ * "Create your first family" hero — shown only when there are no members and
+ * no invitations (design: create_first_family). Icon tile + headline + copy +
+ * gold CTA into the invite flow (or wallet creation when nothing is shareable).
+ */
+function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWallet: boolean }) {
+  return (
+    <View>
+      <View className="items-center px-2 pt-8">
+        <View className="items-center justify-center">
+          <View
+            className="absolute rounded-full"
+            style={{ height: 108, width: 108, borderWidth: 2, borderColor: 'rgba(255,204,0,0.25)' }}
+          />
+          <View className="h-20 w-20 items-center justify-center rounded-3xl bg-white" style={shadow.card}>
+            <Ionicons name="people" size={36} color={colors.goldDeep} />
+          </View>
+        </View>
+        <Text className="mt-7 text-center text-[27px] font-extrabold leading-9 tracking-tight text-ink">
+          Set Up Your Family
+        </Text>
+        <Text className="mt-3 text-center text-[15px] leading-6 text-muted">
+          Define the core of your financial ecosystem — the circle that holds your shared wallets,
+          projects and members.
+        </Text>
+      </View>
+
+      {/* Primary Owner — selected role card (gold border, green check) */}
+      <View
+        className="mt-8 rounded-3xl bg-white p-5"
+        style={[shadow.card, { borderWidth: 2, borderColor: '#FFCC00' }]}
+      >
+        <View className="flex-row items-center">
+          <Ionicons name="star" size={18} color={colors.gold} style={{ marginRight: 8 }} />
+          <Text className="flex-1 text-[16px] font-bold text-ink">Primary Owner</Text>
+          <View className="h-6 w-6 items-center justify-center rounded-full bg-brand">
+            <Ionicons name="checkmark" size={14} color={colors.white} />
+          </View>
+        </View>
+        <Text className="mt-2 text-[13px] leading-5 text-muted">
+          As the creator, you have full control over the family treasury, governance rules and
+          member permissions.
+        </Text>
+      </View>
+
+      {/* Building trust note */}
+      <View className="mt-4 flex-row items-start rounded-3xl bg-page-top p-5">
+        <View className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-gold-soft/60">
+          <Ionicons name="people-circle-outline" size={24} color={colors.goldDeep} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-[14px] font-bold text-ink">Building Trust</Text>
+          <Text className="mt-1 text-[12px] leading-5 text-muted">
+            Your family acts as a shared vault — every wallet you add is protected by bank-grade
+            encryption and shared visibility.
+          </Text>
+        </View>
+      </View>
+
+      <Button title="Create Your Family Circle" icon="arrow-forward" onPress={onPress} className="mt-8" />
+      <Text className="mt-3 text-center text-[11px] leading-4 text-faded">
+        {hasWallet
+          ? 'Invite your first member into a shared wallet.'
+          : 'Start by creating a wallet your family can share.'}
+      </Text>
+    </View>
+  );
+}
+
 export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
   const family = useFamily();
+  const wallets = useWallets();
 
   const data = family.data;
   const members = data?.members ?? [];
@@ -116,6 +187,10 @@ export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
   const received = data?.pending_invitations.received ?? [];
   const sent = data?.pending_invitations.sent ?? [];
   const hasPending = received.length > 0 || sent.length > 0;
+  const isEmpty = members.length === 0 && !hasPending;
+
+  /** First wallet people can be invited into (anything but the system main wallet). */
+  const invitable = (wallets.data ?? []).find((w) => w.type !== 'main');
 
   const inviteSubtitle = (inv: FamilyInvitation) =>
     `${inv.wallet_name ?? 'A wallet'} · ${roleLabel(inv.role)}`;
@@ -138,6 +213,17 @@ export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
             <RefreshControl refreshing={family.isRefetching} onRefresh={family.refetch} tintColor={colors.navy} />
           }
         >
+          {isEmpty ? (
+            <CreateFirstFamily
+              hasWallet={Boolean(invitable)}
+              onPress={() => {
+                selection();
+                if (invitable) navigation.navigate('InviteMember', { walletId: invitable.id });
+                else navigation.navigate('CreateWallet');
+              }}
+            />
+          ) : (
+            <>
           {/* Hero */}
           <LinearGradient
             colors={gradients.navy}
@@ -259,6 +345,8 @@ export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
               </Card>
             </>
           ) : null}
+            </>
+          )}
         </ScrollView>
       )}
     </Screen>

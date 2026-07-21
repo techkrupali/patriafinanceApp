@@ -8,12 +8,17 @@ import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
-import { colors } from '../../theme';
+import { colors, shadow } from '../../theme';
 import { useCreateWallet } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
 import { walletVisual } from '../../lib/walletVisual';
 import type { CreatableWalletType } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
+
+/** On-gold content colour (Curated Ledger on-primary-container). */
+const ON_GOLD = '#3D2F00';
+/** Metallic gold container fill (primary-container). */
+const GOLD_CONTAINER = '#FFCC00';
 
 interface TypeOption {
   value: CreatableWalletType;
@@ -69,71 +74,82 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
 
   return (
     <Screen withBottomInset>
-      <Header title="New Wallet" />
+      <Header title="Create Treasury" />
       <KeyboardAwareScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 24, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
       >
-          <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Wallet type</Text>
+          {/* Editorial headline (design: create_first_treasury) */}
+          <Text className="text-[28px] font-extrabold leading-9 tracking-tight text-navy">
+            Create Your Treasury
+          </Text>
+          <Text className="mt-2 text-[15px] leading-6 text-muted">
+            This is where your money will be stored and managed.
+          </Text>
 
-          <View className="mt-3 flex-row flex-wrap justify-between">
-            {TYPES.map((t) => {
-              const active = type === t.value;
-              const v = walletVisual(t.value);
-              return (
-                <Pressable
-                  key={t.value}
-                  onPress={() => {
-                    selection();
-                    setType(t.value);
-                  }}
-                  style={{ width: '31.5%', marginBottom: 12 }}
-                  className={`items-center rounded-3xl border px-2 py-4 active:opacity-90 ${
-                    active ? 'border-brand bg-success-soft' : 'border-border bg-white'
-                  }`}
-                >
-                  <View
-                    className="h-11 w-11 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: active ? colors.brand : colors.lavSoft }}
+          {/* Identity block — name + purpose chips */}
+          <View className="mt-6 rounded-3xl bg-white p-5" style={shadow.card}>
+            <Input
+              label="Treasury name"
+              icon="pricetag-outline"
+              value={name}
+              onChangeText={setName}
+              placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Treasury`}
+              maxLength={100}
+            />
+
+            <Text className="mb-3 mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              Treasury purpose
+            </Text>
+            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+              {TYPES.map((t) => {
+                const active = type === t.value;
+                const v = walletVisual(t.value);
+                return (
+                  <Pressable
+                    key={t.value}
+                    onPress={() => {
+                      selection();
+                      setType(t.value);
+                    }}
+                    className={`flex-row items-center rounded-full px-4 py-2.5 active:opacity-90 ${
+                      active ? '' : 'bg-lav'
+                    }`}
+                    style={active ? [{ backgroundColor: GOLD_CONTAINER }, shadow.soft] : undefined}
                   >
-                    <Ionicons name={v.icon} size={21} color={active ? colors.white : colors.navy} />
-                  </View>
-                  <Text
-                    className={`mt-2 text-[12px] font-bold ${active ? 'text-brand' : 'text-ink'}`}
-                    numberOfLines={1}
-                  >
-                    {t.title}
-                  </Text>
-                </Pressable>
-              );
-            })}
+                    <Ionicons
+                      name={v.icon}
+                      size={15}
+                      color={active ? ON_GOLD : colors.muted}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      className={`text-[13px] ${active ? 'font-bold' : 'font-semibold text-muted'}`}
+                      style={active ? { color: ON_GOLD } : undefined}
+                    >
+                      {t.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
-          {/* Selected type explainer */}
-          <View className="mt-1 flex-row items-start rounded-2xl bg-lav-faint p-4">
-            <Ionicons name="information-circle" size={18} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
-            <Text className="flex-1 text-[13px] leading-5 text-muted">{selected.description}</Text>
+          {/* Selected purpose explainer — green tip (design lightbulb box) */}
+          <View className="mt-4 flex-row items-start rounded-2xl bg-success-soft p-4">
+            <Ionicons name="bulb" size={17} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
+            <Text className="flex-1 text-[12px] leading-5 text-brand-deep">{selected.description}</Text>
           </View>
-
-          <Input
-            label="Wallet name"
-            icon="pricetag-outline"
-            value={name}
-            onChangeText={setName}
-            placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Wallet`}
-            maxLength={100}
-            containerClassName="mt-6"
-          />
 
           <Input
             label="Description (optional)"
             icon="document-text-outline"
             value={description}
             onChangeText={setDescription}
-            placeholder="What's this wallet for?"
+            placeholder="What's this treasury for?"
             maxLength={200}
-            containerClassName="mt-5"
+            containerClassName="mt-6"
           />
 
           {showTarget ? (
@@ -147,10 +163,13 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
               containerClassName="mt-5"
             />
           ) : null}
+          {showTarget ? (
+            <Text className="ml-1 mt-1.5 text-[11px] italic text-muted">You can fund this later</Text>
+          ) : null}
 
           <ErrorText message={error} className="mt-4" />
 
-          <Button title="Create Wallet" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
+          <Button title="Create Treasury" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
       </KeyboardAwareScrollView>
     </Screen>
   );

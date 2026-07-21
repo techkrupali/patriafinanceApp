@@ -8,7 +8,6 @@ import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollVie
 import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { Card } from '../../components/Card';
 import { ErrorText } from '../../components/ErrorText';
 import { colors, gradients } from '../../theme';
 import { useSubmitKyc } from '../../api/hooks';
@@ -28,10 +27,21 @@ import type { RootScreenProps } from '../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
+/** On-gold content colour (Curated Ledger on-primary-container). */
+const ON_GOLD = '#3D2F00';
+/** Metallic gold container fill (primary-container). */
+const GOLD_CONTAINER = '#FFCC00';
+
 const TIER_INTRO: Record<number, string> = {
   1: 'Confirm your identity with your BVN, NIN and a government-issued ID.',
   2: 'Add your residential address so we can verify where you live.',
   3: 'Tell us your source of funds and what you do.',
+};
+
+const TIER_HEADLINE: Record<number, string> = {
+  1: 'Verify Your Identity',
+  2: 'Verify Your Address',
+  3: 'Your Source of Funds',
 };
 
 interface Option<T extends string> {
@@ -60,19 +70,22 @@ function SelectGrid<T extends string>({
               selection();
               onSelect(o.value);
             }}
-            style={{ width: '48%', marginBottom: 12 }}
-            className={`flex-row items-center rounded-2xl border px-3 py-3 active:opacity-90 ${
-              active ? 'border-brand bg-success-soft' : 'border-border bg-white'
+            style={[
+              { width: '48%', marginBottom: 12 },
+              active ? { borderColor: GOLD_CONTAINER } : undefined,
+            ]}
+            className={`flex-row items-center rounded-2xl bg-white px-3 py-3 active:opacity-90 ${
+              active ? 'border-2' : 'border border-border'
             }`}
           >
             <View
               className="h-9 w-9 items-center justify-center rounded-xl"
-              style={{ backgroundColor: active ? colors.brand : colors.lavSoft }}
+              style={{ backgroundColor: active ? GOLD_CONTAINER : colors.lavSoft }}
             >
-              <Ionicons name={o.icon} size={18} color={active ? colors.white : colors.navy} />
+              <Ionicons name={o.icon} size={18} color={active ? ON_GOLD : colors.navy} />
             </View>
             <Text
-              className={`ml-2.5 flex-1 text-[13px] font-bold ${active ? 'text-brand' : 'text-ink'}`}
+              className={`ml-2.5 flex-1 text-[13px] font-bold ${active ? 'text-gold-deep' : 'text-ink'}`}
               numberOfLines={1}
             >
               {o.label}
@@ -87,6 +100,27 @@ function SelectGrid<T extends string>({
 function FieldLabel({ children }: { children: string }) {
   return (
     <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">{children}</Text>
+  );
+}
+
+/** Onboarding-style progress strip: "Tier x of 3" + gold bar (design language). */
+function TierProgress({ tier }: { tier: number }) {
+  const pct = Math.round((tier / 3) * 100);
+  return (
+    <View className="mb-7">
+      <View className="mb-2 flex-row items-end justify-between">
+        <Text className="text-[11px] font-bold uppercase tracking-widest text-muted">
+          Tier {tier} of 3
+        </Text>
+        <Text className="text-xs font-bold text-gold-deep">{pct}%</Text>
+      </View>
+      <View className="h-1.5 w-full overflow-hidden rounded-full bg-lav-soft">
+        <View
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, backgroundColor: GOLD_CONTAINER }}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -163,14 +197,14 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: 'center' }}
         >
           <View className="items-center">
-            <View className="h-28 w-28 items-center justify-center rounded-full bg-lav-soft">
+            <View className="h-28 w-28 items-center justify-center rounded-full bg-gold-soft">
               <LinearGradient
-                colors={gradients.navy}
+                colors={gradients.gold}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ height: 84, width: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Ionicons name="hourglass-outline" size={42} color={colors.brandGlow} />
+                <Ionicons name="hourglass-outline" size={42} color={ON_GOLD} />
               </LinearGradient>
             </View>
             <Text className="mt-6 text-3xl font-extrabold tracking-tight text-ink">Submitted for review</Text>
@@ -193,23 +227,22 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
 
   return (
     <Screen withBottomInset>
-      <Header title={`Verify Tier ${targetTier}`} />
+      <Header title="Verify Identity" />
       <KeyboardAwareScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 24, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
       >
-          <Card className="flex-row items-center">
-            <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
-              <Ionicons name="shield-checkmark-outline" size={22} color={colors.navy} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[15px] font-bold text-ink">{tierName(targetTier)}</Text>
-              <Text className="mt-0.5 text-[13px] leading-5 text-muted">
-                {TIER_INTRO[targetTier] ?? 'Provide the details below to verify this tier.'}
-              </Text>
-            </View>
-          </Card>
+          <TierProgress tier={targetTier} />
+
+          {/* Editorial headline (design: Verify Your Identity) */}
+          <Text className="text-[30px] font-extrabold leading-9 tracking-tight text-navy">
+            {TIER_HEADLINE[targetTier] ?? `Verify Tier ${targetTier}`}
+          </Text>
+          <Text className="mt-2.5 text-[15px] leading-6 text-muted">
+            {TIER_INTRO[targetTier] ?? 'Provide the details below to verify this tier.'} This helps
+            keep your account secure and unlocks all features.
+          </Text>
 
           {/* ---- Tier 1: Identity ---- */}
           {targetTier === 1 ? (
@@ -222,7 +255,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
                 placeholder="11-digit BVN"
                 keyboardType="number-pad"
                 maxLength={11}
-                containerClassName="mt-6"
+                containerClassName="mt-7"
                 error={bvn.length > 0 && bvn.length !== 11 ? 'BVN must be 11 digits' : undefined}
               />
               <Input
@@ -263,7 +296,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
                 onChangeText={setAddress}
                 placeholder="Street, house number"
                 maxLength={120}
-                containerClassName="mt-6"
+                containerClassName="mt-7"
               />
               <Input
                 label="City"
@@ -326,19 +359,31 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
             </>
           ) : null}
 
-          <ErrorText message={error} className="mt-6" />
+          {/* Security reassurance (design: encrypted + never stored) */}
+          <View className="mt-7 rounded-2xl bg-page-top p-4">
+            <View className="flex-row items-start">
+              <Ionicons name="lock-closed" size={18} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
+              <Text className="flex-1 text-[12px] font-semibold leading-5 text-muted">
+                Your information is encrypted and securely verified.
+              </Text>
+            </View>
+            <Text className="mt-2 text-center text-[11px] leading-4 text-faded">
+              {targetTier === 1
+                ? 'We do not store your BVN/NIN details'
+                : 'Your details are used only to verify your identity'}
+            </Text>
+          </View>
+
+          <ErrorText message={error} className="mt-5" />
 
           <Button
-            title="Submit for review"
-            icon="checkmark"
+            title="Verify & Continue"
+            icon="arrow-forward"
             onPress={onSubmit}
             disabled={!valid}
             loading={submit.isPending}
-            className="mt-6"
+            className="mt-5"
           />
-          <Text className="mt-3 text-center text-[11px] leading-4 text-faded">
-            Your details are used only to verify your identity and are handled securely.
-          </Text>
       </KeyboardAwareScrollView>
     </Screen>
   );
