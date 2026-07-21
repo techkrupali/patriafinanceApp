@@ -62,7 +62,8 @@ class WalletController extends ApiController
     // GET /wallets/{wallet}
     public function show(Request $request, Wallet $wallet): JsonResponse
     {
-        if (!$wallet->isAccessibleBy($request->user())) {
+        // WalletPolicy::view === Wallet::isAccessibleBy — same rule, one source of truth.
+        if ($request->user()->cannot('view', $wallet)) {
             return $this->fail('Wallet not found', 404);
         }
 
@@ -97,7 +98,8 @@ class WalletController extends ApiController
     // GET /wallets/{wallet}/transactions
     public function transactions(Request $request, Wallet $wallet): JsonResponse
     {
-        if (!$wallet->isAccessibleBy($request->user())) {
+        // WalletPolicy::view === Wallet::isAccessibleBy — same rule, one source of truth.
+        if ($request->user()->cannot('view', $wallet)) {
             return $this->fail('Wallet not found', 404);
         }
 

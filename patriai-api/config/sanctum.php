@@ -48,9 +48,12 @@ return [
     | considered expired. This will override any values set in the token's
     | "expires_at" attribute, but first-party sessions are not affected.
     |
+    | Patriai: money-app tokens must not live forever. Default 30 days; the
+    | mobile app re-authenticates (login/OTP) when a token expires.
+    |
     */
 
-    'expiration' => null,
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION_MINUTES', 60 * 24 * 30), // 30 days
 
     /*
     |--------------------------------------------------------------------------

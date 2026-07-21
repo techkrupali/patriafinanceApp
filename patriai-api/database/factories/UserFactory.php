@@ -16,6 +16,9 @@ class UserFactory extends Factory
      */
     protected static ?string $password;
 
+    /** Cached bcrypt of the default '1234' transaction PIN. */
+    protected static ?string $pin;
+
     /**
      * Define the model's default state.
      *
@@ -23,11 +26,18 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $firstName = fake()->firstName();
+        $lastName = fake()->lastName();
+
         return [
-            'name' => fake()->name(),
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'name' => trim("{$firstName} {$lastName}"),
             'email' => fake()->unique()->safeEmail(),
+            'phone' => fake()->unique()->numerify('080########'),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'pin' => static::$pin ??= Hash::make('1234'),
             'remember_token' => Str::random(10),
         ];
     }

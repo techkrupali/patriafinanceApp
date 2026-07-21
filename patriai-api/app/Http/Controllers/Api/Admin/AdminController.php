@@ -171,7 +171,8 @@ class AdminController extends ApiController
     {
         $data = $request->validate(['tier' => ['required', 'integer', 'between:0,3']]);
 
-        $user->update(['kyc_tier' => $data['tier']]);
+        // kyc_tier is not mass-assignable (privilege field) — set it explicitly.
+        $user->forceFill(['kyc_tier' => $data['tier']])->save();
 
         NotificationService::make()->push(
             $user,
@@ -193,7 +194,8 @@ class AdminController extends ApiController
             return $this->fail('Cannot change an admin account status', 403);
         }
 
-        $user->update(['status' => $data['status']]);
+        // status is not mass-assignable (privilege field) — set it explicitly.
+        $user->forceFill(['status' => $data['status']])->save();
         if ($data['status'] === 'suspended') {
             $user->tokens()->delete();
         }

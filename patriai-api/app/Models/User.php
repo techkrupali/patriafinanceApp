@@ -15,6 +15,12 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    /**
+     * Privilege fields (role, kyc_tier, status) are deliberately NOT fillable:
+     * they must never be settable from a request-controlled array. The few
+     * legitimate writers (admin endpoints, KYC approval, seeder) assign them
+     * explicitly via property assignment / forceFill.
+     */
     protected $fillable = [
         'first_name',
         'last_name',
@@ -24,9 +30,6 @@ class User extends Authenticatable
         'password',
         'pin',
         'avatar_url',
-        'kyc_tier',
-        'role',
-        'status',
         'referral_code',
         'referred_by',
     ];

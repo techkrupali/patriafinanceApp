@@ -1,0 +1,45 @@
+name: API CI
+
+on:
+  push:
+    paths:
+      - "patriai-api/**"
+      - ".github/workflows/api-ci.yml"
+  pull_request:
+    paths:
+      - "patriai-api/**"
+      - ".github/workflows/api-ci.yml"
+
+jobs:
+  test:
+    name: Lint & test (PHP 8.4, sqlite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: patriai-api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, intl, pdo_sqlite, sqlite3, bcmath
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: PHP syntax check (app/)
+        run: |
+          find app -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+          echo "php -l passed"
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run tests (sqlite in-memory)
+        run: php artisan test

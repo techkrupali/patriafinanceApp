@@ -235,19 +235,26 @@ class LoanService
      */
     public function approveAndDisburse(Loan $loan, ?User $admin): Loan
     {
-        if (!in_array($loan->status, ['pending', 'approved'], true)) {
-            throw ValidationException::withMessages(['loan' => 'This loan cannot be disbursed in its current state']);
-        }
+        return DB::transaction(function () use ($loan, $admin) {
+            // Serialize on the loan row: two concurrent disbursements (an admin
+            // double-click, or auto-approve racing an admin approve) must not both
+            // pass the status gate and double-credit the wallet. The status is
+            // re-read and re-checked UNDER the lock before any money moves.
+            /** @var Loan|null $loan */
+            $loan = Loan::whereKey($loan->id)->lockForUpdate()->first();
 
-        $wallet = $loan->disbursed_wallet_id
-            ? Wallet::find($loan->disbursed_wallet_id)
-            : $loan->user->mainWallet();
+            if (!$loan || !in_array($loan->status, ['pending', 'approved'], true)) {
+                throw ValidationException::withMessages(['loan' => 'This loan cannot be disbursed in its current state']);
+            }
 
-        if (!$wallet) {
-            throw ValidationException::withMessages(['wallet' => 'No wallet available to disburse this loan']);
-        }
+            $wallet = $loan->disbursed_wallet_id
+                ? Wallet::find($loan->disbursed_wallet_id)
+                : $loan->user->mainWallet();
 
-        return DB::transaction(function () use ($loan, $admin, $wallet) {
+            if (!$wallet) {
+                throw ValidationException::withMessages(['wallet' => 'No wallet available to disburse this loan']);
+            }
+
             $this->wallets->credit(
                 $wallet,
                 $loan->principal,
@@ -386,19 +393,27 @@ class LoanService
         if ($loan->user_id !== $ownerCheck->id) {
             throw ValidationException::withMessages(['loan' => 'This loan does not belong to you']);
         }
-        if (!in_array($loan->status, Loan::OWED_STATUSES, true)) {
-            throw ValidationException::withMessages(['loan' => 'This loan is not open for repayment']);
-        }
         if ($amountKobo <= 0) {
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero']);
         }
 
-        $totalOwed = $loan->outstanding + $loan->penalty_accrued;
-        if ($amountKobo > $totalOwed) {
-            throw ValidationException::withMessages(['amount' => 'Amount exceeds the outstanding balance']);
-        }
-
         return DB::transaction(function () use ($loan, $wallet, $amountKobo, $debitUserId, $recovery, $actor) {
+            // Serialize on the loan row: two concurrent repayments must not both
+            // pass the remaining-balance check and double-debit the borrower.
+            // Status and outstanding are re-read and re-checked UNDER the lock,
+            // BEFORE the wallet debit — mirroring WalletService's discipline.
+            /** @var Loan $loan */
+            $loan = Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
+
+            if (!in_array($loan->status, Loan::OWED_STATUSES, true)) {
+                throw ValidationException::withMessages(['loan' => 'This loan is not open for repayment']);
+            }
+
+            $totalOwed = $loan->outstanding + $loan->penalty_accrued;
+            if ($amountKobo > $totalOwed) {
+                throw ValidationException::withMessages(['amount' => 'Amount exceeds the outstanding balance']);
+            }
+
             $txn = $this->wallets->debit(
                 $wallet,
                 $amountKobo,
@@ -529,7 +544,16 @@ class LoanService
             throw ValidationException::withMessages(['loan' => 'Only an active loan can be defaulted']);
         }
 
-        $recovered = DB::transaction(function () use ($loan) {
+        $recovered = DB::transaction(function () use (&$loan) {
+            // Serialize on the loan row: two concurrent default calls must not both
+            // pass the status gate and run auto-recovery (a double wallet debit).
+            // The status is re-checked UNDER the lock before any money moves.
+            /** @var Loan $loan */
+            $loan = Loan::whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            if ($loan->status !== 'active') {
+                throw ValidationException::withMessages(['loan' => 'Only an active loan can be defaulted']);
+            }
+
             $loan->update(['status' => 'defaulted']);
 
             // Freeze only wallets the borrower SOLELY controls so their own funds

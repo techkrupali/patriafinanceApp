@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Loan;
+use App\Models\User;
+use App\Models\Wallet;
 use App\Services\LoanService;
 use App\Services\PinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class LoanController extends ApiController
 {
@@ -89,7 +92,7 @@ class LoanController extends ApiController
         ]);
     }
 
-    // POST /loans/{loan}/repay  { amount, wallet_id, pin }
+    // POST /loans/{loan}/repay  { amount, wallet_id, pin, idempotency_key? }
     public function repay(Request $request, Loan $loan): JsonResponse
     {
         $user = $request->user();
@@ -102,11 +105,82 @@ class LoanController extends ApiController
             'amount' => ['required', 'numeric', 'min:1'],
             'wallet_id' => ['required', 'integer'],
             'pin' => ['required', 'digits:4'],
+            'idempotency_key' => ['nullable', 'string', 'max:100'],
         ]);
 
+        // --- Idempotency / double-submit protection (mirrors TransferController) --
+        // 1. Explicit client key: replay the original response for ~5 minutes and
+        //    lock out concurrent duplicates carrying the same (user, key).
+        $idempotencyKey = $data['idempotency_key'] ?? null;
+        $cacheKey = $idempotencyKey !== null
+            ? 'loan:repay:idem:' . $user->id . ':' . sha1($idempotencyKey)
+            : null;
+
+        if ($cacheKey !== null) {
+            if ($cached = Cache::get($cacheKey)) {
+                return response()->json($cached['body'], $cached['code']);
+            }
+            if (!Cache::add($cacheKey . ':lock', 1, now()->addSeconds(30))) {
+                return $this->fail('A repayment with this idempotency key is already being processed.', 409);
+            }
+        }
+
+        // 2. Even without a key: reject a byte-identical repayment intent from the
+        //    same user within ~5 seconds (accidental double tap / slow-network
+        //    retry). Short enough to still allow an intentional identical repeat
+        //    payment moments later. Cache::add is atomic, so of two concurrent
+        //    taps exactly one proceeds.
+        $fingerprint = 'loan:repay:dedupe:' . $user->id . ':' . sha1(json_encode([
+            'loan' => $loan->id,
+            'amount' => $data['amount'],
+            'wallet' => $data['wallet_id'],
+        ]));
+        if (!Cache::add($fingerprint, 1, now()->addSeconds(5))) {
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            return $this->fail('Duplicate repayment ignored — this looks like a double submission. Please wait a moment before retrying.', 409);
+        }
+
+        try {
+            $response = $this->performRepay($user, $loan, $data);
+        } catch (\Throwable $e) {
+            // A failed attempt must be retryable immediately: drop the short-window
+            // dedupe marker (and any idempotency lock) so a corrected retry is allowed.
+            Cache::forget($fingerprint);
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            throw $e;
+        }
+
+        if ($cacheKey !== null) {
+            Cache::forget($cacheKey . ':lock');
+        }
+
+        if ($response->getStatusCode() >= 300) {
+            // Non-success (e.g. 404/403/422): allow an immediate corrected retry.
+            Cache::forget($fingerprint);
+        } elseif ($cacheKey !== null) {
+            // Store the successful outcome for idempotent replay within the window.
+            Cache::put($cacheKey, [
+                'body' => $response->getData(true),
+                'code' => $response->getStatusCode(),
+            ], now()->addMinutes(5));
+        }
+
+        return $response;
+    }
+
+    /**
+     * Execute a validated repayment. Split out of repay() so the surrounding
+     * idempotency/double-submit guard never runs a second debit for a replay.
+     */
+    private function performRepay(User $user, Loan $loan, array $data): JsonResponse
+    {
         app(PinService::class)->verify($user, $data['pin']);
 
-        $wallet = \App\Models\Wallet::find($data['wallet_id']);
+        $wallet = Wallet::find($data['wallet_id']);
 
         if (!$wallet || !$wallet->isAccessibleBy($user)) {
             return $this->fail('Wallet not found', 404);
