@@ -40,3 +40,4 @@ yarn-error.*
 /ios
 /android
 mobile/.claude/
+assets/index.android.bundle
