@@ -2,7 +2,6 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import type { Wallet } from '../api/types';
 import { colors, shadow } from '../theme';
 import { formatMoney } from '../lib/format';
@@ -12,7 +11,7 @@ import { walletVisual } from '../lib/walletVisual';
 interface WalletCardProps {
   wallet: Wallet;
   onPress?: () => void;
-  /** Kept for API compatibility; the premium card routes actions to the detail screen. */
+  /** Kept for API compatibility; the treasury row routes actions to the detail screen. */
   onFund?: () => void;
   onWithdraw?: () => void;
   onSend?: () => void;
@@ -25,10 +24,10 @@ function subtitleFor(wallet: Wallet): string {
     return `${wallet.my_role.replace('_', ' ')}${owner}`;
   }
   const map: Record<string, string> = {
-    main: 'Personal account',
+    main: 'Primary operating account',
     shared: 'Shared wallet',
     savings: 'Savings',
-    goal: 'Goal wallet',
+    goal: 'Goal-linked treasury',
     project: 'Project escrow',
     emergency: 'Emergency fund',
     giving: 'Giving',
@@ -39,10 +38,35 @@ function subtitleFor(wallet: Wallet): string {
   return map[wallet.type] ?? 'Wallet';
 }
 
+/** Soft tinted icon tile per wallet type (Stitch treasury list treatment). */
+function tileVisual(wallet: Wallet): { bg: string; fg: string } {
+  if (wallet.type === 'main') return { bg: 'rgba(255,204,0,0.18)', fg: colors.goldDeep };
+  const s = walletVisual(wallet.type);
+  // Light gradients (project, child) get the soft secondary-container tint.
+  if (!s.onDark) return { bg: 'rgba(199,223,255,0.35)', fg: colors.muted };
+  // Dark gradients: tint from the light stop, icon in the deep stop.
+  return { bg: `${s.gradient[1]}26`, fg: s.gradient[0] };
+}
+
+/** Bottom-right status eyebrow, per the design ("Standard" / "LOCKED" / "Goal Active" / "Shared"). */
+function statusFor(wallet: Wallet, hasTarget: boolean): { label: string; color: string } {
+  const st = (wallet.status || 'active').toLowerCase();
+  if (st !== 'active') return { label: st.toUpperCase(), color: colors.danger };
+  if (hasTarget) return { label: 'Goal Active', color: colors.muted };
+  if (wallet.type === 'main') return { label: 'Standard', color: colors.brand };
+  if (wallet.type === 'shared' || wallet.type === 'joint') return { label: 'Shared', color: colors.brand };
+  return { label: 'Active', color: colors.brand };
+}
+
 export function WalletCard({ wallet, onPress, className = '' }: WalletCardProps) {
   const s = walletVisual(wallet.type);
-  const frozen = wallet.status && wallet.status !== 'active';
-  const acct = wallet.virtual_account ? `•••• ${wallet.virtual_account.slice(-4)}` : null;
+  const tile = tileVisual(wallet);
+
+  const target = parseFloat(wallet.target_amount ?? '');
+  const balanceNum = parseFloat(wallet.balance || '0');
+  const hasTarget = Number.isFinite(target) && target > 0;
+  const pct = hasTarget ? Math.min(Math.floor((balanceNum / target) * 100), 100) : 0;
+  const status = statusFor(wallet, hasTarget);
 
   return (
     <Pressable
@@ -52,58 +76,47 @@ export function WalletCard({ wallet, onPress, className = '' }: WalletCardProps)
           onPress();
         }
       }}
-      className={`rounded-3xl border border-border bg-card p-5 active:opacity-95 ${className}`}
-      style={shadow.card}
+      className={`rounded-2xl bg-white p-4 active:opacity-90 ${className}`}
+      style={shadow.soft}
     >
-      <View className="flex-row items-start justify-between">
-        <LinearGradient
-          colors={s.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            { height: 46, width: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-            shadow.soft,
-          ]}
-        >
-          <Ionicons name={s.icon} size={22} color={s.onDark ? colors.white : colors.navy} />
-        </LinearGradient>
+      <View className="flex-row items-center">
+        <View className="h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: tile.bg }}>
+          <Ionicons name={s.icon} size={24} color={tile.fg} />
+        </View>
 
-        {frozen ? (
-          <View className="flex-row items-center rounded-full bg-danger-soft px-2.5 py-1">
-            <Ionicons name="lock-closed" size={10} color={colors.danger} style={{ marginRight: 4 }} />
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-danger">
-              {String(wallet.status)}
-            </Text>
-          </View>
-        ) : (
-          <View className="flex-row items-center rounded-full bg-success-soft px-2.5 py-1">
-            <View className="mr-1.5 h-1.5 w-1.5 rounded-full bg-brand" />
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-brand">Active</Text>
-          </View>
-        )}
-      </View>
+        <View className="ml-4 flex-1 pr-2">
+          <Text className="text-[16px] font-extrabold tracking-tight text-ink" numberOfLines={1}>
+            {wallet.name}
+          </Text>
+          <Text className="mt-0.5 text-xs font-medium capitalize text-muted" numberOfLines={1}>
+            {subtitleFor(wallet)}
+          </Text>
+        </View>
 
-      <Text className="mt-4 text-[17px] font-extrabold tracking-tight text-ink" numberOfLines={1}>
-        {wallet.name}
-      </Text>
-      <Text className="text-[13px] capitalize text-muted" numberOfLines={1}>
-        {subtitleFor(wallet)}
-      </Text>
-
-      <Text className="mt-4 text-[10.5px] font-bold uppercase tracking-widest text-faded">
-        Available balance
-      </Text>
-      <Text className="mt-0.5 text-[28px] font-extrabold tracking-tight text-ink">
-        {formatMoney(wallet.balance)}
-      </Text>
-
-      <View className="mt-4 flex-row items-center justify-between border-t border-border pt-3">
-        <Text className="text-[12px] font-medium text-faded">{acct ?? 'Tap to open'}</Text>
-        <View className="flex-row items-center">
-          <Text className="text-[12px] font-semibold text-brand">Open</Text>
-          <Ionicons name="chevron-forward" size={13} color={colors.brand} style={{ marginLeft: 2 }} />
+        <View className="items-end">
+          <Text className="text-[15px] font-extrabold tracking-tight text-ink">
+            {formatMoney(wallet.balance)}
+          </Text>
+          <Text className="mt-0.5 text-[10px] font-bold" style={{ color: status.color }}>
+            {status.label}
+          </Text>
         </View>
       </View>
+
+      {hasTarget ? (
+        <View className="mt-4">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Progress</Text>
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">{pct}%</Text>
+          </View>
+          <View className="mt-1.5 h-2 overflow-hidden rounded-full bg-lav-soft">
+            <View
+              className="h-2 rounded-full"
+              style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: '#FFCC00' }}
+            />
+          </View>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

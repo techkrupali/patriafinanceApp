@@ -1,19 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { colors } from '../../theme';
+import { selection } from '../../lib/haptics';
 import { useRequestOtp, useVerifyOtp } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import type { AuthScreenProps } from '../../navigation/types';
 
+/**
+ * Stitch "Patria | OTP Verification" (2.2): centered "Verification" header,
+ * tonal gold shield badge, extrabold headline, six tonal digit boxes (12px
+ * radius, green tertiary focus ring per the design html), clock + mm:ss resend
+ * timer, gold "Verify & Continue" CTA and the "Wrong number? Edit contact" link.
+ */
+
 const OTP_LENGTH = 6;
 
-export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
+export function OtpScreen({ route, navigation }: AuthScreenProps<'Otp'>) {
   const { identifier, purpose, sentTo, debugOtp } = route.params;
 
   const [code, setCode] = useState('');
@@ -76,31 +84,70 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
 
   return (
     <Screen withBottomInset>
-      <Header title="Verification" />
-      <View className="flex-1 px-6 pt-4">
+      {/* Top bar: slate back arrow + centered title (design's TopAppBar) */}
+      <View className="flex-row items-center px-5 py-2" style={{ minHeight: 56 }}>
+        <View className="w-10">
+          {navigation.canGoBack() ? (
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.goBack();
+              }}
+              hitSlop={8}
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.muted} />
+            </Pressable>
+          ) : null}
+        </View>
+        <Text className="flex-1 text-center text-lg font-bold text-ink">Verification</Text>
+        <View className="w-10" />
+      </View>
+
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 16 }}>
+        {/* Brand/context header */}
         <View className="items-center">
-          <View className="h-16 w-16 items-center justify-center rounded-3xl bg-lav-soft">
-            <Ionicons name="mail-open-outline" size={30} color={colors.navy} />
+          <View
+            className="h-20 w-20 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: 'rgba(255,204,0,0.18)' }}
+          >
+            <MaterialCommunityIcons name="shield-account" size={40} color="#FFCC00" />
           </View>
-          <Text className="mt-5 text-3xl font-extrabold tracking-tight text-ink">Enter the code</Text>
-          <Text className="mt-2 text-center text-[15px] leading-6 text-muted">
+          <Text className="mt-6 text-center text-3xl font-extrabold tracking-tight text-ink">
+            Enter Verification Code
+          </Text>
+          <Text className="mt-3 text-center text-base leading-6 text-muted">
             We sent a 6-digit code to{'\n'}
             <Text className="font-semibold text-ink">{sentToLabel ?? identifier}</Text>
           </Text>
         </View>
 
-        <Pressable className="mt-9 flex-row justify-between" onPress={() => inputRef.current?.focus()}>
+        {/* OTP digit grid — tonal boxes, green tertiary focus ring per design */}
+        <Pressable
+          className="mt-8 flex-row"
+          style={{ gap: 10 }}
+          onPress={() => inputRef.current?.focus()}
+        >
           {Array.from({ length: OTP_LENGTH }).map((_, i) => {
             const active = i === code.length;
             const filled = Boolean(code[i]);
             return (
               <View
                 key={i}
-                className={`h-16 w-[46px] items-center justify-center rounded-2xl ${
-                  active ? 'border-2 border-brand bg-white' : filled ? 'border-2 border-navy bg-white' : 'bg-lav-faint'
-                }`}
+                className="h-14 flex-1 items-center justify-center rounded-xl"
+                style={{
+                  backgroundColor: active ? colors.white : colors.lavSoft, // surface-container-high
+                  borderWidth: 2,
+                  borderColor: active ? colors.brand : 'transparent', // tertiary #006D2F ring
+                }}
               >
-                <Text className="text-2xl font-extrabold text-ink">{code[i] ?? ''}</Text>
+                {filled ? (
+                  <Text className="text-2xl font-bold text-ink">{code[i]}</Text>
+                ) : (
+                  <Text className="text-2xl font-bold" style={{ color: 'rgba(23,28,31,0.65)' }}>
+                    •
+                  </Text>
+                )}
               </View>
             );
           })}
@@ -114,6 +161,7 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
           keyboardType="number-pad"
           maxLength={OTP_LENGTH}
           autoFocus
+          autoComplete="one-time-code"
           className="absolute h-px w-px opacity-0"
         />
 
@@ -125,28 +173,53 @@ export function OtpScreen({ route }: AuthScreenProps<'Otp'>) {
 
         <ErrorText message={error} className="mt-4" />
 
+        {/* Timer / resend */}
+        <View className="mt-6 flex-row items-center justify-center" style={{ gap: 8 }}>
+          <Ionicons name="time-outline" size={17} color={colors.faded} />
+          {cooldown > 0 ? (
+            <Text className="text-[15px] font-medium text-muted">
+              Resend code in{' '}
+              <Text className="font-semibold text-ink">00:{String(cooldown).padStart(2, '0')}</Text>
+            </Text>
+          ) : (
+            <Pressable onPress={resendCode} disabled={resend.isPending} hitSlop={6}>
+              <Text className="text-[15px] font-medium text-muted">
+                Didn’t get a code?{' '}
+                <Text className="font-bold underline" style={{ color: colors.goldDeep }}>
+                  {resend.isPending ? 'Sending…' : 'Resend'}
+                </Text>
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
         <Button
-          title="Verify"
-          icon="checkmark"
+          title="Verify & Continue"
           onPress={() => submit()}
           loading={verify.isPending}
           disabled={code.length !== OTP_LENGTH}
           className="mt-8"
         />
 
-        <View className="mt-6 flex-row justify-center">
-          <Text className="text-sm text-muted">Didn't get a code? </Text>
-          {cooldown > 0 ? (
-            <Text className="text-sm text-faded">Resend in {cooldown}s</Text>
-          ) : (
-            <Pressable onPress={resendCode} disabled={resend.isPending} hitSlop={6}>
-              <Text className="text-sm font-semibold text-brand">
-                {resend.isPending ? 'Sending…' : 'Resend'}
+        {/* Secondary links */}
+        {navigation.canGoBack() ? (
+          <View className="mt-8 items-center">
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.goBack();
+              }}
+              hitSlop={6}
+              className="flex-row items-center"
+            >
+              <Ionicons name="pencil-outline" size={14} color={colors.muted} style={{ marginRight: 6 }} />
+              <Text className="text-sm font-medium text-muted">
+                Wrong number? <Text className="underline">Edit contact</Text>
               </Text>
             </Pressable>
-          )}
-        </View>
-      </View>
+          </View>
+        ) : null}
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

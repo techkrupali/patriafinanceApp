@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text, TextInput, View, type TextInputProps } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
-import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { PinPad } from '../../components/PinPad';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, shadow } from '../../theme';
 import { useRegister } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { getBiometricSupport, runBiometricPrompt, saveTxnPin, type BiometricSupport } from '../../lib/biometrics';
 import { notifyError, selection } from '../../lib/haptics';
 import type { AuthScreenProps } from '../../navigation/types';
+
+/**
+ * Stitch "Create Account" (step 2 of 8): gold back arrow, centered title,
+ * "STEP X OF N" + % over segmented gold progress bars, extrabold headline,
+ * sentence-case semibold labels with tonal-fill inputs (12px radius, gold
+ * focus), green lock trust line, gold CTA and the "Log in" alternative action.
+ */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\d{10,15}$/;
@@ -26,20 +31,93 @@ interface OtpParams {
   debugOtp?: string;
 }
 
-function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
+/** Design-system field: sentence-case label, tonal fill, 12px radius, gold focus. */
+function Field({
+  label,
+  secure,
+  ...rest
+}: TextInputProps & { label: string; secure?: boolean }) {
+  const [focused, setFocused] = useState(false);
+  const [reveal, setReveal] = useState(false);
+
   return (
-    <View className="px-6 pt-1">
-      <View className="h-2 overflow-hidden rounded-full bg-lav">
-        <LinearGradient
-          colors={gradients.brand}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ height: '100%', width: `${(step / 3) * 100}%`, borderRadius: 999 }}
-        />
-      </View>
-      <Text className="mt-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-        Step {step} of 3
+    <View className="w-full">
+      <Text className="mb-2 ml-1 text-sm font-semibold" style={{ color: '#4E4632' }}>
+        {label}
       </Text>
+      <View
+        className="w-full flex-row items-center rounded-xl px-4"
+        style={{
+          minHeight: 54,
+          backgroundColor: focused ? colors.white : colors.lavSoft, // surface-container-high
+          borderWidth: 1.5,
+          borderColor: focused ? colors.goldDeep : 'transparent',
+        }}
+      >
+        <TextInput
+          placeholderTextColor="#80765F"
+          selectionColor={colors.goldDeep}
+          cursorColor={colors.goldDeep}
+          secureTextEntry={secure && !reveal}
+          className="flex-1 py-3.5 text-base"
+          {...rest}
+          onFocus={(e) => {
+            setFocused(true);
+            rest.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            rest.onBlur?.(e);
+          }}
+          style={[{ color: colors.ink, fontWeight: '500' }, rest.style]}
+        />
+        {secure ? (
+          <Pressable onPress={() => setReveal((r) => !r)} hitSlop={10} className="pl-2">
+            <Ionicons name={reveal ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.muted} />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/** Segmented progress: "STEP X OF 3" + % over three pill bars (gold fill). */
+function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
+  const pct = Math.round((step / 3) * 100);
+  return (
+    <View className="px-6 pt-2">
+      <View className="mb-2 flex-row items-center justify-between">
+        <Text
+          className="text-[11px] font-medium uppercase"
+          style={{ color: '#4B637E', letterSpacing: 1 }}
+        >
+          Step {step} of 3
+        </Text>
+        <Text className="text-[11px] font-bold" style={{ color: '#4B637E' }}>
+          {pct}%
+        </Text>
+      </View>
+      <View className="flex-row" style={{ gap: 6, height: 6 }}>
+        {([1, 2, 3] as const).map((i) => (
+          <View
+            key={i}
+            className="flex-1 rounded-full"
+            style={{ backgroundColor: i <= step ? colors.goldDeep : colors.lav }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Tonal gold icon badge (primary-container/20 with gold glyph, per design). */
+function IconBadge({ name }: { name: React.ComponentProps<typeof Ionicons>['name'] }) {
+  return (
+    <View
+      className="h-20 w-20 items-center justify-center rounded-2xl"
+      style={{ backgroundColor: 'rgba(255,204,0,0.18)' }}
+    >
+      <Ionicons name={name} size={38} color="#FFCC00" />
     </View>
   );
 }
@@ -199,152 +277,179 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
 
   return (
     <Screen withBottomInset>
-      {/* Custom header preserves step-back behaviour */}
-      <View className="flex-row items-center px-5 py-3" style={{ minHeight: 56 }}>
-        <Pressable
-          onPress={back}
-          hitSlop={8}
-          className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-          style={shadow.soft}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.ink} />
-        </Pressable>
-        <Text className="text-lg font-bold text-ink">
-          {phase === 'biometric' ? 'Almost done' : 'Create account'}
+      {/* Top bar: gold back arrow + centered title (design's fixed header) */}
+      <View className="flex-row items-center px-5 py-2" style={{ minHeight: 56 }}>
+        <View className="w-10">
+          <Pressable
+            onPress={back}
+            hitSlop={8}
+            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.goldDeep} />
+          </Pressable>
+        </View>
+        <Text className="flex-1 text-center text-lg font-bold text-ink">
+          {phase === 'biometric' ? 'Almost Done' : 'Create Account'}
         </Text>
+        <View className="w-10" />
       </View>
 
       {phase === 'form' ? <ProgressBar step={step} /> : null}
 
-      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24 }}>
-          {phase === 'form' && step === 1 ? (
-            <>
-              <Text className="text-[11px] font-semibold uppercase tracking-wider text-brand">Get started</Text>
-              <Text className="mt-1.5 text-4xl font-extrabold tracking-tight text-ink">Personal details</Text>
-              <Text className="mt-2.5 text-[15px] leading-6 text-muted">Tell us a little about yourself.</Text>
-              <View className="mt-7" style={{ gap: 16 }}>
-                <Input label="First name" icon="person-outline" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
-                <Input label="Last name" icon="person-outline" value={lastName} onChangeText={setLastName} placeholder="Obi" />
-                <Input
-                  label="Phone number"
-                  icon="call-outline"
-                  value={phone}
-                  onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
-                  placeholder="08012345678"
-                  keyboardType="number-pad"
-                  maxLength={15}
-                />
-                <Input
-                  label="Email address"
-                  icon="mail-outline"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="you@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-              <ErrorText message={error} className="mt-4" />
-              <Button title="Continue" icon="arrow-forward" onPress={continueStep1} className="mt-6" />
-            </>
-          ) : null}
+      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, flexGrow: 1 }}>
+        {phase === 'form' && step === 1 ? (
+          <>
+            <Text className="mt-4 text-3xl font-extrabold tracking-tight text-ink">
+              Create Your Account
+            </Text>
+            <Text className="mt-3 text-base font-medium leading-6 text-muted">
+              Tell us a little about yourself.
+            </Text>
 
-          {phase === 'form' && step === 2 ? (
-            <>
-              <View className="items-center">
-                <LinearGradient
-                  colors={gradients.navy}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[
-                    { height: 60, width: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-                    shadow.card,
-                  ]}
-                >
-                  <Ionicons name="shield-checkmark" size={28} color={colors.brandGlow} />
-                </LinearGradient>
-                <Text className="mt-5 text-4xl font-extrabold tracking-tight text-ink">Secure your vault</Text>
-                <Text className="mt-2.5 text-center text-[15px] leading-6 text-muted">
-                  {confirming
-                    ? 'Confirm your 4-digit transaction PIN.'
-                    : 'Create a 4-digit PIN to authorize transactions.'}
-                </Text>
-              </View>
-              <ErrorText message={error} className="mt-4" />
-              <View className="mt-8">
-                <PinPad value={confirming ? pinConfirm : pin} onChange={onPinChange} />
-              </View>
-            </>
-          ) : null}
-
-          {phase === 'form' && step === 3 ? (
-            <>
-              <Text className="text-[11px] font-semibold uppercase tracking-wider text-brand">Final step</Text>
-              <Text className="mt-1.5 text-4xl font-extrabold tracking-tight text-ink">Set a password</Text>
-              <Text className="mt-2.5 text-[15px] leading-6 text-muted">
-                At least 8 characters. You will use this to sign in.
-              </Text>
-              <View className="mt-7" style={{ gap: 16 }}>
-                <Input
-                  label="Password"
-                  icon="lock-closed-outline"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Create a password"
-                  secureTextEntry
-                />
-                <Input
-                  label="Confirm password"
-                  icon="lock-closed-outline"
-                  value={passwordConfirm}
-                  onChangeText={setPasswordConfirm}
-                  placeholder="Re-enter your password"
-                  secureTextEntry
-                />
-              </View>
-              <ErrorText message={error} className="mt-4" />
-              <Button
-                title="Create Account"
-                icon="checkmark"
-                onPress={submit}
-                loading={register.isPending}
-                className="mt-6"
+            <View className="mt-8" style={{ gap: 20 }}>
+              <Field label="First name" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
+              <Field label="Last name" value={lastName} onChangeText={setLastName} placeholder="Obi" />
+              <Field
+                label="Phone number"
+                value={phone}
+                onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
+                placeholder="Enter your phone number"
+                keyboardType="number-pad"
+                maxLength={15}
               />
-            </>
-          ) : null}
-
-          {phase === 'biometric' ? (
-            <View className="items-center pt-6">
-              <View
-                className="h-24 w-24 items-center justify-center rounded-full bg-success-soft"
-                style={shadow.soft}
-              >
-                <Ionicons name={support?.icon ?? 'finger-print'} size={46} color={colors.brand} />
-              </View>
-              <Text className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-brand">
-                Almost done
-              </Text>
-              <Text className="mt-1.5 text-center text-4xl font-extrabold tracking-tight text-ink">
-                Enable {support?.label}?
-              </Text>
-              <Text className="mt-3 text-center text-[15px] leading-6 text-muted">
-                Unlock Patriai and authorize payments with {support?.label} instead of typing your PIN
-                every time. You can change this anytime in Profile.
-              </Text>
-
-              <View className="mt-8 w-full" style={{ gap: 12 }}>
-                <Button
-                  title={`Enable ${support?.label}`}
-                  icon={support?.icon}
-                  iconPosition="left"
-                  onPress={() => void enableBiometric()}
-                  loading={bioBusy}
-                />
-                <Button title="Maybe later" variant="ghost" onPress={() => goToOtp()} />
-              </View>
-              <ErrorText message={error} className="mt-4" />
+              <Field
+                label="Email address"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
             </View>
-          ) : null}
+
+            {/* Trust reinforcement */}
+            <View className="flex-row items-center justify-center py-2" style={{ gap: 8, marginTop: 20 }}>
+              <Ionicons name="lock-closed" size={15} color={colors.brand} />
+              <Text className="text-[13px] font-medium" style={{ color: '#4B637E' }}>
+                Your information is secure and encrypted
+              </Text>
+            </View>
+
+            <ErrorText message={error} className="mt-2" />
+            <Button title="Continue" onPress={continueStep1} className="mt-4" />
+
+            <View className="mt-6 flex-row justify-center">
+              <Text className="text-[15px] font-medium text-muted">Already have an account? </Text>
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('Login');
+                }}
+                hitSlop={6}
+              >
+                <Text className="text-[15px] font-bold" style={{ color: colors.goldDeep }}>
+                  Log in
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text className="mt-auto pt-10 text-center text-xs leading-5" style={{ color: 'rgba(73,96,124,0.7)' }}>
+              By continuing, you agree to our <Text className="font-medium underline">Terms</Text> &{' '}
+              <Text className="font-medium underline">Privacy Policy</Text>
+            </Text>
+          </>
+        ) : null}
+
+        {phase === 'form' && step === 2 ? (
+          <>
+            <View className="items-center pt-2">
+              <IconBadge name="shield-checkmark" />
+              <Text className="mt-6 text-center text-3xl font-extrabold tracking-tight text-ink">
+                Secure Your Vault
+              </Text>
+              <Text className="mt-3 text-center text-base font-medium leading-6 text-muted">
+                {confirming
+                  ? 'Confirm your 4-digit transaction PIN.'
+                  : 'Create a 4-digit PIN to authorize transactions.'}
+              </Text>
+            </View>
+            <ErrorText message={error} className="mt-4" />
+            <View className="mt-8">
+              <PinPad value={confirming ? pinConfirm : pin} onChange={onPinChange} />
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'form' && step === 3 ? (
+          <>
+            <Text className="mt-4 text-3xl font-extrabold tracking-tight text-ink">Set a Password</Text>
+            <Text className="mt-3 text-base font-medium leading-6 text-muted">
+              At least 8 characters. You will use this to sign in.
+            </Text>
+
+            <View className="mt-8" style={{ gap: 20 }}>
+              <Field
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Create a password"
+                secure
+              />
+              <Field
+                label="Confirm password"
+                value={passwordConfirm}
+                onChangeText={setPasswordConfirm}
+                placeholder="Re-enter your password"
+                secure
+              />
+            </View>
+
+            <View className="flex-row items-center justify-center py-2" style={{ gap: 8, marginTop: 20 }}>
+              <Ionicons name="lock-closed" size={15} color={colors.brand} />
+              <Text className="text-[13px] font-medium" style={{ color: '#4B637E' }}>
+                Your information is secure and encrypted
+              </Text>
+            </View>
+
+            <ErrorText message={error} className="mt-2" />
+            <Button
+              title="Create Account"
+              onPress={submit}
+              loading={register.isPending}
+              className="mt-4"
+            />
+          </>
+        ) : null}
+
+        {phase === 'biometric' ? (
+          <View className="items-center pt-6">
+            <View
+              className="h-24 w-24 items-center justify-center rounded-full bg-success-soft"
+              style={shadow.soft}
+            >
+              <Ionicons name={support?.icon ?? 'finger-print'} size={46} color={colors.brand} />
+            </View>
+            <Text className="mt-6 text-center text-3xl font-extrabold tracking-tight text-ink">
+              Enable {support?.label}?
+            </Text>
+            <Text className="mt-3 text-center text-base font-medium leading-6 text-muted">
+              Unlock Patriai and authorize payments with {support?.label} instead of typing your PIN
+              every time. You can change this anytime in Profile.
+            </Text>
+
+            <View className="mt-8 w-full" style={{ gap: 12 }}>
+              <Button
+                title={`Enable ${support?.label}`}
+                icon={support?.icon}
+                iconPosition="left"
+                onPress={() => void enableBiometric()}
+                loading={bioBusy}
+              />
+              <Button title="Maybe later" variant="ghost" onPress={() => goToOtp()} />
+            </View>
+            <ErrorText message={error} className="mt-4" />
+          </View>
+        ) : null}
       </KeyboardAwareScrollView>
     </Screen>
   );

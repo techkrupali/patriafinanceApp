@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
-import { colors, gradients, shadow } from '../theme';
+import { colors, shadow } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
@@ -79,12 +78,14 @@ const Tabs = createBottomTabNavigator<MainTabParamList>();
 type MciName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 /**
- * Client footer spec — Home · Family · Steward (raised gold AI button) ·
- * Treasury · Rules · More. Material icons per the Curated Ledger design.
+ * Client footer spec (Stitch final layout) — 5 uniform flat tabs:
+ * HOME · FAMILY · STEWARD · TREASURY · MORE. Active tab gets a soft gold
+ * pill behind the icon; no raised centre button.
  */
-const TAB_ICONS: Record<Exclude<keyof MainTabParamList, 'Steward'>, { on: MciName; off: MciName }> = {
+const TAB_ICONS: Record<keyof MainTabParamList, { on: MciName; off: MciName }> = {
   Home: { on: 'home', off: 'home-outline' },
   Family: { on: 'account-group', off: 'account-group-outline' },
+  Steward: { on: 'shield-account', off: 'shield-account-outline' },
   Treasury: { on: 'bank', off: 'bank-outline' },
   More: { on: 'menu', off: 'menu' },
 };
@@ -148,37 +149,7 @@ function MainTabs() {
           />
         ),
         tabBarIcon: ({ focused, color }) => {
-          if (route.name === 'Steward') {
-            // Raised metallic-gold AI button. The circle is absolutely
-            // positioned inside a normal-height slot so the STEWARD label
-            // stays on the exact same baseline as every other tab.
-            return (
-              <View style={{ width: 56, height: 28, alignItems: 'center' }}>
-                <LinearGradient
-                  colors={gradients.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[
-                    {
-                      position: 'absolute',
-                      top: -32,
-                      height: 54,
-                      width: 54,
-                      borderRadius: 27,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 4,
-                      borderColor: colors.white,
-                    },
-                    shadow.gold,
-                  ]}
-                >
-                  <MaterialCommunityIcons name="creation" size={24} color="#3D2F00" />
-                </LinearGradient>
-              </View>
-            );
-          }
-          const icons = TAB_ICONS[route.name as Exclude<keyof MainTabParamList, 'Steward'>];
+          const icons = TAB_ICONS[route.name];
           return (
             <View
               style={{
@@ -190,7 +161,7 @@ function MainTabs() {
                 backgroundColor: focused ? '#FFF3C4' : 'transparent',
               }}
             >
-              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={21} color={color} />
+              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={22} color={color} />
             </View>
           );
         },
