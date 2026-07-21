@@ -273,8 +273,8 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
             icon="flash-outline"
             tint="bg-success-soft"
             iconColor={colors.brand}
-            title="Automations"
-            subtitle="Smart rules & scheduled auto-transfers"
+            title="Rules"
+            subtitle="Automated actions & scheduled money moves"
             onPress={() => navigation.navigate('Automations')}
           />
           <Divider />

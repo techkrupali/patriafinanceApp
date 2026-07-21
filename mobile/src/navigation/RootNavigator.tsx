@@ -86,17 +86,13 @@ const TAB_ICONS: Record<Exclude<keyof MainTabParamList, 'Steward'>, { on: MciNam
   Home: { on: 'home', off: 'home-outline' },
   Family: { on: 'account-group', off: 'account-group-outline' },
   Treasury: { on: 'bank', off: 'bank-outline' },
-  Rules: { on: 'tune-variant', off: 'tune-variant' },
   More: { on: 'menu', off: 'menu' },
 };
 
-// Existing screens re-hosted as tabs (their inner navigation calls still work
-// through the composite navigator; they take no route params).
+// Existing screen re-hosted as a tab (its inner navigation calls still work
+// through the composite navigator; it takes no route params).
 const FamilyTab = (props: Record<string, unknown>) => (
   <FamilyHubScreen {...(props as unknown as React.ComponentProps<typeof FamilyHubScreen>)} />
-);
-const RulesTab = (props: Record<string, unknown>) => (
-  <AutomationsScreen {...(props as unknown as React.ComponentProps<typeof AutomationsScreen>)} />
 );
 
 function MainTabs() {
@@ -204,7 +200,6 @@ function MainTabs() {
       <Tabs.Screen name="Family" component={FamilyTab} />
       <Tabs.Screen name="Steward" component={StewardScreen} options={{ tabBarLabel: 'Steward' }} />
       <Tabs.Screen name="Treasury" component={WalletsScreen} />
-      <Tabs.Screen name="Rules" component={RulesTab} />
       <Tabs.Screen name="More" component={ProfileScreen} />
     </Tabs.Navigator>
   );

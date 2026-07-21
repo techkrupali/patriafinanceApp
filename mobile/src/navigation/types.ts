@@ -13,14 +13,14 @@ export type AuthStackParamList = {
 };
 
 /**
- * Client footer spec: Home · Family · Steward (center AI) · Treasury · Rules · More.
+ * Client footer spec: 5 slots — Home · Family · Steward (dead-center AI) ·
+ * Treasury · More. Rules lives inside More.
  */
 export type MainTabParamList = {
   Home: undefined;
   Family: undefined;
   Steward: undefined;
   Treasury: undefined;
-  Rules: undefined;
   More: undefined;
 };
 
