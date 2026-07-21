@@ -122,22 +122,23 @@ function MainTabs() {
         ),
         tabBarActiveTintColor: colors.goldDeep,
         tabBarInactiveTintColor: colors.muted,
+        // One shared label spec so every tab's text sits on the same baseline.
         tabBarLabelStyle: {
           fontSize: 9,
           fontWeight: '800',
-          marginTop: 2,
-          letterSpacing: 0.8,
+          marginTop: 5,
+          letterSpacing: 0.6,
           textTransform: 'uppercase',
         },
-        tabBarItemStyle: { paddingTop: 10 },
+        tabBarItemStyle: { paddingTop: 12 },
         tabBarStyle: {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 72 + insets.bottom,
+          height: 74 + insets.bottom,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          paddingTop: 6,
-          paddingHorizontal: 2,
+          paddingTop: 4,
+          paddingHorizontal: 4,
         },
         tabBarBackground: () => (
           <View
@@ -152,18 +153,22 @@ function MainTabs() {
         ),
         tabBarIcon: ({ focused, color }) => {
           if (route.name === 'Steward') {
-            // Raised metallic-gold AI button — the Ledger's centrepiece.
+            // Raised metallic-gold AI button. The circle is absolutely
+            // positioned inside a normal-height slot so the STEWARD label
+            // stays on the exact same baseline as every other tab.
             return (
-              <View style={{ marginTop: -26, alignItems: 'center' }}>
+              <View style={{ width: 56, height: 28, alignItems: 'center' }}>
                 <LinearGradient
                   colors={gradients.gold}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={[
                     {
-                      height: 56,
-                      width: 56,
-                      borderRadius: 28,
+                      position: 'absolute',
+                      top: -32,
+                      height: 54,
+                      width: 54,
+                      borderRadius: 27,
                       alignItems: 'center',
                       justifyContent: 'center',
                       borderWidth: 4,
@@ -172,7 +177,7 @@ function MainTabs() {
                     shadow.gold,
                   ]}
                 >
-                  <MaterialCommunityIcons name="creation" size={26} color="#3D2F00" />
+                  <MaterialCommunityIcons name="creation" size={24} color="#3D2F00" />
                 </LinearGradient>
               </View>
             );
@@ -182,14 +187,14 @@ function MainTabs() {
             <View
               style={{
                 width: 46,
-                height: 30,
+                height: 28,
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: focused ? '#FFF3C4' : 'transparent',
               }}
             >
-              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={22} color={color} />
+              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={21} color={color} />
             </View>
           );
         },
