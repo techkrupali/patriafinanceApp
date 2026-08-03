@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed-dim": "#b0c9e8",
+              "on-tertiary-fixed-variant": "#005322",
+              "secondary-fixed": "#d1e4ff",
+              "on-tertiary-container": "#00682d",
+              "inverse-surface": "#2c3134",
+              "on-error-container": "#93000a",
+              "on-secondary": "#ffffff",
+              "on-primary-fixed": "#241a00",
+              "on-primary-fixed-variant": "#584400",
+              "primary-fixed": "#ffe08b",
+              "on-tertiary-fixed": "#002109",
+              "surface-container-highest": "#dfe3e7",
+              "surface-dim": "#d6dade",
+              "surface-container-low": "#f0f4f8",
+              "on-surface": "#171c1f",
+              "outline-variant": "#d2c5ab",
+              "surface-variant": "#dfe3e7",
+              "surface": "#f6fafe",
+              "on-secondary-fixed-variant": "#314863",
+              "inverse-on-surface": "#edf1f5",
+              "surface-tint": "#745b00",
+              "error": "#ba1a1a",
+              "tertiary-fixed": "#66ff8e",
+              "on-surface-variant": "#4e4632",
+              "primary-container": "#ffcc00",
+              "tertiary-container": "#4cee7d",
+              "on-background": "#171c1f",
+              "error-container": "#ffdad6",
+              "on-secondary-container": "#4b637e",
+              "surface-bright": "#f6fafe",
+              "on-tertiary": "#ffffff",
+              "secondary-container": "#c7dfff",
+              "inverse-primary": "#f1c100",
+              "surface-container": "#eaeef2",
+              "outline": "#80765f",
+              "on-error": "#ffffff",
+              "primary-fixed-dim": "#f1c100",
+              "primary": "#745b00",
+              "on-secondary-fixed": "#011d35",
+              "secondary": "#49607c",
+              "background": "#f6fafe",
+              "on-primary": "#ffffff",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-container-high": "#e4e9ed",
+              "tertiary": "#006d2f",
+              "on-primary-container": "#6f5700",
+              "surface-container-lowest": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-24">
+<!-- Top App Bar -->
+<header class="bg-[#f6fafe]/80 dark:bg-[#171c1f]/80 backdrop-blur-xl fixed top-0 w-full z-40">
+<div class="flex justify-between items-center px-6 h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary-container overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="Close-up portrait of a professional man with a kind expression, soft natural indoor lighting, warm tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYx1eZqNc0mgOAJGkgP_37Jkh2_q3lQuWV_z-U-hWvwYwLJ3SZn5ur1OlmouTH3K0sebY-87VTegS-_V6pWJagHL9XbgqizJQg7gfX4HDwMVt3mt8wy02q_p1r7zHB1UDoYyZ810aHcyetwaGnxvqtrXtF9zFisn9VAANsZQwUyGQOawM6-2INmn2zir_g-As14YFqGUB64xgX5JmlQOmh54UASPGKTxKHS77VVRip16s8CSlYzjE7htOIpyCr1Lf0dUvMOsSj_gM"/>
+</div>
+<span class="font-['Manrope'] font-black text-[#171c1f] dark:text-[#f6fafe] text-xl">Patria</span>
+</div>
+<button class="text-[#745b00] dark:text-[#FFCC00] hover:opacity-80 transition-opacity active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<main class="pt-20 px-6 max-w-md mx-auto space-y-8">
+<!-- Hero Balance Section -->
+<section class="space-y-1">
+<span class="font-label text-secondary font-medium tracking-tight text-sm">Total Family Wealth</span>
+<h1 class="font-headline text-5xl font-extrabold tracking-tighter text-on-surface">$128,430.50</h1>
+<div class="flex items-center gap-2 mt-2">
+<span class="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+                    +2.4%
+                </span>
+<span class="text-on-surface-variant text-xs font-medium">vs last month</span>
+</div>
+</section>
+<!-- Bento Grid: Quick Insights -->
+<section class="grid grid-cols-2 gap-4">
+<!-- Family Ledger Card -->
+<div class="col-span-2 bg-surface-container-lowest p-6 rounded-[24px] shadow-[0px_8px_24px_rgba(23,28,31,0.04)]">
+<div class="flex justify-between items-start mb-4">
+<div class="bg-primary-container/20 p-2 rounded-xl">
+<span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant">more_horiz</span>
+</div>
+<p class="font-label text-xs font-semibold text-secondary uppercase tracking-widest mb-1">Checking Account</p>
+<h2 class="font-headline text-2xl font-bold">$12,450.00</h2>
+</div>
+<!-- Savings Mini Card -->
+<div class="bg-surface-container-low p-5 rounded-[24px]">
+<p class="font-label text-[10px] font-bold text-secondary uppercase tracking-wider mb-2">Savings</p>
+<p class="font-headline text-lg font-bold text-on-surface">$84,000</p>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-tertiary h-full w-[75%]"></div>
+</div>
+</div>
+<!-- Investments Mini Card -->
+<div class="bg-surface-container-low p-5 rounded-[24px]">
+<p class="font-label text-[10px] font-bold text-secondary uppercase tracking-wider mb-2">Portfolio</p>
+<p class="font-headline text-lg font-bold text-on-surface">$31,980</p>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary h-full w-[40%]"></div>
+</div>
+</div>
+</section>
+<!-- Recent Ledger Activity -->
+<section class="space-y-4">
+<div class="flex justify-between items-center">
+<h3 class="font-headline text-lg font-bold">Ledger Feed</h3>
+<button class="text-primary text-sm font-semibold">View All</button>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">shopping_cart</span>
+</div>
+<div>
+<p class="font-semibold text-sm">Whole Foods Market</p>
+<p class="text-xs text-on-surface-variant">Food &amp; Dining • Today</p>
+</div>
+</div>
+<p class="font-bold text-error">-$240.12</p>
+</div>
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl opacity-60">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">payments</span>
+</div>
+<div>
+<p class="font-semibold text-sm">Salary Deposit</p>
+<p class="text-xs text-on-surface-variant">Income • Yesterday</p>
+</div>
+</div>
+<p class="font-bold text-tertiary">+$8,500.00</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Modal Backdrop / Dimmer -->
+<div class="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+<!-- Budget Alert Popup -->
+<div class="bg-surface-container-lowest w-full max-w-sm rounded-[32px] overflow-hidden shadow-[0px_24px_48px_rgba(23,28,31,0.2)]">
+<div class="p-8 text-center space-y-6">
+<!-- Alert Icon Cluster -->
+<div class="relative inline-block">
+<div class="w-20 h-20 rounded-full bg-primary-container flex items-center justify-center mx-auto">
+<span class="material-symbols-outlined text-on-primary-container text-4xl" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-error border-4 border-surface-container-lowest flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[16px]">priority_high</span>
+</div>
+</div>
+<div class="space-y-2">
+<h2 class="font-headline text-2xl font-extrabold text-on-surface tracking-tight">Budget Alert</h2>
+<p class="text-on-secondary-container font-medium text-balance leading-relaxed">
+                        You are about to exceed your monthly food budget.
+                    </p>
+</div>
+<div class="pt-2 space-y-3">
+<button class="w-full h-14 bg-primary-container text-on-primary-container font-bold rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform duration-100 shadow-sm">
+                        Adjust Budget
+                    </button>
+<button class="w-full h-14 bg-surface-container-low text-secondary font-semibold rounded-2xl flex items-center justify-center active:scale-95 transition-transform duration-100">
+                        Ignore
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="bg-white/80 dark:bg-[#171c1f]/80 backdrop-blur-xl fixed bottom-0 w-full z-40 rounded-t-3xl shadow-[0px_-8px_24px_rgba(23,28,31,0.06)] h-[72px] flex justify-around items-center px-4 pb-safe">
+<a class="flex flex-col items-center justify-center bg-[#FFCC00] dark:bg-[#745b00] text-[#171c1f] dark:text-white rounded-2xl px-3 py-1.5 active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider mt-0.5">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] dark:text-[#94a3b8] hover:bg-[#f0f4f8] dark:hover:bg-[#1c2227] rounded-2xl transition-all active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider mt-0.5">Family</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] dark:text-[#94a3b8] hover:bg-[#f0f4f8] dark:hover:bg-[#1c2227] rounded-2xl transition-all active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">shield_person</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider mt-0.5">Steward</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] dark:text-[#94a3b8] hover:bg-[#f0f4f8] dark:hover:bg-[#1c2227] rounded-2xl transition-all active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider mt-0.5">Treasury</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] dark:text-[#94a3b8] hover:bg-[#f0f4f8] dark:hover:bg-[#1c2227] rounded-2xl transition-all active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider mt-0.5">Rules</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Patria - How Control Works</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary-container": "#4cee7d",
+                        "on-secondary-container": "#4b637e",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-container": "#00682d",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "secondary": "#49607c",
+                        "tertiary": "#006d2f",
+                        "background": "#f6fafe",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#dfe3e7",
+                        "surface-container-high": "#e4e9ed",
+                        "secondary-container": "#c7dfff",
+                        "secondary-fixed": "#d1e4ff",
+                        "on-tertiary-fixed-variant": "#005322",
+                        "surface-container-low": "#f0f4f8",
+                        "primary-fixed-dim": "#f1c100",
+                        "primary-fixed": "#ffe08b",
+                        "outline": "#80765f",
+                        "on-background": "#171c1f",
+                        "outline-variant": "#d2c5ab",
+                        "on-surface": "#171c1f",
+                        "surface-tint": "#745b00",
+                        "primary-container": "#ffcc00",
+                        "on-secondary-fixed": "#011d35",
+                        "tertiary-fixed-dim": "#3de273",
+                        "on-primary-container": "#6f5700",
+                        "tertiary-fixed": "#66ff8e",
+                        "on-secondary-fixed-variant": "#314863",
+                        "on-error-container": "#93000a",
+                        "surface-container": "#eaeef2",
+                        "surface": "#f6fafe",
+                        "inverse-surface": "#2c3134",
+                        "secondary-fixed-dim": "#b0c9e8",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#d6dade",
+                        "primary": "#745b00",
+                        "surface-variant": "#dfe3e7",
+                        "on-primary-fixed": "#241a00",
+                        "on-primary-fixed-variant": "#584400",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#edf1f5",
+                        "on-surface-variant": "#4e4632",
+                        "inverse-primary": "#f1c100",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#f6fafe",
+                        "on-tertiary-fixed": "#002109"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f6fafe;
+            color: #171c1f;
+        }
+        h1, h2, h3 {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col items-center">
+<!-- Top Navigation Anchor -->
+<header class="w-full top-0 sticky z-50 bg-surface-container-low flex items-center justify-between px-6 py-4">
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-slate-200/50 transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-[#745b00]" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="text-xl font-bold font-manrope text-on-surface">How Control Works</h1>
+</div>
+<div class="hidden md:flex items-center gap-6">
+<span class="font-label font-medium text-sm text-secondary">Step 7 of 8</span>
+</div>
+</header>
+<main class="w-full max-w-2xl px-6 py-8 md:py-12 flex flex-col gap-10">
+<!-- Progress Bar Section -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<p class="text-secondary font-label font-medium text-xs tracking-wider uppercase">Onboarding Journey</p>
+<p class="text-on-surface font-headline font-bold text-sm">Step 7/8</p>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[87.5%] rounded-full"></div>
+</div>
+</div>
+<!-- Hero Section -->
+<div class="text-center space-y-4">
+<h2 class="text-4xl md:text-5xl font-extrabold tracking-tight text-on-surface">Control Stays With You</h2>
+<p class="text-secondary text-lg font-body max-w-md mx-auto leading-relaxed">
+                Decide who can view, spend, or approve money in your family
+            </p>
+</div>
+<!-- Diagram: Visual Hierarchy -->
+<section class="bg-surface-container-low rounded-2xl p-8 relative overflow-hidden">
+<div class="relative z-10 flex flex-col items-center gap-8">
+<!-- Owner Node -->
+<div class="flex flex-col items-center">
+<div class="w-20 h-20 rounded-2xl bg-primary-container flex items-center justify-center shadow-lg border border-primary/10">
+<span class="material-symbols-outlined text-4xl text-on-primary-container" data-icon="shield_person" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+</div>
+<span class="mt-3 font-headline font-bold text-on-surface">You (Owner)</span>
+</div>
+<!-- Connectors -->
+<div class="w-px h-12 bg-outline-variant/40 relative">
+<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-outline-variant"></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-12 w-full max-w-md">
+<!-- Family Node -->
+<div class="flex flex-col items-center">
+<div class="w-16 h-16 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-3xl text-secondary" data-icon="family_history">family_history</span>
+</div>
+<span class="mt-2 font-headline font-semibold text-sm text-on-surface">Family Members</span>
+<div class="flex gap-1 mt-3">
+<span class="px-2 py-0.5 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[10px] font-bold uppercase tracking-tighter">View</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-container/20 text-on-tertiary-container text-[10px] font-bold uppercase tracking-tighter">Spend</span>
+</div>
+</div>
+<!-- Treasury Node -->
+<div class="flex flex-col items-center">
+<div class="w-16 h-16 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-md border-2 border-primary/20">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="account_balance">account_balance</span>
+</div>
+<span class="mt-2 font-headline font-semibold text-sm text-on-surface">Treasury</span>
+<div class="flex gap-1 mt-3">
+<span class="px-2 py-0.5 rounded-full bg-primary-container text-on-primary-container text-[10px] font-bold uppercase tracking-tighter">Approve</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Decorative background element -->
+<div class="absolute inset-0 opacity-5 pointer-events-none">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-container rounded-full blur-3xl -mr-32 -mt-32"></div>
+<div class="absolute bottom-0 left-0 w-64 h-64 bg-secondary-container rounded-full blur-3xl -ml-32 -mb-32"></div>
+</div>
+</section>
+<!-- Bento-style Info Cards -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Roles Card -->
+<div class="p-6 rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-container hover:shadow-md transition-shadow flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="groups">groups</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-on-surface text-base">Roles</h3>
+<p class="text-secondary text-sm font-body mt-1 leading-relaxed">Each person has a role — like Owner, Spouse, or Child.</p>
+</div>
+</div>
+<!-- Permissions Card -->
+<div class="p-6 rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-container hover:shadow-md transition-shadow flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="rule">rule</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-on-surface text-base">Permissions</h3>
+<p class="text-secondary text-sm font-body mt-1 leading-relaxed">You decide who can spend, view, or approve money.</p>
+</div>
+</div>
+<!-- Approvals Card -->
+<div class="p-6 rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-container hover:shadow-md transition-shadow flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="verified_user">verified_user</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-on-surface text-base">Approvals</h3>
+<p class="text-secondary text-sm font-body mt-1 leading-relaxed">Important actions can require approval before money moves.</p>
+</div>
+</div>
+</section>
+<!-- Example Scenario Box -->
+<section class="bg-surface-container-high rounded-2xl p-6 border-l-4 border-primary shadow-sm">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="info">info</span>
+<p class="text-primary font-headline font-bold text-xs uppercase tracking-widest">Typical Scenario</p>
+</div>
+<div class="space-y-4">
+<div class="flex gap-4 items-start">
+<div class="min-w-[40px] h-10 rounded-full overflow-hidden bg-slate-200">
+<img class="w-full h-full object-cover" data-alt="portrait of a mature smiling man with graying hair representing a father figure" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAT057KGRFAOjtXOV_PQX5GUOpEs3J9tIQLW0MDEliDKQTn14MwIaepEHf5F0a-FO4uRlAfSipY7UHd9FDV-qoDHynXdrVm96xYOn4WrJHN2pIkvvo6Cz4fZtYJP5hz8jjxVpO-0f0cxNQZk2jhZUGzZoLLDAIF61BIal1dZAjd6lWTMLpBg4y9BhdGtdK8rQCTAFXYztOLRzLfp1lBmbq6Pj4_0-Bqxjl8gW7rXCR0QtTo4T5-i4nlI0pT_wTEMCnY8v7TYX0VPv8"/>
+</div>
+<p class="text-on-surface-variant text-sm font-body leading-relaxed italic">
+                        "Your spouse can <span class="text-on-surface font-semibold">approve payments</span>. Your child can <span class="text-on-surface font-semibold">request money</span>. Vendors can request payments — <span class="text-on-surface font-semibold underline decoration-primary-container decoration-4 underline-offset-2">but you approve</span>."
+                    </p>
+</div>
+</div>
+</section>
+<!-- Reassurance & Footer -->
+<div class="flex flex-col items-center gap-8 mt-4">
+<div class="flex items-center gap-2 text-tertiary">
+<span class="material-symbols-outlined text-sm" data-icon="lock" style="font-variation-settings: 'FILL' 1;">lock</span>
+<span class="font-label font-medium text-xs">Nothing moves without your control</span>
+</div>
+<div class="w-full flex flex-col gap-4">
+<button class="w-full h-16 bg-primary-container text-on-primary-container rounded-xl font-headline font-extrabold text-lg flex items-center justify-center gap-3 shadow-lg hover:shadow-xl active:scale-[0.98] transition-all">
+                    Continue
+                    <span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+<a class="text-secondary text-sm font-label font-medium text-center hover:text-on-surface transition-colors underline underline-offset-4 decoration-outline-variant" href="#">
+                    Learn more about roles &amp; permissions
+                </a>
+</div>
+</div>
+</main>
+<!-- Bottom spacing for mobile navigation clarity -->
+<div class="h-12 w-full md:hidden"></div>
+</body></html>

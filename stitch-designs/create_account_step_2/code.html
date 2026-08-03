@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-high": "#e4e9ed",
+              "secondary-fixed": "#d1e4ff",
+              "on-primary-fixed": "#241a00",
+              "secondary-fixed-dim": "#b0c9e8",
+              "secondary": "#49607c",
+              "on-background": "#171c1f",
+              "background": "#f6fafe",
+              "tertiary-fixed": "#66ff8e",
+              "surface-container-lowest": "#ffffff",
+              "surface-container": "#eaeef2",
+              "surface": "#f6fafe",
+              "tertiary-container": "#4cee7d",
+              "on-secondary-container": "#4b637e",
+              "on-primary": "#ffffff",
+              "on-surface-variant": "#4e4632",
+              "on-tertiary": "#ffffff",
+              "error": "#ba1a1a",
+              "surface-bright": "#f6fafe",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-variant": "#dfe3e7",
+              "primary-fixed-dim": "#f1c100",
+              "outline-variant": "#d2c5ab",
+              "primary": "#745b00",
+              "on-primary-fixed-variant": "#584400",
+              "surface-container-low": "#f0f4f8",
+              "surface-container-highest": "#dfe3e7",
+              "on-tertiary-fixed-variant": "#005322",
+              "on-error-container": "#93000a",
+              "on-primary-container": "#6f5700",
+              "on-tertiary-fixed": "#002109",
+              "error-container": "#ffdad6",
+              "on-secondary-fixed": "#011d35",
+              "inverse-primary": "#f1c100",
+              "surface-tint": "#745b00",
+              "secondary-container": "#c7dfff",
+              "primary-fixed": "#ffe08b",
+              "on-surface": "#171c1f",
+              "outline": "#80765f",
+              "inverse-on-surface": "#edf1f5",
+              "primary-container": "#ffcc00",
+              "on-tertiary-container": "#00682d",
+              "tertiary": "#006d2f",
+              "on-error": "#ffffff",
+              "surface-dim": "#d6dade",
+              "on-secondary-fixed-variant": "#314863",
+              "on-secondary": "#ffffff",
+              "inverse-surface": "#2c3134"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f6fafe; /* Milk White / Surface Base */
+            color: #171c1f; /* Dark Blue / On Surface */
+        }
+        h1, h2, .headline {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col items-center">
+<!-- Top Navigation Anchor -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-[#f6fafe] dark:bg-slate-950">
+<div class="flex items-center justify-between w-full h-14 px-6 max-w-screen-xl mx-auto">
+<button class="p-2 -ml-2 hover:bg-black/5 dark:hover:bg-white/5 transition-colors rounded-full active:scale-95 duration-150 ease-in-out">
+<span class="material-symbols-outlined text-[#745b00] dark:text-[#FFCC00]">arrow_back</span>
+</button>
+<h1 class="font-manrope font-bold text-[#171c1f] dark:text-slate-100 text-lg">Create Account</h1>
+<div class="w-10"></div> <!-- Spacer for symmetry -->
+</div>
+</header>
+<main class="w-full max-w-md px-6 pt-24 pb-12 flex flex-col flex-grow">
+<!-- Progress Indicator -->
+<div class="mb-10">
+<div class="flex items-center justify-between mb-2">
+<span class="text-on-secondary-container font-medium text-xs font-label uppercase tracking-wider">Step 2 of 8</span>
+<span class="text-on-secondary-container font-bold text-xs">25%</span>
+</div>
+<div class="flex gap-1.5 h-1.5 w-full">
+<div class="flex-1 bg-primary rounded-full"></div>
+<div class="flex-1 bg-primary rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+</div>
+</div>
+<!-- Heading Section -->
+<div class="mb-8">
+<h2 class="text-3xl font-extrabold text-on-surface tracking-tight mb-3">Create Your Account</h2>
+<p class="text-secondary font-medium leading-relaxed">Start with your phone number or email</p>
+</div>
+<!-- Input Method Selector (Toggle) -->
+<div class="p-1 bg-surface-container-low rounded-xl flex mb-8">
+<button class="flex-1 py-2.5 text-sm font-semibold rounded-lg bg-surface-container-lowest shadow-sm text-primary transition-all">
+                Phone Number
+            </button>
+<button class="flex-1 py-2.5 text-sm font-semibold rounded-lg text-secondary hover:bg-black/5 transition-colors">
+                Email Address
+            </button>
+</div>
+<!-- Form Section -->
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-on-surface-variant ml-1">Phone Number</label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none gap-2">
+<img alt="Nigeria Flag" class="w-5 h-3.5 object-cover rounded-sm shadow-sm" data-alt="close up of the Nigerian flag with its green and white vertical stripes in a clean rectangular format" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBt8e1yuLliFZ49xe9XKMe7qUJ82ZH2eaC6p_n-TsiWqM1ZZYLbIkaZePBv9a4Pejbl3ZFFaxrAzm-9Pn2MZ3p1u8piJ3lwFTc_nBxSHLscVUjELt6nzARevYXA1HnJDxWG0716NAy_Xez26EbNVE9gc5Kx8CuaUIGw10Scwa4i_h_uYSjh3YZ9BaAcs-JhqI4JotmhNoLWkpEkDEe6ZB2zmmbdAgmJ74CcHtGnHWYlLWHLUFxo2RH5VbjMBU7bgT3HTDxXpqtLC4"/>
+<span class="text-on-surface font-semibold text-base">+234</span>
+<div class="w-px h-6 bg-outline-variant/40 ml-1"></div>
+</div>
+<input class="w-full pl-24 pr-4 py-4 bg-surface-container-high border-none rounded-xl text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all text-base font-medium" placeholder="Enter your phone number" type="tel"/>
+</div>
+</div>
+<!-- Trust Reinforcement -->
+<div class="flex items-center justify-center gap-2 py-2">
+<span class="material-symbols-outlined text-[16px] text-tertiary" style="font-variation-settings: 'FILL' 1;">lock</span>
+<p class="text-[13px] text-on-secondary-container font-medium">Your information is secure and encrypted</p>
+</div>
+<!-- CTA -->
+<button class="w-full bg-primary-container text-on-primary-container font-bold py-4 rounded-xl shadow-[0px_8px_24px_rgba(116,91,0,0.15)] active:scale-[0.98] transition-all hover:brightness-105">
+                Continue
+            </button>
+<!-- Alternative Action -->
+<div class="text-center pt-4">
+<p class="text-secondary font-medium">
+                    Already have an account? 
+                    <a class="text-primary font-bold hover:underline ml-1" href="#">Log in</a>
+</p>
+</div>
+</div>
+<!-- Footer Policy -->
+<footer class="mt-auto pt-12 text-center">
+<p class="text-xs text-secondary/70 leading-relaxed px-4">
+                By continuing, you agree to our 
+                <a class="underline font-medium" href="#">Terms</a> &amp; 
+                <a class="underline font-medium" href="#">Privacy Policy</a>
+</p>
+</footer>
+</main>
+<!-- Visual Polish: Background Decorative Element -->
+<div class="fixed top-0 right-0 -z-10 w-64 h-64 bg-primary-container/10 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
+<div class="fixed bottom-0 left-0 -z-10 w-80 h-80 bg-secondary-container/20 blur-[120px] rounded-full -translate-x-1/2 translate-y-1/2"></div>
+</body></html>

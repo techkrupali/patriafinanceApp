@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verify Identity - Patria</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#dfe3e7",
+              "primary-container": "#ffcc00",
+              "on-primary-fixed-variant": "#584400",
+              "on-surface-variant": "#4e4632",
+              "on-background": "#171c1f",
+              "secondary-fixed": "#d1e4ff",
+              "on-tertiary-fixed": "#002109",
+              "on-surface": "#171c1f",
+              "outline": "#80765f",
+              "secondary": "#49607c",
+              "primary-fixed-dim": "#f1c100",
+              "on-tertiary-fixed-variant": "#005322",
+              "secondary-fixed-dim": "#b0c9e8",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-bright": "#f6fafe",
+              "background": "#f6fafe",
+              "surface-container-low": "#f0f4f8",
+              "on-secondary-fixed-variant": "#314863",
+              "on-secondary-container": "#4b637e",
+              "inverse-on-surface": "#edf1f5",
+              "surface": "#f6fafe",
+              "on-primary-fixed": "#241a00",
+              "tertiary": "#006d2f",
+              "error-container": "#ffdad6",
+              "tertiary-fixed": "#66ff8e",
+              "tertiary-container": "#4cee7d",
+              "surface-container-high": "#e4e9ed",
+              "on-tertiary-container": "#00682d",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-fixed": "#011d35",
+              "on-secondary": "#ffffff",
+              "inverse-surface": "#2c3134",
+              "surface-tint": "#745b00",
+              "primary-fixed": "#ffe08b",
+              "on-primary-container": "#6f5700",
+              "on-error-container": "#93000a",
+              "on-error": "#ffffff",
+              "surface-dim": "#d6dade",
+              "surface-container": "#eaeef2",
+              "on-tertiary": "#ffffff",
+              "inverse-primary": "#f1c100",
+              "surface-variant": "#dfe3e7",
+              "outline-variant": "#d2c5ab",
+              "on-primary": "#ffffff",
+              "primary": "#745b00",
+              "error": "#ba1a1a",
+              "secondary-container": "#c7dfff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f6fafe; /* Soft milk white surface */
+        }
+        h1, h2, h3 {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky flex items-center justify-between px-6 py-4 bg-[#f6fafe] dark:bg-slate-950 no-border z-50">
+<div class="flex items-center gap-4">
+<button class="p-2 -ml-2 hover:bg-[#f0f4f8] dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200 rounded-full">
+<span class="material-symbols-outlined text-[#745b00] dark:text-[#FFCC00]">arrow_back</span>
+</button>
+<h1 class="font-['Manrope'] font-bold text-lg tracking-tight text-[#171c1f] dark:text-slate-100">Verify Identity</h1>
+</div>
+<div class="w-8"></div> <!-- Spacer for balance -->
+</header>
+<main class="flex-1 flex flex-col px-6 max-w-md mx-auto w-full">
+<!-- Progress Indicator Section -->
+<div class="mt-4 mb-8">
+<div class="flex justify-between items-center mb-2">
+<span class="text-secondary font-medium text-sm tracking-wide">Step 3 of 8</span>
+<span class="text-secondary font-semibold text-xs opacity-60">37.5%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[37.5%] rounded-full shadow-[0_0_8px_rgba(255,204,0,0.3)]"></div>
+</div>
+</div>
+<!-- Title & Hero Section -->
+<div class="mb-10">
+<h2 class="text-3xl font-extrabold text-[#011d35] leading-tight mb-3">Verify Your Identity</h2>
+<p class="text-secondary text-base font-medium opacity-80 leading-relaxed">
+                This helps keep your account secure and unlocks all features
+            </p>
+</div>
+<!-- Method Selection (Toggle Switch) -->
+<div class="bg-surface-container-low p-1.5 rounded-xl flex items-center gap-1 mb-10">
+<button class="flex-1 py-2.5 px-4 rounded-lg text-sm font-bold bg-surface-container-lowest text-on-surface shadow-sm transition-all duration-200">
+                BVN
+            </button>
+<button class="flex-1 py-2.5 px-4 rounded-lg text-sm font-bold text-secondary opacity-60 hover:bg-surface-container-high transition-all duration-200">
+                NIN
+            </button>
+</div>
+<!-- Input Section -->
+<div class="space-y-6 flex-1">
+<div class="space-y-2">
+<label class="block text-sm font-semibold text-on-surface-variant ml-1" for="bvn_input">
+                    Enter your BVN
+                </label>
+<div class="relative group">
+<input class="w-full h-14 px-4 bg-surface-container-high border-none rounded-xl text-on-surface font-medium placeholder:text-outline-variant focus:ring-0 focus:bg-surface-container-lowest transition-all duration-200 border-b-2 border-transparent focus:border-primary" id="bvn_input" placeholder="e.g. 12345678901" type="number"/>
+</div>
+</div>
+<!-- Security Text -->
+<div class="space-y-3 bg-surface-container-low/50 p-4 rounded-xl border border-white/40">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-tertiary text-xl" style="font-variation-settings: 'FILL' 1;">lock</span>
+<p class="text-xs text-secondary font-medium leading-normal">
+                        Your information is encrypted and securely verified.
+                    </p>
+</div>
+<p class="text-[11px] text-outline text-center font-medium">
+                    We do not store your BVN/NIN details
+                </p>
+</div>
+</div>
+<!-- Sticky Footer CTA Area -->
+<div class="py-8 mt-auto">
+<button class="w-full h-14 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-bold rounded-xl shadow-[0_8px_24px_rgba(23,28,31,0.06)] active:scale-[0.98] transition-all duration-200 mb-6 text-base flex items-center justify-center gap-2">
+                Verify &amp; Continue
+                <span class="material-symbols-outlined text-lg">chevron_right</span>
+</button>
+<div class="text-center">
+<button class="text-secondary font-bold text-sm hover:text-on-secondary-fixed-variant transition-colors py-2">
+                    Skip for now
+                </button>
+</div>
+</div>
+</main>
+<!-- Decorative Corner Element for High-End Editorial Feel -->
+<div class="fixed bottom-0 right-0 -z-10 opacity-10">
+<div class="w-64 h-64 bg-primary-container rounded-full blur-[100px] translate-x-1/2 translate-y-1/2"></div>
+</div>
+</body></html>

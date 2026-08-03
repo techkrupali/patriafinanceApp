@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Patria | Secure Entry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#f0f4f8",
+              "surface": "#f6fafe",
+              "tertiary-fixed": "#66ff8e",
+              "tertiary-container": "#4cee7d",
+              "outline-variant": "#d2c5ab",
+              "surface-variant": "#dfe3e7",
+              "secondary-fixed": "#d1e4ff",
+              "inverse-primary": "#f1c100",
+              "surface-dim": "#d6dade",
+              "surface-container-highest": "#dfe3e7",
+              "on-primary-container": "#6f5700",
+              "surface-tint": "#745b00",
+              "on-secondary-fixed": "#011d35",
+              "on-primary-fixed": "#241a00",
+              "on-secondary-fixed-variant": "#314863",
+              "on-tertiary-fixed-variant": "#005322",
+              "on-surface-variant": "#4e4632",
+              "on-secondary-container": "#4b637e",
+              "secondary": "#49607c",
+              "surface-container": "#eaeef2",
+              "on-error-container": "#93000a",
+              "surface-container-lowest": "#ffffff",
+              "secondary-container": "#c7dfff",
+              "on-surface": "#171c1f",
+              "surface-bright": "#f6fafe",
+              "error-container": "#ffdad6",
+              "on-tertiary-container": "#00682d",
+              "on-tertiary": "#ffffff",
+              "on-primary": "#ffffff",
+              "on-error": "#ffffff",
+              "inverse-on-surface": "#edf1f5",
+              "primary-container": "#ffcc00",
+              "outline": "#80765f",
+              "surface-container-high": "#e4e9ed",
+              "on-primary-fixed-variant": "#584400",
+              "on-tertiary-fixed": "#002109",
+              "secondary-fixed-dim": "#b0c9e8",
+              "on-secondary": "#ffffff",
+              "inverse-surface": "#2c3134",
+              "on-background": "#171c1f",
+              "error": "#ba1a1a",
+              "background": "#f6fafe",
+              "primary-fixed": "#ffe08b",
+              "tertiary": "#006d2f",
+              "tertiary-fixed-dim": "#3de273",
+              "primary": "#745b00",
+              "primary-fixed-dim": "#f1c100",
+              "milk-white": "#FDFCFB"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .radial-glow {
+            background: radial-gradient(circle, rgba(255, 204, 0, 0.15) 0%, rgba(253, 252, 251, 0) 70%);
+        }
+        .dot-pulse {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-milk-white overflow-hidden font-body text-on-surface h-screen w-screen flex flex-col justify-between items-center px-8 py-16">
+<!-- Hero Central Block -->
+<div class="relative flex flex-col items-center justify-center flex-grow w-full max-w-lg">
+<!-- Subtle Radial Glow Background -->
+<div class="absolute inset-0 radial-glow pointer-events-none scale-150"></div>
+<!-- Brand Wordmark -->
+<div class="relative z-10 text-center">
+<h1 class="font-headline font-black text-6xl md:text-8xl tracking-widest text-on-secondary-fixed transition-all duration-700">
+                PATRIA
+            </h1>
+<div class="mt-4 flex items-center justify-center gap-2">
+<span class="h-[1px] w-8 bg-primary-container"></span>
+<span class="font-headline text-[10px] uppercase tracking-[0.3em] text-secondary/60 font-semibold">Legacy &amp; Wealth</span>
+<span class="h-[1px] w-8 bg-primary-container"></span>
+</div>
+</div>
+</div>
+<!-- Bottom Loading Section -->
+<div class="flex flex-col items-center gap-6 z-10">
+<!-- Pulse Indicator -->
+<div class="flex gap-2">
+<div class="dot-pulse w-2 h-2 rounded-full bg-primary" style="animation-delay: 0s;"></div>
+<div class="dot-pulse w-2 h-2 rounded-full bg-primary" style="animation-delay: 0.2s;"></div>
+<div class="dot-pulse w-2 h-2 rounded-full bg-primary" style="animation-delay: 0.4s;"></div>
+</div>
+<!-- Loading Text -->
+<div class="flex flex-col items-center gap-1">
+<p class="font-body text-sm text-secondary/70 tracking-wide">
+                Loading securely...
+            </p>
+<!-- Encryption Badge (Optional High-End Detail) -->
+<div class="flex items-center gap-1.5 opacity-40">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+<span class="text-[10px] font-medium tracking-tighter uppercase">256-bit Encrypted Environment</span>
+</div>
+</div>
+</div>
+<!-- Decorative Texture Layer (Low Opacity) -->
+<div class="fixed inset-0 pointer-events-none opacity-[0.03]" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCl5ere2TeZCVvJhBg_Nouy2_YnbeCo2r8OtO2wbf0Pnf8XoM1HIFQvBRRh4PoUsvE90gdt2zusy2vAOnLd4U2kBT8Nxsset68kI0X_MfBR-HwdJF5G9sY5XbxqOQFQcTvVqGpGZ9ZW6GXvPKM8dDM0SZP0wY49aIYGvAAKRM0R8Z1CuNrHw2L20Hc8BTqZ6RxDneM4bJaY5P9SMd2aFTNBE42LRRskVAyd18K5_p7_Qhhol2Gf6RM_WEbPuaC-4yrqN85G1vmin0w');">
+</div>
+</body></html>

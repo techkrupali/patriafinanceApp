@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Family Treasury Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-high": "#e4e9ed",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#dfe3e7",
+                        "outline-variant": "#d2c5ab",
+                        "primary": "#745b00",
+                        "surface-container": "#eaeef2",
+                        "surface-tint": "#745b00",
+                        "on-tertiary-container": "#00682d",
+                        "on-primary-fixed-variant": "#584400",
+                        "surface-variant": "#dfe3e7",
+                        "on-tertiary-fixed": "#002109",
+                        "inverse-primary": "#f1c100",
+                        "secondary-container": "#c7dfff",
+                        "primary-container": "#ffcc00",
+                        "background": "#f6fafe",
+                        "inverse-surface": "#2c3134",
+                        "secondary-fixed-dim": "#b0c9e8",
+                        "surface-dim": "#d6dade",
+                        "primary-fixed-dim": "#f1c100",
+                        "inverse-on-surface": "#edf1f5",
+                        "surface-bright": "#f6fafe",
+                        "surface": "#f6fafe",
+                        "on-primary-container": "#6f5700",
+                        "surface-container-low": "#f0f4f8",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#011d35",
+                        "on-secondary-container": "#4b637e",
+                        "on-tertiary-fixed-variant": "#005322",
+                        "tertiary": "#006d2f",
+                        "secondary-fixed": "#d1e4ff",
+                        "on-surface-variant": "#4e4632",
+                        "primary-fixed": "#ffe08b",
+                        "outline": "#80765f",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#66ff8e",
+                        "secondary": "#49607c",
+                        "tertiary-container": "#4cee7d",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#314863",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#3de273",
+                        "on-surface": "#171c1f",
+                        "on-background": "#171c1f",
+                        "on-primary-fixed": "#241a00"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface antialiased">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 bg-[#f6fafe]/80 backdrop-blur-xl flex items-center justify-between px-6 h-14 w-full">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-primary/10">
+<img class="w-full h-full object-cover" data-alt="User profile portrait of a professional man with a kind expression in soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAw300kydF7vLRxp7Pi7NTimbPRyeMG6M5a07kGGAo50MmmBlkAHypyryYxqsKd3NZfeI13OAgtsHe-ASKMkKFr0TlEXQ-Y-XjadMffe-yZRW38KVbViUlSpUoWlE4KBwYUbUQIWG7FO5zgXfIdkXogbm574zC7lCiQ7y42ZNP5qXawRdNoImiLpVqwA9fkkLNIpO8BhePFEIDIG-HkflwN_J9iVpvU1tlKPH9pz4hud5aAoyANdvs9EH50k6sMM2WYk7f2JlZHj0o"/>
+</div>
+<h1 class="font-headline font-bold text-lg tracking-tight text-on-surface">Welcome back, Alex</h1>
+</div>
+<button class="text-on-secondary-container hover:opacity-80 transition-opacity active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="pt-20 pb-24 px-6 space-y-8">
+<!-- Family Selector -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline font-bold text-on-surface">Family Group</h2>
+<button class="text-primary font-semibold text-sm">Switch</button>
+</div>
+<div class="flex gap-4 overflow-x-auto no-scrollbar py-2">
+<div class="flex flex-col items-center gap-2 flex-shrink-0">
+<div class="w-14 h-14 rounded-2xl bg-primary-container flex items-center justify-center border-2 border-primary">
+<img class="w-full h-full object-cover rounded-xl" data-alt="Happy multi-generational family portrait in a sunlit garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB93WcVHC_hZCyF7XfmOX-WnoMMUSYPwaMvl2RKABTD-I8BsLFywMzwA0jeUbavaBQ7WQ2t7xAPpgeEkfxaZ1Ulxrc998dAZ-r-16WMf8NapziKU5fWApcCNm83bIFOFwpLR4N-j1XVNg7g3alDDHASh40Q7QpJ6usWsniE0yTEl0dsDOGETmqFViE6pn9lQ_Qi7tdiLeJMJq_nYiO10aHa0q-GWtzE6_3rUVOzuFuX805AFZYELZUrFfooNCRy3e-iec44xKw3Wfc"/>
+</div>
+<span class="text-xs font-medium">The Smiths</span>
+</div>
+<div class="flex flex-col items-center gap-2 flex-shrink-0 opacity-40">
+<div class="w-14 h-14 rounded-2xl bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="add">add</span>
+</div>
+<span class="text-xs font-medium">Add New</span>
+</div>
+</div>
+</section>
+<!-- Treasury Balance Card -->
+<section class="bg-gradient-to-br from-primary to-primary-container p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label text-xs uppercase tracking-widest opacity-80">Treasury Balance</span>
+<span class="material-symbols-outlined opacity-80" data-icon="account_balance">account_balance</span>
+</div>
+<div class="font-headline font-extrabold text-4xl mb-6">₦ 12,450,200.00</div>
+<div class="flex items-center gap-4">
+<button class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-white/30 transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="arrow_upward">arrow_upward</span>
+                        Transfer
+                    </button>
+<button class="bg-white text-primary px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg hover:shadow-none active:scale-95">
+                        View Treasury
+                    </button>
+</div>
+</div>
+<!-- Decorative circle -->
+<div class="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+</section>
+<!-- Active Wallets Bento -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline font-bold text-on-surface">Active Wallets</h2>
+<span class="material-symbols-outlined text-secondary" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 shadow-sm">
+<div class="w-10 h-10 bg-secondary-container rounded-lg flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-secondary" data-icon="shopping_bag">shopping_bag</span>
+</div>
+<div class="font-label text-xs text-secondary font-medium uppercase mb-1">Expenses</div>
+<div class="font-headline font-bold text-on-surface">₦ 450,000</div>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/10 shadow-sm">
+<div class="w-10 h-10 bg-tertiary-container rounded-lg flex items-center justify-center mb-3 text-on-tertiary-container">
+<span class="material-symbols-outlined" data-icon="savings">savings</span>
+</div>
+<div class="font-label text-xs text-secondary font-medium uppercase mb-1">Education</div>
+<div class="font-headline font-bold text-on-surface">₦ 2,800,000</div>
+</div>
+</div>
+</section>
+<!-- Smart Alerts & Pending -->
+<section class="space-y-4">
+<h2 class="font-headline font-bold text-on-surface">Action Center</h2>
+<!-- Pending Approvals -->
+<div class="bg-surface-container-low p-4 rounded-2xl flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="rule" data-weight="fill" style="font-variation-settings: 'FILL' 1;">rule</span>
+</div>
+<div class="flex-1">
+<div class="font-semibold text-sm">Approval Required</div>
+<div class="text-xs text-secondary">Sarah requested ₦15k for groceries</div>
+</div>
+<button class="bg-on-surface text-white text-xs px-3 py-2 rounded-lg font-bold">Review</button>
+</div>
+<!-- Smart Alert -->
+<div class="bg-tertiary/10 p-4 rounded-2xl border border-tertiary/10 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-tertiary/20 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+</div>
+<div class="flex-1">
+<div class="font-semibold text-sm text-on-tertiary-container">Yield Optimization</div>
+<div class="text-xs text-on-tertiary-container/80">Move ₦1.2M to Vault for 12% APY</div>
+</div>
+<span class="material-symbols-outlined text-tertiary" data-icon="bolt">bolt</span>
+</div>
+</section>
+<!-- Steward AI card -->
+<section class="bg-inverse-surface text-inverse-on-surface p-6 rounded-[2rem] flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="smart_toy">smart_toy</span>
+</div>
+<div>
+<div class="font-headline font-bold text-lg leading-none">Steward AI</div>
+<div class="text-[10px] uppercase tracking-widest text-primary-fixed opacity-70">Personal Advisor</div>
+</div>
+</div>
+<p class="text-sm leading-relaxed italic opacity-90">
+                "Based on your recent utility bills, I recommend adjusting the monthly maintenance wallet by +₦12,500."
+            </p>
+<div class="flex gap-2">
+<button class="flex-1 py-2 bg-surface-variant/20 rounded-xl text-xs font-semibold hover:bg-surface-variant/30">Ask Steward</button>
+<button class="flex-1 py-2 bg-primary-container text-on-primary-container rounded-xl text-xs font-bold">Apply Insight</button>
+</div>
+</section>
+<!-- Goals Section -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline font-bold text-on-surface">Family Goals</h2>
+<button class="text-xs text-secondary font-medium">See All</button>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-2xl space-y-4 shadow-sm">
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-semibold">Summer Vacation '25</span>
+<span class="text-secondary">₦4.2M / ₦10M</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[42%]"></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Overlay Popup -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/40 backdrop-blur-sm">
+<div class="bg-surface-container-lowest w-full max-w-sm rounded-[2rem] p-8 shadow-2xl space-y-6">
+<div class="w-16 h-16 bg-primary-container/20 rounded-full flex items-center justify-center mx-auto text-primary">
+<span class="material-symbols-outlined text-4xl" data-icon="lock_open">lock_open</span>
+</div>
+<div class="text-center space-y-2">
+<h3 class="font-headline font-bold text-2xl text-on-surface">Open Treasury</h3>
+<p class="text-secondary text-sm leading-relaxed">
+                    You are about to view all wallets and financial structures. This action requires administrative access.
+                </p>
+</div>
+<div class="flex flex-col gap-3">
+<button class="w-full py-4 bg-primary-container text-on-primary-container font-extrabold rounded-2xl shadow-lg active:scale-95 transition-all">
+                    Continue
+                </button>
+<button class="w-full py-4 bg-secondary-container text-on-secondary-container font-bold rounded-2xl active:scale-95 transition-all">
+                    Cancel
+                </button>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar (72px height, Glassmorphism, 6 tabs logic applied to mobile) -->
+<nav class="fixed bottom-0 w-full h-[72px] z-50 rounded-t-2xl bg-white/80 backdrop-blur-xl flex justify-around items-center px-4 pb-safe w-full shadow-[0px_-8px_24px_rgba(23,28,31,0.06)]">
+<!-- Home Active -->
+<a class="flex flex-col items-center justify-center bg-[#FFCC00] text-[#171c1f] rounded-xl px-3 py-1.5 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="home" data-weight="fill" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-body font-medium text-[10px] uppercase tracking-wider mt-0.5">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="group">group</span>
+<span class="font-body font-medium text-[10px] uppercase tracking-wider mt-0.5">Family</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="account_balance">account_balance</span>
+<span class="font-body font-medium text-[10px] uppercase tracking-wider mt-0.5">Treasury</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="tune">tune</span>
+<span class="font-body font-medium text-[10px] uppercase tracking-wider mt-0.5">Controls</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="more_horiz">more_horiz</span>
+<span class="font-body font-medium text-[10px] uppercase tracking-wider mt-0.5">More</span>
+</a>
+</nav>
+<!-- Floating Action Button (Suppressed on popups, but usually on Home) -->
+<button class="fixed bottom-24 right-6 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-lg flex items-center justify-center z-40 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-2xl" data-icon="add">add</span>
+</button>
+</body></html>

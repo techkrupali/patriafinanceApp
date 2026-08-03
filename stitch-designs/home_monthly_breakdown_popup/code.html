@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-high": "#e4e9ed",
+              "on-tertiary": "#ffffff",
+              "on-error-container": "#93000a",
+              "error": "#ba1a1a",
+              "surface-container-highest": "#dfe3e7",
+              "outline-variant": "#d2c5ab",
+              "primary": "#745b00",
+              "surface-container": "#eaeef2",
+              "surface-tint": "#745b00",
+              "on-tertiary-container": "#00682d",
+              "on-primary-fixed-variant": "#584400",
+              "surface-variant": "#dfe3e7",
+              "on-tertiary-fixed": "#002109",
+              "inverse-primary": "#f1c100",
+              "secondary-container": "#c7dfff",
+              "primary-container": "#ffcc00",
+              "background": "#f6fafe",
+              "inverse-surface": "#2c3134",
+              "secondary-fixed-dim": "#b0c9e8",
+              "surface-dim": "#d6dade",
+              "primary-fixed-dim": "#f1c100",
+              "inverse-on-surface": "#edf1f5",
+              "surface-bright": "#f6fafe",
+              "surface": "#f6fafe",
+              "on-primary-container": "#6f5700",
+              "surface-container-low": "#f0f4f8",
+              "on-primary": "#ffffff",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-fixed": "#011d35",
+              "on-secondary-container": "#4b637e",
+              "on-tertiary-fixed-variant": "#005322",
+              "tertiary": "#006d2f",
+              "secondary-fixed": "#d1e4ff",
+              "on-surface-variant": "#4e4632",
+              "primary-fixed": "#ffe08b",
+              "outline": "#80765f",
+              "error-container": "#ffdad6",
+              "tertiary-fixed": "#66ff8e",
+              "secondary": "#49607c",
+              "tertiary-container": "#4cee7d",
+              "on-secondary": "#ffffff",
+              "on-secondary-fixed-variant": "#314863",
+              "on-error": "#ffffff",
+              "tertiary-fixed-dim": "#3de273",
+              "on-surface": "#171c1f",
+              "on-background": "#171c1f",
+              "on-primary-fixed": "#241a00"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-[100px]">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 bg-[#f6fafe]/80 backdrop-blur-xl flex items-center justify-between px-6 h-14 w-full">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant/20">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Professional studio portrait of a smiling man with neat hair wearing a casual blue shirt on a light grey background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOz0xhL-2Z_uTrSSsXLPA1szfAkDCBtZMQWOTjFBOFsO8zMFGk2cjrssLtYHYnhFamNLE1Ot0BhVuTUENk7iKUe28QfCKFIM47DxajNWqpJRw6p-8Sew3pG9QaGA6gIErqWnHe3pW_POed6LFzq0k1v9aEk6pV4lcu-YO2LGZvSclzKGZzlCx7YmO1Z7zfLnw9Ng4IzRDkfOTkLIQXIwVkrsKy_QNgCeXVdK4QWGdK0iIYptNgC15i8aHR9Jh8TxzTHCzx9aBmd88"/>
+</div>
+<h1 class="font-['Manrope'] font-bold text-lg tracking-tight text-[#745b00]">Welcome back, Alex</h1>
+</div>
+<button class="text-[#745b00] hover:opacity-80 transition-opacity active:scale-95 transition-transform">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<main class="pt-20 px-6 space-y-8">
+<!-- Hero Balance Section -->
+<section class="space-y-1">
+<p class="font-label text-sm text-secondary font-medium tracking-wide uppercase">Total Family Balance</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline font-extrabold text-4xl tracking-tight">₦4,250,000.00</span>
+<span class="text-tertiary font-bold text-sm flex items-center">
+<span class="material-symbols-outlined text-sm">trending_up</span> 12%
+                </span>
+</div>
+</section>
+<!-- Income vs Expense Summary (The Trigger) -->
+<div class="grid grid-cols-2 gap-4">
+<button class="bg-surface-container-lowest p-5 rounded-xl shadow-[0px_8px_24px_rgba(23,28,31,0.06)] flex flex-col items-start gap-2 text-left transition-transform active:scale-95">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/30 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_downward</span>
+</div>
+<div>
+<p class="text-[10px] font-bold text-secondary uppercase tracking-widest">Monthly Income</p>
+<p class="font-headline font-bold text-lg">₦500k</p>
+</div>
+</button>
+<button class="bg-surface-container-lowest p-5 rounded-xl shadow-[0px_8px_24px_rgba(23,28,31,0.06)] flex flex-col items-start gap-2 text-left transition-transform active:scale-95">
+<div class="w-10 h-10 rounded-full bg-error-container/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_upward</span>
+</div>
+<div>
+<p class="text-[10px] font-bold text-secondary uppercase tracking-widest">Monthly Expense</p>
+<p class="font-headline font-bold text-lg">₦380k</p>
+</div>
+</button>
+</div>
+<!-- Bento Grid Sections -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Treasury Vault Card -->
+<div class="bg-primary-container p-6 rounded-2xl relative overflow-hidden group">
+<div class="relative z-10 space-y-4">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-on-primary-container text-3xl">account_balance</span>
+<span class="bg-on-primary-container/10 px-3 py-1 rounded-full text-[10px] font-bold text-on-primary-container uppercase tracking-widest">High Yield</span>
+</div>
+<div>
+<h3 class="font-headline font-extrabold text-2xl text-on-primary-container">Treasury Vault</h3>
+<p class="text-on-primary-container/80 text-sm font-medium">Earn up to 14.5% APY</p>
+</div>
+<button class="bg-on-primary-container text-primary-container font-bold px-6 py-2.5 rounded-xl text-sm transition-opacity hover:opacity-90">Manage Funds</button>
+</div>
+<!-- Decorative element -->
+<div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+</div>
+<!-- Family Circle -->
+<div class="bg-surface-container-low p-6 rounded-2xl space-y-6">
+<div class="flex justify-between items-center">
+<h3 class="font-headline font-bold text-on-surface">Family Circle</h3>
+<span class="material-symbols-outlined text-secondary">group</span>
+</div>
+<div class="flex -space-x-3">
+<img alt="Sarah" class="w-10 h-10 rounded-full border-4 border-surface-container-low object-cover" data-alt="Portrait of a smiling young woman with brown hair in a bright outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVoRpA88d__ghRLTR5hCVVA7vk31Ty1sJ5Z2HhzjTig8p9yEcsQrafHs2Mrnb4rXqavsoy0ReHvMByKYe8sMJz5bLYfmkWvJoOoIgka84PZqLjemb9neErvEDjN4i3pPJgzJdb3Vzf1Iv0ohtD8hyk8HOb5uQA7p8jMmqaDY7FJjFAU3EqhkLQX4JgXtJZeVbtq7VN4_Nogs5SfKtjRKn1EJ-4FtcpDafddd5zVcQXACd6GiNjgjVCQcuCWGJ_bCjBQ0W9miJCwQo"/>
+<img alt="Leo" class="w-10 h-10 rounded-full border-4 border-surface-container-low object-cover" data-alt="Portrait of a young boy with curly hair laughing heartily in a garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5JEs-bZRCv27ffFwtKNtfCv9W0LvX1N8ipRVQBd8zBqcQ5GVCFvCbjD2oj78A-6tw0b7p8vJDZPZ8pf_FNZC3O6dEYttaxsLsmqV1nyGcXJEaH-45uTGA0QS1YfebNSgB62mYp-zESTXs8cnsIj9a6YsMtCMruHJKaq2TEEHi96M64n6_6GX_yhtRAYWznQz5hzTAHy9mnM9_5MFF0wycyBr2Zef3nikBvY8m568BIAPpjpXcDW_q49j751B5c4Zz8wSLejshsmY"/>
+<img alt="Emma" class="w-10 h-10 rounded-full border-4 border-surface-container-low object-cover" data-alt="Close up of a mature woman with glasses smiling gently into the camera" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6LVSoqdKbzwfOPPvi-dKql6kphkpls14s8MRI3MuiK9l3scBKeTPLobv5EbOebhZ1z3gAsISK8ts3owAoix1-aVtRpG9yEA-vwSbLdPLNJsCmR_rXzlWp6wqBbFKI7nOLD-xhTBa6z1nOZR6mQgFCP41MWtfalgbDspRKLAVVAr7Z3kB_lE5Z3eB8-JVGEgBtIQH79PXS9pN4-8URfZTCAmA-5WgD8rUVdXZeI2rOGQ4vxjbEvtE0QAUJSe8VMUHAw5C9MC6A6AI"/>
+<div class="w-10 h-10 rounded-full border-4 border-surface-container-low bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">+2</div>
+</div>
+<p class="text-sm text-secondary leading-relaxed">3 dependents managed by this ledger. Recent activity: <span class="font-bold">Leo's School Fees</span></p>
+</div>
+</section>
+<!-- Recent Ledger Activity -->
+<section class="space-y-4">
+<div class="flex justify-between items-center">
+<h3 class="font-headline font-bold text-lg">Recent Ledger</h3>
+<button class="text-primary font-bold text-xs uppercase tracking-widest">See All</button>
+</div>
+<div class="space-y-3">
+<!-- Transaction 1 -->
+<div class="bg-surface-container-lowest p-4 rounded-xl flex items-center justify-between shadow-[0px_4px_12px_rgba(23,28,31,0.03)]">
+<div class="flex items-center gap-4">
+<div class="w-11 h-11 bg-surface-container rounded-lg flex items-center justify-center text-[#49607c]">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<div>
+<p class="font-bold text-on-surface text-sm">Groceries &amp; Essentials</p>
+<p class="text-xs text-secondary">Today, 2:45 PM</p>
+</div>
+</div>
+<p class="font-headline font-bold text-on-surface">-₦12,500</p>
+</div>
+<!-- Transaction 2 -->
+<div class="bg-surface-container-lowest p-4 rounded-xl flex items-center justify-between shadow-[0px_4px_12px_rgba(23,28,31,0.03)]">
+<div class="flex items-center gap-4">
+<div class="w-11 h-11 bg-tertiary-container/20 rounded-lg flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<div>
+<p class="font-bold text-on-surface text-sm">Dividend Payout</p>
+<p class="text-xs text-secondary">Yesterday</p>
+</div>
+</div>
+<p class="font-headline font-bold text-tertiary">+₦85,000</p>
+</div>
+</div>
+</section>
+</main>
+<!-- POPUP OVERLAY (ACTIVE STATE) -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center px-6">
+<!-- Background Dim -->
+<div class="absolute inset-0 bg-on-surface/40 backdrop-blur-sm"></div>
+<!-- Modal Content -->
+<div class="relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-[24px] overflow-hidden shadow-2xl">
+<div class="p-8 space-y-6">
+<div class="flex items-center justify-between">
+<h2 class="font-['Manrope'] font-extrabold text-2xl tracking-tight text-on-surface">Monthly Breakdown</h2>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="space-y-5">
+<!-- Income Row -->
+<div class="flex items-center justify-between bg-surface-container-low p-4 rounded-2xl">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<span class="font-medium text-secondary">Income</span>
+</div>
+<span class="font-headline font-bold text-on-surface">₦500,000</span>
+</div>
+<!-- Expenses Row -->
+<div class="flex items-center justify-between bg-surface-container-low p-4 rounded-2xl">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-error/10 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">trending_down</span>
+</div>
+<span class="font-medium text-secondary">Expenses</span>
+</div>
+<span class="font-headline font-bold text-on-surface">₦380,000</span>
+</div>
+<!-- Savings Row (Teal/Green Emphasis) -->
+<div class="flex items-center justify-between bg-tertiary-container/10 p-4 rounded-2xl border-2 border-tertiary-container/30">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-tertiary flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-lg">savings</span>
+</div>
+<span class="font-bold text-tertiary">Net Savings</span>
+</div>
+<span class="font-headline font-extrabold text-tertiary">₦120,000</span>
+</div>
+</div>
+<div class="pt-4 flex flex-col gap-3">
+<button class="w-full bg-[#FFCC00] text-[#171c1f] font-bold py-4 rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all">
+                        View Full Analytics
+                    </button>
+<button class="w-full text-secondary font-medium py-2 hover:text-on-surface transition-colors">
+                        Close
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 w-full h-[72px] z-50 rounded-t-2xl bg-white/80 backdrop-blur-xl shadow-[0px_-8px_24px_rgba(23,28,31,0.06)] flex justify-around items-center px-4 pb-safe">
+<button class="flex flex-col items-center justify-center bg-[#FFCC00] text-[#171c1f] rounded-xl px-3 py-1.5 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined">group</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Family</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Treasury</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined">tune</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Controls</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:text-[#745b00] active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined">more_horiz</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">More</span>
+</button>
+</nav>
+</body></html>

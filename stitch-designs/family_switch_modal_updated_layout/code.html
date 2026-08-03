@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Curated Ledger - Select Family</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed-variant": "#005322",
+              "inverse-on-surface": "#edf1f5",
+              "on-secondary-fixed": "#011d35",
+              "on-error": "#ffffff",
+              "primary": "#745b00",
+              "on-surface-variant": "#4e4632",
+              "secondary-container": "#c7dfff",
+              "secondary-fixed-dim": "#b0c9e8",
+              "error": "#ba1a1a",
+              "outline": "#80765f",
+              "secondary": "#49607c",
+              "on-primary-fixed-variant": "#584400",
+              "surface-container-high": "#e4e9ed",
+              "on-surface": "#171c1f",
+              "on-secondary-container": "#4b637e",
+              "on-tertiary": "#ffffff",
+              "surface-container-highest": "#dfe3e7",
+              "on-primary-fixed": "#241a00",
+              "on-error-container": "#93000a",
+              "background": "#f6fafe",
+              "surface": "#f6fafe",
+              "surface-container": "#eaeef2",
+              "primary-fixed-dim": "#f1c100",
+              "primary-container": "#ffcc00",
+              "on-tertiary-container": "#00682d",
+              "on-background": "#171c1f",
+              "surface-tint": "#745b00",
+              "outline-variant": "#d2c5ab",
+              "surface-container-lowest": "#ffffff",
+              "inverse-surface": "#2c3134",
+              "inverse-primary": "#f1c100",
+              "surface-bright": "#f6fafe",
+              "on-primary-container": "#6f5700",
+              "error-container": "#ffdad6",
+              "surface-dim": "#d6dade",
+              "primary-fixed": "#ffe08b",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-variant": "#dfe3e7",
+              "on-primary": "#ffffff",
+              "tertiary-fixed": "#66ff8e",
+              "on-tertiary-fixed": "#002109",
+              "on-secondary-fixed-variant": "#314863",
+              "on-secondary": "#ffffff",
+              "tertiary-container": "#4cee7d",
+              "surface-container-low": "#f0f4f8",
+              "tertiary": "#006d2f",
+              "secondary-fixed": "#d1e4ff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-header {
+            background: rgba(246, 250, 254, 0.8);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface font-body text-on-surface">
+<!-- TOP APP BAR -->
+<header class="fixed top-0 w-full z-50 glass-header">
+<div class="flex justify-between items-center px-6 h-14 w-full max-w-7xl mx-auto">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a professional man with a friendly expression in a brightly lit modern office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuxHvCX6a5MA0V3Fhy_NXaAYGCO7GlHacloffG8049uIfphhbLLzB15b2V4Mu5q5aYRgkC-6gWH2bIbZL4s-HVxliOsP5Nq1E74zYgKfI6zgIkijaW2vLG9mvZJls1s_R9uSMyNoe9C3G1aE4Qd0xiYlkOEDsFWZmgEJWvqsZCUX-y2HA3gPSoxRLOsUJj2RPesR-S9D8Y1YEhXFC5tKapuRELb5qpgEoob9qu-utapNHJGgkMC4W0JtyjHaLBld9BCG1nOypDHak"/>
+</div>
+<span class="text-xl font-extrabold text-[#171c1f] font-headline tracking-tight">The Curated Ledger</span>
+</div>
+<button class="text-secondary hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<!-- MAIN DASHBOARD CONTENT (BACKGROUND) -->
+<main class="pt-20 pb-32 px-6 max-w-7xl mx-auto space-y-8">
+<!-- Hero Section -->
+<section class="space-y-2">
+<p class="font-label text-sm font-medium text-secondary">Total Family Savings</p>
+<h1 class="font-headline text-5xl font-extrabold tracking-tight text-on-surface">$42,000.00</h1>
+</section>
+<!-- Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Main Ledger Card -->
+<div class="md:col-span-2 bg-surface-container-lowest p-8 rounded-[2rem] shadow-[0px_8px_24px_rgba(23,28,31,0.04)] space-y-6">
+<div class="flex justify-between items-center">
+<h2 class="font-headline text-xl font-bold">Recent Movements</h2>
+<span class="text-tertiary font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+                        +12.4%
+                    </span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<div>
+<p class="font-bold">Organic Groceries</p>
+<p class="text-xs text-secondary">Family Kitchen • Today</p>
+</div>
+</div>
+<p class="font-headline font-bold text-error">-$240.00</p>
+</div>
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">account_balance</span>
+</div>
+<div>
+<p class="font-bold">Treasury Dividend</p>
+<p class="text-xs text-secondary">Investment Portfolio • Yesterday</p>
+</div>
+</div>
+<p class="font-headline font-bold text-tertiary">+$1,120.00</p>
+</div>
+</div>
+</div>
+<!-- Side Card: Family Members -->
+<div class="bg-primary-container p-8 rounded-[2rem] flex flex-col justify-between text-on-primary-container overflow-hidden relative">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-8xl" style="font-variation-settings: 'FILL' 1;">group</span>
+</div>
+<h3 class="font-headline text-lg font-bold">Family Circle</h3>
+<div class="space-y-4">
+<div class="flex -space-x-3">
+<img alt="Member" class="w-10 h-10 rounded-full border-4 border-primary-container" data-alt="portrait of a smiling young woman with dark hair in a casual professional setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNDhaYpYj3gzF294boi_bBl30WRRuWmZmv7p4nTpBJv58G6hj3-tIHHZhlbX7WjFl8l-iyBYjT7BdYptp3As-jWpSe3OeFs8SpbXrM1gtfsDLhmd92QSGOqw33jWSydyc-iBVCXgIYuVRs9oUZg48OyrPG-y9LwOBhhG3mJCFxTXj7DPulhUG-G41oqSytGEh6Uj9FhgbNdrLntoHWAOC8UluQAszKRVYU8DstNQRcE65xaGg9znSJdBtWabqjbOFR7pqU8VBzbI8"/>
+<img alt="Member" class="w-10 h-10 rounded-full border-4 border-primary-container" data-alt="middle aged man with glasses smiling softly against a neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD00JpriPdaUVJdnzws_3v0jOxBAXvaD1007Ll51i_tbj3wRGDPQ0vjpLxuBJI3NSvmBa0vqqPeuM_gArFTWfbDbhJ-YsFqfDWvo2-6JCNZKe-KBWZqjL59-90F_IofCxT4gkFs6Bt_HwTm04hsCf1_Jp_mq1K9AK5F8k7s02H1iQ0E19SW8HjpG_FhNu_ydIQlmqLyBDmDW15SDNuSVuE2nTWjgTK35bW2La3FTcWbRiNpaXeoPbmlBgUc80bVJQJlwqbwjyARC5o"/>
+<div class="w-10 h-10 rounded-full border-4 border-primary-container bg-surface flex items-center justify-center text-xs font-bold text-primary">+2</div>
+</div>
+<p class="text-sm font-medium">4 Active Members</p>
+</div>
+</div>
+</div>
+</main>
+<!-- MODAL OVERLAY (DIMMED) -->
+<div class="fixed inset-0 z-[60] bg-on-surface/40 backdrop-blur-[2px] flex items-end sm:items-center sm:justify-center p-0 sm:p-6">
+<!-- BOTTOM SHEET / MODAL CONTAINER -->
+<div class="w-full max-w-lg bg-surface-bright rounded-t-[2.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden">
+<!-- Handle for Mobile Drag -->
+<div class="flex justify-center pt-4 pb-2 sm:hidden">
+<div class="w-12 h-1.5 bg-surface-container-highest rounded-full"></div>
+</div>
+<div class="p-8 space-y-8">
+<!-- Header -->
+<div class="flex items-center justify-between">
+<div>
+<h2 class="font-headline text-2xl font-extrabold text-on-surface">Select Family</h2>
+<p class="text-secondary font-medium mt-1">Manage your financial circles</p>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-secondary hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Family List -->
+<div class="space-y-4">
+<!-- Active Family Item -->
+<div class="p-6 rounded-2xl bg-[#FFCC00]/10 border-2 border-primary-container flex items-center justify-between cursor-pointer transition-transform active:scale-[0.98]">
+<div class="flex items-center gap-5">
+<div class="w-14 h-14 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">family_restroom</span>
+</div>
+<div>
+<h4 class="font-headline text-lg font-bold text-on-surface">Abara Family</h4>
+<p class="text-[10px] font-medium text-secondary flex items-center gap-2">
+                                    4 Members <span class="w-1 h-1 rounded-full bg-outline-variant"></span> ₦4.2M Treasury
+                                </p>
+</div>
+</div>
+<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'wght' 700;">check</span>
+</div>
+</div>
+<!-- Inactive Family Item -->
+<div class="p-6 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low transition-colors flex items-center justify-between cursor-pointer border border-transparent">
+<div class="flex items-center gap-5">
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-3xl">home</span>
+</div>
+<div>
+<h4 class="font-headline text-lg font-bold text-on-surface">The Smith Estate</h4>
+<p class="text-[10px] font-medium text-secondary flex items-center gap-2">
+                                    2 Members <span class="w-1 h-1 rounded-full bg-outline-variant"></span> $12.5K Treasury
+                                </p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+<!-- Create New Action -->
+<button class="w-full p-6 rounded-2xl border-2 border-dashed border-outline-variant flex items-center justify-center gap-3 text-primary font-bold hover:bg-surface-container-low transition-all group active:scale-[0.98]">
+<div class="w-10 h-10 rounded-full bg-primary-container/30 flex items-center justify-center group-hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined">add</span>
+</div>
+<span class="font-headline">+ Create New Family</span>
+</button>
+</div>
+<!-- Modal Footer -->
+<div class="pt-2">
+<button class="w-full py-4 bg-secondary text-on-secondary rounded-xl font-bold shadow-lg shadow-secondary/20 hover:opacity-90 transition-all active:scale-95">
+                        Confirm Selection
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- BOTTOM NAVIGATION (HIDDEN ON MODAL OVERLAY BUT PRESENT IN DOM) -->
+<nav class="fixed bottom-0 left-0 w-full z-40">
+<div class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-white/80 backdrop-blur-xl rounded-t-3xl shadow-[0px_-8px_24px_rgba(23,28,31,0.06)]">
+<button class="flex flex-col items-center justify-center bg-[#FFCC00]/20 text-[#745b00] rounded-2xl px-3 py-1.5 active:scale-90 duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] font-medium text-[10px] tracking-wide mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:bg-[#f0f4f8] rounded-2xl transition-all">
+<span class="material-symbols-outlined">group</span>
+<span class="font-['Inter'] font-medium text-[10px] tracking-wide mt-1">Family</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:bg-[#f0f4f8] rounded-2xl transition-all">
+<span class="material-symbols-outlined">shield_person</span>
+<span class="font-['Inter'] font-medium text-[10px] tracking-wide mt-1">Steward</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:bg-[#f0f4f8] rounded-2xl transition-all">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-['Inter'] font-medium text-[10px] tracking-wide mt-1">Treasury</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#49607c] px-3 py-1.5 hover:bg-[#f0f4f8] rounded-2xl transition-all">
+<span class="material-symbols-outlined">menu</span>
+<span class="font-['Inter'] font-medium text-[10px] tracking-wide mt-1">More</span>
+</button>
+</div>
+</nav>
+</body></html>

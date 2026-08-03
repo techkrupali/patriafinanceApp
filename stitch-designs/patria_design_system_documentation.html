@@ -1,0 +1,45 @@
+# Patria Design System & Product Requirements
+
+## 1. NAVIGATION ARCHITECTURE
+- **Hybrid Model**: Top Bar, Bottom Nav, Contextual Actions.
+- **Top Bar**: [☰ Menu] Patria Logo/Title [👤 Profile]. Sticky, shrinks on scroll.
+- **Bottom Nav**: [Home] [Family] [Steward] [Treasury] [Controls] [More]. 72px height, White bg, Yellow active, Grey inactive.
+- **FAB**: Visible on Treasury, Family, Home. Circular, 56px, Yellow, expands to create actions.
+
+## 2. BUTTON SYSTEM
+- **Primary**: Yellow (#FFCC00), Black text, 48px height, 12px radius.
+- **Secondary**: White bg, 1px Grey border, Dark Blue text.
+- **Success**: Green (#25D366), White text.
+- **Warning**: Dark Blue bg, Teal border, White text (Replaces red).
+- **States**: Default, Hover, Pressed (0.98 scale), Disabled (#E5E7EB), Loading (Spinner).
+
+## 3. CARD SYSTEM
+- **Core UI Unit**: 16px radius, 16px padding, soft shadow, White bg.
+- **Types**: Wallet, Project, Goal, Transaction, Approval, AI (Steward), Alert.
+- **Interactions**: Tap (details), Swipe (delete/archive), Long press (multi-select).
+
+## 4. INPUT & FORM SYSTEM
+- **Principles**: Multi-step flows, real-time validation, no placeholder-only labels.
+- **Number Input**: Auto-format with commas (₦), numeric keypad only.
+- **States**: Default, Focus, Filled, Error (Red), Success (Green).
+- **Validation**: Format, Logical (balance check), Risk (limit check).
+
+## 5. MODALS & CONFIRMATION
+- **Types**: Confirmation, PIN/Biometric, Warning, Success, Error, AI Action.
+- **Flow**: Action -> Confirm Modal -> PIN -> Processing -> Success.
+- **Safety**: High-risk actions require PIN + Biometric + possible delay.
+
+## 6. DATA DISPLAY
+- **Hierarchy**: Level 1 (Summary), Level 2 (Breakdown), Level 3 (Deep/Transactions).
+- **Visuals**: Progress bars (Yellow fill), Charts (Bar, Line, Pie).
+- **Colors**: Income (Green), Expense (Grey/Dark), Alert (Yellow), Neutral (Blue).
+
+## 7. STEWARD (AI) INTERFACE
+- **Persona**: Trusted advisor, calm, clear, non-judgmental.
+- **Modes**: Chat, Passive Insight Cards, Action Prompts.
+- **Control**: User defines what AI can execute vs suggest.
+
+## 8. ROLES & PERMISSIONS
+- **Entities**: Owner (Super Admin), Co-Owner (Spouse), Contributor, Viewer, Child, Vendor, Steward (AI).
+- **Model**: Permissions assigned per wallet/project, not just global.
+- **Approval**: Single, Dual, Threshold-based, or AI-assisted.

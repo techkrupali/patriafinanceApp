@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Patria | OTP Verification</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#f6fafe",
+              "outline-variant": "#d2c5ab",
+              "secondary-fixed": "#d1e4ff",
+              "on-tertiary": "#ffffff",
+              "surface-container-low": "#f0f4f8",
+              "primary": "#745b00",
+              "on-secondary": "#ffffff",
+              "inverse-surface": "#2c3134",
+              "primary-fixed-dim": "#f1c100",
+              "tertiary-fixed": "#66ff8e",
+              "on-surface": "#171c1f",
+              "surface-bright": "#f6fafe",
+              "secondary-container": "#c7dfff",
+              "on-tertiary-fixed": "#002109",
+              "on-error-container": "#93000a",
+              "background": "#f6fafe",
+              "secondary": "#49607c",
+              "on-background": "#171c1f",
+              "primary-container": "#ffcc00",
+              "on-tertiary-container": "#00682d",
+              "tertiary": "#006d2f",
+              "on-primary-fixed": "#241a00",
+              "error-container": "#ffdad6",
+              "outline": "#80765f",
+              "surface-dim": "#d6dade",
+              "on-surface-variant": "#4e4632",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-container": "#4b637e",
+              "surface-tint": "#745b00",
+              "surface-variant": "#dfe3e7",
+              "on-primary-container": "#6f5700",
+              "on-error": "#ffffff",
+              "inverse-on-surface": "#edf1f5",
+              "surface-container-high": "#e4e9ed",
+              "secondary-fixed-dim": "#b0c9e8",
+              "on-primary": "#ffffff",
+              "on-secondary-fixed-variant": "#314863",
+              "tertiary-container": "#4cee7d",
+              "surface-container": "#eaeef2",
+              "primary-fixed": "#ffe08b",
+              "on-secondary-fixed": "#011d35",
+              "on-primary-fixed-variant": "#584400",
+              "surface-container-highest": "#dfe3e7",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed-variant": "#005322",
+              "inverse-primary": "#f1c100"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f6fafe; /* Milk white / surface */
+            font-family: 'Inter', sans-serif;
+        }
+        .otp-input:focus {
+            border-color: #006d2f; /* Tertiary as teal/green focus */
+            box-shadow: 0 0 0 2px rgba(0, 109, 47, 0.1);
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased min-h-screen flex flex-col">
+<!-- TopAppBar Section -->
+<header class="fixed top-0 w-full h-14 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-6 z-50">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined text-slate-500 dark:text-slate-400" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-manrope font-bold text-slate-900 dark:text-slate-100 text-lg">Verification</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</header>
+<main class="flex-grow pt-24 pb-12 px-6 max-w-lg mx-auto w-full flex flex-col justify-center">
+<!-- Brand/Context Header -->
+<div class="mb-10 text-center">
+<div class="inline-flex items-center justify-center p-4 bg-primary-container/20 rounded-2xl mb-6">
+<span class="material-symbols-outlined text-primary-container text-4xl" data-icon="shield_person" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+</div>
+<h2 class="font-headline font-extrabold text-3xl text-on-surface tracking-tight mb-3">Enter Verification Code</h2>
+<p class="font-body text-secondary text-base leading-relaxed">
+                We sent a 6-digit code to <span class="font-semibold text-on-surface">+234 801 *** 5678</span>
+</p>
+</div>
+<!-- OTP Input Grid -->
+<div class="grid grid-cols-6 gap-3 mb-8">
+<input autocomplete="one-time-code" class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+<input class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+<input class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+<input class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+<input class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+<input class="otp-input w-full h-14 text-center text-2xl font-bold rounded-xl border-none bg-surface-container-high focus:bg-surface-container-lowest focus:ring-2 focus:ring-tertiary transition-all outline-none" maxlength="1" placeholder="•" type="text"/>
+</div>
+<!-- Timer -->
+<div class="flex items-center justify-center gap-2 mb-10">
+<span class="material-symbols-outlined text-slate-400 text-lg" data-icon="schedule">schedule</span>
+<p class="font-label text-slate-500 font-medium">Resend code in <span class="text-on-surface">00:30</span></p>
+</div>
+<!-- Action Button -->
+<div class="space-y-4">
+<button class="w-full h-14 bg-primary-container text-on-primary-container font-headline font-bold text-lg rounded-xl shadow-lg shadow-primary-container/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+                Verify &amp; Continue
+            </button>
+<!-- Secondary/Footer Links Within Body Flow -->
+<div class="pt-6 flex flex-col items-center gap-4 border-t border-surface-variant/40">
+<button class="flex items-center gap-2 group">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="edit">edit</span>
+<span class="font-body text-secondary group-hover:text-primary transition-colors text-sm font-medium">Wrong number? <span class="underline decoration-outline-variant underline-offset-4">Edit contact</span></span>
+</button>
+<button class="flex items-center gap-2 group">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="support_agent">support_agent</span>
+<span class="font-body text-secondary group-hover:text-primary transition-colors text-sm font-medium">Need help? <span class="underline decoration-outline-variant underline-offset-4">Support</span></span>
+</button>
+</div>
+</div>
+</main>
+<!-- Bottom Illustration/Branding Layer -->
+<div class="mt-auto px-6 pb-12 opacity-50 select-none pointer-events-none overflow-hidden">
+<div class="relative h-24 w-full">
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent rounded-t-full scale-150 transform translate-y-12"></div>
+<!-- Decorative abstract dots -->
+<div class="absolute top-4 left-1/4 w-2 h-2 rounded-full bg-primary-fixed"></div>
+<div class="absolute top-8 left-2/3 w-3 h-3 rounded-full bg-tertiary-container/40"></div>
+<div class="absolute top-12 left-1/2 w-1.5 h-1.5 rounded-full bg-secondary-fixed"></div>
+</div>
+</div>
+<!-- Hidden bottom nav for spacing consistency, but suppressed as per transactional rule -->
+</body></html>

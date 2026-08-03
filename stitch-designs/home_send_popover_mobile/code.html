@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Patria - Home Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed-dim": "#b0c9e8",
+              "on-tertiary-fixed-variant": "#005322",
+              "secondary-fixed": "#d1e4ff",
+              "on-tertiary-container": "#00682d",
+              "inverse-surface": "#2c3134",
+              "on-error-container": "#93000a",
+              "on-secondary": "#ffffff",
+              "on-primary-fixed": "#241a00",
+              "on-primary-fixed-variant": "#584400",
+              "primary-fixed": "#ffe08b",
+              "on-tertiary-fixed": "#002109",
+              "surface-container-highest": "#dfe3e7",
+              "surface-dim": "#d6dade",
+              "surface-container-low": "#f0f4f8",
+              "on-surface": "#171c1f",
+              "outline-variant": "#d2c5ab",
+              "surface-variant": "#dfe3e7",
+              "surface": "#f6fafe",
+              "on-secondary-fixed-variant": "#314863",
+              "inverse-on-surface": "#edf1f5",
+              "surface-tint": "#745b00",
+              "error": "#ba1a1a",
+              "tertiary-fixed": "#66ff8e",
+              "on-surface-variant": "#4e4632",
+              "primary-container": "#ffcc00",
+              "tertiary-container": "#4cee7d",
+              "on-background": "#171c1f",
+              "error-container": "#ffdad6",
+              "on-secondary-container": "#4b637e",
+              "surface-bright": "#f6fafe",
+              "on-tertiary": "#ffffff",
+              "secondary-container": "#c7dfff",
+              "inverse-primary": "#f1c100",
+              "surface-container": "#eaeef2",
+              "outline": "#80765f",
+              "on-error": "#ffffff",
+              "primary-fixed-dim": "#f1c100",
+              "primary": "#745b00",
+              "on-secondary-fixed": "#011d35",
+              "secondary": "#49607c",
+              "background": "#f6fafe",
+              "on-primary": "#ffffff",
+              "tertiary-fixed-dim": "#3de273",
+              "surface-container-high": "#e4e9ed",
+              "tertiary": "#006d2f",
+              "on-primary-container": "#6f5700",
+              "surface-container-lowest": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, h4 { font-family: 'Manrope', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f6fafe]/80 backdrop-blur-xl">
+<div class="flex justify-between items-center px-6 h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="User profile portrait" class="w-full h-full object-cover" data-alt="Close-up studio portrait of a friendly professional man with short dark hair wearing a light gray sweater, warm soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1wP2bxkGPH6zL0PRvfsQf9NErg1iOgP9UIOYD0u-7M-DeuiJzxZnkQh_v61uDdkkbeCrUl0tjzOCPpnKqmjnsRyH5_gwKlOBKllKb9kzm34h0Gpebr6jOsAOOq8y1NZf1VSgMyv4nGfyk3g74dsmZjUimEz7PRiVA-IodRSqr4fFV3kYwKiVQ5pfFtwkxOSfeg6Yf4nvqm8fzccLzUUsB1jPfza08v-Oftcw6v8aOPXSDzNQV2l37OksqLNSOfd8aUuTPEdlbkx8"/>
+</div>
+<span class="font-['Manrope'] font-black text-[#171c1f] text-xl">Patria</span>
+</div>
+<button class="text-[#745b00] hover:opacity-80 transition-opacity active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="mt-20 px-6 space-y-8 flex-grow">
+<!-- Hero Balance Section -->
+<section class="space-y-1">
+<p class="font-label text-sm font-medium text-secondary tracking-wide">TOTAL FAMILY SAVINGS</p>
+<h1 class="font-headline text-5xl font-extrabold tracking-tight text-on-surface">$42,850.40</h1>
+<div class="flex items-center gap-2 mt-2">
+<span class="flex items-center text-tertiary font-medium text-sm">
+<span class="material-symbols-outlined text-sm mr-1" data-icon="trending_up">trending_up</span>
+                    +12.4% this month
+                </span>
+</div>
+</section>
+<!-- Bento Grid Insights -->
+<section class="grid grid-cols-2 gap-4">
+<!-- Large Primary Card -->
+<div class="col-span-2 bg-surface-container-lowest p-6 rounded-[24px] shadow-[0px_8px_24px_rgba(23,28,31,0.06)] relative overflow-hidden">
+<div class="relative z-10">
+<p class="font-label text-xs font-bold text-primary uppercase tracking-widest mb-1">Active Goal</p>
+<h2 class="font-headline text-2xl font-bold mb-4 text-on-surface">Summer Retreat 2024</h2>
+<div class="w-full bg-surface-container-low h-3 rounded-full overflow-hidden mb-2">
+<div class="bg-primary-container h-full w-3/4 rounded-full"></div>
+</div>
+<div class="flex justify-between items-end">
+<p class="text-sm font-medium text-secondary">$15,000 of $20,000</p>
+<span class="text-xs bg-tertiary-container text-on-tertiary-container px-2 py-1 rounded-lg font-bold">75%</span>
+</div>
+</div>
+<!-- Abstract Texture Background -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-container/10 blur-3xl -mr-10 -mt-10"></div>
+</div>
+<!-- Smaller Stat Cards -->
+<div class="bg-surface-container-low p-5 rounded-[20px] space-y-2">
+<span class="material-symbols-outlined text-secondary" data-icon="account_balance">account_balance</span>
+<p class="font-label text-xs font-medium text-secondary">Treasury</p>
+<p class="font-headline text-xl font-bold">$28.2k</p>
+</div>
+<div class="bg-surface-container-low p-5 rounded-[20px] space-y-2">
+<span class="material-symbols-outlined text-secondary" data-icon="shield">shield</span>
+<p class="font-label text-xs font-medium text-secondary">Safety Net</p>
+<p class="font-headline text-xl font-bold">$12.5k</p>
+</div>
+</section>
+<!-- Transactions Ledger Style -->
+<section class="space-y-4 pb-12">
+<div class="flex justify-between items-center">
+<h3 class="font-headline text-lg font-bold text-on-surface">Recent Ledger</h3>
+<button class="text-primary text-sm font-semibold">See All</button>
+</div>
+<div class="space-y-6">
+<!-- Transaction Item -->
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+</div>
+<div>
+<p class="font-body font-semibold text-on-surface">Whole Foods Market</p>
+<p class="font-label text-xs text-secondary">Today, 2:45 PM</p>
+</div>
+</div>
+<p class="font-headline font-bold text-on-surface">-$142.20</p>
+</div>
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-tertiary-container/30 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+</div>
+<div>
+<p class="font-body font-semibold text-on-surface">Dividend Payout</p>
+<p class="font-label text-xs text-secondary">Yesterday</p>
+</div>
+</div>
+<p class="font-headline font-bold text-tertiary">+$450.00</p>
+</div>
+<div class="flex items-center justify-between group opacity-60">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined" data-icon="directions_car">directions_car</span>
+</div>
+<div>
+<p class="font-body font-semibold text-on-surface">Tesla Supercharger</p>
+<p class="font-label text-xs text-secondary">Nov 12, 2023</p>
+</div>
+</div>
+<p class="font-headline font-bold text-on-surface">-$22.50</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Quick Action Popover (Non-blocking) -->
+<!-- Positioned above the quick action panel, specifically above the 'Send' button area -->
+<div class="fixed bottom-[148px] left-6 right-6 z-[60]">
+<div class="bg-surface-container-lowest border border-outline-variant/10 rounded-2xl shadow-[0px_12px_48px_rgba(23,28,31,0.12)] p-2 w-56 ml-auto">
+<div class="flex flex-col">
+<p class="px-3 py-2 text-[10px] font-bold text-secondary uppercase tracking-widest">Select Source</p>
+<button class="flex items-center gap-3 px-3 py-3 hover:bg-surface-container-low rounded-xl transition-colors text-left group">
+<div class="w-8 h-8 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<span class="font-body text-sm font-semibold text-on-surface">Main Wallet</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-3 hover:bg-surface-container-low rounded-xl transition-colors text-left group">
+<div class="w-8 h-8 rounded-lg bg-tertiary-container/20 flex items-center justify-center text-tertiary group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="savings">savings</span>
+</div>
+<span class="font-body text-sm font-semibold text-on-surface">Savings Wallet</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-3 hover:bg-surface-container-low rounded-xl transition-colors text-left group">
+<div class="w-8 h-8 rounded-lg bg-error-container/20 flex items-center justify-center text-error group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="emergency_home">emergency_home</span>
+</div>
+<span class="font-body text-sm font-semibold text-on-surface">Emergency Wallet</span>
+</button>
+</div>
+<!-- Popover Tip/Arrow -->
+<div class="absolute -bottom-2 right-10 w-4 h-4 bg-surface-container-lowest rotate-45 border-r border-b border-outline-variant/10"></div>
+</div>
+</div>
+<!-- Quick Action Panel (Persistent on Home) -->
+<div class="fixed bottom-24 left-6 right-6 z-40 bg-on-surface text-surface py-4 px-6 rounded-3xl flex justify-between items-center shadow-lg">
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest/10 flex items-center justify-center group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-primary-container" data-icon="add_card">add_card</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Deposit</span>
+</button>
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="send">send</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-primary-container">Send</span>
+</button>
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest/10 flex items-center justify-center group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-primary-container" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Scan</span>
+</button>
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest/10 flex items-center justify-center group-active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-primary-container" data-icon="more_horiz">more_horiz</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter">More</span>
+</button>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full h-[72px] flex justify-around items-center px-4 pb-safe bg-white/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0px_-8px_24px_rgba(23,28,31,0.06)]">
+<a class="flex flex-col items-center justify-center bg-[#FFCC00] text-[#171c1f] rounded-2xl px-3 py-1.5 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:bg-[#f0f4f8] rounded-2xl transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Family</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:bg-[#f0f4f8] rounded-2xl transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="shield_person">shield_person</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Steward</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:bg-[#f0f4f8] rounded-2xl transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Treasury</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:bg-[#f0f4f8] rounded-2xl transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Inter'] font-medium text-[10px] uppercase tracking-wider">Rules</span>
+</a>
+</nav>
+</body></html>

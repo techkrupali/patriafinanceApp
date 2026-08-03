@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "inverse-surface": "#2c3134",
+              "surface-dim": "#d6dade",
+              "primary-container": "#ffcc00",
+              "tertiary": "#006d2f",
+              "surface-container-high": "#e4e9ed",
+              "surface": "#f6fafe",
+              "on-primary-container": "#6f5700",
+              "surface-container": "#eaeef2",
+              "tertiary-fixed-dim": "#3de273",
+              "primary": "#745b00",
+              "on-secondary-fixed": "#011d35",
+              "on-surface": "#171c1f",
+              "error-container": "#ffdad6",
+              "on-surface-variant": "#4e4632",
+              "primary-fixed-dim": "#f1c100",
+              "on-primary-fixed": "#241a00",
+              "outline": "#80765f",
+              "on-secondary-container": "#4b637e",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-background": "#171c1f",
+              "surface-container-low": "#f0f4f8",
+              "surface-variant": "#dfe3e7",
+              "secondary": "#49607c",
+              "tertiary-container": "#4cee7d",
+              "secondary-fixed": "#d1e4ff",
+              "surface-tint": "#745b00",
+              "on-secondary-fixed-variant": "#314863",
+              "surface-container-highest": "#dfe3e7",
+              "secondary-fixed-dim": "#b0c9e8",
+              "primary-fixed": "#ffe08b",
+              "secondary-container": "#c7dfff",
+              "on-primary": "#ffffff",
+              "background": "#f6fafe",
+              "on-error": "#ffffff",
+              "tertiary-fixed": "#66ff8e",
+              "on-tertiary-container": "#00682d",
+              "inverse-on-surface": "#edf1f5",
+              "error": "#ba1a1a",
+              "on-tertiary": "#ffffff",
+              "on-error-container": "#93000a",
+              "inverse-primary": "#f1c100",
+              "on-primary-fixed-variant": "#584400",
+              "on-tertiary-fixed-variant": "#005322",
+              "outline-variant": "#d2c5ab",
+              "on-tertiary-fixed": "#002109",
+              "surface-bright": "#f6fafe"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fcfcfc; /* Milk White approximation */
+        }
+        h1, h2, h3 {
+            font-family: 'Manrope', sans-serif;
+        }
+        .success-glow {
+            box-shadow: 0 0 60px 10px rgba(255, 204, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-[#fcfcfc] min-h-screen flex items-center justify-center p-6 overflow-hidden">
+<!-- Main Content Canvas -->
+<main class="w-full max-w-lg mx-auto flex flex-col items-center text-center">
+<!-- Celebratory Success Visual -->
+<div class="relative mb-12">
+<!-- Decorative Background Elements -->
+<div class="absolute inset-0 bg-primary-container/20 rounded-full blur-3xl scale-150 -z-10"></div>
+<div class="w-32 h-32 md:w-40 md:h-40 bg-primary-container rounded-full flex items-center justify-center success-glow relative overflow-hidden group">
+<!-- Abstract inner pattern for depth -->
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<svg class="w-full h-full" viewbox="0 0 100 100">
+<circle class="text-on-primary-container" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="4 4" stroke-width="2"></circle>
+</svg>
+</div>
+<span class="material-symbols-outlined text-on-primary-fixed text-6xl md:text-7xl font-bold" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">
+                    check_circle
+                </span>
+</div>
+</div>
+<!-- Heading Section -->
+<div class="space-y-4 mb-10">
+<h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-on-secondary-fixed">
+                You’re All Set
+            </h1>
+<p class="text-on-secondary-container text-lg md:text-xl font-medium max-w-sm mx-auto leading-relaxed">
+                This is your family’s financial control system — ready to go
+            </p>
+</div>
+<!-- Value Guidance Block (Bento Style Item) -->
+<div class="w-full bg-surface-container-low rounded-xl p-6 mb-12 text-left space-y-6">
+<div class="flex items-start gap-4">
+<div class="mt-1 flex-shrink-0 w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<div class="flex-1">
+<p class="font-semibold text-on-surface">Track and manage your money in one place</p>
+<p class="text-sm text-on-surface-variant">Real-time visibility across all family accounts.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="mt-1 flex-shrink-0 w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<div class="flex-1">
+<p class="font-semibold text-on-surface">Set rules and automate your finances</p>
+<p class="text-sm text-on-surface-variant">Intelligent transfers and savings goals.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="mt-1 flex-shrink-0 w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]" data-icon="group_add">group_add</span>
+</div>
+<div class="flex-1">
+<p class="font-semibold text-on-surface">Invite family and manage together</p>
+<p class="text-sm text-on-surface-variant">Shared control with customizable permissions.</p>
+</div>
+</div>
+</div>
+<!-- Primary CTA -->
+<div class="w-full max-w-xs space-y-4">
+<button class="group w-full bg-primary-container hover:bg-primary-fixed py-4 px-8 rounded-lg font-bold text-on-primary-fixed transition-all active:scale-95 shadow-lg shadow-primary-container/20 flex items-center justify-center gap-2">
+<span>Go to Dashboard</span>
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</button>
+<p class="text-xs text-on-surface-variant/60 font-medium uppercase tracking-widest">
+                System Activated • 1.2.8
+            </p>
+</div>
+<!-- Background Decoration - Subtle Glass Nodes -->
+<div class="fixed top-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-primary-container/5 blur-[120px] -z-20"></div>
+<div class="fixed bottom-[-10%] left-[-10%] w-[30vw] h-[30vw] rounded-full bg-secondary-container/10 blur-[100px] -z-20"></div>
+</main>
+<!-- Suppressed Shell Components for Focused Transactional Flow -->
+<!-- (TopAppBar and BottomNavBar are omitted per hierarchy rules for onboarding screens) -->
+</body></html>

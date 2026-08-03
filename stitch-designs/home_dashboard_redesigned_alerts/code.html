@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Patria - Home Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-container": "#c7dfff",
+                        "on-tertiary-fixed": "#002109",
+                        "on-error-container": "#93000a",
+                        "background": "#f6fafe",
+                        "primary-fixed-dim": "#f1c100",
+                        "tertiary-fixed": "#66ff8e",
+                        "on-surface": "#171c1f",
+                        "surface-bright": "#f6fafe",
+                        "secondary-fixed": "#d1e4ff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#f0f4f8",
+                        "primary": "#745b00",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2c3134",
+                        "surface": "#f6fafe",
+                        "outline-variant": "#d2c5ab",
+                        "on-secondary-container": "#4b637e",
+                        "surface-tint": "#745b00",
+                        "surface-dim": "#d6dade",
+                        "on-surface-variant": "#4e4632",
+                        "tertiary-fixed-dim": "#3de273",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#00682d",
+                        "tertiary": "#006d2f",
+                        "on-primary-fixed": "#241a00",
+                        "error-container": "#ffdad6",
+                        "outline": "#80765f",
+                        "secondary": "#49607c",
+                        "on-background": "#171c1f",
+                        "primary-container": "#ffcc00",
+                        "tertiary-container": "#4cee7d",
+                        "surface-container-high": "#e4e9ed",
+                        "secondary-fixed-dim": "#b0c9e8",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed-variant": "#314863",
+                        "surface-variant": "#dfe3e7",
+                        "on-primary-container": "#6f5700",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#edf1f5",
+                        "surface-container-highest": "#dfe3e7",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed-variant": "#005322",
+                        "inverse-primary": "#f1c100",
+                        "on-secondary-fixed": "#011d35",
+                        "on-primary-fixed-variant": "#584400",
+                        "surface-container": "#eaeef2",
+                        "primary-fixed": "#ffe08b"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-nav {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 bg-[#f6fafe]/80 backdrop-blur-xl flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant">menu</span>
+<h1 class="font-['Manrope'] font-bold text-lg tracking-tight text-[#171c1f]">Good evening, David</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container/20">
+<img alt="Profile picture of David" class="w-full h-full object-cover" data-alt="Close-up portrait of a professional man with a warm smile, natural lighting, blurred office background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzm0Z6dANWl8IEyuu4K1S2CetpKA2c9paVvaWZVsZvdGM4eYXmGoaVZWHUG4iEfmhIsHIbnk-CZgluCIDfESPPRq9XMJwq6-irRAZqVFRA3JJzu9XLBhlWpxG9HWjEkHyB4oM25_3DsjaxzdGV8oc4_BPdx6cWYV_Zj-GrwXbwSoJ6nOPk4Ox1VPKBQuXrfaeqwKWs_t6uAsnjovw7DVF45g4NJrHiP_iO6A_OCO7lvonyU1Ybrt1-rfMEdEdfQ3uVeD_leOox9Tw"/>
+</div>
+</header>
+<main class="max-w-md mx-auto px-6 space-y-8 mt-4">
+<!-- Active Family Selector -->
+<section class="bg-surface-container-low rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-3">
+<span class="text-xl">🏡</span>
+<div>
+<p class="font-headline font-bold text-on-surface">Abara Family</p>
+<p class="font-label text-xs text-secondary">4 Members • 2 Active Goals</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</section>
+<!-- Treasury Snapshot -->
+<section class="bg-gradient-to-br from-primary to-on-primary-fixed-variant rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+<div class="absolute top-0 right-0 p-8 opacity-10">
+<span class="material-symbols-outlined !text-7xl">account_balance</span>
+</div>
+<div class="relative z-10">
+<p class="font-label text-sm font-medium opacity-80 mb-1">Total Treasury Balance</p>
+<h2 class="font-headline text-4xl font-extrabold mb-6">₦4,250,000</h2>
+<div class="grid grid-cols-3 gap-2 mb-6">
+<div class="bg-white/10 rounded-xl p-2">
+<p class="text-[10px] uppercase tracking-wider opacity-70">Available</p>
+<p class="font-bold text-sm">₦2.1M</p>
+</div>
+<div class="bg-white/10 rounded-xl p-2">
+<p class="text-[10px] uppercase tracking-wider opacity-70">Locked</p>
+<p class="font-bold text-sm">₦1.5M</p>
+</div>
+<div class="bg-white/10 rounded-xl p-2">
+<p class="text-[10px] uppercase tracking-wider opacity-70">Goals</p>
+<p class="font-bold text-sm">₦650K</p>
+</div>
+</div>
+<div class="flex items-center gap-2 bg-primary-container/20 border border-primary-container/30 rounded-lg p-3 mb-6">
+<span class="material-symbols-outlined text-primary-container text-sm">auto_awesome</span>
+<p class="text-xs text-primary-container font-medium">You’re on track with 3 active commitments</p>
+</div>
+<button class="w-full py-3 bg-primary-container text-on-primary-container font-bold rounded-xl active:scale-95 transition-transform">
+                    View Treasury
+                </button>
+</div>
+</section>
+<!-- Quick Actions Panel -->
+<section class="grid grid-cols-4 gap-4">
+<div class="flex flex-col items-center gap-2">
+<button class="w-14 h-14 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center hover:shadow-lg transition-all active:scale-90">
+<span class="material-symbols-outlined">send</span>
+</button>
+<span class="font-label text-[11px] font-semibold text-secondary">Send</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-14 h-14 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center hover:shadow-lg transition-all active:scale-90">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</button>
+<span class="font-label text-[11px] font-semibold text-secondary">Fund</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-14 h-14 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center hover:shadow-lg transition-all active:scale-90">
+<span class="material-symbols-outlined">add_card</span>
+</button>
+<span class="font-label text-[11px] font-semibold text-secondary">Create Wallet</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-14 h-14 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center hover:shadow-lg transition-all active:scale-90">
+<span class="material-symbols-outlined">person_add</span>
+</button>
+<span class="font-label text-[11px] font-semibold text-secondary">Add Member</span>
+</div>
+</section>
+<!-- Smart Alerts -->
+<section class="space-y-3 mt-2">
+<h3 class="font-headline font-bold text-sm text-on-surface px-1 mb-2 opacity-70 uppercase tracking-wider">Smart Alerts</h3>
+<div class="space-y-2"><!-- Warning/Pending Alert -->
+<div class="bg-primary-container/10 border border-primary-container/20 p-3 rounded-lg flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all group">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-sm">warning</span>
+</div>
+<p class="flex-1 text-xs font-semibold text-on-surface leading-tight font-['Manrope']">₦120,000 payment request pending approval</p>
+<span class="material-symbols-outlined text-primary/40 group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+<!-- Success/Goal Alert -->
+<div class="bg-tertiary-container/10 border border-tertiary-container/20 p-3 rounded-lg flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all group">
+<div class="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary text-sm">check_circle</span>
+</div>
+<p class="flex-1 text-xs font-semibold text-on-surface leading-tight font-['Manrope']">Goal ‘School Fees’ is 80% complete</p>
+<span class="material-symbols-outlined text-tertiary/40 group-hover:text-tertiary transition-colors">chevron_right</span>
+</div>
+<!-- AI/Insight Alert -->
+<div class="bg-secondary-container/10 border border-secondary-container/20 p-3 rounded-lg flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all group">
+<div class="w-8 h-8 rounded-full bg-secondary-container/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary text-sm">analytics</span>
+</div>
+<p class="flex-1 text-xs font-semibold text-on-surface leading-tight font-['Manrope']">Unusual spending detected this week</p>
+<span class="material-symbols-outlined text-secondary/40 group-hover:text-secondary transition-colors">chevron_right</span>
+</div></div>
+</section>
+<!-- Pending Approvals Widget -->
+<section class="bg-surface-container-lowest rounded-2xl p-5 shadow-sm">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline font-bold text-on-surface">Pending Actions (3)</h3>
+<span class="text-xs font-bold text-primary uppercase tracking-wider">Review All</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between py-2 border-b border-surface-variant/30">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Vendor milestone release</span>
+<span class="text-xs text-secondary">Awaiting signature</span>
+</div>
+<span class="text-sm font-bold text-on-surface">→ ₦300K</span>
+</div>
+<div class="flex items-center justify-between py-2">
+<div class="flex flex-col">
+<span class="text-sm font-semibold">Child request</span>
+<span class="text-xs text-secondary">Pocket money</span>
+</div>
+<span class="text-sm font-bold text-on-surface">→ ₦20K</span>
+</div>
+</div>
+</section>
+<!-- Goals Snapshot -->
+<section class="space-y-3">
+<h3 class="font-headline font-bold text-on-surface px-1">Active Goals</h3>
+<div class="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-6 px-6">
+<div class="min-w-[240px] bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-surface-variant/20">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-xl">🎓</div>
+<span class="text-xs font-bold text-tertiary">80%</span>
+</div>
+<p class="font-headline font-bold text-on-surface mb-1">School Fees</p>
+<p class="text-sm text-secondary mb-4">₦400K / ₦500K</p>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full w-[80%] rounded-full"></div>
+</div>
+</div>
+<div class="min-w-[240px] bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-surface-variant/20">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-secondary-container/20 flex items-center justify-center text-xl">🏠</div>
+<span class="text-xs font-bold text-secondary">35%</span>
+</div>
+<p class="font-headline font-bold text-on-surface mb-1">Estate Levy</p>
+<p class="text-sm text-secondary mb-4">₦175K / ₦500K</p>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[35%] rounded-full"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Steward AI Insight -->
+<section class="bg-[#e0f2f1] dark:bg-slate-800 rounded-2xl p-6 relative overflow-hidden">
+<div class="flex items-start gap-4 relative z-10">
+<div class="w-12 h-12 rounded-full bg-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+</div>
+<div>
+<h4 class="font-headline font-bold text-on-tertiary-container mb-1">Steward AI Insight</h4>
+<p class="text-sm text-on-tertiary-fixed-variant leading-relaxed mb-4">You spent 18% more this week than usual. Most of it went to 'Household Supplies'.</p>
+<button class="px-4 py-2 bg-on-tertiary-container text-white rounded-lg text-xs font-bold active:scale-95 transition-transform">
+                        Ask Steward
+                    </button>
+</div>
+</div>
+<div class="absolute -bottom-6 -right-6 w-32 h-32 bg-tertiary-container/20 rounded-full blur-2xl"></div>
+</section>
+<!-- Activity Feed -->
+<section class="space-y-4">
+<h3 class="font-headline font-bold text-on-surface px-1">Recent Activity</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">payments</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold">₦50,000 sent to Vendor A</p>
+<p class="text-xs text-secondary">Today, 2:45 PM • Treasury Wallet</p>
+</div>
+<span class="text-xs font-medium text-secondary">Pending</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">add_circle</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-semibold">John contributed ₦20,000</p>
+<p class="text-xs text-secondary">Yesterday, 6:12 PM • Family Savings</p>
+</div>
+<span class="text-xs font-medium text-tertiary">+20k</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 rounded-t-2xl bg-white/80 backdrop-blur-xl shadow-[0px_-8px_24px_rgba(23,28,31,0.06)] flex justify-around items-center h-[72px] px-4 pb-safe w-full">
+<a class="flex flex-col items-center justify-center text-[#745b00] font-bold bg-[#FFCC00]/10 rounded-xl px-3 py-1" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:text-[#745b00] transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">Family</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:text-[#745b00] transition-all" href="#">
+<span class="material-symbols-outlined">shield_person</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">Steward</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:text-[#745b00] transition-all" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">Treasury</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:text-[#745b00] transition-all" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">Rules</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#49607c] hover:text-[#745b00] transition-all" href="#">
+<span class="material-symbols-outlined">more_horiz</span>
+<span class="font-['Inter'] text-[10px] font-medium tracking-wide uppercase mt-1">More</span>
+</a>
+</nav>
+<!-- Contextual FAB (Hidden on some views but available for dashboard quick fund) -->
+<button class="fixed right-6 bottom-24 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-[0px_8px_24px_rgba(23,28,31,0.2)] flex items-center justify-center z-40 active:scale-90 transition-transform">
+<span class="material-symbols-outlined !text-3xl">add</span>
+</button>
+</body></html>
