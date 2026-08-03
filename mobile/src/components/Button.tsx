@@ -26,12 +26,11 @@ const surface: Record<Exclude<Variant, 'primary'>, string> = {
   danger: 'bg-danger-soft',
 };
 
-// Primary sits on the metallic gold gradient, so its content is dark
-// on-primary-container brown per the Curated Ledger spec.
-const ON_GOLD = '#3D2F00';
+// Primary sits on the deep-green action gradient, so its content is white.
+const ON_GOLD = '#FFFFFF';
 
 const textColor: Record<Variant, string> = {
-  primary: 'text-[#3D2F00]',
+  primary: 'text-white',
   secondary: 'text-navy',
   ghost: 'text-brand',
   danger: 'text-danger',

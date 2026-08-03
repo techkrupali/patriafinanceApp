@@ -97,7 +97,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
               alignItems: 'center',
               justifyContent: 'center',
               borderWidth: 2,
-              borderColor: '#FFCC00',
+              borderColor: '#3DE273',
             }}
           >
             <Text className="text-[13px] font-bold text-white">{initials(me.data?.full_name)}</Text>
@@ -207,11 +207,11 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                       setFilter(f.key);
                     }}
                     className={`rounded-full px-6 py-2.5 active:opacity-80 ${
-                      selected ? 'bg-[#FFCC00]' : 'bg-lav-soft'
+                      selected ? 'bg-[#006D2F]' : 'bg-lav-soft'
                     }`}
                     style={selected ? shadow.soft : undefined}
                   >
-                    <Text className={`text-xs font-bold ${selected ? 'text-[#6F5700]' : 'text-muted'}`}>
+                    <Text className={`text-xs font-bold ${selected ? 'text-white' : 'text-muted'}`}>
                       {f.label}
                     </Text>
                   </Pressable>
@@ -245,11 +245,11 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                 selection();
                 navigation.navigate('CreateWallet');
               }}
-              className="mt-8 flex-row items-center justify-center rounded-2xl bg-[#FFCC00] py-5 active:opacity-90"
+              className="mt-8 flex-row items-center justify-center rounded-2xl bg-[#006D2F] py-5 active:opacity-90"
               style={shadow.gold}
             >
-              <Ionicons name="add" size={20} color="#6F5700" style={{ marginRight: 8 }} />
-              <Text className="text-[15px] font-extrabold text-[#6F5700]">Create New Wallet</Text>
+              <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text className="text-[15px] font-extrabold text-white">Create New Wallet</Text>
             </Pressable>
           </>
         )}

@@ -15,10 +15,10 @@ import { walletVisual } from '../../lib/walletVisual';
 import type { CreatableWalletType } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-/** On-gold content colour (Curated Ledger on-primary-container). */
-const ON_GOLD = '#3D2F00';
-/** Metallic gold container fill (primary-container). */
-const GOLD_CONTAINER = '#FFCC00';
+/** Content colour on the green action fill. */
+const ON_GOLD = '#FFFFFF';
+/** Action green container fill (gold retired per client video). */
+const GOLD_CONTAINER = '#006D2F';
 
 interface TypeOption {
   value: CreatableWalletType;

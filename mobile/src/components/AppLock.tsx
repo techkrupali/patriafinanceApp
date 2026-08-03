@@ -76,7 +76,7 @@ export function AppLock({ onUsePassword }: AppLockProps) {
                   height: 132,
                   width: 132,
                   borderWidth: 2,
-                  borderColor: 'rgba(255,204,0,0.25)',
+                  borderColor: 'rgba(15,138,68,0.30)',
                 }}
               />
               <View

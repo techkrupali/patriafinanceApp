@@ -120,7 +120,7 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
         <View className="items-center justify-center">
           <View
             className="absolute rounded-full"
-            style={{ height: 108, width: 108, borderWidth: 2, borderColor: 'rgba(255,204,0,0.25)' }}
+            style={{ height: 108, width: 108, borderWidth: 2, borderColor: 'rgba(15,138,68,0.30)' }}
           />
           <View className="h-20 w-20 items-center justify-center rounded-3xl bg-white" style={shadow.card}>
             <Ionicons name="people" size={36} color={colors.goldDeep} />
@@ -138,7 +138,7 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
       {/* Primary Owner — selected role card (gold border, green check) */}
       <View
         className="mt-8 rounded-3xl bg-white p-5"
-        style={[shadow.card, { borderWidth: 2, borderColor: '#FFCC00' }]}
+        style={[shadow.card, { borderWidth: 2, borderColor: '#006D2F' }]}
       >
         <View className="flex-row items-center">
           <Ionicons name="star" size={18} color={colors.gold} style={{ marginRight: 8 }} />

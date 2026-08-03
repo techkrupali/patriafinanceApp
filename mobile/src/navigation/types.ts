@@ -21,6 +21,7 @@ export type MainTabParamList = {
   Family: undefined;
   Steward: undefined;
   Treasury: undefined;
+  Rules: undefined;
   More: undefined;
 };
 

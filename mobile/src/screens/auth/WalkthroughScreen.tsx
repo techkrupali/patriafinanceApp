@@ -15,12 +15,12 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-/** On-gold content colour (Curated Ledger on-primary-container). */
-const ON_GOLD = '#3D2F00';
-/** Metallic gold container fill (primary-container). */
-const GOLD_CONTAINER = '#FFCC00';
-/** Deep completion check colour (design on-primary-fixed). */
-const ON_GOLD_FIXED = '#241A00';
+/** Content colour on the green action fill. */
+const ON_GOLD = '#FFFFFF';
+/** Action green container fill (gold retired per client video). */
+const GOLD_CONTAINER = '#006D2F';
+/** Completion check colour on the green fill. */
+const ON_GOLD_FIXED = '#FFFFFF';
 
 type Slide =
   | { kind: 'feature'; key: string; icon: IconName; title: string; body: string; chips?: string[] }
@@ -80,7 +80,7 @@ function FeatureSlide({ slide }: { slide: Extract<Slide, { kind: 'feature' }> })
       <View className="items-center justify-center">
         <View
           className="absolute rounded-full"
-          style={{ height: 150, width: 150, borderWidth: 2, borderColor: 'rgba(255,204,0,0.25)' }}
+          style={{ height: 150, width: 150, borderWidth: 2, borderColor: 'rgba(15,138,68,0.30)' }}
         />
         <View className="h-28 w-28 items-center justify-center rounded-3xl bg-white" style={shadow.card}>
           <Ionicons name={slide.icon} size={54} color={colors.goldDeep} />

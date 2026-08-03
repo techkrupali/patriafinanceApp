@@ -156,7 +156,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
           end={{ x: 1, y: 1 }}
           style={[{ height: 40, width: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, shadow.gold]}
         >
-          <MaterialCommunityIcons name="creation" size={20} color="#3D2F00" />
+          <MaterialCommunityIcons name="creation" size={20} color="#FFFFFF" />
         </LinearGradient>
         <View className="ml-3 flex-1">
           <Text className="text-lg font-extrabold text-ink">Steward</Text>
@@ -179,7 +179,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
           {insights.map((ins) => (
             <LinearGradient
               key={ins.text}
-              colors={['#FFCC00', '#F1C100']}
+              colors={['#DFF2E5', '#CBEAD6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={[{ borderRadius: 16, padding: 16 }, shadow.soft]}
@@ -188,10 +188,10 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
                 <MaterialCommunityIcons
                   name={ins.icon as never}
                   size={18}
-                  color="#3D2F00"
+                  color="#0B5227"
                   style={{ marginRight: 10, marginTop: 1 }}
                 />
-                <Text className="flex-1 text-[14px] font-bold leading-5 text-[#3D2F00]">{ins.text}</Text>
+                <Text className="flex-1 text-[14px] font-bold leading-5 text-[#0B5227]">{ins.text}</Text>
               </View>
             </LinearGradient>
           ))}
@@ -262,7 +262,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
               end={{ x: 1, y: 1 }}
               style={{ height: 36, width: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Ionicons name="arrow-up" size={18} color="#3D2F00" />
+              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
             </LinearGradient>
           </Pressable>
         </View>

@@ -17,15 +17,16 @@ export interface WalletVisual {
 
 /**
  * Each wallet type gets its own recognisable material (client request):
- * treasury navy for main, slate for the family wallets, metallic gold for
- * savings/goals, green for giving, warm red for emergency.
+ * treasury navy for main, slate for the family wallets, deep→bright green for
+ * savings/goals (gold retired per client video), green for giving, warm red
+ * for emergency.
  */
 const MAP: Record<WalletType, WalletVisual> = {
   main: { gradient: gradients.navy, icon: 'shield-checkmark', label: 'MAIN', onDark: true },
   shared: { gradient: ['#314863', '#49607C'] as const, icon: 'people', label: 'SHARED', onDark: true },
   project: { gradient: ['#EAEEF2', '#DFE3E7'] as const, icon: 'flag', label: 'PROJECT', onDark: false },
-  savings: { gradient: ['#745B00', '#E0B200'] as const, icon: 'wallet', label: 'SAVINGS', onDark: true },
-  goal: { gradient: ['#8A6D00', '#F1C100'] as const, icon: 'trophy', label: 'GOAL', onDark: true },
+  savings: { gradient: ['#004D21', '#0F8A44'] as const, icon: 'wallet', label: 'SAVINGS', onDark: true },
+  goal: { gradient: ['#0F8A44', '#2BC162'] as const, icon: 'trophy', label: 'GOAL', onDark: true },
   emergency: { gradient: ['#7F1D1D', '#BA1A1A'] as const, icon: 'medkit', label: 'EMERGENCY', onDark: true },
   giving: { gradient: ['#005322', '#0F8A44'] as const, icon: 'heart', label: 'GIVING', onDark: true },
   joint: { gradient: ['#25405C', '#3E5C7E'] as const, icon: 'people-circle', label: 'JOINT', onDark: true },

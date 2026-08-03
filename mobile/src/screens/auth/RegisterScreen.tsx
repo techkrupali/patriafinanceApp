@@ -110,14 +110,14 @@ function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-/** Tonal gold icon badge (primary-container/20 with gold glyph, per design). */
+/** Tonal green icon badge (tertiary-container tint with green glyph). */
 function IconBadge({ name }: { name: React.ComponentProps<typeof Ionicons>['name'] }) {
   return (
     <View
       className="h-20 w-20 items-center justify-center rounded-2xl"
-      style={{ backgroundColor: 'rgba(255,204,0,0.18)' }}
+      style={{ backgroundColor: 'rgba(0,109,47,0.12)' }}
     >
-      <Ionicons name={name} size={38} color="#FFCC00" />
+      <Ionicons name={name} size={38} color="#006D2F" />
     </View>
   );
 }

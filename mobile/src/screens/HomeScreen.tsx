@@ -23,16 +23,16 @@ const GOAL_TYPES: readonly string[] = ['savings', 'goal', 'emergency', 'giving']
 // Stitch "home_dashboard_mobile_final_layout" tokens (code.html)
 // ---------------------------------------------------------------------------
 
-/** Treasury card — dark brown → gold gradient (from-[#241a00] to-[#584400]). */
-const TREASURY_GRADIENT = ['#241A00', '#584400'] as const;
+/** Treasury card — deep treasury navy (client video 2026-08-03: "this deep blue"). */
+const TREASURY_GRADIENT = ['#011D35', '#12324F'] as const;
 /** Steward insight card — tertiary green → deep green (from-tertiary to-[#004d21]). */
 const STEWARD_GRADIENT = ['#006D2F', '#004D21'] as const;
-/** View Treasury button fill (primary-container). */
-const GOLD_BUTTON = '#FFCC00';
-/** Dark ink on gold surfaces (client on-primary-container family). */
-const GOLD_INK = '#3D2F00';
-/** Soft gold action-tile fill (primary-container/20 flattened on the page). */
-const GOLD_TILE = '#FFF3C4';
+/** View Treasury button fill — white pill on the navy card (design's light-on-navy actions). */
+const GOLD_BUTTON = '#FFFFFF';
+/** Ink on the white pill — treasury navy. */
+const GOLD_INK = '#011D35';
+/** Soft green action-tile fill (gold tiles retired per client). */
+const GOLD_TILE = '#DFF2E5';
 
 const sumBalances = (ws: Wallet[]): number =>
   ws.reduce((acc, w) => acc + (parseFloat(w.balance || '0') || 0), 0);
@@ -460,14 +460,14 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           </View>
         </Pressable>
 
-        {/* 3 · Treasury card — dark brown → gold */}
+        {/* 3 · Treasury card — deep treasury navy */}
         <LinearGradient
           colors={TREASURY_GRADIENT}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[{ borderRadius: 16, marginTop: 32, padding: 24, overflow: 'hidden' }, shadow.hero]}
         >
-          {/* Decorative gold glow (design's blurred circle) */}
+          {/* Decorative mint glow (design's blurred circle) */}
           <View
             pointerEvents="none"
             style={{
@@ -477,24 +477,24 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               height: 192,
               width: 192,
               borderRadius: 96,
-              backgroundColor: GOLD_BUTTON,
-              opacity: 0.08,
+              backgroundColor: colors.brandMint,
+              opacity: 0.1,
             }}
           />
 
           <View className="flex-row items-start justify-between">
             <Text
               className="text-[10px] font-bold uppercase"
-              style={{ color: 'rgba(255, 224, 139, 0.75)', letterSpacing: 2 }}
+              style={{ color: 'rgba(255, 255, 255, 0.6)', letterSpacing: 2 }}
             >
               Total Treasury Balance
             </Text>
-            <Ionicons name="wallet" size={20} color={colors.goldSoft} />
+            <Ionicons name="wallet" size={20} color="rgba(255,255,255,0.8)" />
           </View>
 
           <Text
             className="mt-2 font-extrabold"
-            style={{ color: colors.gold, fontSize: 34, letterSpacing: -1 }}
+            style={{ color: colors.white, fontSize: 34, letterSpacing: -1 }}
             numberOfLines={1}
             adjustsFontSizeToFit
           >
@@ -517,7 +517,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             className="mt-5 flex-row items-center rounded-lg px-3 py-2"
             style={{ backgroundColor: 'rgba(255,255,255,0.10)' }}
           >
-            <MaterialCommunityIcons name="creation" size={15} color={colors.gold} />
+            <MaterialCommunityIcons name="creation" size={15} color={colors.brandMint} />
             <Text className="ml-2 flex-1 text-[11px] font-medium text-white/90" numberOfLines={1}>
               {commitmentLine}
             </Text>

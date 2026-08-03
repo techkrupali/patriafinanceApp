@@ -5,8 +5,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // "The Curated Ledger" — treasury navy + metallic gold + grounded green.
-        // Token names stable; values mirror src/theme.ts.
+        // "The Curated Ledger" — treasury navy + grounded green (gold retired
+        // per client video 2026-08-03). Token names stable; values mirror src/theme.ts.
         navy: '#011D35',
         'navy-light': '#173A5C',
         ink: '#171C1F',
@@ -14,9 +14,9 @@ module.exports = {
         'brand-deep': '#005322',
         'brand-mint': '#3DE273',
         'brand-glow': '#66FF8E',
-        gold: '#F1C100',
-        'gold-deep': '#745B00',
-        'gold-soft': '#FFE08B',
+        gold: '#0F8A44',
+        'gold-deep': '#006D2F',
+        'gold-soft': '#DFF2E5',
         lav: '#DFE3E7',
         'lav-soft': '#E4E9ED',
         'lav-faint': '#EAEEF2',

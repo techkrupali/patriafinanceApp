@@ -7,10 +7,10 @@ import { colors } from '../theme';
 import { selection } from '../lib/haptics';
 
 /** Client design tokens (family_switch_modal_updated_layout code.html). */
-const GOLD_CONTAINER = '#FFCC00'; // primary-container
-const GOLD_CONTAINER_TINT = 'rgba(255, 204, 0, 0.10)'; // bg-[#FFCC00]/10
-const ON_GOLD = '#6F5700'; // on-primary-container
-const GOLD_INK = '#3D2F00';
+const GOLD_CONTAINER = '#006D2F'; // action green (gold retired per client video)
+const GOLD_CONTAINER_TINT = 'rgba(0, 109, 47, 0.08)';
+const ON_GOLD = '#FFFFFF'; // content on the green fill
+const GOLD_INK = '#FFFFFF';
 const DASH = '#D2C5AB'; // outline-variant
 const SCRIM = 'rgba(23, 28, 31, 0.4)'; // on-surface/40
 

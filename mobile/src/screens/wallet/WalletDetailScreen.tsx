@@ -21,10 +21,10 @@ import type { RootScreenProps } from '../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-/** Main-treasury hero: dark gold/brown editorial gradient from the Stitch design. */
-const TREASURY_HERO = ['#413B2A', '#241A00'] as const;
-/** On-primary-container brown — text/icon colour on the #FFCC00 action pills. */
-const ON_GOLD = '#6F5700';
+/** Main-treasury hero: deep treasury navy (client video: "this deep blue"). */
+const TREASURY_HERO = ['#0A2A44', '#011D35'] as const;
+/** Content colour on the green action pills. */
+const ON_GOLD = '#FFFFFF';
 
 /** Uppercase micro section heading (Stitch "RECENT TRANSACTIONS" treatment). */
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -33,7 +33,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Gold action pill — icon over an uppercase label (Fund / Withdraw / Transfer / Request). */
+/** Green action pill — icon over an uppercase label (Fund / Withdraw / Transfer / Request). */
 function ActionButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   return (
     <Pressable
@@ -41,11 +41,11 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded-2xl bg-[#FFCC00] py-4 active:opacity-90"
+      className="flex-1 items-center justify-center rounded-2xl bg-[#006D2F] py-4 active:opacity-90"
       style={shadow.soft}
     >
       <Ionicons name={icon} size={24} color={ON_GOLD} />
-      <Text className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-[#6F5700]">
+      <Text className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">
         {label}
       </Text>
     </Pressable>
@@ -284,7 +284,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 >
                   <View
                     className="h-2 rounded-full"
-                    style={{ width: `${Math.max(targetPct, 2)}%`, backgroundColor: '#FFCC00' }}
+                    style={{ width: `${Math.max(targetPct, 2)}%`, backgroundColor: '#3DE273' }}
                   />
                 </View>
                 <Text className="mt-1.5 text-[11px]" style={{ color: heroDark ? 'rgba(255,255,255,0.7)' : colors.muted }}>
@@ -304,7 +304,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 <Ionicons
                   name="card-outline"
                   size={15}
-                  color={heroDark ? colors.gold : colors.goldDeep}
+                  color={heroDark ? colors.brandMint : colors.goldDeep}
                   style={{ marginRight: 7 }}
                 />
                 <Text className={`text-[13px] font-semibold ${heroDark ? 'text-white' : 'text-ink'}`}>
@@ -346,7 +346,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               style={shadow.card}
             >
               <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-white/15">
-                <Ionicons name="hourglass-outline" size={18} color={colors.gold} />
+                <Ionicons name="hourglass-outline" size={18} color={colors.brandMint} />
               </View>
               <View className="flex-1">
                 <Text className="text-[14px] font-bold text-white">
@@ -354,7 +354,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 </Text>
                 <Text className="text-xs text-white/60">Review spends waiting on this wallet</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.gold} />
+              <Ionicons name="chevron-forward" size={18} color={colors.brandMint} />
             </Pressable>
           ) : null}
 
@@ -421,7 +421,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                       }}
                       hitSlop={6}
                       className="flex-row items-center rounded-full px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(255,204,0,0.20)' }}
+                      style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
                     >
                       <Ionicons name="options-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
                       <Text className="text-[12px] font-bold text-gold-deep">Access</Text>
@@ -435,7 +435,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                       }}
                       hitSlop={6}
                       className="flex-row items-center rounded-full px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(255,204,0,0.20)' }}
+                      style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
                     >
                       <Ionicons name="person-add-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
                       <Text className="text-[12px] font-bold text-gold-deep">Invite</Text>
@@ -539,7 +539,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                     onPress={() => void txns.fetchNextPage()}
                     disabled={txns.isFetchingNextPage}
                     className="items-center rounded-2xl py-3.5 active:opacity-80"
-                    style={{ backgroundColor: 'rgba(255,204,0,0.16)' }}
+                    style={{ backgroundColor: 'rgba(15,138,68,0.14)' }}
                   >
                     {txns.isFetchingNextPage ? (
                       <ActivityIndicator color={colors.goldDeep} />

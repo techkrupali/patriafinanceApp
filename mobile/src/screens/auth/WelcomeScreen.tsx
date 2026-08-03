@@ -10,9 +10,9 @@ import type { AuthScreenProps } from '../../navigation/types';
 
 /**
  * Stitch "Patria | Secure Entry" splash — milk-white canvas (#FDFCFB) with a
- * soft radial gold glow, the PATRIA wordmark in deep navy with wide tracking,
- * gold hairlines around "LEGACY & WEALTH", pulsing gold dots and the
- * encryption badge above the entry actions.
+ * soft radial green glow, the PATRIA wordmark in deep navy with wide tracking,
+ * green hairlines around "LEGACY & WEALTH", pulsing green dots and the
+ * encryption badge above the entry actions (navy+green scheme per client).
  */
 
 /** One gold pulse dot (design: opacity 0.3→1, scale 0.8→1.1, staggered). */
@@ -84,7 +84,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
       </View>
 
       <View className="flex-1 items-center justify-center px-8">
-        {/* Radial gold glow approximation (design: rgba(255,204,0,0.15) → transparent) */}
+        {/* Radial green glow approximation (green scheme per client video) */}
         <View pointerEvents="none" style={styles.glowOuter} />
         <View pointerEvents="none" style={styles.glowInner} />
 
@@ -149,18 +149,18 @@ const styles = StyleSheet.create({
     width: 420,
     height: 420,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,204,0,0.06)',
+    backgroundColor: 'rgba(15,138,68,0.05)',
   },
   glowInner: {
     position: 'absolute',
     width: 260,
     height: 260,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,204,0,0.09)',
+    backgroundColor: 'rgba(15,138,68,0.08)',
   },
   hairline: {
     height: StyleSheet.hairlineWidth * 2,
     width: 32,
-    backgroundColor: '#FFCC00', // primary-container hairline per design
+    backgroundColor: '#006D2F', // green hairline (gold retired per client)
   },
 });

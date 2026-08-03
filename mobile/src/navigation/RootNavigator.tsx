@@ -78,15 +78,17 @@ const Tabs = createBottomTabNavigator<MainTabParamList>();
 type MciName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 /**
- * Client footer spec (Stitch final layout) — 5 uniform flat tabs:
- * HOME · FAMILY · STEWARD · TREASURY · MORE. Active tab gets a soft gold
- * pill behind the icon; no raised centre button.
+ * Client footer spec (video 2026-08-03) — 6 uniform flat tabs:
+ * HOME · FAMILY · STEWARD · TREASURY · RULES · MORE ("Controls which can be
+ * Rules — you decide" → Rules). Active tab gets a soft green pill behind the
+ * icon; no raised centre button.
  */
 const TAB_ICONS: Record<keyof MainTabParamList, { on: MciName; off: MciName }> = {
   Home: { on: 'home', off: 'home-outline' },
   Family: { on: 'account-group', off: 'account-group-outline' },
   Steward: { on: 'shield-account', off: 'shield-account-outline' },
   Treasury: { on: 'bank', off: 'bank-outline' },
+  Rules: { on: 'tune-vertical', off: 'tune-vertical' },
   More: { on: 'menu', off: 'menu' },
 };
 
@@ -94,6 +96,9 @@ const TAB_ICONS: Record<keyof MainTabParamList, { on: MciName; off: MciName }> =
 // through the composite navigator; it takes no route params).
 const FamilyTab = (props: Record<string, unknown>) => (
   <FamilyHubScreen {...(props as unknown as React.ComponentProps<typeof FamilyHubScreen>)} />
+);
+const RulesTab = (props: Record<string, unknown>) => (
+  <AutomationsScreen {...(props as unknown as React.ComponentProps<typeof AutomationsScreen>)} />
 );
 
 function MainTabs() {
@@ -158,7 +163,7 @@ function MainTabs() {
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: focused ? '#FFF3C4' : 'transparent',
+                backgroundColor: focused ? colors.goldSoft : 'transparent',
               }}
             >
               <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={22} color={color} />
@@ -171,6 +176,7 @@ function MainTabs() {
       <Tabs.Screen name="Family" component={FamilyTab} />
       <Tabs.Screen name="Steward" component={StewardScreen} options={{ tabBarLabel: 'Steward' }} />
       <Tabs.Screen name="Treasury" component={WalletsScreen} />
+      <Tabs.Screen name="Rules" component={RulesTab} />
       <Tabs.Screen name="More" component={ProfileScreen} />
     </Tabs.Navigator>
   );

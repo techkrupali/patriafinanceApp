@@ -109,9 +109,9 @@ export function OtpScreen({ route, navigation }: AuthScreenProps<'Otp'>) {
         <View className="items-center">
           <View
             className="h-20 w-20 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: 'rgba(255,204,0,0.18)' }}
+            style={{ backgroundColor: 'rgba(0,109,47,0.12)' }}
           >
-            <MaterialCommunityIcons name="shield-account" size={40} color="#FFCC00" />
+            <MaterialCommunityIcons name="shield-account" size={40} color="#006D2F" />
           </View>
           <Text className="mt-6 text-center text-3xl font-extrabold tracking-tight text-ink">
             Enter Verification Code
