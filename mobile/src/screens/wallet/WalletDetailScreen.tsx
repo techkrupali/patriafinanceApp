@@ -208,14 +208,14 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 height: 176,
                 width: 176,
                 borderRadius: 88,
-                backgroundColor: heroDark ? 'rgba(241,193,0,0.14)' : 'rgba(255,255,255,0.35)',
+                backgroundColor: heroDark ? 'rgba(61,226,115,0.10)' : 'rgba(255,255,255,0.35)',
               }}
             />
 
             <View className="flex-row items-center justify-between">
               <Text
                 className="flex-1 pr-3 text-[11px] font-bold uppercase"
-                style={{ letterSpacing: 2.5, color: heroDark ? 'rgba(255,224,139,0.8)' : colors.goldDeep }}
+                style={{ letterSpacing: 2.5, color: heroDark ? 'rgba(255,255,255,0.7)' : colors.goldDeep }}
                 numberOfLines={1}
               >
                 {wallet.name}

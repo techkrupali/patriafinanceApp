@@ -4,7 +4,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -519,7 +518,8 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
       {/* Submit-proof / reject-note sheet */}
       <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
+        {/* behavior="padding" on BOTH platforms — adjustResize is dead under RN edge-to-edge */}
+        <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
           <View className="flex-1 justify-end bg-black/50">
             <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
               <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />

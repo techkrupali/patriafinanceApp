@@ -105,7 +105,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
           >
             <View className="flex-row items-center">
               <View className="mr-2.5 h-8 w-8 items-center justify-center rounded-xl bg-white/15">
-                <Ionicons name="gift" size={16} color={colors.gold} />
+                <Ionicons name="gift" size={16} color={colors.brandMint} />
               </View>
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                 Rewards earned

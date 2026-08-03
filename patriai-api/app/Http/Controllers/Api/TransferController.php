@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\ApprovalRequest;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
@@ -10,6 +11,7 @@ use App\Services\NotificationService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class TransferController extends ApiController
@@ -74,11 +76,34 @@ class TransferController extends ApiController
             return $this->fail('Duplicate transfer ignored — this looks like a double submission. Please wait a moment before retrying.', 409);
         }
 
+        $startedAt = now();
+
         try {
             $response = $this->performTransfer($user, $data);
         } catch (\Throwable $e) {
-            // A failed attempt must be retryable immediately: drop the short-window
-            // dedupe marker (and any idempotency lock) so a corrected retry is allowed.
+            // Ambiguous outcome: a bank payout that timed out on the rails is parked
+            // by WalletService as pending/needs_reconciliation — the bank may still
+            // execute it. A retry must NOT run a second payout, so KEEP the dedupe
+            // marker and make the idempotency key replay a "processing" answer until
+            // reconciliation settles the original.
+            if ($parked = $this->unresolvedWithdrawal($user, $data, $startedAt)) {
+                if ($cacheKey !== null) {
+                    Cache::put($cacheKey, [
+                        'body' => [
+                            'status' => false,
+                            'message' => 'Transfer is processing — do not retry. It will complete shortly or be reversed automatically.',
+                            'errors' => ['reference' => $parked->reference],
+                        ],
+                        'code' => 409,
+                    ], now()->addMinutes(5));
+                    Cache::forget($cacheKey . ':lock');
+                }
+                throw $e;
+            }
+
+            // Definitive failure (validation, provider rejection with refund): must be
+            // retryable immediately — drop the short-window dedupe marker (and any
+            // idempotency lock) so a corrected retry is allowed.
             Cache::forget($fingerprint);
             if ($cacheKey !== null) {
                 Cache::forget($cacheKey . ':lock');
@@ -128,8 +153,9 @@ class TransferController extends ApiController
         // Fee only applies to external (bank) transfers; wallet/user moves are free.
         $spendKobo = $amountKobo + ($dest['kind'] === 'bank' ? $feeKobo : 0);
 
-        // Per-tier daily transfer limit (money leaving the wallet).
-        if ($err = $this->dailyTransferLimitError($user, $amountKobo)) {
+        // Per-tier daily transfer limit (money leaving the wallet). Checked fee-
+        // inclusive so it matches how todaysOutgoingKobo() accumulates amount + fee.
+        if ($err = $this->dailyTransferLimitError($user, $spendKobo)) {
             return $err;
         }
 
@@ -240,6 +266,30 @@ class TransferController extends ApiController
             'balance' => $from->balanceNaira(),
             'recipient' => $result['recipient'] ?? null,
         ]);
+    }
+
+    /**
+     * Detect the ambiguous-outcome bank payout: on a rails timeout WalletService
+     * does NOT refund — it parks the debit as pending with needs_reconciliation
+     * and throws. Returns that transaction when THIS request created one (only
+     * the timeout path leaves one behind), or null for definitive failures where
+     * nothing is in flight and an immediate retry is safe.
+     */
+    private function unresolvedWithdrawal(User $user, array $data, Carbon $startedAt): ?Transaction
+    {
+        if (($data['destination']['kind'] ?? null) !== 'bank') {
+            return null;
+        }
+
+        return Transaction::where('wallet_id', $data['from_wallet_id'])
+            ->where('user_id', $user->id)
+            ->where('type', 'withdrawal')
+            ->where('amount', $this->toKobo($data['amount']))
+            ->where('status', 'pending')
+            ->where('meta->needs_reconciliation', true)
+            ->where('created_at', '>=', $startedAt)
+            ->latest('id')
+            ->first();
     }
 
     private function pendingApproval(ApprovalRequest $req, User $user): JsonResponse

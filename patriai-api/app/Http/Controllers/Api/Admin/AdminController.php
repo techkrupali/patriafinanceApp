@@ -160,6 +160,10 @@ class AdminController extends ApiController
         }
 
         $user->fill($data);
+        // A new address must re-verify — don't let the verified badge survive an email swap.
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
         $user->name = trim("{$user->first_name} {$user->last_name}");
         $user->save();
 

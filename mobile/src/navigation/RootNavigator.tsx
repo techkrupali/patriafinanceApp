@@ -55,6 +55,7 @@ import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
 import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
+import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
 import { ChangePasswordScreen } from '../screens/profile/ChangePasswordScreen';
 import { ChangePinScreen } from '../screens/profile/ChangePinScreen';
 import { DevicesScreen } from '../screens/profile/DevicesScreen';
@@ -239,6 +240,7 @@ export function RootNavigator() {
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
       <RootStack.Screen name="Invitations" component={InvitationsScreen} />
+      <RootStack.Screen name="EditProfile" component={EditProfileScreen} />
       <RootStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <RootStack.Screen name="ChangePin" component={ChangePinScreen} />
       <RootStack.Screen name="Devices" component={DevicesScreen} />

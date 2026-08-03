@@ -10,12 +10,14 @@ interface HeaderProps {
   title?: string;
   right?: React.ReactNode;
   className?: string;
+  /** Tab-hosted screens pass false — canGoBack() is true there but goBack() jumps tabs. */
+  showBack?: boolean;
 }
 
 /** In-screen header: back chevron on the left, centered title, optional right action. */
-export function Header({ title = '', right, className = '' }: HeaderProps) {
+export function Header({ title = '', right, className = '', showBack = true }: HeaderProps) {
   const navigation = useNavigation();
-  const canGoBack = navigation.canGoBack();
+  const canGoBack = showBack && navigation.canGoBack();
 
   return (
     <View className={`flex-row items-center px-5 py-3 ${className}`} style={{ minHeight: 56 }}>

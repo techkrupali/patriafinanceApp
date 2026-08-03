@@ -42,7 +42,7 @@ function Field({
 
   return (
     <View className="w-full">
-      <Text className="mb-2 ml-1 text-sm font-semibold" style={{ color: '#4E4632' }}>
+      <Text className="mb-2 ml-1 text-sm font-semibold" style={{ color: colors.muted }}>
         {label}
       </Text>
       <View
@@ -55,7 +55,7 @@ function Field({
         }}
       >
         <TextInput
-          placeholderTextColor="#80765F"
+          placeholderTextColor={colors.faded}
           selectionColor={colors.goldDeep}
           cursorColor={colors.goldDeep}
           secureTextEntry={secure && !reveal}
@@ -147,7 +147,6 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
   const [otpParams, setOtpParams] = useState<OtpParams | null>(null);
 
   const register = useRegister();
-  const setPendingToken = useAuth((s) => s.setPendingToken);
   const setBiometricEnabled = useAuth((s) => s.setBiometricEnabled);
 
   useEffect(() => {
@@ -236,9 +235,8 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
         pin,
       },
       {
-        onSuccess: async (data) => {
-          // Keep the token but stay guest until the email OTP is verified.
-          await setPendingToken(data.token, data.user);
+        onSuccess: (data) => {
+          // No token yet — the session starts when the email OTP is verified.
           const params: OtpParams = {
             identifier: data.user.email,
             purpose: 'verify',

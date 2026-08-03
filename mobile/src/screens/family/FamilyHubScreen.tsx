@@ -177,7 +177,9 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
   );
 }
 
-export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
+export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHub'>) {
+  // Hosted both as the Family tab (route 'Family') and a stack screen ('FamilyHub').
+  const isTab = route?.name !== 'FamilyHub';
   const family = useFamily();
   const wallets = useWallets();
 
@@ -197,7 +199,7 @@ export function FamilyHubScreen({ navigation }: RootScreenProps<'FamilyHub'>) {
 
   return (
     <Screen withBottomInset>
-      <Header title="Family Hub" />
+      <Header title="Family Hub" showBack={!isTab} />
 
       {family.isLoading ? (
         <View className="flex-1 items-center justify-center">

@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Transaction;
-use App\Models\Wallet;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,19 +12,22 @@ use Illuminate\Support\Facades\Log;
  * WalletService::withdrawToBank, which leaves the debit reserved with
  * meta.needs_reconciliation when the payout outcome is unknown).
  *
- * The Matrix Banking API exposes no payout/transfer status lookup, so once the
- * grace period has elapsed we conservatively REFUND the reserved amount + fee
- * back to the wallet (mirroring withdrawToBank's Throwable refund path) and mark
- * the transaction 'failed'. Each refund runs in its own DB transaction with a
- * row lock and re-checks state under the lock, so repeated runs (or a concurrent
- * admin reversal) never double-refund. Registered on the scheduler in
- * bootstrap/app.php as banking:reconcile.
+ * The Matrix Banking API exposes no payout/transfer status lookup, so the
+ * payout outcome is UNKNOWABLE from here. We must NOT refund blindly — the
+ * bank may have executed the payout, and re-crediting the wallet would
+ * double-spend (WalletService's no-blind-refund invariant). Instead, once the
+ * grace period has elapsed we flag the transaction for manual review: status
+ * stays 'pending', funds stay reserved, and an operator confirms the outcome
+ * with the bank before reversing via POST /admin/transactions/{id}/reverse.
+ * Each flag runs in its own DB transaction with a row lock and re-checks state
+ * under the lock, so repeated runs never re-flag. Registered on the scheduler
+ * in bootstrap/app.php as banking:reconcile.
  */
 class ReconcilePendingPayouts extends Command
 {
     protected $signature = 'banking:reconcile';
 
-    protected $description = 'Refund and fail withdrawals left pending past the reconciliation grace period';
+    protected $description = 'Flag withdrawals left pending past the reconciliation grace period for manual review';
 
     /** Wait this long after the debit before acting, so a slow payout can still settle. */
     private const GRACE_MINUTES = 15;
@@ -36,13 +38,14 @@ class ReconcilePendingPayouts extends Command
 
         $candidates = Transaction::where('status', 'pending')
             ->where('meta->needs_reconciliation', true)
+            ->whereNull('meta->needs_manual_review')
             ->where('created_at', '<', $cutoff)
             ->get();
 
-        $reconciled = 0;
+        $flagged = 0;
 
         foreach ($candidates as $candidate) {
-            $refunded = DB::transaction(function () use ($candidate) {
+            $marked = DB::transaction(function () use ($candidate) {
                 // Row-lock the txn and re-check under the lock to stay idempotent
                 // against a concurrent reconcile run or an admin reversal.
                 $txn = Transaction::whereKey($candidate->id)->lockForUpdate()->first();
@@ -50,40 +53,30 @@ class ReconcilePendingPayouts extends Command
 
                 if ($txn->status !== 'pending'
                     || empty($meta['needs_reconciliation'])
+                    || !empty($meta['needs_manual_review'])
                     || !empty($meta['refunded'])
                     || !empty($meta['reversed'])) {
                     return false;
                 }
 
-                $wallet = Wallet::whereKey($txn->wallet_id)->lockForUpdate()->first();
-                if (!$wallet) {
-                    return false;
-                }
-
-                $wallet->balance += $txn->amount + $txn->fee;
-                $wallet->save();
-
                 $txn->update([
-                    'status' => 'failed',
-                    'balance_after' => $wallet->balance,
                     'meta' => array_merge($meta, [
-                        'refunded' => true,
-                        'reconciled' => true,
-                        'reconciled_at' => now()->toIso8601String(),
-                        'reconcile_note' => 'Payout unresolved past grace period; amount + fee refunded automatically.',
+                        'needs_manual_review' => true,
+                        'reviewed_after' => now()->toIso8601String(),
+                        'reconcile_note' => 'Payout unresolved past grace period; funds held pending manual review — confirm outcome with the bank before reversing.',
                     ]),
                 ]);
 
                 return true;
             });
 
-            if ($refunded) {
-                $reconciled++;
-                Log::warning("Reconciled stuck payout {$candidate->reference}: refunded amount + fee and marked failed.");
+            if ($marked) {
+                $flagged++;
+                Log::warning("Stuck payout {$candidate->reference}: outcome unknown past grace period; flagged for manual review (funds remain reserved, no refund issued).");
             }
         }
 
-        $this->info("Reconciled {$reconciled} stuck payout(s) out of {$candidates->count()} candidate(s).");
+        $this->info("Flagged {$flagged} stuck payout(s) for manual review out of {$candidates->count()} candidate(s).");
 
         return self::SUCCESS;
     }

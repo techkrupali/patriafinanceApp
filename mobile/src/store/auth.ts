@@ -15,7 +15,6 @@ interface AuthState {
   hydrate: () => Promise<void>;
   setSession: (user: User, token: string) => Promise<void>;
   /** Persist a token without marking the app authed (e.g. right after register, before OTP). */
-  setPendingToken: (token: string, user?: User) => Promise<void>;
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
   /** Restore the persisted session after a successful biometric prompt. */
   unlockStoredSession: () => Promise<boolean>;
@@ -75,14 +74,6 @@ export const useAuth = create<AuthState>((set, get) => ({
     await SecureStore.setItemAsync(STORAGE_KEYS.token, token);
     await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user));
     set({ user, token, status: 'authed', hasStoredSession: true });
-  },
-
-  setPendingToken: async (token, user) => {
-    await SecureStore.setItemAsync(STORAGE_KEYS.token, token);
-    if (user) {
-      await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user));
-    }
-    set({ token });
   },
 
   setBiometricEnabled: async (enabled) => {

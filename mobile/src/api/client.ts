@@ -5,12 +5,15 @@ import { useAuth } from '../store/auth';
 export class ApiError extends Error {
   statusCode: number;
   errors?: Record<string, string[]>;
+  /** The envelope's `data` on failure responses (e.g. { code: 'unverified' }). */
+  data?: unknown;
 
-  constructor(message: string, statusCode: number, errors?: Record<string, string[]>) {
+  constructor(message: string, statusCode: number, errors?: Record<string, string[]>, data?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
     this.errors = errors;
+    this.data = data;
   }
 }
 
@@ -77,7 +80,7 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
       firstValidationError(json?.errors) ??
       json?.message ??
       `Request failed (${res.status})`;
-    throw new ApiError(message, res.status, json?.errors);
+    throw new ApiError(message, res.status, json?.errors, json?.data);
   }
 
   return json.data as T;

@@ -38,7 +38,7 @@ function AutomationCard({ rule }: { rule: AutomationRule }) {
         Alert.alert(
           d.result.status === 'ran' ? 'Automation ran' : 'Skipped',
           d.result.status === 'ran'
-            ? `Moved ${d.result.amount ? '₦' + d.result.amount : ''} to ${rule.to_wallet.name}.`
+            ? `Moved ${d.result.amount ? formatMoney(d.result.amount) : ''} to ${rule.to_wallet.name}.`
             : d.result.reason || 'Nothing to do.',
         );
       },
@@ -164,7 +164,9 @@ function AutomationCard({ rule }: { rule: AutomationRule }) {
   );
 }
 
-export function AutomationsScreen({ navigation }: RootScreenProps<'Automations'>) {
+export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automations'>) {
+  // Hosted both as the Rules tab (route 'Rules') and a stack screen ('Automations').
+  const isTab = route?.name !== 'Automations';
   const { data, isLoading, error, refetch, isRefetching } = useAutomations();
   const rules = data ?? [];
 
@@ -184,7 +186,7 @@ export function AutomationsScreen({ navigation }: RootScreenProps<'Automations'>
 
   return (
     <Screen withBottomInset>
-      <Header title="Rules" right={addAction} />
+      <Header title="Rules" right={addAction} showBack={!isTab} />
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

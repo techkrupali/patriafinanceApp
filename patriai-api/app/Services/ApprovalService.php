@@ -121,7 +121,9 @@ class ApprovalService
             throw ValidationException::withMessages(['approval' => 'You have already responded to this request.']);
         }
 
-        DB::transaction(function () use ($request, $approver, $decision, $note) {
+        $shouldExecute = false;
+
+        DB::transaction(function () use ($request, $approver, $decision, $note, &$shouldExecute) {
             /** @var ApprovalRequest $locked */
             $locked = ApprovalRequest::whereKey($request->id)->lockForUpdate()->first();
 
@@ -166,9 +168,11 @@ class ApprovalService
             $locked->approvals_count += 1;
 
             if ($locked->approvals_count >= $locked->required_approvals) {
+                // Commit the 'approved' flip first; the actual money movement
+                // runs after this transaction commits (see below).
                 $locked->status = 'approved';
                 $locked->save();
-                $this->execute($locked);
+                $shouldExecute = true;
             } else {
                 $locked->save();
             }
@@ -176,13 +180,29 @@ class ApprovalService
             $request->setRawAttributes($locked->getAttributes());
         });
 
+        // Execute only AFTER the decision transaction has committed. The payout
+        // leg can call an external provider over HTTP; running it inside the
+        // transaction held the approval + wallet row locks across the round
+        // trip and demoted the ledger debit to a savepoint that could roll back
+        // after real money had left. execute() never throws — it marks the
+        // request failed itself — so a committed 'approved' row only ever
+        // advances to 'executed' or 'failed' here. A crash in between leaves
+        // status 'approved' with no executed_transaction_reference, i.e. a
+        // discoverable "execution still owed" state.
+        if ($shouldExecute) {
+            $this->execute($request);
+        }
+
         return $request->refresh();
     }
 
     /**
-     * Replay the recorded spend through WalletService. On any money-layer
-     * failure (e.g. insufficient balance now), mark the request failed rather
-     * than throwing — the outer response transaction must still commit.
+     * Replay the recorded spend through WalletService. Runs AFTER the decision
+     * transaction has committed, so WalletService's own row-locked transaction
+     * is a real transaction (not a savepoint) and no locks are held across the
+     * payout provider's HTTP round trip. On any money-layer failure (e.g.
+     * insufficient balance now), mark the request failed rather than throwing —
+     * the approval decision itself has already committed.
      */
     private function execute(ApprovalRequest $request): void
     {

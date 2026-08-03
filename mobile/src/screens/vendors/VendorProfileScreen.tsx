@@ -110,7 +110,7 @@ export function VendorProfileScreen({ route, navigation }: RootScreenProps<'Vend
                   {v.business_name}
                 </Text>
                 {v.verified ? (
-                  <Ionicons name="shield-checkmark" size={19} color={colors.gold} style={{ marginLeft: 7 }} />
+                  <Ionicons name="shield-checkmark" size={19} color={colors.brandMint} style={{ marginLeft: 7 }} />
                 ) : null}
               </View>
               <Text className="mt-1 text-[13px] text-white/60" numberOfLines={1}>

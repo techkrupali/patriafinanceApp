@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from './client';
+import { useAuth } from '../store/auth';
 import { getDeviceMeta } from '../lib/device';
 import type {
   AddMilestonePayload,
@@ -359,6 +360,20 @@ export function useVerifyAccount() {
 
 // ---------- Profile mutations ----------
 
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { first_name: string; last_name: string }) =>
+      api<MeData>('/profile', { method: 'PUT', body: input }),
+    onSuccess: async (d) => {
+      void qc.invalidateQueries({ queryKey: keys.me });
+      // The More tab reads the auth store's user — keep it (and SecureStore) fresh.
+      const { token, setSession } = useAuth.getState();
+      if (token) await setSession(d.user, token);
+    },
+  });
+}
+
 export function useChangePassword() {
   return useMutation({
     mutationFn: (input: { current_password: string; new_password: string }) =>
@@ -408,6 +423,7 @@ export function useUpdateMember(walletId: number) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.walletMembers(walletId) });
       void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -420,6 +436,7 @@ export function useRemoveMember(walletId: number) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.walletMembers(walletId) });
       void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -445,6 +462,7 @@ export function useCreateInvitation(walletId: number) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.walletInvitations(walletId) });
       void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -456,6 +474,7 @@ export function useCancelInvitation(walletId: number) {
       api(`/wallets/${walletId}/invitations/${invitationId}`, { method: 'DELETE' }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.walletInvitations(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -479,6 +498,7 @@ export function useAcceptInvitation() {
       void qc.invalidateQueries({ queryKey: keys.dashboard });
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -492,6 +512,7 @@ export function useDeclineInvitation() {
       void qc.invalidateQueries({ queryKey: keys.myInvitations });
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }

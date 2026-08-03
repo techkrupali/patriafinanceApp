@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Device;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends ApiController
@@ -41,6 +43,9 @@ class ProfileController extends ApiController
 
         $user->update(['password' => $data['new_password']]);
 
+        // Revoke all other tokens so stolen sessions die with the old password
+        $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
+
         return $this->ok('Password changed successfully');
     }
 
@@ -48,7 +53,7 @@ class ProfileController extends ApiController
     public function changePin(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'current_pin' => ['required_if:has_pin,true', 'nullable', 'digits:4'],
+            'current_pin' => [Rule::requiredIf(fn () => $request->user()->pin !== null), 'nullable', 'digits:4'],
             'new_pin' => ['required', 'digits:4'],
             'password' => ['required', 'string'],
         ]);
@@ -58,7 +63,7 @@ class ProfileController extends ApiController
         if (!Hash::check($data['password'], $user->password)) {
             return $this->fail('Password is incorrect');
         }
-        if ($user->pin && (!$data['current_pin'] || !Hash::check($data['current_pin'], $user->pin))) {
+        if ($user->pin && (!($data['current_pin'] ?? null) || !Hash::check($data['current_pin'], $user->pin))) {
             return $this->fail('Current PIN is incorrect');
         }
 
@@ -111,6 +116,31 @@ class ProfileController extends ApiController
                 'platform' => $d->platform,
                 'last_active_at' => $d->last_active_at?->toIso8601String(),
             ]),
+        ]);
+    }
+
+    // DELETE /devices/{device}  (remove a device and revoke its session tokens)
+    public function removeDevice(Request $request, Device $device): JsonResponse
+    {
+        if ($device->user_id !== $request->user()->id) {
+            return $this->fail('Device not found', 404);
+        }
+
+        // Login tokens are named after the device_name supplied at login ('mobile'
+        // when none), so name-matching is the only token<->device linkage the schema
+        // offers. Same-named devices therefore share sessions: revoking one device
+        // revokes every session carrying that name — including the caller's own.
+        $tokenName = $device->device_name ?? 'mobile';
+        $currentSessionRevoked = $request->user()->currentAccessToken()->name === $tokenName;
+        $revoked = $request->user()->tokens()->where('name', $tokenName)->delete();
+
+        $device->delete();
+
+        return $this->ok('Device removed', [
+            'revoked_sessions' => $revoked,
+            // True when the caller's own token was among those revoked; the app
+            // should treat this as a signal to log itself out locally.
+            'current_session_revoked' => $currentSessionRevoked,
         ]);
     }
 }

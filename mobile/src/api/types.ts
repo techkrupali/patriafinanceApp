@@ -231,7 +231,9 @@ export interface AuthSessionData {
   token: string;
 }
 
-export interface RegisterData extends AuthSessionData {
+// Register no longer returns a token — the session starts at OTP verification.
+export interface RegisterData {
+  user: User;
   otp_sent_to: string;
   debug_otp?: string;
 }

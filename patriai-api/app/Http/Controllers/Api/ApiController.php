@@ -18,6 +18,7 @@ use App\Models\WalletMember;
 use App\Services\KycService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 abstract class ApiController extends Controller
 {
@@ -423,9 +424,29 @@ abstract class ApiController extends Controller
         return $data;
     }
 
-    /** Parse a naira amount ("1500" / "1500.50") into kobo int. */
+    /**
+     * Parse a naira amount ("1500" / "1500.50") into kobo int.
+     *
+     * Single choke point for every money input: only a plain positive decimal
+     * (max 2 places) within 0 < kobo <= ₦10 billion is accepted, so oversized,
+     * signed, or scientific-notation input can never overflow into negative kobo.
+     */
     protected function toKobo(string|int|float $naira): int
     {
-        return (int) round(((float) $naira) * 100);
+        $raw = is_string($naira) ? trim($naira) : (string) $naira;
+
+        // Plain decimal only — no sign/exponent, max 11 integer digits + 2 places.
+        if (!preg_match('/^(\d{1,11})(?:\.(\d{1,2}))?$/', $raw, $m)) {
+            throw ValidationException::withMessages(['amount' => 'Invalid amount.']);
+        }
+
+        // Pure integer math (max fits comfortably in 64 bits) — no float path.
+        $kobo = ((int) $m[1]) * 100 + (int) str_pad($m[2] ?? '', 2, '0');
+
+        if ($kobo <= 0 || $kobo > 10_000_000_000_00) { // cap: ₦10 billion in kobo
+            throw ValidationException::withMessages(['amount' => 'Invalid amount.']);
+        }
+
+        return $kobo;
     }
 }

@@ -176,6 +176,14 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Identity</Text>
         <Card className="mt-2 py-1">
           <Row
+            icon="create-outline"
+            tint="bg-lav-faint"
+            iconColor={colors.navy}
+            title="Edit profile"
+            subtitle="Update your name"
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <Row
             icon="shield-checkmark-outline"
             tint="bg-success-soft"
             iconColor={colors.brand}

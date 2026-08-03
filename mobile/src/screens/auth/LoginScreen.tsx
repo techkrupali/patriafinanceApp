@@ -9,6 +9,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { colors, shadow } from '../../theme';
 import { selection } from '../../lib/haptics';
 import { useLogin } from '../../api/hooks';
+import { ApiError } from '../../api/client';
 import { useAuth } from '../../store/auth';
 import {
   getBiometricSupport,
@@ -165,15 +166,29 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
 
   const submit = () => {
     setError(null);
-    if (!identifier.trim() || !password) {
+    // Phone keypads inject spaces/dashes/parens — the API matches raw digits.
+    const cleaned = mode === 'phone' ? identifier.replace(/[^0-9+]/g, '').replace(/^\+/, '') : identifier.trim();
+    if (!cleaned || !password) {
       setError('Enter your email/phone and password.');
       return;
     }
     login.mutate(
-      { identifier: identifier.trim(), password },
+      { identifier: cleaned, password },
       {
         onSuccess: (data) => void offerBiometric(data.user, data.token),
-        onError: (e) => setError(e.message),
+        onError: (e) => {
+          // Unverified account: the server auto-sent a verify OTP — go finish it.
+          // The fail() helper rides the payload under `errors` (plain strings).
+          const extra =
+            e instanceof ApiError
+              ? ((e.errors ?? e.data) as { code?: string; identifier?: string } | undefined)
+              : undefined;
+          if (e instanceof ApiError && e.statusCode === 403 && extra?.code === 'unverified') {
+            navigation.navigate('Otp', { identifier: extra.identifier ?? cleaned, purpose: 'verify' });
+            return;
+          }
+          setError(e.message);
+        },
       },
     );
   };
@@ -317,7 +332,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         <View className="mt-10 flex-row justify-center" style={{ gap: 8, opacity: 0.2 }}>
           <View className="h-1 w-12 rounded-full" style={{ backgroundColor: colors.goldDeep }} />
           <View className="h-1 w-4 rounded-full" style={{ backgroundColor: colors.muted }} />
-          <View className="h-1 w-2 rounded-full" style={{ backgroundColor: '#D2C5AB' }} />
+          <View className="h-1 w-2 rounded-full" style={{ backgroundColor: colors.lav }} />
         </View>
 
         <Text className="mt-6 text-center text-[11px] text-faded">

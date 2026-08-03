@@ -13,8 +13,8 @@ export type AuthStackParamList = {
 };
 
 /**
- * Client footer spec: 5 slots — Home · Family · Steward (dead-center AI) ·
- * Treasury · More. Rules lives inside More.
+ * Client footer spec (video 2026-08-03): 6 flat tabs — Home · Family ·
+ * Steward · Treasury · Rules · More.
  */
 export type MainTabParamList = {
   Home: undefined;
@@ -35,6 +35,7 @@ export type RootStackParamList = {
   Transfer: { walletId?: number } | undefined;
   RequestSpend: { walletId: number };
   CreateWallet: undefined;
+  EditProfile: undefined;
   ChangePassword: undefined;
   ChangePin: undefined;
   Devices: undefined;

@@ -11,7 +11,7 @@ const GOLD_CONTAINER = '#006D2F'; // action green (gold retired per client video
 const GOLD_CONTAINER_TINT = 'rgba(0, 109, 47, 0.08)';
 const ON_GOLD = '#FFFFFF'; // content on the green fill
 const GOLD_INK = '#FFFFFF';
-const DASH = '#D2C5AB'; // outline-variant
+const DASH = '#DFE3E7'; // outline-variant (lav)
 const SCRIM = 'rgba(23, 28, 31, 0.4)'; // on-surface/40
 
 interface FamilySwitcherModalProps {

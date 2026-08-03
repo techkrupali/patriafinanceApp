@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
 use App\Services\KycService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 class WalletController extends ApiController
 {
@@ -144,7 +147,7 @@ class WalletController extends ApiController
         ]);
     }
 
-    // POST /wallets/{wallet}/withdraw  { amount, bank_code, account_number, account_name, pin, description? }
+    // POST /wallets/{wallet}/withdraw  { amount, bank_code, account_number, account_name, pin, description?, idempotency_key? }
     public function withdraw(Request $request, Wallet $wallet): JsonResponse
     {
         if (!$wallet->isAccessibleBy($request->user())) {
@@ -168,16 +171,106 @@ class WalletController extends ApiController
             'bank_name' => ['required', 'string', 'max:150'],
             'pin' => ['required', 'digits:4'],
             'description' => ['nullable', 'string', 'max:200'],
+            'idempotency_key' => ['nullable', 'string', 'max:100'],
         ]);
 
         $user = $request->user();
+
+        // --- Idempotency / double-submit protection -------------------------------
+        // 1. Explicit client key: replay the original response for ~5 minutes and
+        //    lock out concurrent duplicates carrying the same (user, key).
+        $idempotencyKey = $data['idempotency_key'] ?? null;
+        $cacheKey = $idempotencyKey !== null
+            ? 'withdraw:idem:' . $user->id . ':' . sha1($idempotencyKey)
+            : null;
+
+        if ($cacheKey !== null) {
+            if ($cached = Cache::get($cacheKey)) {
+                return response()->json($cached['body'], $cached['code']);
+            }
+            if (!Cache::add($cacheKey . ':lock', 1, now()->addSeconds(30))) {
+                return $this->fail('A withdrawal with this idempotency key is already being processed.', 409);
+            }
+        }
+
+        // 2. Even without a key: reject a byte-identical withdrawal intent from the
+        //    same user within ~5 seconds (accidental double tap / slow-network
+        //    retry). Short enough to still allow an intentional identical repeat
+        //    withdrawal moments later. Cache::add is atomic, so of two concurrent
+        //    taps exactly one proceeds.
+        $fingerprint = 'withdraw:dedupe:' . $user->id . ':' . sha1(json_encode([
+            'wallet' => $wallet->id,
+            'amount' => $data['amount'],
+            'bank_code' => $data['bank_code'],
+            'account_number' => $data['account_number'],
+        ]));
+        if (!Cache::add($fingerprint, 1, now()->addSeconds(5))) {
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            return $this->fail('Duplicate withdrawal ignored — this looks like a double submission. Please wait a moment before retrying.', 409);
+        }
+
+        try {
+            $response = $this->performWithdrawal($user, $wallet, $data);
+        } catch (\Throwable $e) {
+            if ($this->isUnknownBankingOutcome($e)) {
+                // Banking timeout/network failure: the payout outcome is UNKNOWN (the
+                // bank may have executed it), so a retry could fire a second real
+                // payout. KEEP the dedupe marker and cache a do-not-retry response
+                // under the key so replays are answered without touching the rails.
+                if ($cacheKey !== null) {
+                    Cache::put($cacheKey, [
+                        'body' => ['status' => false, 'message' => 'Your withdrawal is processing — do not retry. It will complete shortly or be reversed automatically.'],
+                        'code' => 409,
+                    ], now()->addMinutes(5));
+                    Cache::forget($cacheKey . ':lock');
+                }
+                throw $e;
+            }
+            // Any other failed attempt must be retryable immediately: drop the
+            // short-window dedupe marker (and any idempotency lock) so a corrected
+            // retry is allowed.
+            Cache::forget($fingerprint);
+            if ($cacheKey !== null) {
+                Cache::forget($cacheKey . ':lock');
+            }
+            throw $e;
+        }
+
+        if ($cacheKey !== null) {
+            Cache::forget($cacheKey . ':lock');
+        }
+
+        if ($response->getStatusCode() >= 300) {
+            // Non-success (e.g. 422): allow an immediate corrected retry.
+            Cache::forget($fingerprint);
+        } elseif ($cacheKey !== null) {
+            // Store the successful outcome for idempotent replay within the window.
+            Cache::put($cacheKey, [
+                'body' => $response->getData(true),
+                'code' => $response->getStatusCode(),
+            ], now()->addMinutes(5));
+        }
+
+        return $response;
+    }
+
+    /**
+     * Execute a validated withdrawal. Split out of withdraw() so the surrounding
+     * idempotency/double-submit guard never runs a second payout for a replay.
+     */
+    private function performWithdrawal(User $user, Wallet $wallet, array $data): JsonResponse
+    {
         app(\App\Services\PinService::class)->verify($user, $data['pin']);
 
         $amountKobo = $this->toKobo($data['amount']);
         $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);
 
-        // Per-tier daily withdrawal/transfer limit.
-        if ($err = $this->dailyTransferLimitError($user, $amountKobo)) {
+        // Per-tier daily withdrawal/transfer limit. Fee-inclusive, because
+        // todaysOutgoingKobo() accumulates amount + fee for withdrawals — checking
+        // the bare amount here would let the fee leak past the daily cap.
+        if ($err = $this->dailyTransferLimitError($user, $amountKobo + $feeKobo)) {
             return $err;
         }
 
@@ -224,6 +317,19 @@ class WalletController extends ApiController
         );
 
         return $this->ok('Withdrawal successful', ['transaction' => $this->serializeTransaction($txn)]);
+    }
+
+    /**
+     * True for the unknown-outcome banking failure: WalletService caught a
+     * ConnectionException mid-payout (the bank may have executed it) and surfaced
+     * it as a ValidationException whose 'banking' message says the withdrawal is
+     * processing. Message-prefix match is deliberate — the definitive-rejection
+     * path uses the same 'banking' key with a "Bank transfer failed" message.
+     */
+    private function isUnknownBankingOutcome(\Throwable $e): bool
+    {
+        return $e instanceof ValidationException
+            && str_starts_with($e->errors()['banking'][0] ?? '', 'Your withdrawal is processing');
     }
 
     // PATCH /wallets/{wallet}  { name?, description?, approval_enabled?, approval_threshold?, required_approvals? }

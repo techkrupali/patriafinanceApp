@@ -53,6 +53,7 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/verify-pin', [ProfileController::class, 'verifyPin'])->middleware('throttle:10,1');
         Route::post('devices', [ProfileController::class, 'registerDevice']);
         Route::get('devices', [ProfileController::class, 'devices']);
+        Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');
 
         Route::get('dashboard', [DashboardController::class, 'index']);
 

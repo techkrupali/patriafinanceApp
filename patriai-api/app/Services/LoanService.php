@@ -652,54 +652,75 @@ class LoanService
 
         Loan::where('status', 'active')->chunkById(100, function ($loans) use ($today, &$loansProcessed, &$loansPenalized, &$penaltyCharged) {
             foreach ($loans as $loan) {
-                $overdueRows = $loan->repayments()
-                    ->whereIn('status', ['pending', 'partial', 'overdue'])
-                    ->whereDate('due_date', '<', $today)
-                    ->orderBy('sequence')
-                    ->get();
+                $result = DB::transaction(function () use ($loan, $today) {
+                    // Serialize on the loan row: applyPayment mutates penalty_accrued
+                    // under this same lock, so a read-modify-write here on the chunk's
+                    // stale instance would silently drop a concurrent repayment. The
+                    // status, overdue rows and last-run guard are all re-read and the
+                    // penalty applied UNDER the lock.
+                    /** @var Loan|null $loan */
+                    $loan = Loan::whereKey($loan->id)->lockForUpdate()->first();
 
-                if ($overdueRows->isEmpty()) {
+                    if (!$loan || $loan->status !== 'active') {
+                        return null;
+                    }
+
+                    $overdueRows = $loan->repayments()
+                        ->whereIn('status', ['pending', 'partial', 'overdue'])
+                        ->whereDate('due_date', '<', $today)
+                        ->orderBy('sequence')
+                        ->get();
+
+                    if ($overdueRows->isEmpty()) {
+                        return null;
+                    }
+
+                    $newlyOverdue = false;
+                    foreach ($overdueRows as $row) {
+                        if ($row->status !== 'overdue') {
+                            $row->update(['status' => 'overdue']);
+                            $newlyOverdue = true;
+                        }
+                    }
+
+                    $meta = $loan->meta ?? [];
+                    if (($meta['last_overdue_run'] ?? null) === $today) {
+                        // Already penalised today. Still notify if a row just tipped overdue.
+                        return ['loan' => $loan, 'penalty' => 0, 'notify' => $newlyOverdue];
+                    }
+
+                    $penalty = 0;
+                    foreach ($overdueRows as $row) {
+                        $stillDue = $row->amount_due - $row->amount_paid;
+                        if ($stillDue > 0) {
+                            $penalty += (int) round($stillDue * 0.01);
+                        }
+                    }
+
+                    if ($penalty > 0) {
+                        $meta['last_overdue_run'] = $today;
+                        $loan->penalty_accrued += $penalty;
+                        $loan->meta = $meta;
+                        $loan->save();
+                    }
+
+                    return ['loan' => $loan, 'penalty' => $penalty, 'notify' => $newlyOverdue || $penalty > 0];
+                });
+
+                if ($result === null) {
                     continue;
                 }
 
                 $loansProcessed++;
-
-                $newlyOverdue = false;
-                foreach ($overdueRows as $row) {
-                    if ($row->status !== 'overdue') {
-                        $row->update(['status' => 'overdue']);
-                        $newlyOverdue = true;
-                    }
-                }
-
-                $meta = $loan->meta ?? [];
-                if (($meta['last_overdue_run'] ?? null) === $today) {
-                    // Already penalised today. Still notify if a row just tipped overdue.
-                    if ($newlyOverdue) {
-                        $this->notifyOverdue($loan, 0);
-                    }
-                    continue;
-                }
-
-                $penalty = 0;
-                foreach ($overdueRows as $row) {
-                    $stillDue = $row->amount_due - $row->amount_paid;
-                    if ($stillDue > 0) {
-                        $penalty += (int) round($stillDue * 0.01);
-                    }
-                }
-
-                if ($penalty > 0) {
-                    $meta['last_overdue_run'] = $today;
-                    $loan->penalty_accrued += $penalty;
-                    $loan->meta = $meta;
-                    $loan->save();
+                if ($result['penalty'] > 0) {
                     $loansPenalized++;
-                    $penaltyCharged += $penalty;
+                    $penaltyCharged += $result['penalty'];
                 }
 
-                if ($newlyOverdue || $penalty > 0) {
-                    $this->notifyOverdue($loan, $penalty);
+                // Notify outside the transaction so a rollback never leaves a
+                // stray "penalty applied" message behind.
+                if ($result['notify']) {
+                    $this->notifyOverdue($result['loan'], $result['penalty']);
                 }
             }
         });

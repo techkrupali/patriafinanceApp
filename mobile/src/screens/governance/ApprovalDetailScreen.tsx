@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   RefreshControl,
   ScrollView,
@@ -246,7 +247,8 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
       {/* Reject note modal */}
       <Modal visible={rejectOpen} transparent animationType="slide" onRequestClose={() => setRejectOpen(false)}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-        <View className="flex-1 justify-end bg-black/50">
+        {/* behavior="padding" on BOTH platforms — adjustResize is dead under RN edge-to-edge */}
+        <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end bg-black/50">
           <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="mb-4 flex-row items-start justify-between">
@@ -284,7 +286,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
               className="mt-4"
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
         </GestureHandlerRootView>
       </Modal>
     </Screen>

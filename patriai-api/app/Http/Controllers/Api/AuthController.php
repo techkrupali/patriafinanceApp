@@ -15,6 +15,10 @@ use Illuminate\Validation\Rules\Password;
 
 class AuthController extends ApiController
 {
+    // Bcrypt hash (cost 12, same as real passwords) checked when the login
+    // identifier does not exist, so both failure paths cost the same time.
+    private const DUMMY_HASH = '$2y$12$a33VGHduvTG1Dsg3zi2WGOsfXGU4.EW6Zw2g.zWLmxqcWN0LG7k4u';
+
     public function __construct(private readonly OtpService $otp) {}
 
     // POST /auth/register
@@ -102,13 +106,13 @@ class AuthController extends ApiController
         $user->refresh(); // pick up DB-level defaults (role, status, kyc_tier)
         $this->registerDevice($request, $user);
         $code = $this->otp->issue($user->email, 'verify');
-        $token = $user->createToken($data['device_name'] ?? 'mobile')->plainTextToken;
 
+        // No token until the email is verified — the client takes the OTP screen
+        // next and /auth/otp/verify mints the first session.
         return $this->ok('Account created successfully', [
             'user' => $this->serializeUser($user),
-            'token' => $token,
             'otp_sent_to' => $user->email,
-            ...(config('app.debug') ? ['debug_otp' => $code] : []),
+            ...(config('app.debug') && !app()->isProduction() ? ['debug_otp' => $code] : []),
         ], 201);
     }
 
@@ -125,11 +129,28 @@ class AuthController extends ApiController
 
         $user = $this->findByIdentifier($data['identifier']);
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        if (!$user) {
+            // Burn the same bcrypt cost as a real check so response timing does not
+            // reveal whether the identifier exists.
+            Hash::check($data['password'], self::DUMMY_HASH);
+
+            return $this->fail('Invalid credentials', 401);
+        }
+        if (!Hash::check($data['password'], $user->password)) {
             return $this->fail('Invalid credentials', 401);
         }
         if ($user->status !== 'active') {
             return $this->fail('Account is suspended. Contact support.', 403);
+        }
+        if (!$user->email_verified_at) {
+            // No session until the email is verified — re-issue the verify code so
+            // the client can jump straight to the OTP screen.
+            $this->otp->issue($user->email, 'verify');
+
+            return $this->fail('Email not verified', 403, [
+                'code' => 'unverified',
+                'identifier' => $data['identifier'],
+            ]);
         }
 
         $user->update(['last_login_at' => now()]);
@@ -150,8 +171,8 @@ class AuthController extends ApiController
         ]);
 
         $user = $this->findByIdentifier($data['identifier']);
-        if (!$user) {
-            // Do not leak which identifiers exist.
+        if (!$user || $user->status !== 'active') {
+            // Do not leak which identifiers exist (or that one is suspended).
             return $this->ok('If the account exists, an OTP has been sent.');
         }
 
@@ -159,7 +180,7 @@ class AuthController extends ApiController
 
         return $this->ok('OTP sent', [
             'sent_to' => $this->maskEmail($user->email),
-            ...(config('app.debug') ? ['debug_otp' => $code] : []),
+            ...(config('app.debug') && !app()->isProduction() ? ['debug_otp' => $code] : []),
         ]);
     }
 
@@ -182,11 +203,16 @@ class AuthController extends ApiController
 
         $this->otp->verify($user->email, $data['purpose'], $data['code']);
 
+        // Same guard as login(): a valid OTP must never mint a session for a
+        // suspended account. Checked after the code so probes can't map statuses.
+        if ($user->status !== 'active') {
+            return $this->fail('Account is suspended. Contact support.', 403);
+        }
+
+        // OTPs are delivered by email only, so this proves the email address —
+        // phone_verified_at is stamped by the Termii SMS channel (Milestone 4).
         if (!$user->email_verified_at) {
             $user->email_verified_at = now();
-        }
-        if (!$user->phone_verified_at) {
-            $user->phone_verified_at = now();
         }
         $user->last_login_at = now();
         $user->save();

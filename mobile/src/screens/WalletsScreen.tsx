@@ -141,7 +141,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
               end={{ x: 1, y: 1 }}
               style={[{ marginTop: 20, borderRadius: 28, padding: 24, overflow: 'hidden' }, shadow.hero]}
             >
-              {/* Decorative gold wash */}
+              {/* Decorative mint wash */}
               <View
                 pointerEvents="none"
                 style={{
@@ -151,7 +151,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                   height: 192,
                   width: 192,
                   borderRadius: 96,
-                  backgroundColor: 'rgba(241,193,0,0.10)',
+                  backgroundColor: 'rgba(61,226,115,0.10)',
                 }}
               />
 
