@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Device;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -18,9 +19,26 @@ class ProfileController extends ApiController
             'first_name' => ['sometimes', 'string', 'max:100'],
             'last_name' => ['sometimes', 'string', 'max:100'],
             'avatar_url' => ['sometimes', 'nullable', 'url', 'max:500'],
+            'username' => ['sometimes', 'string', 'regex:/^[a-zA-Z0-9_]{3,30}$/'],
         ]);
 
         $user = $request->user();
+
+        // Usernames are stored lowercase and unique case-insensitively.
+        if (array_key_exists('username', $data)) {
+            $uname = strtolower($data['username']);
+            $clash = User::whereRaw('lower(username) = ?', [$uname])
+                ->where('id', '!=', $user->id)
+                ->exists();
+            if ($clash) {
+                return $this->fail('Username already exists. Please choose another username.', 422, [
+                    'username' => ['Username already exists. Please choose another username.'],
+                ]);
+            }
+            $user->username = $uname;
+            unset($data['username']);
+        }
+
         $user->fill($data);
         $user->name = trim("{$user->first_name} {$user->last_name}");
         $user->save();

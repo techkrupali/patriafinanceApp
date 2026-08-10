@@ -71,8 +71,9 @@ class AuthController extends ApiController
             }
         }
 
-        // Give the new account its own shareable referral code.
+        // Give the new account its own shareable referral code + @username.
         $user->ensureReferralCode();
+        $user->ensureUsername();
 
         // Main wallet + funding virtual account on the banking rails.
         WalletService::make()->createWallet($user, 'main', 'Main Wallet');

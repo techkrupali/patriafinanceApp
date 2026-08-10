@@ -8,6 +8,7 @@ export interface User {
   full_name: string;
   email: string;
   phone: string;
+  username: string | null;
   avatar_url: string | null;
   kyc_tier: number;
   role: string;

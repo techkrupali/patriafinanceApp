@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Switch, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
@@ -10,8 +10,8 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
 import { colors } from '../../theme';
-import { useUpdateWallet, useWallet } from '../../api/hooks';
-import { selection } from '../../lib/haptics';
+import { useUpdateWallet, useWallet, useWalletDeletion } from '../../api/hooks';
+import { selection, notifySuccess } from '../../lib/haptics';
 import type { UpdateWalletPayload } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
@@ -23,6 +23,67 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
   const wallet = detail.data?.wallet;
   const approval = detail.data?.approval;
   const isMain = wallet?.type === 'main';
+
+  const del = useWalletDeletion(walletId);
+  const isArchived = wallet?.status === 'closed';
+  const isOwner = (detail.data?.my_role ?? wallet?.my_role) === 'owner';
+  const delBusy = del.archive.isPending || del.unarchive.isPending || del.remove.isPending;
+
+  const confirmArchive = () => {
+    if (!wallet) return;
+    selection();
+    Alert.alert(
+      'Delete wallet',
+      `"${wallet.name}" will be archived and hidden from your active wallets. You can restore it anytime. The wallet must be empty first.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            del.archive.mutate(undefined, {
+              onSuccess: () => {
+                notifySuccess();
+                navigation.goBack();
+              },
+              onError: (e) => Alert.alert('Could not delete', e.message),
+            }),
+        },
+      ],
+    );
+  };
+
+  const restore = () => {
+    selection();
+    del.unarchive.mutate(undefined, {
+      onSuccess: () => notifySuccess(),
+      onError: (e) => Alert.alert('Could not restore', e.message),
+    });
+  };
+
+  const confirmDeleteForever = () => {
+    if (!wallet) return;
+    selection();
+    Alert.alert(
+      'Delete permanently',
+      `This permanently removes "${wallet.name}" and its history. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete forever',
+          style: 'destructive',
+          onPress: () =>
+            del.remove.mutate(undefined, {
+              onSuccess: () => {
+                notifySuccess();
+                navigation.goBack();
+              },
+              onError: (e) => Alert.alert('Could not delete', e.message),
+            }),
+        },
+      ],
+    );
+  };
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -241,6 +302,78 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                     <Ionicons name="chevron-forward" size={18} color={colors.faded} />
                   </Pressable>
                 </View>
+
+                {/* Danger zone — delete/archive (owner only) */}
+                {isOwner ? (
+                  <>
+                    <Text className="mt-9 text-[11px] font-semibold uppercase tracking-wider text-danger">
+                      Danger zone
+                    </Text>
+                    <View
+                      className="mt-2 overflow-hidden rounded-2xl bg-white"
+                      style={{ borderWidth: 1, borderColor: colors.border }}
+                    >
+                      {isArchived ? (
+                        <>
+                          <Pressable
+                            onPress={restore}
+                            disabled={delBusy}
+                            className="flex-row items-center p-4 active:opacity-70"
+                          >
+                            <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                              <Ionicons name="refresh-outline" size={19} color={colors.navy} />
+                            </View>
+                            <View className="flex-1 pr-2">
+                              <Text className="text-[15px] font-semibold text-ink">Restore wallet</Text>
+                              <Text className="mt-0.5 text-[13px] text-muted">
+                                Move it back to your active wallets
+                              </Text>
+                            </View>
+                            {del.unarchive.isPending ? (
+                              <ActivityIndicator color={colors.navy} />
+                            ) : (
+                              <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+                            )}
+                          </Pressable>
+                          <View style={{ height: 1, backgroundColor: colors.border }} />
+                          <Pressable
+                            onPress={confirmDeleteForever}
+                            disabled={delBusy}
+                            className="flex-row items-center p-4 active:opacity-70"
+                          >
+                            <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-danger-soft">
+                              <Ionicons name="trash-outline" size={19} color={colors.danger} />
+                            </View>
+                            <View className="flex-1 pr-2">
+                              <Text className="text-[15px] font-semibold text-danger">Delete permanently</Text>
+                              <Text className="mt-0.5 text-[13px] text-muted">
+                                Remove this wallet and its history — cannot be undone
+                              </Text>
+                            </View>
+                            {del.remove.isPending ? <ActivityIndicator color={colors.danger} /> : null}
+                          </Pressable>
+                        </>
+                      ) : (
+                        <Pressable
+                          onPress={confirmArchive}
+                          disabled={delBusy}
+                          className="flex-row items-center p-4 active:opacity-70"
+                        >
+                          <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-danger-soft">
+                            <Ionicons name="trash-outline" size={19} color={colors.danger} />
+                          </View>
+                          <View className="flex-1 pr-2">
+                            <Text className="text-[15px] font-semibold text-danger">Delete wallet</Text>
+                            <Text className="mt-0.5 text-[13px] text-muted">
+                              Archives it (reversible). The wallet must be empty.
+                            </Text>
+                          </View>
+                          {del.archive.isPending ? <ActivityIndicator color={colors.danger} /> : null}
+                        </Pressable>
+                      )}
+                    </View>
+                  </>
+                ) : null}
               </>
             ) : null}
         </KeyboardAwareScrollView>

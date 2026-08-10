@@ -30,6 +30,7 @@ class User extends Authenticatable
         'password',
         'pin',
         'avatar_url',
+        'username',
         'referral_code',
         'referred_by',
     ];
@@ -126,5 +127,37 @@ class User extends Authenticatable
         $this->save();
 
         return $code;
+    }
+
+    /** A sanitized username base derived from a name: letters/digits, 3–20 chars. */
+    public static function usernameBase(?string $name): string
+    {
+        $base = preg_replace('/[^a-z0-9]/', '', strtolower((string) $name));
+        $base = substr($base, 0, 20);
+        return strlen($base) >= 3 ? $base : 'user';
+    }
+
+    /**
+     * Return this user's @username, lazily generating a unique one from their
+     * name (deduped with a numeric suffix) and persisting it. Idempotent.
+     */
+    public function ensureUsername(): string
+    {
+        if ($this->username) {
+            return $this->username;
+        }
+
+        $base = self::usernameBase(trim(($this->first_name ?? '') . ($this->last_name ?? '')) ?: $this->name);
+        $candidate = $base;
+        $n = 1;
+        while (static::where('username', $candidate)->exists()) {
+            $candidate = $base . $n;
+            $n++;
+        }
+
+        $this->username = $candidate;
+        $this->save();
+
+        return $candidate;
     }
 }

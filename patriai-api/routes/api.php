@@ -87,6 +87,11 @@ Route::prefix('v1')->group(function () {
         Route::get('wallets/{wallet}/funding-details', [WalletController::class, 'fundingDetails']);
         Route::post('wallets/{wallet}/withdraw', [WalletController::class, 'withdraw'])->middleware('throttle:10,1');
 
+        // Wallet deletion — archive (reversible) + permanent delete (archived + empty)
+        Route::post('wallets/{wallet}/archive', [WalletController::class, 'archive'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/unarchive', [WalletController::class, 'unarchive'])->middleware('throttle:30,1');
+        Route::delete('wallets/{wallet}', [WalletController::class, 'destroy'])->middleware('throttle:20,1');
+
         // Wallet audit log + lock / scheduled access
         Route::get('wallets/{wallet}/audit-log', [WalletAuditLogController::class, 'index']);
         Route::post('wallets/{wallet}/freeze', [WalletLockController::class, 'freeze'])->middleware('throttle:30,1');

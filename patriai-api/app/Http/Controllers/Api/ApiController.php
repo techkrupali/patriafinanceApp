@@ -151,6 +151,7 @@ abstract class ApiController extends Controller
             'full_name' => $user->fullName(),
             'email' => $user->email,
             'phone' => $user->phone,
+            'username' => $user->username,
             'avatar_url' => $user->avatar_url,
             'kyc_tier' => $user->kyc_tier,
             'role' => $user->role,

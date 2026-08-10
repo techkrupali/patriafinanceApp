@@ -409,4 +409,77 @@ class WalletController extends ApiController
 
         return $this->ok('Wallet settings updated', ['wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true)]);
     }
+
+    // POST /wallets/{wallet}/archive — reversible soft delete (status=closed), owner only
+    public function archive(Request $request, Wallet $wallet): JsonResponse
+    {
+        if ($err = $this->guardDeletable($request, $wallet)) {
+            return $err;
+        }
+        if ($wallet->status === 'closed') {
+            return $this->fail('This wallet is already archived', 422);
+        }
+        $wallet->update(['status' => 'closed']);
+
+        return $this->ok('Wallet archived', ['wallet' => $this->serializeWallet($wallet->refresh())]);
+    }
+
+    // POST /wallets/{wallet}/unarchive — restore an archived wallet, owner only
+    public function unarchive(Request $request, Wallet $wallet): JsonResponse
+    {
+        if ($wallet->user_id !== $request->user()->id) {
+            return $this->fail('Wallet not found', 404);
+        }
+        if ($wallet->status !== 'closed') {
+            return $this->fail('This wallet is not archived', 422);
+        }
+        $wallet->update(['status' => 'active']);
+
+        return $this->ok('Wallet restored', ['wallet' => $this->serializeWallet($wallet->refresh())]);
+    }
+
+    // DELETE /wallets/{wallet} — permanent delete (archived + empty only), owner only
+    public function destroy(Request $request, Wallet $wallet): JsonResponse
+    {
+        if ($err = $this->guardDeletable($request, $wallet)) {
+            return $err;
+        }
+        if ($wallet->status !== 'closed') {
+            return $this->fail('Archive the wallet first, then delete it permanently', 422);
+        }
+        $wallet->delete(); // cascades members, transactions and invitations
+
+        return $this->ok('Wallet deleted permanently');
+    }
+
+    /**
+     * Shared safety guards for archive / permanent-delete. Returns a fail
+     * response, or null when the wallet may be removed. Money-safety first: the
+     * main wallet is protected, the wallet must be empty, and it must have no
+     * other members or an attached project.
+     */
+    private function guardDeletable(Request $request, Wallet $wallet): ?JsonResponse
+    {
+        if ($wallet->user_id !== $request->user()->id) {
+            return $this->fail('Wallet not found', 404);
+        }
+        if ($wallet->type === 'main') {
+            return $this->fail('Your main wallet cannot be deleted', 422);
+        }
+        if ((int) $wallet->balance !== 0) {
+            return $this->fail('Move the balance out first — the wallet must be empty to delete it', 422);
+        }
+        $otherMembers = $wallet->members()
+            ->where('status', 'active')
+            ->where('user_id', '!=', $wallet->user_id)
+            ->exists();
+        if ($otherMembers) {
+            return $this->fail('Remove the other members before deleting this wallet', 422);
+        }
+        if (\App\Models\Project::where('wallet_id', $wallet->id)->exists()) {
+            return $this->fail("This wallet belongs to a project and can't be deleted here", 422);
+        }
+
+        return null;
+    }
 }

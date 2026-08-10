@@ -363,8 +363,12 @@ export function useVerifyAccount() {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { first_name: string; last_name: string }) =>
-      api<MeData>('/profile', { method: 'PUT', body: input }),
+    mutationFn: (input: {
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+      avatar_url?: string | null;
+    }) => api<MeData>('/profile', { method: 'PUT', body: input }),
     onSuccess: async (d) => {
       void qc.invalidateQueries({ queryKey: keys.me });
       // The More tab reads the auth store's user — keep it (and SecureStore) fresh.
@@ -1001,6 +1005,30 @@ export function useWalletLock(walletId: number) {
     onSuccess: done,
   });
   return { freeze, unfreeze, setSchedule };
+}
+
+/** Archive (reversible), restore, or permanently delete a wallet. */
+export function useWalletDeletion(walletId: number) {
+  const qc = useQueryClient();
+  const done = () => {
+    void qc.invalidateQueries({ queryKey: keys.wallets });
+    void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.dashboard });
+    void qc.invalidateQueries({ queryKey: keys.family });
+  };
+  const archive = useMutation({
+    mutationFn: () => api<WalletUpdatedData>(`/wallets/${walletId}/archive`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const unarchive = useMutation({
+    mutationFn: () => api<WalletUpdatedData>(`/wallets/${walletId}/unarchive`, { method: 'POST' }),
+    onSuccess: done,
+  });
+  const remove = useMutation({
+    mutationFn: () => api(`/wallets/${walletId}`, { method: 'DELETE' }),
+    onSuccess: done,
+  });
+  return { archive, unarchive, remove };
 }
 
 // ---------- Dispute Center ----------
