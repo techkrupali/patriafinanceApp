@@ -27,7 +27,7 @@ function subtitleFor(wallet: Wallet): string {
     main: 'Primary operating account',
     shared: 'Shared wallet',
     savings: 'Savings',
-    goal: 'Goal-linked treasury',
+    goal: 'Goal-linked wallet',
     project: 'Project escrow',
     emergency: 'Emergency fund',
     giving: 'Giving',

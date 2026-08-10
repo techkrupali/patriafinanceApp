@@ -74,7 +74,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
 
   return (
     <Screen withBottomInset>
-      <Header title="Create Treasury" />
+      <Header title="Create Wallet" />
       <KeyboardAwareScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 24, paddingTop: 8 }}
@@ -82,7 +82,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
       >
           {/* Editorial headline (design: create_first_treasury) */}
           <Text className="text-[28px] font-extrabold leading-9 tracking-tight text-navy">
-            Create Your Treasury
+            Create Your Wallet
           </Text>
           <Text className="mt-2 text-[15px] leading-6 text-muted">
             This is where your money will be stored and managed.
@@ -91,16 +91,16 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
           {/* Identity block — name + purpose chips */}
           <View className="mt-6 rounded-3xl bg-white p-5" style={shadow.card}>
             <Input
-              label="Treasury name"
+              label="Wallet name"
               icon="pricetag-outline"
               value={name}
               onChangeText={setName}
-              placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Treasury`}
+              placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Wallet`}
               maxLength={100}
             />
 
             <Text className="mb-3 mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Treasury purpose
+              Wallet purpose
             </Text>
             <View className="flex-row flex-wrap" style={{ gap: 8 }}>
               {TYPES.map((t) => {
@@ -147,7 +147,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
             icon="document-text-outline"
             value={description}
             onChangeText={setDescription}
-            placeholder="What's this treasury for?"
+            placeholder="What's this wallet for?"
             maxLength={200}
             containerClassName="mt-6"
           />
@@ -169,7 +169,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
 
           <ErrorText message={error} className="mt-4" />
 
-          <Button title="Create Treasury" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
+          <Button title="Create Wallet" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
       </KeyboardAwareScrollView>
     </Screen>
   );
