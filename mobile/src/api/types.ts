@@ -1075,7 +1075,14 @@ export interface UpdateAutomationPayload {
 // Dispute Center
 // ============================================================================
 
-export type DisputeCategory = 'transaction' | 'project' | 'vendor' | 'account' | 'other';
+export type DisputeCategory =
+  | 'transaction'
+  | 'withdrawal'
+  | 'project'
+  | 'wallet'
+  | 'vendor'
+  | 'account'
+  | 'other';
 export type DisputeStatus = 'open' | 'under_review' | 'resolved' | 'rejected';
 
 export interface Dispute {

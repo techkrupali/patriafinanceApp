@@ -14,6 +14,8 @@ class Dispute extends Model
         'vendor',
         'account',
         'other',
+        'wallet',
+        'withdrawal',
     ];
 
     protected $fillable = [
