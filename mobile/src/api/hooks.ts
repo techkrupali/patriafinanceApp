@@ -45,6 +45,7 @@ import type {
   FundingDetailsData,
   InvitationAcceptData,
   InvitationCreatedData,
+  UsersSearchData,
   InvitationsData,
   KycState,
   KycSubmitData,
@@ -132,6 +133,7 @@ export const keys = {
   // ---- Referrals ----
   referrals: ['referrals'] as const,
   // ---- Vendors ----
+  usersSearch: (q: string) => ['users', 'search', q] as const,
   vendors: (q: string, category: string) => ['vendors', q, category] as const,
   vendor: (id: number) => ['vendors', 'detail', id] as const,
   myVendorProfile: ['vendors', 'me'] as const,
@@ -452,6 +454,18 @@ export function useWalletInvitations(walletId: number) {
     queryKey: keys.walletInvitations(walletId),
     queryFn: () => api<InvitationsData>(`/wallets/${walletId}/invitations`),
     select: (d) => d.invitations,
+  });
+}
+
+/** Search registered users by @username/name to invite them in-app. */
+export function useUserSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: keys.usersSearch(q),
+    queryFn: () => api<UsersSearchData>(`/users/search?q=${encodeURIComponent(q)}`),
+    select: (d) => d.users,
+    enabled: q.replace(/^@/, '').length >= 2,
+    staleTime: 30_000,
   });
 }
 

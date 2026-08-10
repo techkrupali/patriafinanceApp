@@ -482,10 +482,24 @@ export interface UpdateMemberPayload {
 }
 
 export interface CreateInvitationPayload {
-  /** Email or phone of the person to invite. */
-  identifier: string;
+  /** Email or phone of the person to invite (out-of-app invite). */
+  identifier?: string;
+  /** Existing registered user, picked via username search (in-app invite). */
+  invitee_user_id?: number;
   role?: string;
   can_approve?: boolean;
+}
+
+/** Slim user shape returned by GET /users/search. */
+export interface UserSearchResult {
+  id: number;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+export interface UsersSearchData {
+  users: UserSearchResult[];
 }
 
 export interface RespondApprovalPayload {

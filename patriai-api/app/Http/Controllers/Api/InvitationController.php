@@ -30,14 +30,25 @@ class InvitationController extends ApiController
         }
 
         $data = $request->validate([
-            'identifier' => ['required', 'string', 'max:150'],
+            // Existing users are invited directly by id (username search); everyone
+            // else by an email/phone identifier for an out-of-band invite.
+            'invitee_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'identifier' => ['required_without:invitee_user_id', 'nullable', 'string', 'max:150'],
             'role' => ['sometimes', 'in:co_owner,admin,contributor,viewer'],
             'can_approve' => ['sometimes', 'boolean'],
         ]);
 
-        $identifier = trim($data['identifier']);
         $inviteRole = $data['role'] ?? 'contributor';
         $canApprove = $request->boolean('can_approve');
+
+        // Resolve the invitee. In-app (existing user) path takes an id directly;
+        // otherwise fall back to email/phone identifier resolution.
+        if (!empty($data['invitee_user_id'])) {
+            $invitee = User::find($data['invitee_user_id']);
+            $identifier = $invitee->username ? '@' . $invitee->username : ($invitee->email ?? $invitee->phone ?? (string) $invitee->id);
+        } else {
+            $identifier = trim($data['identifier']);
+        }
 
         // Role ceiling: an inviter may never grant a role that outranks (or
         // equals) their own. The owner sits above every invitable role, so this
@@ -52,9 +63,11 @@ class InvitationController extends ApiController
             return $this->fail('A viewer cannot be given approval rights', 422);
         }
 
-        $invitee = str_contains($identifier, '@')
-            ? User::where('email', strtolower($identifier))->first()
-            : User::where('phone', $identifier)->first();
+        if (empty($data['invitee_user_id'])) {
+            $invitee = str_contains($identifier, '@')
+                ? User::where('email', strtolower($identifier))->first()
+                : User::where('phone', $identifier)->first();
+        }
 
         if ($invitee && $invitee->id === $request->user()->id) {
             return $this->fail('You cannot invite yourself', 422);

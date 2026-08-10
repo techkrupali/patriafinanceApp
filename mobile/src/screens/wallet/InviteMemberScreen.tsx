@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, Platform, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Platform, Switch, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
@@ -11,37 +11,59 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { colors, shadow } from '../../theme';
-import { useCreateInvitation, useWallets } from '../../api/hooks';
+import { useCreateInvitation, useUserSearch, useWallets } from '../../api/hooks';
 import { ROLE_OPTIONS, roleLabel } from '../../lib/governance';
+import { initials } from '../../lib/format';
 import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { selection } from '../../lib/haptics';
+import type { UserSearchResult } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type Channel = 'email' | 'sms' | 'whatsapp';
+type Channel = 'user' | 'email' | 'sms' | 'whatsapp';
 
 const CHANNELS: { key: Channel; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { key: 'user', label: 'User', icon: 'at-outline' },
   { key: 'email', label: 'Email', icon: 'mail-outline' },
   { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' },
   { key: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp' },
 ];
+
+/** Avatar for a search result — image if set, else initials on a tinted circle. */
+function UserAvatar({ user, size = 40 }: { user: UserSearchResult; size?: number }) {
+  if (user.avatar_url) {
+    return <Image source={{ uri: user.avatar_url }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+  }
+  return (
+    <View
+      className="items-center justify-center rounded-full bg-lav"
+      style={{ width: size, height: size }}
+    >
+      <Text className="text-[13px] font-bold text-navy">{initials(user.full_name)}</Text>
+    </View>
+  );
+}
 
 export function InviteMemberScreen({ navigation, route }: RootScreenProps<'InviteMember'>) {
   const { walletId } = route.params;
   const wallets = useWallets();
   const walletName = (wallets.data ?? []).find((w) => w.id === walletId)?.name;
 
-  const [channel, setChannel] = useState<Channel>('email');
+  const [channel, setChannel] = useState<Channel>('user');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phoneNational, setPhoneNational] = useState('');
+  const [search, setSearch] = useState('');
+  const [picked, setPicked] = useState<UserSearchResult | null>(null);
   const [role, setRole] = useState<string>('contributor');
   const [canApprove, setCanApprove] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const invite = useCreateInvitation(walletId);
+  const results = useUserSearch(channel === 'user' ? search : '');
 
-  const isPhone = channel !== 'email';
+  const isUser = channel === 'user';
+  const isPhone = channel === 'sms' || channel === 'whatsapp';
   const identifier = isPhone ? toE164(phoneCountry.dial, phoneNational) : email.trim().toLowerCase();
 
   /** Prefilled invite text for SMS / WhatsApp hand-off. */
@@ -78,6 +100,17 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
 
   const submit = () => {
     setError(null);
+    if (isUser) {
+      if (!picked) {
+        setError('Search and select a user to invite.');
+        return;
+      }
+      invite.mutate(
+        { invitee_user_id: picked.id, role, can_approve: canApprove },
+        { onSuccess: () => setSent(true), onError: (e) => setError(e.message) },
+      );
+      return;
+    }
     if (channel === 'email') {
       if (!email.trim()) {
         setError('Enter an email address to invite.');
@@ -101,18 +134,21 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
 
   if (sent) {
     const channelLabel = CHANNELS.find((c) => c.key === channel)?.label ?? 'Invite';
+    const invitedValue = isUser ? (picked?.username ? `@${picked.username}` : picked?.full_name ?? '') : identifier;
     return (
       <Screen withBottomInset>
         <SuccessReceipt
           title="Invitation sent"
           subtitle={
-            isPhone
-              ? `${identifier} will see this invite when they open Patriai. We also opened ${channelLabel} so you can message them.`
-              : `${identifier} will see this invite when they open Patriai.`
+            isUser
+              ? `${picked?.full_name ?? 'They'} will get an in-app invitation to accept or decline.`
+              : isPhone
+                ? `${identifier} will see this invite when they open Patriai. We also opened ${channelLabel} so you can message them.`
+                : `${identifier} will see this invite when they open Patriai.`
           }
           rows={[
-            { label: 'Invited', value: identifier },
-            { label: 'Via', value: channelLabel },
+            { label: 'Invited', value: invitedValue },
+            { label: 'Via', value: isUser ? 'In-app' : channelLabel },
             { label: 'Role', value: roleLabel(role) },
             { label: 'Can approve', value: canApprove ? 'Yes' : 'No' },
           ]}
@@ -131,18 +167,9 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         showsVerticalScrollIndicator={false}
       >
         <Text className="text-[15px] leading-5 text-muted">
-          Invite someone by email, SMS or WhatsApp. They'll get a pending invitation to accept in Patriai.
+          Invite an existing user by @username, or someone new by email, SMS or WhatsApp. They'll get a
+          pending invitation to accept in Patriai.
         </Text>
-
-        <Input
-          label="Name (optional)"
-          icon="person-outline"
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Ada"
-          maxLength={100}
-          containerClassName="mt-6"
-        />
 
         {/* Channel selector */}
         <View className="mt-6 flex-row rounded-2xl bg-page-top p-1" style={{ gap: 4 }}>
@@ -155,18 +182,20 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
                   selection();
                   setChannel(c.key);
                   setError(null);
+                  setPicked(null);
                 }}
                 className="flex-1 flex-row items-center justify-center rounded-xl py-2.5"
                 style={active ? [{ backgroundColor: colors.white }, shadow.soft] : undefined}
               >
                 <Ionicons
                   name={c.icon}
-                  size={15}
+                  size={14}
                   color={active ? colors.goldDeep : colors.muted}
-                  style={{ marginRight: 5 }}
+                  style={{ marginRight: 4 }}
                 />
                 <Text
-                  className={`text-[13px] ${active ? 'font-bold' : 'font-medium'}`}
+                  numberOfLines={1}
+                  className={`text-[12px] ${active ? 'font-bold' : 'font-medium'}`}
                   style={{ color: active ? colors.goldDeep : colors.muted }}
                 >
                   {c.label}
@@ -176,7 +205,98 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
           })}
         </View>
 
-        {channel === 'email' ? (
+        {isUser ? (
+          picked ? (
+            <View className="mt-5 flex-row items-center rounded-2xl bg-success-soft p-3">
+              <UserAvatar user={picked} />
+              <View className="ml-3 flex-1 pr-2">
+                <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
+                  {picked.full_name}
+                </Text>
+                {picked.username ? (
+                  <Text className="text-[13px] text-muted" numberOfLines={1}>
+                    @{picked.username}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => {
+                  selection();
+                  setPicked(null);
+                }}
+                hitSlop={6}
+                className="rounded-full bg-white px-3 py-1.5 active:opacity-80"
+              >
+                <Text className="text-[12px] font-bold text-navy">Change</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Input
+                icon="search-outline"
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search @username or name…"
+                autoCapitalize="none"
+                autoCorrect={false}
+                containerClassName="mt-5"
+              />
+              {results.isFetching ? (
+                <View className="mt-4 items-center">
+                  <ActivityIndicator color={colors.navy} />
+                </View>
+              ) : search.trim().replace(/^@/, '').length < 2 ? (
+                <Text className="mt-3 text-[13px] text-muted">
+                  Type at least 2 characters to search registered users.
+                </Text>
+              ) : (results.data ?? []).length === 0 ? (
+                <Text className="mt-3 text-[13px] text-muted">
+                  No users found. Invite them by email, SMS or WhatsApp instead.
+                </Text>
+              ) : (
+                <View className="mt-2">
+                  {(results.data ?? []).map((u) => (
+                    <Pressable
+                      key={u.id}
+                      onPress={() => {
+                        selection();
+                        setPicked(u);
+                        setError(null);
+                      }}
+                      className="mt-2 flex-row items-center rounded-2xl bg-white p-3 active:opacity-90"
+                      style={shadow.soft}
+                    >
+                      <UserAvatar user={u} />
+                      <View className="ml-3 flex-1 pr-2">
+                        <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
+                          {u.full_name}
+                        </Text>
+                        {u.username ? (
+                          <Text className="text-[13px] text-muted" numberOfLines={1}>
+                            @{u.username}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Ionicons name="add-circle-outline" size={22} color={colors.brand} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </>
+          )
+        ) : (
+          <Input
+            label="Name (optional)"
+            icon="person-outline"
+            value={name}
+            onChangeText={setName}
+            placeholder="e.g. Ada"
+            maxLength={100}
+            containerClassName="mt-5"
+          />
+        )}
+
+        {isUser ? null : channel === 'email' ? (
           <Input
             label="Email address"
             icon="at-outline"
@@ -247,7 +367,11 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         <ErrorText message={error} className="mt-4" />
 
         <Button
-          title={channel === 'email' ? 'Send invitation' : `Invite via ${CHANNELS.find((c) => c.key === channel)?.label}`}
+          title={
+            isUser || channel === 'email'
+              ? 'Send invitation'
+              : `Invite via ${CHANNELS.find((c) => c.key === channel)?.label}`
+          }
           icon={channel === 'whatsapp' ? 'logo-whatsapp' : 'paper-plane'}
           onPress={submit}
           loading={invite.isPending}

@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\SpendRequestController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\WalletAuditLogController;
 use App\Http\Controllers\Api\WalletController;
@@ -56,6 +57,9 @@ Route::prefix('v1')->group(function () {
         Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');
 
         Route::get('dashboard', [DashboardController::class, 'index']);
+
+        // Find registered users to invite by @username (in-app invitations)
+        Route::get('users/search', [UserController::class, 'search'])->middleware('throttle:60,1');
 
         // Family Hub (aggregated people/invitations/stats across the user's wallets)
         Route::get('family', [FamilyController::class, 'index']);
