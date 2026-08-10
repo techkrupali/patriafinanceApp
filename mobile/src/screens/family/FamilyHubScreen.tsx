@@ -197,9 +197,29 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
   const inviteSubtitle = (inv: FamilyInvitation) =>
     `${inv.wallet_name ?? 'A wallet'} · ${roleLabel(inv.role)}`;
 
+  /** Start the invite flow — into the first shareable wallet, or make one first. */
+  const startInvite = () => {
+    selection();
+    if (invitable) navigation.navigate('InviteMember', { walletId: invitable.id });
+    else navigation.navigate('CreateWallet');
+  };
+
   return (
     <Screen withBottomInset>
-      <Header title="Family Hub" showBack={!isTab} />
+      <Header
+        title="Family Hub"
+        showBack={!isTab}
+        right={
+          <Pressable
+            onPress={startInvite}
+            hitSlop={8}
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
+            style={shadow.soft}
+          >
+            <Ionicons name="person-add" size={20} color={colors.navy} />
+          </Pressable>
+        }
+      />
 
       {family.isLoading ? (
         <View className="flex-1 items-center justify-center">
@@ -216,14 +236,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           }
         >
           {isEmpty ? (
-            <CreateFirstFamily
-              hasWallet={Boolean(invitable)}
-              onPress={() => {
-                selection();
-                if (invitable) navigation.navigate('InviteMember', { walletId: invitable.id });
-                else navigation.navigate('CreateWallet');
-              }}
-            />
+            <CreateFirstFamily hasWallet={Boolean(invitable)} onPress={startInvite} />
           ) : (
             <>
           {/* Hero */}
@@ -259,6 +272,9 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
               <StatTile value={stats?.pending_invites ?? 0} label="Pending" />
             )}
           </View>
+
+          {/* Always-available invite action */}
+          <Button title="Invite member" icon="person-add" onPress={startInvite} className="mt-4" />
 
           {/* Members */}
           <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Members</Text>
