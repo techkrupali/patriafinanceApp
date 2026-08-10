@@ -10,8 +10,9 @@ import { TxnRow } from '../../components/TxnRow';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
+import { AutomationCard } from '../../components/AutomationCard';
 import { colors, gradients, shadow } from '../../theme';
-import { useWallet, useWalletMembers, useWalletTransactions } from '../../api/hooks';
+import { useWallet, useWalletMembers, useWalletTransactions, useAutomations } from '../../api/hooks';
 import { formatMoney, initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import { walletVisual } from '../../lib/walletVisual';
@@ -45,7 +46,10 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
       style={shadow.soft}
     >
       <Ionicons name={icon} size={24} color={ON_GOLD} />
-      <Text className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">
+      <Text
+        numberOfLines={1}
+        className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white"
+      >
         {label}
       </Text>
     </Pressable>
@@ -77,6 +81,13 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const pending = detail.data?.pending_approvals ?? 0;
   const allTxns = txns.data?.pages.flatMap((p) => p.transactions) ?? [];
   const visual = walletVisual(wallet?.type);
+
+  // Automation rules that move money in or out of THIS wallet — shown in the
+  // Governance & Rules section so a rule created here appears immediately.
+  const automations = useAutomations();
+  const walletRules = (automations.data ?? []).filter(
+    (r) => r.from_wallet.id === walletId || r.to_wallet.id === walletId,
+  );
 
   const canManage = canManageWallet(role);
   const canInvite = canInviteMembers(role);
@@ -370,12 +381,25 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             ) : canRequest ? (
               <ActionButton icon="hand-left" label="Request" onPress={() => navigation.navigate('RequestSpend', { walletId })} />
             ) : null}
+            {role === 'owner' ? (
+              <ActionButton
+                icon="repeat"
+                label="Rule"
+                onPress={() =>
+                  navigation.navigate(
+                    'CreateAutomation',
+                    wallet.type === 'main' ? { fromWalletId: walletId } : { toWalletId: walletId },
+                  )
+                }
+              />
+            ) : null}
           </View>
 
-          {/* Governance & Rules — tonal secondary-container card */}
-          {approval || held > 0 ? (
+          {/* Governance & Rules — approvals summary + this wallet's automation rules */}
+          {approval || held > 0 || walletRules.length > 0 ? (
             <View className="mt-7">
               <SectionTitle>Governance & Rules</SectionTitle>
+              {approval || held > 0 ? (
               <View
                 className="mt-3 rounded-2xl p-5"
                 style={{ backgroundColor: 'rgba(199,223,255,0.35)', gap: 14 }}
@@ -402,6 +426,10 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   <GovRow icon="lock-closed" text={`${formatMoney(held)} held for pending approvals`} />
                 ) : null}
               </View>
+              ) : null}
+              {walletRules.map((r) => (
+                <AutomationCard key={r.id} rule={r} />
+              ))}
             </View>
           ) : null}
 

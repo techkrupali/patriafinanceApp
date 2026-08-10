@@ -51,7 +51,7 @@ export type RootStackParamList = {
   WalletAuditLog: { walletId: number };
   WalletLock: { walletId: number };
   Automations: undefined;
-  CreateAutomation: undefined;
+  CreateAutomation: { fromWalletId?: number; toWalletId?: number } | undefined;
   // ---- Support & compliance ----
   Disputes: undefined;
   RaiseDispute: { reference?: string; category?: string } | undefined;

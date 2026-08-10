@@ -32,15 +32,16 @@ const WEEKDAYS: { value: number; label: string }[] = [
   { value: 7, label: 'Sun' },
 ];
 
-export function CreateAutomationScreen({ navigation }: RootScreenProps<'CreateAutomation'>) {
+export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'CreateAutomation'>) {
   const wallets = useWallets();
   const create = useCreateAutomation();
 
   const owned = (wallets.data ?? []).filter((w) => w.my_role === 'owner');
 
   const [name, setName] = useState('');
-  const [fromId, setFromId] = useState<number | null>(null);
-  const [toId, setToId] = useState<number | null>(null);
+  // Preselected when launched from a specific wallet's "New rule" action.
+  const [fromId, setFromId] = useState<number | null>(route.params?.fromWalletId ?? null);
+  const [toId, setToId] = useState<number | null>(route.params?.toWalletId ?? null);
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<AutomationFrequency>('monthly');
   const [dayOfWeek, setDayOfWeek] = useState(1);
