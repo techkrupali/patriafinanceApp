@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { colors, gradients, shadow } from '../../theme';
-import { useFamily, useWallets } from '../../api/hooks';
+import { useFamily, useWallets, useCancelInvitation } from '../../api/hooks';
 import { initials } from '../../lib/format';
 import { roleLabel } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
@@ -105,6 +105,51 @@ function InviteRow({
       </View>
       {right}
     </View>
+  );
+}
+
+/** A sent, still-pending invite with a Cancel action (reuses useCancelInvitation). */
+function SentInviteRow({ inv, subtitle }: { inv: FamilyInvitation; subtitle: string }) {
+  const cancel = useCancelInvitation(inv.wallet_id);
+  const onCancel = () => {
+    selection();
+    Alert.alert('Cancel invitation', `Cancel the invite to ${inv.invited_identifier}?`, [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel invite',
+        style: 'destructive',
+        onPress: () => cancel.mutate(inv.id, { onError: (e) => Alert.alert('Could not cancel', e.message) }),
+      },
+    ]);
+  };
+  return (
+    <InviteRow
+      icon="paper-plane-outline"
+      tile="bg-lav-faint"
+      iconColor={colors.muted}
+      title={`Invited ${inv.invited_identifier}`}
+      subtitle={subtitle}
+      right={
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+            <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Pending</Text>
+          </View>
+          <Pressable
+            onPress={onCancel}
+            hitSlop={8}
+            disabled={cancel.isPending}
+            className="h-8 w-8 items-center justify-center rounded-full bg-danger-soft active:opacity-80"
+          >
+            {cancel.isPending ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Ionicons name="close" size={16} color={colors.danger} />
+            )}
+          </Pressable>
+        </View>
+      }
+    />
   );
 }
 
@@ -340,21 +385,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
                 ))}
                 {sent.map((inv, i) => (
                   <View key={`s-${inv.id}`}>
-                    <InviteRow
-                      icon="paper-plane-outline"
-                      tile="bg-lav-faint"
-                      iconColor={colors.muted}
-                      title={`Invited ${inv.invited_identifier}`}
-                      subtitle={inviteSubtitle(inv)}
-                      right={
-                        <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
-                          <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                            Pending
-                          </Text>
-                        </View>
-                      }
-                    />
+                    <SentInviteRow inv={inv} subtitle={inviteSubtitle(inv)} />
                     {i < sent.length - 1 ? (
                       <View style={{ height: 1, backgroundColor: colors.border }} />
                     ) : null}

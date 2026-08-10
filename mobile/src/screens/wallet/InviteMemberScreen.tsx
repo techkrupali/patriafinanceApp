@@ -31,6 +31,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
   const walletName = (wallets.data ?? []).find((w) => w.id === walletId)?.name;
 
   const [channel, setChannel] = useState<Channel>('email');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phoneNational, setPhoneNational] = useState('');
@@ -45,7 +46,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
 
   /** Prefilled invite text for SMS / WhatsApp hand-off. */
   const inviteMessage = () =>
-    `Hi! I've invited you to join ${walletName ? `"${walletName}"` : 'my shared wallet'} on Patriai ` +
+    `Hi${name.trim() ? ` ${name.trim()}` : ''}! I've invited you to join ${walletName ? `"${walletName}"` : 'my shared wallet'} on Patriai ` +
     `as a ${roleLabel(role)}. Download Patriai and sign up with this ${
       channel === 'whatsapp' ? 'WhatsApp number' : channel === 'sms' ? 'number' : 'email'
     } to accept.`;
@@ -132,6 +133,16 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         <Text className="text-[15px] leading-5 text-muted">
           Invite someone by email, SMS or WhatsApp. They'll get a pending invitation to accept in Patriai.
         </Text>
+
+        <Input
+          label="Name (optional)"
+          icon="person-outline"
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Ada"
+          maxLength={100}
+          containerClassName="mt-6"
+        />
 
         {/* Channel selector */}
         <View className="mt-6 flex-row rounded-2xl bg-page-top p-1" style={{ gap: 4 }}>
