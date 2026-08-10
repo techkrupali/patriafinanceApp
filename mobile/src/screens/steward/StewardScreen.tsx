@@ -77,7 +77,7 @@ function buildInsights(ctx: Ctx): { icon: string; text: string }[] {
   const goals = (d?.wallets ?? []).filter((w) => GOAL_TYPES.includes(w.type) && w.target_amount);
   for (const g of goals) {
     const pct = Math.round((parseFloat(g.balance) / parseFloat(g.target_amount!)) * 100);
-    if (pct >= 100) out.push({ icon: 'trophy', text: `“${g.name}” has reached its target — consider moving the surplus to the Treasury.` });
+    if (pct >= 100) out.push({ icon: 'trophy', text: `“${g.name}” has reached its target — consider moving the surplus to another wallet.` });
     else if (pct >= 60) out.push({ icon: 'trending-up', text: `“${g.name}” is ${pct}% funded and ahead of pace. Keep the auto-save running.` });
   }
   const p = ctx.pending ?? [];
