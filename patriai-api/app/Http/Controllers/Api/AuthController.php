@@ -28,7 +28,8 @@ class AuthController extends ApiController
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'phone' => ['required', 'regex:/^\d{10,15}$/', 'unique:users,phone'],
+            // E.164: leading '+', country code, national number — kept clean in the DB.
+            'phone' => ['required', 'regex:/^\+[1-9]\d{7,14}$/', 'unique:users,phone'],
             'password' => ['required', Password::min(8)],
             'pin' => ['required', 'digits:4'],
             'device_id' => ['nullable', 'string', 'max:120'],
@@ -270,9 +271,39 @@ class AuthController extends ApiController
 
     private function findByIdentifier(string $identifier): ?User
     {
-        return str_contains($identifier, '@')
-            ? User::where('email', strtolower($identifier))->first()
-            : User::where('phone', $identifier)->first();
+        if (str_contains($identifier, '@')) {
+            return User::where('email', strtolower($identifier))->first();
+        }
+
+        return User::where('phone', self::normalizePhone($identifier))->first();
+    }
+
+    /**
+     * Best-effort normalize a phone identifier to the stored E.164 form
+     * (+<code><national>). Clients send E.164 directly; this also rescues loose
+     * inputs (spaces/dashes, a "00" international prefix, or a bare local
+     * trunk-0 number, which we treat as the primary market — Nigeria, +234).
+     */
+    private static function normalizePhone(string $raw): string
+    {
+        $trimmed = trim($raw);
+        $hasPlus = str_starts_with($trimmed, '+');
+        $digits = preg_replace('/\D/', '', $trimmed);
+
+        if ($digits === '') {
+            return $trimmed;
+        }
+        if ($hasPlus) {
+            return '+' . $digits;
+        }
+        if (str_starts_with($digits, '00')) {
+            return '+' . substr($digits, 2);
+        }
+        if (str_starts_with($digits, '0')) {
+            return '+234' . ltrim($digits, '0');
+        }
+
+        return '+' . $digits;
     }
 
     private function registerDevice(Request $request, User $user): void

@@ -6,8 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
 import { PinPad } from '../../components/PinPad';
+import { PhoneInput } from '../../components/PhoneInput';
 import { ErrorText } from '../../components/ErrorText';
 import { colors, shadow } from '../../theme';
+import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { useRegister } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { getBiometricSupport, runBiometricPrompt, saveTxnPin, type BiometricSupport } from '../../lib/biometrics';
@@ -22,7 +24,6 @@ import type { AuthScreenProps } from '../../navigation/types';
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^\d{10,15}$/;
 
 interface OtpParams {
   identifier: string;
@@ -129,6 +130,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
   // Step 1
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
 
@@ -183,8 +185,8 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
       setError('Enter your first and last name.');
       return;
     }
-    if (!PHONE_RE.test(phone.trim())) {
-      setError('Phone number must be 10–15 digits.');
+    if (!isValidE164(toE164(phoneCountry.dial, phone))) {
+      setError('Enter a valid phone number for the selected country.');
       return;
     }
     if (!EMAIL_RE.test(email.trim())) {
@@ -230,7 +232,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim().toLowerCase(),
-        phone: phone.trim(),
+        phone: toE164(phoneCountry.dial, phone),
         password,
         pin,
       },
@@ -307,13 +309,12 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
             <View className="mt-8" style={{ gap: 20 }}>
               <Field label="First name" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
               <Field label="Last name" value={lastName} onChangeText={setLastName} placeholder="Obi" />
-              <Field
+              <PhoneInput
                 label="Phone number"
+                country={phoneCountry}
+                onChangeCountry={setPhoneCountry}
                 value={phone}
-                onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
-                placeholder="Enter your phone number"
-                keyboardType="number-pad"
-                maxLength={15}
+                onChangeText={setPhone}
               />
               <Field
                 label="Email address"

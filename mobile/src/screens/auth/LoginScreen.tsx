@@ -5,8 +5,10 @@ import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollVie
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
+import { PhoneInput } from '../../components/PhoneInput';
 import { ErrorText } from '../../components/ErrorText';
 import { colors, shadow } from '../../theme';
+import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { selection } from '../../lib/haptics';
 import { useLogin } from '../../api/hooks';
 import { ApiError } from '../../api/client';
@@ -120,6 +122,7 @@ function Segment({
 
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const [identifier, setIdentifier] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'phone' | 'email'>('phone');
   const [error, setError] = useState<string | null>(null);
@@ -166,10 +169,14 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
 
   const submit = () => {
     setError(null);
-    // Phone keypads inject spaces/dashes/parens — the API matches raw digits.
-    const cleaned = mode === 'phone' ? identifier.replace(/[^0-9+]/g, '').replace(/^\+/, '') : identifier.trim();
-    if (!cleaned || !password) {
+    // Phone logs in with the same clean E.164 value that was registered.
+    const cleaned = mode === 'phone' ? toE164(phoneCountry.dial, identifier) : identifier.trim();
+    if (!password || (mode === 'email' ? !cleaned : !identifier.trim())) {
       setError('Enter your email/phone and password.');
+      return;
+    }
+    if (mode === 'phone' && !isValidE164(cleaned)) {
+      setError('Enter a valid phone number for the selected country.');
       return;
     }
     login.mutate(
@@ -274,17 +281,33 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
               { key: 'email', label: 'Email' },
             ]}
             value={mode}
-            onChange={(k) => setMode(k as 'phone' | 'email')}
+            onChange={(k) => {
+              setMode(k as 'phone' | 'email');
+              setIdentifier('');
+              setError(null);
+            }}
           />
 
-          <Field
-            label={mode === 'phone' ? 'Phone Number' : 'Email Address'}
-            value={identifier}
-            onChangeText={setIdentifier}
-            placeholder={mode === 'phone' ? 'e.g. 08012345678' : 'you@example.com'}
-            autoCapitalize="none"
-            keyboardType={mode === 'phone' ? 'phone-pad' : 'email-address'}
-          />
+          {mode === 'phone' ? (
+            <PhoneInput
+              label="Phone Number"
+              labelClassName="mb-2 ml-1 text-[11px] font-semibold uppercase tracking-wider"
+              country={phoneCountry}
+              onChangeCountry={setPhoneCountry}
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="e.g. 8012345678"
+            />
+          ) : (
+            <Field
+              label="Email Address"
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="you@example.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          )}
 
           <View>
             <Field
