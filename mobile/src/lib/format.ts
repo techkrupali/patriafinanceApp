@@ -8,6 +8,36 @@ export function formatMoney(value: string | number | null | undefined): string {
   );
 }
 
+/**
+ * Clean raw text from an amount field down to a plain number string:
+ * digits, at most one decimal point, at most 2 decimal places, no grouping.
+ * This is what should be stored in state / sent to the API.
+ */
+export function sanitizeAmountInput(text: string): string {
+  let s = text.replace(/[^0-9.]/g, '');
+  const dot = s.indexOf('.');
+  if (dot !== -1) {
+    const intPart = s.slice(0, dot);
+    const decPart = s.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+    s = intPart + '.' + decPart;
+  }
+  return s;
+}
+
+/**
+ * Display a raw amount string with thousands separators as the user types,
+ * so it's easy to count zeros: '100000000' → '100,000,000', '1000.5' → '1,000.5'.
+ * Preserves a trailing dot and partial decimals mid-typing.
+ */
+export function groupAmountInput(raw: string): string {
+  if (!raw) return '';
+  const dot = raw.indexOf('.');
+  const intPart = dot === -1 ? raw : raw.slice(0, dot);
+  const rest = dot === -1 ? '' : raw.slice(dot);
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return grouped + rest;
+}
+
 export function initials(name: string | null | undefined): string {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);

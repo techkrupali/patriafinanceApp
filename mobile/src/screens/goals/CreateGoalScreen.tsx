@@ -10,7 +10,7 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { colors } from '../../theme';
 import { useWallets, useCreateWallet, useCreateAutomation } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, sanitizeAmountInput, groupAmountInput } from '../../lib/format';
 import { selection, notifySuccess } from '../../lib/haptics';
 import { walletVisual } from '../../lib/walletVisual';
 import type { Wallet } from '../../api/types';
@@ -184,8 +184,8 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
         <Input
           label="Target amount (₦)"
           icon="cash-outline"
-          value={target}
-          onChangeText={(t) => setTarget(t.replace(/[^0-9.]/g, ''))}
+          value={groupAmountInput(target)}
+          onChangeText={(t) => setTarget(sanitizeAmountInput(t))}
           placeholder="0.00"
           keyboardType="decimal-pad"
           containerClassName="mt-7"
@@ -234,8 +234,8 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
             <Input
               label="Monthly amount (₦)"
               icon="cash-outline"
-              value={monthly}
-              onChangeText={(t) => setMonthly(t.replace(/[^0-9.]/g, ''))}
+              value={groupAmountInput(monthly)}
+              onChangeText={(t) => setMonthly(sanitizeAmountInput(t))}
               placeholder="0.00"
               keyboardType="decimal-pad"
               containerClassName="mt-7"
