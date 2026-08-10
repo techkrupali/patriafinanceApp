@@ -24,7 +24,7 @@ class AuthVerificationGateTest extends TestCase
             'first_name' => 'Ada',
             'last_name' => 'Obi',
             'email' => 'ada@example.test',
-            'phone' => '08031234567',
+            'phone' => '+2348031234567',
             'password' => 'password123',
             'pin' => '1234',
         ];
