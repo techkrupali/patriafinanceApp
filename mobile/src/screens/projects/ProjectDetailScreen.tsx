@@ -61,6 +61,33 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Green action pill — icon over an uppercase label (Fund / Withdraw / …). */
+function ProjAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        selection();
+        onPress();
+      }}
+      className="flex-1 items-center justify-center rounded-2xl bg-[#006D2F] py-4 active:opacity-90"
+      style={shadow.soft}
+    >
+      <Ionicons name={icon} size={22} color={colors.white} />
+      <Text numberOfLines={1} className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function MilestoneCard({
   milestone,
   isOwner,
@@ -469,15 +496,20 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             <Text className="mt-4 text-[14px] leading-5 text-muted">{project.description}</Text>
           ) : null}
 
-          {/* Fund escrow (owner) */}
-          {isOwner ? (
-            <Button
-              title="Fund escrow"
-              icon="add"
-              iconPosition="left"
-              onPress={() => navigation.navigate('Fund', { walletId: project.wallet_id })}
-              className="mt-5"
-            />
+          {/* Core Project Wallet actions */}
+          {isOwner || ((isVendor) && project.status === 'active') ? (
+            <View className="mt-5 flex-row" style={{ gap: 10 }}>
+              {isOwner ? (
+                <>
+                  <ProjAction icon="add-circle" label="Fund" onPress={() => navigation.navigate('Fund', { walletId: project.wallet_id })} />
+                  <ProjAction icon="cash" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId: project.wallet_id })} />
+                  <ProjAction icon="swap-horizontal" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId: project.wallet_id })} />
+                </>
+              ) : null}
+              {(isOwner || isVendor) && project.status === 'active' ? (
+                <ProjAction icon="flag" label="Milestone" onPress={() => navigation.navigate('AddMilestone', { projectId })} />
+              ) : null}
+            </View>
           ) : null}
 
           {/* Team & approvals (owner) — reuses the wallet member + governance screens */}

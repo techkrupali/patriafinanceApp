@@ -47,15 +47,6 @@ class ProjectService
         }
     }
 
-    /** Resolve a user by email (lowercased) or phone. */
-    private function resolveUser(string $identifier): ?User
-    {
-        $identifier = trim($identifier);
-
-        return str_contains($identifier, '@')
-            ? User::where('email', strtolower($identifier))->first()
-            : User::where('phone', $identifier)->first();
-    }
 
     /**
      * Create a project backed by a fresh 'project'-type escrow wallet.
@@ -92,14 +83,10 @@ class ProjectService
      * Assign (or reassign) a vendor. Owner only. Blocks self-assignment and reassigning
      * away from a vendor who already has released milestones.
      */
-    public function assignVendor(Project $project, User $owner, string $identifier): Project
+    public function assignVendor(Project $project, User $owner, User $vendor): Project
     {
         $this->assertOwner($project, $owner);
 
-        $vendor = $this->resolveUser($identifier);
-        if (!$vendor) {
-            throw ValidationException::withMessages(['identifier' => 'No user found for that email or phone']);
-        }
         if ($vendor->id === $owner->id) {
             throw ValidationException::withMessages(['identifier' => 'You cannot assign yourself as the vendor']);
         }
@@ -162,7 +149,10 @@ class ProjectService
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero']);
         }
         if ($amountKobo > $project->availableToAllocate()) {
-            throw ValidationException::withMessages(['amount' => 'Milestone amount exceeds unallocated wallet balance']);
+            throw ValidationException::withMessages([
+                'amount' => 'Insufficient available funds in this Project Wallet. Fund the escrow first — only ₦'
+                    . $this->naira($project->availableToAllocate()) . ' is available to allocate to milestones.',
+            ]);
         }
 
         $sequence = ((int) $project->milestones()->max('sequence')) + 1;

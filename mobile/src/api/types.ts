@@ -770,8 +770,10 @@ export interface CreateProjectPayload {
 }
 
 export interface AssignVendorPayload {
-  /** Vendor's email or phone. */
-  identifier: string;
+  /** Existing app user picked via @username search (in-app). */
+  vendor_user_id?: number;
+  /** Or a vendor's email/phone (external). */
+  identifier?: string;
 }
 
 export interface MilestoneEvidence {

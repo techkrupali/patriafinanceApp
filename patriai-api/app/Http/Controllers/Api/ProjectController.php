@@ -92,9 +92,25 @@ class ProjectController extends ApiController
             return $guard;
         }
 
-        $data = $request->validate(['identifier' => ['required', 'string']]);
+        $data = $request->validate([
+            // Existing app user picked via @username search, or an email/phone identifier.
+            'vendor_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'identifier' => ['required_without:vendor_user_id', 'nullable', 'string'],
+        ]);
 
-        $project = ProjectService::make()->assignVendor($project, $user, $data['identifier']);
+        if (!empty($data['vendor_user_id'])) {
+            $vendor = User::find($data['vendor_user_id']);
+        } else {
+            $id = trim($data['identifier']);
+            $vendor = str_contains($id, '@')
+                ? User::where('email', strtolower($id))->first()
+                : User::where('phone', $id)->first();
+        }
+        if (!$vendor) {
+            return $this->fail('No user found for that username, email or phone', 422);
+        }
+
+        $project = ProjectService::make()->assignVendor($project, $user, $vendor);
 
         return $this->ok('Vendor assigned', [
             'project' => $this->serializeProject($project->load(['wallet', 'owner', 'vendor']), $user),

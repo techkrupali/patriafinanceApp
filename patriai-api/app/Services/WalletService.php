@@ -36,8 +36,20 @@ class WalletService
             throw ValidationException::withMessages(['type' => 'Invalid wallet type']);
         }
 
-        if ($type === 'main' && $user->wallets()->where('type', 'main')->exists()) {
-            throw ValidationException::withMessages(['type' => 'Main wallet already exists']);
+        if ($type === 'main') {
+            if ($user->wallets()->where('type', 'main')->exists()) {
+                throw ValidationException::withMessages(['type' => 'Main wallet already exists']);
+            }
+        } else {
+            // Enforce the KYC wallet-count limit on EVERY non-main creation path
+            // (direct wallets and project escrow wallets alike), before any insert —
+            // so a Project Wallet can't bypass the cap and no partial rows are left.
+            $max = KycService::make()->limits((int) $user->kyc_tier)['max_wallets'];
+            if ($user->wallets()->count() >= $max) {
+                throw ValidationException::withMessages([
+                    'wallet' => "Wallet limit reached for your verification tier ({$max}). Verify a higher KYC tier to create more wallets.",
+                ]);
+            }
         }
 
         $wallet = Wallet::create([
