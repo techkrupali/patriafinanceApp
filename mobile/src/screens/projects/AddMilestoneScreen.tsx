@@ -9,7 +9,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
 import { colors } from '../../theme';
 import { useAddMilestone, useProject } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import type { RootScreenProps } from '../../navigation/types';
 
 export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMilestone'>) {
@@ -20,13 +20,16 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const dueDateValid = !dueDate || /^\d{4}-\d{2}-\d{2}$/.test(dueDate);
 
   const available = parseFloat(query.data?.project.available ?? query.data?.available ?? '0');
   const amountNum = parseFloat(amount);
   const overAvailable = Number.isFinite(amountNum) && amountNum > available + 0.001;
   const amountOk = Number.isFinite(amountNum) && amountNum > 0 && !overAvailable;
-  const canAdd = Boolean(title.trim() && amountOk);
+  const canAdd = Boolean(title.trim() && amountOk && dueDateValid);
 
   const submit = () => {
     setError(null);
@@ -38,11 +41,16 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
       setError(overAvailable ? `Amount exceeds the ${formatMoney(available)} available in escrow.` : 'Enter a valid amount.');
       return;
     }
+    if (!dueDateValid) {
+      setError('Enter the due date as YYYY-MM-DD, or leave it empty.');
+      return;
+    }
     add.mutate(
       {
         title: title.trim(),
         description: description.trim() || undefined,
         amount,
+        due_date: dueDate || undefined,
       },
       {
         onSuccess: () => navigation.goBack(),
@@ -78,8 +86,8 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
               <View className="flex-row items-center justify-center">
                 <Text className="text-4xl font-extrabold text-faded">₦</Text>
                 <TextInput
-                  value={amount}
-                  onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                  value={groupAmountInput(amount)}
+                  onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
                   placeholder="0.00"
                   placeholderTextColor={colors.faded}
                   keyboardType="decimal-pad"
@@ -110,6 +118,16 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
               onChangeText={setDescription}
               placeholder="What must the vendor deliver?"
               maxLength={300}
+              containerClassName="mt-5"
+            />
+
+            <Input
+              label="Due date (optional)"
+              icon="calendar-outline"
+              value={dueDate}
+              onChangeText={(t) => setDueDate(t.replace(/[^0-9-]/g, '').slice(0, 10))}
+              placeholder="YYYY-MM-DD"
+              keyboardType="numbers-and-punctuation"
               containerClassName="mt-5"
             />
 

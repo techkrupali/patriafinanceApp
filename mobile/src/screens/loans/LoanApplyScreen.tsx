@@ -23,7 +23,7 @@ import { LoadError } from '../../components/LoadError';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
 import { colors, gradients, shadow } from '../../theme';
 import { useApplyLoan, useLoanEligibility, useWallets } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import {
   FREQUENCY_OPTIONS,
@@ -307,8 +307,8 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               <View className="flex-row items-center justify-center">
                 <Text className="text-4xl font-extrabold text-faded">₦</Text>
                 <TextInput
-                  value={amount}
-                  onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                  value={groupAmountInput(amount)}
+                  onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
                   placeholder="0.00"
                   placeholderTextColor={colors.faded}
                   keyboardType="decimal-pad"

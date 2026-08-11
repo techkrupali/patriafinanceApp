@@ -11,6 +11,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { colors, shadow } from '../../theme';
 import { useCreateWallet } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
+import { groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { walletVisual } from '../../lib/walletVisual';
 import type { CreatableWalletType } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -30,7 +31,7 @@ const TYPES: TypeOption[] = [
   { value: 'shared', title: 'Shared', description: 'Pool money with people you invite. Everyone can see and use it together.' },
   { value: 'savings', title: 'Savings', description: 'Set money aside and watch it grow toward a target you choose.' },
   { value: 'goal', title: 'Goal', description: 'Save toward a specific goal amount — a trip, a gadget, a dream.' },
-  { value: 'project', title: 'Project', description: 'Ring-fence money for a specific project or bill, away from daily spending.' },
+  { value: 'project', title: 'Project', description: 'Escrow for a project: invite a vendor, fund milestones, and release payment only when work is approved.' },
   { value: 'emergency', title: 'Emergency', description: 'A rainy-day buffer set aside for the unexpected.' },
   { value: 'giving', title: 'Giving', description: 'Set aside money for donations, tithes and causes you care about.' },
   { value: 'joint', title: 'Joint', description: 'Shared with a partner — both of you manage it together.' },
@@ -56,6 +57,12 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
     setError(null);
     if (!name.trim()) {
       setError('Give your wallet a name.');
+      return;
+    }
+    // A Project is an escrow project (vendor + milestones), not a plain wallet —
+    // route into the real project flow, which creates its own escrow wallet.
+    if (type === 'project') {
+      navigation.navigate('CreateProject', { name: name.trim() });
       return;
     }
     create.mutate(
@@ -156,8 +163,8 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
             <Input
               label="Target amount (optional)"
               icon="flag-outline"
-              value={target}
-              onChangeText={(t) => setTarget(t.replace(/[^0-9.]/g, ''))}
+              value={groupAmountInput(target)}
+              onChangeText={(t) => setTarget(sanitizeAmountInput(t))}
               placeholder="0.00"
               keyboardType="decimal-pad"
               containerClassName="mt-5"
@@ -169,7 +176,13 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
 
           <ErrorText message={error} className="mt-4" />
 
-          <Button title="Create Wallet" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
+          <Button
+            title={type === 'project' ? 'Continue to project setup' : 'Create Wallet'}
+            icon={type === 'project' ? 'arrow-forward' : 'checkmark'}
+            onPress={submit}
+            loading={create.isPending}
+            className="mt-6"
+          />
       </KeyboardAwareScrollView>
     </Screen>
   );

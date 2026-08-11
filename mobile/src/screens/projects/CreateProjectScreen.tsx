@@ -9,6 +9,7 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { colors } from '../../theme';
 import { useCreateProject } from '../../api/hooks';
+import { groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import type { RootScreenProps } from '../../navigation/types';
 
 function InfoRow({ icon, title, body }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string }) {
@@ -25,8 +26,8 @@ function InfoRow({ icon, title, body }: { icon: React.ComponentProps<typeof Ioni
   );
 }
 
-export function CreateProjectScreen({ navigation }: RootScreenProps<'CreateProject'>) {
-  const [title, setTitle] = useState('');
+export function CreateProjectScreen({ navigation, route }: RootScreenProps<'CreateProject'>) {
+  const [title, setTitle] = useState(route.params?.name ?? '');
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +97,8 @@ export function CreateProjectScreen({ navigation }: RootScreenProps<'CreateProje
           <Input
             label="Budget (optional)"
             icon="cash-outline"
-            value={budget}
-            onChangeText={(t) => setBudget(t.replace(/[^0-9.]/g, ''))}
+            value={groupAmountInput(budget)}
+            onChangeText={(t) => setBudget(sanitizeAmountInput(t))}
             placeholder="0.00"
             keyboardType="decimal-pad"
             containerClassName="mt-5"

@@ -33,7 +33,7 @@ import {
   useSubmitMilestone,
 } from '../../api/hooks';
 import { statusIconColor } from '../../lib/governance';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, dayLabel } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import {
   canRemoveMilestone,
@@ -96,11 +96,19 @@ function MilestoneCard({
         <Text className="text-[15px] font-extrabold text-ink">{formatMoney(milestone.amount)}</Text>
       </View>
 
-      <View className="mt-2 flex-row items-center">
+      <View className="mt-2 flex-row items-center" style={{ gap: 8 }}>
         <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
           <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
+        {milestone.due_date ? (
+          <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+            <Ionicons name="calendar-outline" size={11} color={colors.muted} style={{ marginRight: 4 }} />
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
+              Due {dayLabel(milestone.due_date)}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {milestone.description ? (
@@ -457,7 +465,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             <Text className="text-lg font-bold text-ink">
               Milestones{milestones.length > 0 ? ` · ${milestones.length}` : ''}
             </Text>
-            {isOwner && project.status === 'active' ? (
+            {(isOwner || isVendor) && project.status === 'active' ? (
               <Pressable
                 onPress={() => {
                   selection();

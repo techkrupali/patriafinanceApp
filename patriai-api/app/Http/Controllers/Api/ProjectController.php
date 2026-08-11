@@ -120,14 +120,16 @@ class ProjectController extends ApiController
     public function addMilestone(Request $request, Project $project): JsonResponse
     {
         $user = $request->user();
-        if ($guard = $this->ownerGuard($project, $user)) {
-            return $guard;
+        // Owner or the assigned vendor may add milestones.
+        if (!$project->isAccessibleBy($user)) {
+            return $this->fail('Project not found', 404);
         }
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:500'],
             'amount' => ['required', 'numeric', 'min:1'],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         $milestone = ProjectService::make()->addMilestone(
@@ -136,6 +138,7 @@ class ProjectController extends ApiController
             $data['title'],
             $data['description'] ?? null,
             $this->toKobo($data['amount']),
+            $data['due_date'] ?? null,
         );
 
         return $this->ok('Milestone added', [

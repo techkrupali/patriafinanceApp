@@ -689,6 +689,8 @@ export interface Milestone {
   description: string | null;
   /** Naira decimal string reserved for this milestone. */
   amount: string;
+  /** Optional deadline, ISO date (YYYY-MM-DD). */
+  due_date: string | null;
   status: MilestoneStatus;
   /** Vendor-supplied proof of work, once submitted. */
   proof: string | null;
@@ -775,6 +777,8 @@ export interface AddMilestonePayload {
   description?: string;
   /** Naira decimal string — must be ≤ the project's available escrow. */
   amount: string;
+  /** Optional deadline, YYYY-MM-DD. */
+  due_date?: string;
 }
 
 export interface SubmitMilestonePayload {

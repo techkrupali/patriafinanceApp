@@ -18,6 +18,7 @@ class Milestone extends Model
         'title',
         'description',
         'amount',
+        'due_date',
         'status',
         'proof',
         'submitted_at',
@@ -30,6 +31,7 @@ class Milestone extends Model
     {
         return [
             'amount' => 'integer',
+            'due_date' => 'date',
             'submitted_at' => 'datetime',
             'released_at' => 'datetime',
             'meta' => 'array',

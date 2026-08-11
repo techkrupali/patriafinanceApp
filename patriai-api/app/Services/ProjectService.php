@@ -40,6 +40,13 @@ class ProjectService
         }
     }
 
+    private function assertOwnerOrVendor(Project $project, User $user): void
+    {
+        if ($project->owner_id !== $user->id && $project->vendor_id !== $user->id) {
+            throw ValidationException::withMessages(['project' => 'Only the project owner or vendor can perform this action']);
+        }
+    }
+
     /** Resolve a user by email (lowercased) or phone. */
     private function resolveUser(string $identifier): ?User
     {
@@ -143,9 +150,10 @@ class ProjectService
      * Add a milestone reserving part of the escrow wallet. Owner only.
      * Amount must be > 0 and within the wallet's unallocated balance.
      */
-    public function addMilestone(Project $project, User $owner, string $title, ?string $description, int $amountKobo): Milestone
+    public function addMilestone(Project $project, User $actor, string $title, ?string $description, int $amountKobo, ?string $dueDate = null): Milestone
     {
-        $this->assertOwner($project, $owner);
+        // Both the project owner and the assigned vendor may add milestones.
+        $this->assertOwnerOrVendor($project, $actor);
 
         if ($project->status !== 'active') {
             throw ValidationException::withMessages(['project' => 'Project is not active']);
@@ -165,12 +173,15 @@ class ProjectService
             'title' => $title,
             'description' => $description,
             'amount' => $amountKobo,
+            'due_date' => $dueDate,
             'status' => 'funded',
         ]);
 
-        if ($project->vendor_id && ($vendor = $project->vendor)) {
+        // Notify the counterparty (owner adds -> tell vendor; vendor adds -> tell owner).
+        $notify = $actor->id === $project->owner_id ? $project->vendor : $project->owner;
+        if ($notify) {
             $this->notifications->push(
-                $vendor,
+                $notify,
                 'milestone_added',
                 'New milestone added',
                 "A new milestone \"{$title}\" (₦" . $this->naira($amountKobo) . ") was added to \"{$project->title}\".",

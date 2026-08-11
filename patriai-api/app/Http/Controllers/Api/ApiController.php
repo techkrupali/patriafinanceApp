@@ -397,6 +397,7 @@ abstract class ApiController extends Controller
             'title' => $milestone->title,
             'description' => $milestone->description,
             'amount' => number_format($milestone->amount / 100, 2, '.', ''),
+            'due_date' => $milestone->due_date?->toDateString(),
             'status' => $milestone->status,
             'proof' => $milestone->proof,
             'submitted_at' => $milestone->submitted_at?->toIso8601String(),

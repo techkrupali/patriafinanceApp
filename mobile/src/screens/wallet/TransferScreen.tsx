@@ -17,7 +17,7 @@ import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
 import { colors, gradients, shadow } from '../../theme';
 import { useTransfer, useVerifyAccount, useWallets } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import { isPendingApproval } from '../../api/types';
 import type {
@@ -204,8 +204,8 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 <View className="mt-3 flex-row items-end justify-center">
                   <Text className="mb-1.5 mr-1 text-3xl font-extrabold text-brand-glow">₦</Text>
                   <TextInput
-                    value={amount}
-                    onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+                    value={groupAmountInput(amount)}
+                    onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
                     placeholder="0.00"
                     placeholderTextColor="rgba(188,215,255,0.45)"
                     keyboardType="decimal-pad"
