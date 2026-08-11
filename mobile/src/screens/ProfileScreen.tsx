@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, Switch, Text, View } from 'react-native';
 import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -152,15 +152,22 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
 
         {/* Identity card */}
         <Card className="mt-5 items-center py-7">
-          <LinearGradient
-            colors={gradients.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ height: 72, width: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text className="text-2xl font-bold text-white">{initials(user?.full_name)}</Text>
-          </LinearGradient>
+          {user?.avatar_url ? (
+            <Image source={{ uri: user.avatar_url }} style={{ height: 72, width: 72, borderRadius: 36 }} />
+          ) : (
+            <LinearGradient
+              colors={gradients.avatar}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ height: 72, width: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text className="text-2xl font-bold text-white">{initials(user?.full_name)}</Text>
+            </LinearGradient>
+          )}
           <Text className="mt-3 text-lg font-extrabold text-ink">{user?.full_name}</Text>
+          {user?.username ? (
+            <Text className="mt-0.5 text-sm font-semibold text-gold-deep">@{user.username}</Text>
+          ) : null}
           <Text className="mt-1 text-sm text-muted">{user?.email}</Text>
           <Text className="mt-0.5 text-sm text-muted">{user?.phone}</Text>
 

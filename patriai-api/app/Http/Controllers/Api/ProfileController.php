@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -44,6 +45,31 @@ class ProfileController extends ApiController
         $user->save();
 
         return $this->ok('Profile updated', ['user' => $this->serializeUser($user)]);
+    }
+
+    // POST /profile/avatar  — multipart upload of a profile picture
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // 5 MB
+        ]);
+
+        $user = $request->user();
+        $old = $user->avatar_url;
+
+        // Store on the public disk (storage/app/public/avatars, served at /storage).
+        $path = $request->file('avatar')->store('avatars', 'public');
+        // Build an absolute URL against the host the client actually reached, so
+        // the image loads from a device/emulator regardless of APP_URL.
+        $user->avatar_url = $request->getSchemeAndHttpHost() . '/storage/' . $path;
+        $user->save();
+
+        // Best-effort cleanup of the previously-stored avatar file.
+        if ($old && str_contains($old, '/storage/avatars/')) {
+            Storage::disk('public')->delete('avatars/' . basename(parse_url($old, PHP_URL_PATH)));
+        }
+
+        return $this->ok('Profile photo updated', ['user' => $this->serializeUser($user)]);
     }
 
     // POST /profile/change-password

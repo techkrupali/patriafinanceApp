@@ -49,6 +49,7 @@ Route::prefix('v1')->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout']);
 
         Route::put('profile', [ProfileController::class, 'update']);
+        Route::post('profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1');
         Route::post('profile/change-password', [ProfileController::class, 'changePassword']);
         Route::post('profile/change-pin', [ProfileController::class, 'changePin']);
         Route::post('profile/verify-pin', [ProfileController::class, 'verifyPin'])->middleware('throttle:10,1');

@@ -47,10 +47,14 @@ function firstValidationError(errors?: Record<string, string[]>): string | undef
 export async function api<T = void>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = await SecureStore.getItemAsync(STORAGE_KEYS.token);
 
+  // FormData (file uploads) must NOT be JSON-stringified, and RN sets its own
+  // multipart Content-Type (with boundary) when we leave the header unset.
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let res: Response;
@@ -58,7 +62,12 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
     res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body:
+        options.body === undefined
+          ? undefined
+          : isForm
+            ? (options.body as FormData)
+            : JSON.stringify(options.body),
     });
   } catch {
     throw new ApiError('Network error. Check your connection and try again.', 0);

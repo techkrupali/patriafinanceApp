@@ -380,6 +380,29 @@ export function useUpdateProfile() {
   });
 }
 
+/** Upload a profile picture (multipart) and refresh the stored user. */
+export function useUpdateAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (asset: { uri: string; fileName?: string | null; mimeType?: string | null }) => {
+      const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
+      const form = new FormData();
+      // React Native's FormData file part: { uri, name, type }.
+      form.append('avatar', {
+        uri: asset.uri,
+        name: asset.fileName || `avatar.${ext}`,
+        type: asset.mimeType || 'image/jpeg',
+      } as unknown as Blob);
+      return api<MeData>('/profile/avatar', { method: 'POST', body: form });
+    },
+    onSuccess: async (d) => {
+      void qc.invalidateQueries({ queryKey: keys.me });
+      const { token, setSession } = useAuth.getState();
+      if (token) await setSession(d.user, token);
+    },
+  });
+}
+
 export function useChangePassword() {
   return useMutation({
     mutationFn: (input: { current_password: string; new_password: string }) =>
