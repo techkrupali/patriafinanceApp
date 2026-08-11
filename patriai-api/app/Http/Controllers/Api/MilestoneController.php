@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Milestone;
+use App\Models\MilestoneEvidence;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ProjectService;
@@ -79,5 +80,34 @@ class MilestoneController extends ApiController
         $milestone = ProjectService::make()->rejectMilestone($milestone, $user, $data['note'] ?? null);
 
         return $this->ok('Milestone rejected', ['milestone' => $this->serializeMilestone($milestone)]);
+    }
+
+    // POST /milestones/{milestone}/evidence  (multipart: file)  — any project member
+    public function uploadEvidence(Request $request, Milestone $milestone): JsonResponse
+    {
+        $user = $request->user();
+        $project = $this->accessibleProject($milestone, $user);
+        if ($project instanceof JsonResponse) {
+            return $project;
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,mp4,mov,quicktime,m4v', 'max:51200'], // 50 MB
+        ]);
+
+        $file = $request->file('file');
+        $isVideo = str_starts_with((string) $file->getMimeType(), 'video');
+        $path = $file->store('evidence', 'public');
+
+        MilestoneEvidence::create([
+            'milestone_id' => $milestone->id,
+            'user_id' => $user->id,
+            'kind' => $isVideo ? 'video' : 'image',
+            'url' => $request->getSchemeAndHttpHost() . '/storage/' . $path,
+        ]);
+
+        return $this->ok('Evidence uploaded', [
+            'milestone' => $this->serializeMilestone($milestone->fresh()->load('evidence.user')),
+        ]);
     }
 }

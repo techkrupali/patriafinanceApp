@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   RefreshControl,
@@ -14,6 +15,7 @@ import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler'
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
@@ -31,6 +33,7 @@ import {
   useRemoveMilestone,
   useRemoveVendor,
   useSubmitMilestone,
+  useUploadMilestoneEvidence,
 } from '../../api/hooks';
 import { statusIconColor } from '../../lib/governance';
 import { formatMoney, dayLabel } from '../../lib/format';
@@ -66,7 +69,9 @@ function MilestoneCard({
   onReject,
   onRemove,
   onSubmit,
+  onAddEvidence,
   busy,
+  evidenceBusy,
 }: {
   milestone: Milestone;
   isOwner: boolean;
@@ -75,12 +80,16 @@ function MilestoneCard({
   onReject: (m: Milestone) => void;
   onRemove: (m: Milestone) => void;
   onSubmit: (m: Milestone) => void;
+  onAddEvidence: (m: Milestone) => void;
   busy: boolean;
+  evidenceBusy: boolean;
 }) {
   const status = milestoneStatusVisual(milestone.status);
   const showApprove = isOwner && canReviewMilestone(milestone.status);
   const showRemove = isOwner && canRemoveMilestone(milestone.status);
   const showSubmit = isVendor && canSubmitMilestone(milestone.status);
+  // Members can attach evidence until the milestone is paid out.
+  const canAddEvidence = (isOwner || isVendor) && milestone.status !== 'released';
 
   return (
     <Card className="py-4">
@@ -119,6 +128,40 @@ function MilestoneCard({
         <View className="mt-3 rounded-2xl bg-lav-faint p-3.5">
           <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Vendor’s proof of work</Text>
           <Text className="mt-1 text-[13px] leading-5 text-ink">{milestone.proof}</Text>
+        </View>
+      ) : null}
+
+      {/* Evidence (images / videos) */}
+      {milestone.evidence.length > 0 || canAddEvidence ? (
+        <View className="mt-3">
+          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Evidence</Text>
+          <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
+            {milestone.evidence.map((ev) => (
+              <View key={ev.id} className="h-16 w-16 overflow-hidden rounded-xl bg-lav-faint">
+                {ev.kind === 'image' ? (
+                  <Image source={{ uri: ev.url }} style={{ width: 64, height: 64 }} />
+                ) : (
+                  <View className="h-16 w-16 items-center justify-center">
+                    <Ionicons name="videocam" size={22} color={colors.navy} />
+                  </View>
+                )}
+              </View>
+            ))}
+            {canAddEvidence ? (
+              <Pressable
+                onPress={() => onAddEvidence(milestone)}
+                disabled={evidenceBusy}
+                className="h-16 w-16 items-center justify-center rounded-xl border border-dashed active:opacity-70"
+                style={{ borderColor: colors.border }}
+              >
+                {evidenceBusy ? (
+                  <ActivityIndicator color={colors.navy} />
+                ) : (
+                  <Ionicons name="add" size={22} color={colors.muted} />
+                )}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -191,6 +234,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
   const submit = useSubmitMilestone(projectId);
   const removeVendor = useRemoveVendor(projectId);
   const cancelProject = useCancelProject(projectId);
+  const uploadEvidence = useUploadMilestoneEvidence(projectId);
 
   const [copied, setCopied] = useState(false);
   const [sheet, setSheet] = useState<{ kind: SheetKind; milestone: Milestone } | null>(null);
@@ -198,6 +242,30 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
   const [sheetError, setSheetError] = useState<string | null>(null);
   // Only the milestone being approved/removed should show a spinner, not all cards.
   const [busyMilestoneId, setBusyMilestoneId] = useState<number | null>(null);
+  const [evidenceMilestoneId, setEvidenceMilestoneId] = useState<number | null>(null);
+
+  const addEvidence = async (milestone: Milestone) => {
+    selection();
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo/video access to attach evidence.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setEvidenceMilestoneId(milestone.id);
+    uploadEvidence.mutate(
+      { milestoneId: milestone.id, asset: { uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType } },
+      {
+        onError: (e) => Alert.alert('Upload failed', e.message),
+        onSettled: () => setEvidenceMilestoneId(null),
+      },
+    );
+  };
 
   const data = query.data;
   const project = data?.project;
@@ -502,7 +570,9 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                   onReject={(ms) => openSheet('reject', ms)}
                   onRemove={confirmRemove}
                   onSubmit={(ms) => openSheet('submit', ms)}
+                  onAddEvidence={addEvidence}
                   busy={busyMilestoneId === m.id}
+                  evidenceBusy={evidenceMilestoneId === m.id}
                 />
               ))
             )}

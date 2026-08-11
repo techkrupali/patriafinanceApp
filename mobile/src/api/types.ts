@@ -694,6 +694,8 @@ export interface Milestone {
   status: MilestoneStatus;
   /** Vendor-supplied proof of work, once submitted. */
   proof: string | null;
+  /** Uploaded image/video evidence attached to this milestone. */
+  evidence: MilestoneEvidence[];
   submitted_at: string | null;
   released_at: string | null;
   released_transaction_reference: string | null;
@@ -770,6 +772,14 @@ export interface CreateProjectPayload {
 export interface AssignVendorPayload {
   /** Vendor's email or phone. */
   identifier: string;
+}
+
+export interface MilestoneEvidence {
+  id: number;
+  kind: 'image' | 'video';
+  url: string;
+  uploaded_by: string | null;
+  created_at: string | null;
 }
 
 export interface AddMilestonePayload {

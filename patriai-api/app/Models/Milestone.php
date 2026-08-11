@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A single milestone within a Project. Its amount is a reservation against the
@@ -41,5 +42,10 @@ class Milestone extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(MilestoneEvidence::class)->latest();
     }
 }

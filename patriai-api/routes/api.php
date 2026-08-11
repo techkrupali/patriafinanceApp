@@ -173,6 +173,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1');
         Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1');
         Route::delete('milestones/{milestone}', [ProjectController::class, 'removeMilestone'])->middleware('throttle:30,1');
+        Route::post('milestones/{milestone}/evidence', [MilestoneController::class, 'uploadEvidence'])->middleware('throttle:20,1');
         Route::post('milestones/{milestone}/submit', [MilestoneController::class, 'submit'])->middleware('throttle:20,1');
         Route::post('milestones/{milestone}/approve', [MilestoneController::class, 'approve'])->middleware('throttle:20,1');
         Route::post('milestones/{milestone}/reject', [MilestoneController::class, 'reject'])->middleware('throttle:30,1');

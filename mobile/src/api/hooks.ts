@@ -829,6 +829,31 @@ export function useSubmitMilestone(projectId: number) {
   });
 }
 
+/** Upload image/video evidence (multipart) to a milestone. */
+export function useUploadMilestoneEvidence(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      milestoneId: number;
+      asset: { uri: string; fileName?: string | null; mimeType?: string | null };
+    }) => {
+      const { asset } = input;
+      const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
+      const form = new FormData();
+      form.append('file', {
+        uri: asset.uri,
+        name: asset.fileName || `evidence.${ext}`,
+        type: asset.mimeType || 'image/jpeg',
+      } as unknown as Blob);
+      return api<MilestoneData>(`/milestones/${input.milestoneId}/evidence`, {
+        method: 'POST',
+        body: form,
+      });
+    },
+    onSuccess: () => invalidateProject(qc, projectId),
+  });
+}
+
 export function useApproveMilestone(projectId: number) {
   const qc = useQueryClient();
   return useMutation({

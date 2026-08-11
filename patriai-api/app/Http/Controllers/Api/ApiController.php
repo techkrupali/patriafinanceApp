@@ -403,6 +403,13 @@ abstract class ApiController extends Controller
             'submitted_at' => $milestone->submitted_at?->toIso8601String(),
             'released_at' => $milestone->released_at?->toIso8601String(),
             'released_transaction_reference' => $milestone->released_transaction_reference,
+            'evidence' => $milestone->evidence->map(fn ($e) => [
+                'id' => $e->id,
+                'kind' => $e->kind,
+                'url' => $e->url,
+                'uploaded_by' => $e->user?->fullName(),
+                'created_at' => $e->created_at?->toIso8601String(),
+            ])->values(),
             'created_at' => $milestone->created_at?->toIso8601String(),
         ];
     }
