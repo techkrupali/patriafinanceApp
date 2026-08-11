@@ -57,8 +57,15 @@ class MilestoneController extends ApiController
 
         $result = ProjectService::make()->approveMilestone($milestone, $user);
 
+        if (($result['status'] ?? null) === 'pending_approval') {
+            return $this->ok('Approval requested — the milestone pays out once approvers sign off', [
+                'milestone' => $this->serializeMilestone($result['milestone']->load('evidence.user')),
+                'approval_request_id' => $result['approval_request_id'],
+            ]);
+        }
+
         return $this->ok('Milestone approved and released', [
-            'milestone' => $this->serializeMilestone($result['milestone']),
+            'milestone' => $this->serializeMilestone($result['milestone']->load('evidence.user')),
             'reference' => $result['reference'],
         ]);
     }

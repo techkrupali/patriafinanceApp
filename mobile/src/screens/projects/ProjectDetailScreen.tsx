@@ -480,6 +480,64 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             />
           ) : null}
 
+          {/* Team & approvals (owner) — reuses the wallet member + governance screens */}
+          {isOwner ? (
+            <View className="mt-4 overflow-hidden rounded-2xl bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('InviteMember', { walletId: project.wallet_id });
+                }}
+                className="flex-row items-center p-4 active:opacity-70"
+              >
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                  <Ionicons name="person-add-outline" size={19} color={colors.navy} />
+                </View>
+                <View className="flex-1 pr-2">
+                  <Text className="text-[15px] font-semibold text-ink">Add team member</Text>
+                  <Text className="mt-0.5 text-[13px] text-muted">Invite by @username — approver, contributor or viewer</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+              </Pressable>
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('AssignAccess', { walletId: project.wallet_id });
+                }}
+                className="flex-row items-center p-4 active:opacity-70"
+              >
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                  <Ionicons name="people-outline" size={19} color={colors.navy} />
+                </View>
+                <View className="flex-1 pr-2">
+                  <Text className="text-[15px] font-semibold text-ink">Members & roles</Text>
+                  <Text className="mt-0.5 text-[13px] text-muted">Manage who can spend and approve</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+              </Pressable>
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <Pressable
+                onPress={() => {
+                  selection();
+                  navigation.navigate('WalletSettings', { walletId: project.wallet_id });
+                }}
+                className="flex-row items-center p-4 active:opacity-70"
+              >
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                  <Ionicons name="shield-checkmark-outline" size={19} color={colors.navy} />
+                </View>
+                <View className="flex-1 pr-2">
+                  <Text className="text-[15px] font-semibold text-ink">Approval settings</Text>
+                  <Text className="mt-0.5 text-[13px] text-muted">
+                    Require approval, set a threshold & number of approvers
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Vendor */}
           <Text className="mt-8 text-lg font-bold text-ink">Vendor</Text>
           {vendorContact ? (

@@ -37,6 +37,7 @@ class ApprovalService
             'transfer_wallet' => 'wallet transfer',
             'transfer_user' => 'transfer',
             'transfer_bank' => 'bank transfer',
+            'milestone_release' => 'milestone payout',
             default => $action,
         };
     }
@@ -148,6 +149,16 @@ class ApprovalService
 
             if ($decision === 'reject') {
                 $locked->update(['status' => 'rejected']);
+
+                // A rejected milestone payout returns the milestone to 'submitted'
+                // so the owner can address the concern and re-approve.
+                if ($locked->action === 'milestone_release') {
+                    $mid = $locked->payload['milestone_id'] ?? null;
+                    if ($mid) {
+                        \App\Models\Milestone::whereKey($mid)->where('status', 'approved')->update(['status' => 'submitted']);
+                    }
+                }
+
                 $initiator = $locked->initiator;
                 if ($initiator) {
                     $this->notifications->push(
@@ -260,6 +271,16 @@ class ApprovalService
                         $payload['description'] ?? $request->description ?? "Transfer to {$recipient->fullName()}",
                     );
                     $reference = $result['reference'];
+                    break;
+
+                case 'milestone_release':
+                    $milestone = \App\Models\Milestone::find($payload['milestone_id'] ?? 0);
+                    if (!$milestone) {
+                        throw ValidationException::withMessages(['milestone' => 'Milestone no longer exists.']);
+                    }
+                    // Delegate to ProjectService (row-locked, idempotent payout).
+                    $released = ProjectService::make()->releaseMilestone($milestone, $initiator);
+                    $reference = $released['reference'];
                     break;
 
                 default:

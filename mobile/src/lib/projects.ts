@@ -27,7 +27,7 @@ export function projectStatusVisual(status: ProjectStatus | string): StatusVisua
 const MILESTONE_STATUS_VISUALS: Record<MilestoneStatus, StatusVisual> = {
   funded: { label: 'Funded', bg: 'bg-lav-faint', text: 'text-muted', icon: 'lock-closed-outline' },
   submitted: { label: 'Submitted', bg: 'bg-lav-soft', text: 'text-navy', icon: 'cloud-upload-outline' },
-  approved: { label: 'Approved', bg: 'bg-success-soft', text: 'text-brand', icon: 'checkmark-circle' },
+  approved: { label: 'Awaiting approvers', bg: 'bg-lav-soft', text: 'text-navy', icon: 'hourglass-outline' },
   released: { label: 'Released', bg: 'bg-success-soft', text: 'text-brand', icon: 'checkmark-done-circle' },
   rejected: { label: 'Rejected', bg: 'bg-danger-soft', text: 'text-danger', icon: 'close-circle' },
 };

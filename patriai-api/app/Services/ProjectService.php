@@ -233,6 +233,13 @@ class ProjectService
      *
      * @return array{milestone: Milestone, reference: string}
      */
+    /**
+     * Owner approves a submitted milestone. If the escrow wallet's governance
+     * requires approval for this amount, this routes the payout through the
+     * multi-approver ApprovalService (milestone moves to 'approved' = awaiting
+     * approvers, escrow stays reserved) instead of releasing immediately.
+     * Otherwise it releases straight away.
+     */
     public function approveMilestone(Milestone $milestone, User $owner): array
     {
         $project = $milestone->project;
@@ -245,34 +252,77 @@ class ProjectService
         if ($milestone->status !== 'submitted') {
             throw ValidationException::withMessages(['milestone' => 'Only a submitted milestone can be approved']);
         }
-        if (!$project->vendor_id || !($vendor = $project->vendor)) {
+        if (!$project->vendor_id || !$project->vendor) {
             throw ValidationException::withMessages(['milestone' => 'No vendor is assigned to receive this payout']);
         }
-
-        $vendorWallet = $vendor->mainWallet();
-        if (!$vendorWallet) {
+        if (!$project->vendor->mainWallet()) {
             throw ValidationException::withMessages(['milestone' => 'Vendor has no active wallet to receive payment']);
         }
 
         $projectWallet = $project->wallet;
 
-        return DB::transaction(function () use ($milestone, $project, $owner, $vendor, $vendorWallet, $projectWallet) {
-            // Re-validate the milestone under a row lock so two concurrent approvals
-            // cannot both pay out. The second request finds status != 'submitted' and
-            // aborts, rolling back before any transfer or status write happens.
+        // Governance: when the escrow wallet requires approval for this amount,
+        // create a multi-approver request and hold the milestone as 'approved'
+        // (escrow stays reserved) until enough approvers sign off.
+        if ($projectWallet->approvalRequiredFor($milestone->amount)) {
+            $request = ApprovalService::make()->create(
+                $projectWallet,
+                $owner,
+                'milestone_release',
+                $milestone->amount,
+                0,
+                "Milestone payout: {$milestone->title}",
+                ['milestone_id' => $milestone->id],
+            );
+
+            $milestone->update([
+                'status' => 'approved',
+                'meta' => array_merge($milestone->meta ?? [], ['approval_request_id' => $request->id]),
+            ]);
+
+            return [
+                'status' => 'pending_approval',
+                'milestone' => $milestone->refresh(),
+                'approval_request_id' => $request->id,
+            ];
+        }
+
+        $result = $this->releaseMilestone($milestone, $owner);
+
+        return ['status' => 'released', 'milestone' => $result['milestone'], 'reference' => $result['reference']];
+    }
+
+    /**
+     * Pay a milestone out of escrow to the vendor's main wallet and mark it
+     * released. Called directly (no-governance path) and by ApprovalService once
+     * a milestone_release request reaches its approval count. Row-locked and
+     * idempotent: releases only a 'submitted' or 'approved' (pending) milestone.
+     */
+    public function releaseMilestone(Milestone $milestone, User $actor): array
+    {
+        $project = $milestone->project;
+        $vendor = $project?->vendor;
+        $vendorWallet = $vendor?->mainWallet();
+        $projectWallet = $project?->wallet;
+        if (!$project || !$vendor || !$vendorWallet || !$projectWallet) {
+            throw ValidationException::withMessages(['milestone' => 'Cannot release: vendor or wallet is missing.']);
+        }
+
+        return DB::transaction(function () use ($milestone, $project, $actor, $vendor, $vendorWallet, $projectWallet) {
+            // Row lock so two concurrent releases cannot both pay out. The second
+            // finds a non-releasable status and aborts before any transfer.
             $fresh = Milestone::whereKey($milestone->id)->lockForUpdate()->first();
-            if (!$fresh || $fresh->status !== 'submitted') {
+            if (!$fresh || !in_array($fresh->status, ['submitted', 'approved'], true)) {
                 throw ValidationException::withMessages(['milestone' => 'This milestone has already been processed']);
             }
 
-            // Overdraft-guarded, row-locked escrow payout. Throws ValidationException if
-            // the escrow wallet was drained below the milestone amount — which rolls back
-            // this transaction so the milestone stays 'submitted'.
+            // Overdraft-guarded, row-locked escrow payout. Throws (and rolls back
+            // this transaction) if the escrow was drained below the amount.
             $result = $this->wallets->transferBetweenWallets(
                 $projectWallet,
                 $vendorWallet,
                 $fresh->amount,
-                $owner,
+                $actor,
                 "Milestone payout: {$fresh->title}",
             );
 
@@ -282,8 +332,8 @@ class ProjectService
                 'released_transaction_reference' => $result['reference'],
             ]);
 
-            // Auto-complete the project once every milestone has been released. Only from
-            // an 'active' state — never overwrite a terminal status such as 'cancelled'.
+            // Auto-complete the project once every milestone is released — only from
+            // 'active', never overwriting a terminal status like 'cancelled'.
             if ($project->status === 'active'
                 && $project->milestones()->count() > 0
                 && !$project->milestones()->where('status', '!=', 'released')->exists()) {
@@ -304,10 +354,10 @@ class ProjectService
             );
 
             $this->notifications->push(
-                $owner,
+                $project->owner,
                 'milestone_released',
-                'Milestone approved and paid',
-                "You approved \"{$fresh->title}\" and released ₦" . $this->naira($fresh->amount) . " to {$vendor->fullName()}.",
+                'Milestone paid',
+                "\"{$fresh->title}\" — ₦" . $this->naira($fresh->amount) . " released to {$vendor->fullName()}.",
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
