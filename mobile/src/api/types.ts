@@ -432,6 +432,124 @@ export interface TransferPayload {
   pin: string;
   description?: string;
   destination: TransferDestination;
+  /** Optional idempotency key — reused from the AI create_transfer hand-off. */
+  idempotency_key?: string;
+}
+
+/**
+ * Structured UI action the AI assistant can attach to a reply. `secure_transfer`
+ * carries everything the frontend needs to submit a transfer to POST /transfers
+ * EXCEPT the PIN, which the user enters into the secure PinSheet in-chat.
+ */
+export interface SecureTransferAction {
+  type: 'secure_transfer';
+  summary: {
+    source_wallet: { id: number; name: string };
+    /** Unified destination: a wallet (name) or a verified bank account. */
+    destination: {
+      kind: 'wallet' | 'bank';
+      name: string; // wallet name OR verified account holder name
+      bank_name?: string | null; // bank transfers only
+      account_masked?: string | null; // bank transfers only, e.g. "******7890"
+    };
+    amount: string;
+    fee: string; // "0.00" for wallet transfers
+    currency: string;
+    description: string | null;
+    may_require_approval: boolean;
+  };
+  authorization: {
+    action: 'open_secure_transfer';
+    requires_pin: boolean;
+    pin_set: boolean;
+    transfer: {
+      from_wallet_id: number;
+      destination: TransferDestination;
+      amount: string;
+      description: string | null;
+      idempotency_key: string;
+    };
+  };
+}
+
+/** A single transaction row shown in the assistant's structured list. */
+export interface AssistantTransactionRow {
+  id: number;
+  reference: string;
+  date: string | null;
+  type: string;
+  direction: 'credit' | 'debit';
+  amount: string;
+  currency: string;
+  status: string;
+  description: string | null;
+  wallet: string | null;
+  recipient: string | null;
+}
+
+/** Structured transaction list the app renders natively inside the chat. */
+export interface TransactionListAction {
+  type: 'transaction_list';
+  title: string;
+  summary: {
+    total_transactions: number;
+    count: number;
+    total_amount: string | null;
+  };
+  transactions: AssistantTransactionRow[];
+  page: number;
+  per_page: number | null;
+  has_more: boolean;
+}
+
+/** Grouped/aggregated transactions for one target (wallet, bank account, recipient). */
+export interface TransactionGroupAction {
+  type: 'transaction_group';
+  title: string;
+  target:
+    | { type: 'wallet'; wallet_id: number; wallet_name: string | null }
+    | { type: 'bank_account'; display: string }
+    | { type: 'recipient'; display: string }
+    | null;
+  summary: {
+    transaction_count: number;
+    total_amount: string;
+    total_incoming: string;
+    total_outgoing: string;
+    average_amount: string;
+    currency: string;
+    first_transaction: string | null;
+    latest_transaction: string | null;
+  };
+  transactions: AssistantTransactionRow[];
+  page: number;
+  per_page: number | null;
+  has_more: boolean;
+}
+
+/** A backend-team support escalation that was submitted. */
+export interface SupportRequestAction {
+  type: 'support_request';
+  request_id: number | null;
+  category: string | null;
+  subject: string | null;
+  status: string | null;
+}
+
+export type AssistantAction =
+  | SecureTransferAction
+  | TransactionListAction
+  | TransactionGroupAction
+  | SupportRequestAction;
+
+export interface AssistantChatPayload {
+  message: string;
+  history?: { role: 'user' | 'assistant'; content: string }[];
+}
+
+export interface AssistantChatData {
+  reply: string;
+  action: AssistantAction | null;
 }
 
 export interface WithdrawPayload {

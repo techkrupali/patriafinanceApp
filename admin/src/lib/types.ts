@@ -483,3 +483,41 @@ export interface ReverseTransactionResult {
 export interface BroadcastResult {
   sent: number;
 }
+
+// ---- Support requests (backend-team escalations from the AI assistant) ----
+
+export type SupportRequestStatus = "pending" | "in_review" | "resolved" | "closed";
+export type SupportRequestPriority = "low" | "medium" | "high";
+export type SupportRequestCategory =
+  | "transfer"
+  | "withdrawal"
+  | "wallet"
+  | "account"
+  | "transaction"
+  | "other";
+
+export interface SupportRequestListItem {
+  id: number;
+  user: { id: number; name: string; email: string } | null;
+  subject: string;
+  category: SupportRequestCategory;
+  description_preview: string;
+  reference: string | null;
+  priority: SupportRequestPriority;
+  status: SupportRequestStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportRequestDetail extends SupportRequestListItem {
+  description: string;
+}
+
+export interface SupportRequestsData {
+  support_requests: SupportRequestListItem[];
+  pagination: Pagination;
+}
+
+export interface SupportRequestDetailData {
+  support_request: SupportRequestDetail;
+}

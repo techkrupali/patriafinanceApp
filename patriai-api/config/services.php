@@ -35,6 +35,16 @@ return [
         ],
     ],
 
+    // AI Assistant — Anthropic Claude (Messages API). The key lives ONLY in
+    // .env (gitignored), never in source. Model is env-overridable.
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
+        'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'),
+        'version' => env('ANTHROPIC_VERSION', '2023-06-01'),
+        'max_tokens' => (int) env('ANTHROPIC_MAX_TOKENS', 1024),
+    ],
+
     // Client-provided banking rails (Matrix Banking API).
     // Local dev points at the sandbox in backend/; production points at the live host.
     'matrix' => [

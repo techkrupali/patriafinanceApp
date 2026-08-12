@@ -29,6 +29,8 @@ export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   /** Full transaction feed (was a tab; now reached from Home → View all). */
   Activity: undefined;
+  /** AI Assistant chat (hosts the in-chat secure transfer PIN flow). */
+  Assistant: undefined;
   WalletDetail: { walletId: number };
   Fund: { walletId: number };
   Withdraw: { walletId: number };

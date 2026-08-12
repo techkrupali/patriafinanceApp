@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\ApprovalController;
+use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\BankController;
@@ -58,6 +59,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');
 
         Route::get('dashboard', [DashboardController::class, 'index']);
+
+        // AI Assistant (read-only tools; runs the LLM tool loop server-side as
+        // the authenticated user). Rate-limited — each call may fan out to the LLM.
+        Route::post('assistant/chat', [AssistantController::class, 'chat'])->middleware('throttle:20,1');
 
         // Find registered users to invite by @username (in-app invitations)
         Route::get('users/search', [UserController::class, 'search'])->middleware('throttle:60,1');
@@ -198,6 +203,11 @@ Route::prefix('v1')->group(function () {
 
             // Broadcast in-app notifications
             Route::post('notifications/broadcast', [AdminController::class, 'broadcastNotification']);
+
+            // Support requests (backend-team escalations from the AI assistant)
+            Route::get('support-requests', [AdminController::class, 'supportRequests']);
+            Route::get('support-requests/{supportRequest}', [AdminController::class, 'supportRequestShow']);
+            Route::patch('support-requests/{supportRequest}/status', [AdminController::class, 'updateSupportRequestStatus'])->middleware('throttle:60,1');
 
             // Loans
             Route::get('loans', [AdminController::class, 'loans']);

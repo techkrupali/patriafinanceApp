@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import {
+  IconAlert,
   IconApprovals,
   IconDashboard,
   IconKyc,
@@ -39,6 +40,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/users", label: "Users", icon: IconUsers },
       { href: "/kyc", label: "KYC", icon: IconKyc },
+      { href: "/support", label: "Support", icon: IconAlert },
     ],
   },
   {

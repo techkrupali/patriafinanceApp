@@ -379,21 +379,34 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           Good {daypart}, {firstName}
         </Text>
       </View>
-      <Pressable
-        onPress={() => {
-          selection();
-          navigation.navigate('Notifications');
-        }}
-        hitSlop={8}
-        className="active:opacity-70"
-      >
-        <Ionicons name="notifications-outline" size={24} color={colors.muted} />
-        {unread > 0 ? (
-          <View className="absolute -right-2 -top-1.5 h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1">
-            <Text className="text-[9px] font-bold text-white">{unread > 99 ? '99+' : unread}</Text>
-          </View>
-        ) : null}
-      </Pressable>
+      <View className="flex-row items-center" style={{ gap: 18 }}>
+        <Pressable
+          onPress={() => {
+            selection();
+            navigation.navigate('Assistant');
+          }}
+          hitSlop={8}
+          accessibilityLabel="Open AI assistant"
+          className="active:opacity-70"
+        >
+          <Ionicons name="sparkles-outline" size={23} color={colors.muted} />
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            selection();
+            navigation.navigate('Notifications');
+          }}
+          hitSlop={8}
+          className="active:opacity-70"
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.muted} />
+          {unread > 0 ? (
+            <View className="absolute -right-2 -top-1.5 h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1">
+              <Text className="text-[9px] font-bold text-white">{unread > 99 ? '99+' : unread}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
     </View>
   );
 

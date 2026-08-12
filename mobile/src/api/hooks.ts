@@ -14,6 +14,8 @@ import type {
   ApprovalDetailData,
   ApprovalsData,
   AssignVendorPayload,
+  AssistantChatData,
+  AssistantChatPayload,
   AuthSessionData,
   BanksData,
   CreateInvitationPayload,
@@ -350,6 +352,17 @@ export function useTransfer() {
       void qc.invalidateQueries({ queryKey: keys.dashboard });
       void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
+  });
+}
+
+/**
+ * AI Assistant chat. Sends the new message plus prior turns (text only — never a
+ * PIN or secret) and returns the reply and an optional structured UI action.
+ */
+export function useAssistantChat() {
+  return useMutation({
+    mutationFn: (input: AssistantChatPayload) =>
+      api<AssistantChatData>('/assistant/chat', { method: 'POST', body: input }),
   });
 }
 

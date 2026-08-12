@@ -22,6 +22,7 @@ import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { WalletsScreen } from '../screens/WalletsScreen';
 import { ActivityScreen } from '../screens/ActivityScreen';
+import { AssistantScreen } from '../screens/AssistantScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 
 // Stack screens
@@ -210,6 +211,7 @@ export function RootNavigator() {
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="Tabs" component={MainTabs} />
       <RootStack.Screen name="Activity" component={ActivityScreen} />
+      <RootStack.Screen name="Assistant" component={AssistantScreen} />
       <RootStack.Screen name="WalletDetail" component={WalletDetailScreen} />
       <RootStack.Screen name="Fund" component={FundScreen} />
       <RootStack.Screen name="Withdraw" component={WithdrawScreen} />

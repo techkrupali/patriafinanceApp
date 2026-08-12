@@ -9,12 +9,14 @@ use App\Models\KycSubmission;
 use App\Models\Loan;
 use App\Models\Milestone;
 use App\Models\Project;
+use App\Models\SupportRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\KycService;
 use App\Services\LoanService;
 use App\Services\NotificationService;
+use App\Services\SupportService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -824,5 +826,137 @@ class AdminController extends ApiController
         });
 
         return $this->ok('Broadcast sent', ['sent' => $sent]);
+    }
+
+    // ---- Support requests (backend-team escalations) ------------------------
+
+    /** Allowed forward-only status transitions. */
+    private const SUPPORT_TRANSITIONS = [
+        'pending' => ['in_review'],
+        'in_review' => ['resolved'],
+        'resolved' => ['closed'],
+        'closed' => [],
+    ];
+
+    // GET /admin/support-requests?status=&category=&priority=&search=&per_page=
+    public function supportRequests(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+        // Portable case-insensitive LIKE: ilike on Postgres, like elsewhere (sqlite/mysql).
+        $like = SupportRequest::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        $items = SupportRequest::with('user')
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->when($request->query('category'), fn ($q, $c) => $q->where('category', $c))
+            ->when($request->query('priority'), fn ($q, $p) => $q->where('priority', $p))
+            ->when($search !== '', function ($q) use ($search, $like) {
+                $q->where(function ($w) use ($search, $like) {
+                    $w->where('subject', $like, "%{$search}%")
+                        ->orWhere('reference', $like, "%{$search}%")
+                        ->orWhereHas('user', fn ($u) => $u
+                            ->where('first_name', $like, "%{$search}%")
+                            ->orWhere('last_name', $like, "%{$search}%"));
+                    if (ctype_digit($search)) {
+                        $w->orWhere('id', (int) $search);
+                    }
+                });
+            })
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return $this->ok('Support requests fetched', [
+            'support_requests' => collect($items->items())->map(fn ($r) => $this->serializeSupportRequest($r)),
+            'pagination' => [
+                'page' => $items->currentPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+                'last_page' => $items->lastPage(),
+            ],
+        ]);
+    }
+
+    // GET /admin/support-requests/{supportRequest}
+    public function supportRequestShow(SupportRequest $supportRequest): JsonResponse
+    {
+        return $this->ok('Support request fetched', [
+            'support_request' => $this->serializeSupportRequest($supportRequest->load('user'), withDescription: true),
+        ]);
+    }
+
+    // PATCH /admin/support-requests/{supportRequest}/status  { status }
+    public function updateSupportRequestStatus(Request $request, SupportRequest $supportRequest): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', Rule::in(SupportRequest::STATUSES)],
+        ]);
+
+        $from = $supportRequest->status;
+        $to = $data['status'];
+
+        // Forward-only transitions; a no-op to the same status is a 422 too.
+        if (!in_array($to, self::SUPPORT_TRANSITIONS[$from] ?? [], true)) {
+            return $this->fail("Cannot change a {$from} request to {$to}.", 422);
+        }
+
+        $supportRequest->update(['status' => $to]);
+
+        // Notify the requesting user — no sensitive details.
+        if ($supportRequest->user) {
+            NotificationService::make()->push(
+                $supportRequest->user,
+                'support_request_updated',
+                'Support request #'.$supportRequest->id.' updated',
+                $this->supportStatusMessage($supportRequest->id, $to),
+                ['support_request_id' => $supportRequest->id, 'status' => $to],
+            );
+        }
+
+        return $this->ok('Support request updated', [
+            'support_request' => $this->serializeSupportRequest($supportRequest->refresh()->load('user'), withDescription: true),
+        ]);
+    }
+
+    private function supportStatusMessage(int $id, string $status): string
+    {
+        return match ($status) {
+            'in_review' => "Your support request #{$id} is now being reviewed.",
+            'resolved' => "Your support request #{$id} has been resolved.",
+            'closed' => "Your support request #{$id} has been closed.",
+            default => "Your support request #{$id} status is now {$status}.",
+        };
+    }
+
+    /**
+     * Serialize a support request for admins. Subject/description/reference are
+     * re-run through SupportService's redaction so no secret or full bank account
+     * number is ever exposed, regardless of how the row was created.
+     */
+    private function serializeSupportRequest(SupportRequest $r, bool $withDescription = false): array
+    {
+        $support = SupportService::make();
+        $description = $support->redact((string) $r->description);
+
+        $data = [
+            'id' => $r->id,
+            'user' => $r->user ? [
+                'id' => $r->user->id,
+                'name' => $r->user->fullName(),
+                'email' => $r->user->email,
+            ] : null,
+            'subject' => $support->redact((string) $r->subject),
+            'category' => $r->category,
+            'description_preview' => mb_strlen($description) > 120 ? mb_substr($description, 0, 120).'…' : $description,
+            'reference' => $r->reference !== null ? $support->redact((string) $r->reference) : null,
+            'priority' => $r->priority,
+            'status' => $r->status,
+            'created_at' => $r->created_at?->toIso8601String(),
+            'updated_at' => $r->updated_at?->toIso8601String(),
+        ];
+
+        if ($withDescription) {
+            $data['description'] = $description;
+        }
+
+        return $data;
     }
 }
