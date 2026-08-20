@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Text, TextInput, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
@@ -102,6 +102,7 @@ export function PhoneInput({
         onRequestClose={() => setPickerOpen(false)}
         transparent={false}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 bg-page" style={{ paddingTop: insets.top }}>
           <View className="flex-row items-center px-5 py-3" style={{ minHeight: 56 }}>
             <Text className="flex-1 text-lg font-bold text-ink">Select country</Text>
@@ -170,6 +171,7 @@ export function PhoneInput({
             }}
           />
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </View>
   );
