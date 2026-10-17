@@ -34,7 +34,7 @@ use Illuminate\Validation\ValidationException;
 class CreateWalletTool implements AssistantTool
 {
     /** Types safe to create fully through POST /wallets (subset of CREATABLE_TYPES). */
-    private const ALLOWED_TYPES = ['savings', 'goal', 'emergency', 'giving', 'spending', 'shared', 'joint'];
+    private const ALLOWED_TYPES = ['savings', 'goal', 'giving', 'spending', 'shared', 'joint'];
 
     public function name(): string
     {
@@ -48,14 +48,16 @@ class CreateWalletTool implements AssistantTool
             .'Shopping"). '
             ."\n\nHOW TO USE:\n"
             .'1. Collect the wallet name and type conversationally (do not ask for '
-            .'everything at once). Supported types: savings, goal, emergency, '
-            .'giving, spending, shared, joint.\n'
+            .'everything at once). Supported types: savings, goal, giving, '
+            .'spending, shared, joint.\n'
             .'2. Show the user a short summary and ask them to confirm.\n'
             .'3. ONLY after they clearly say yes, call this tool with confirmed=true. '
             .'If they cancel, do not call it.\n\n'
             .'New wallets start at ₦0 (currency NGN) and are funded separately — '
             .'there is no initial balance. This tool CANNOT create a Project wallet '
             .'(use the Projects feature — it sets up escrow, milestones and a vendor), '
+            .'an Emergency wallet (its access rules, emergency PIN and recipients are '
+            .'set in the guided flow: Wallets → Create wallet → Emergency), '
             .'a Child wallet, or a Main wallet (created automatically). If the user '
             .'asks for one of those, tell them so. For shared/joint wallets, mention '
             .'that members are invited separately after the wallet is created. '
@@ -178,8 +180,9 @@ class CreateWalletTool implements AssistantTool
         return match ($type) {
             'project' => 'Project wallets are created through the Projects feature, which also sets up escrow, milestones and a vendor — I can\'t create one here.',
             'child' => 'Child wallets are set up through the family/child flow, so I can\'t create one here.',
+            'emergency' => 'Emergency wallets need access rules — who can unlock it, an emergency PIN and who receives the money — so they\'re set up in the guided flow: Wallets → Create wallet → Emergency.',
             'main' => 'Your Main wallet is created automatically and there can only be one.',
-            default => 'That wallet type isn\'t supported. You can create a savings, goal, emergency, giving, spending, shared or joint wallet.',
+            default => 'That wallet type isn\'t supported. You can create a savings, goal, giving, spending, shared or joint wallet.',
         };
     }
 }

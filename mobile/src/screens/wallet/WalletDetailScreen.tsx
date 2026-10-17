@@ -99,7 +99,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
     (role != null && ['owner', 'co_owner'].includes(role));
   // Members who can't spend directly but hold the "Request" permission can raise
   // a spend request that the owner approves.
-  const canRequest = detail.data?.my_can_request ?? false;
+  // A locked emergency wallet blocks spend requests too — its rules decide when
+  // money may leave, via the Emergency Access screen.
+  const emergency = detail.data?.emergency ?? null;
+  const emergencyLocked = emergency?.locked ?? false;
+  const canRequest = (detail.data?.my_can_request ?? false) && !emergencyLocked;
   // Members with ids (for management) — only fetched when the user can manage.
   const richMembers = useWalletMembers(walletId, canManage);
 
@@ -118,7 +122,9 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const available = Math.max(balanceNum - held, 0);
 
   // Derived one-line insight (Stitch "AI insight" strip) from real wallet state.
-  const insight = !canSpend
+  const insight = emergencyLocked
+    ? 'This emergency wallet is locked. Anyone can add money, but it only leaves when one of its access rules is met.'
+    : !canSpend
     ? canRequest
       ? 'You can request spends on this wallet — the owner reviews and approves them before money moves.'
       : 'You have view-only access to this wallet — withdrawals and transfers are disabled for your role.'
@@ -344,6 +350,36 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             <Ionicons name="sparkles" size={18} color={colors.goldDeep} style={{ marginRight: 12, marginTop: 1 }} />
             <Text className="flex-1 text-sm font-medium leading-5 text-muted">{insight}</Text>
           </View>
+
+          {/* Emergency protection — lock state + way into the unlock rules */}
+          {emergency ? (
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.navigate('EmergencyCenter', { walletId });
+              }}
+              className={`mt-4 flex-row items-center rounded p-4 active:opacity-90 ${emergencyLocked ? 'bg-navy' : 'bg-success-soft'}`}
+            >
+              <View className={`mr-3 h-9 w-9 items-center justify-center rounded ${emergencyLocked ? 'bg-white/15' : 'bg-white'}`}>
+                <Ionicons
+                  name={emergencyLocked ? 'lock-closed' : 'lock-open'}
+                  size={18}
+                  color={emergencyLocked ? colors.brandMint : colors.brand}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className={`text-[14px] font-bold ${emergencyLocked ? 'text-white' : 'text-brand-deep'}`}>
+                  {emergencyLocked ? 'Locked by Emergency Rules' : 'Unlocked'}
+                </Text>
+                <Text className={`text-xs ${emergencyLocked ? 'text-white/60' : 'text-brand-deep'}`}>
+                  {emergency.my_emergency_role === 'recipient'
+                    ? 'See your share and how this wallet unlocks'
+                    : 'Unlock rules, recipients and requests'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={emergencyLocked ? colors.brandMint : colors.brand} />
+            </Pressable>
+          ) : null}
 
           {/* Pending approvals banner */}
           {pending > 0 ? (

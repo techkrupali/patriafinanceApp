@@ -1,0 +1,163 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\EmergencyUnlockRequest;
+use App\Models\Wallet;
+use App\Services\EmergencyService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * Emergency Wallet access (owner, named approver and recipients). Rules are set
+ * at creation (POST /wallets); these endpoints unlock, re-lock and pay out.
+ */
+class EmergencyController extends ApiController
+{
+    /** Members of the wallet, plus anyone named in its rules, may see them. */
+    private function visible(Request $request, Wallet $wallet): bool
+    {
+        $user = $request->user();
+        if ($wallet->type !== 'emergency' || !$wallet->emergencySetting) {
+            return false;
+        }
+
+        return $wallet->isAccessibleBy($user) || EmergencyService::make()->isAuthorized($wallet, $user);
+    }
+
+    private function detail(Request $request, Wallet $wallet, string $message): JsonResponse
+    {
+        $wallet->unsetRelation('emergencySetting');
+
+        return $this->ok($message, ['emergency' => EmergencyService::make()->detail($wallet->refresh(), $request->user())]);
+    }
+
+    // GET /wallets/{wallet}/emergency
+    public function show(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+
+        return $this->detail($request, $wallet, 'Emergency rules fetched');
+    }
+
+    // POST /wallets/{wallet}/emergency/unlock  { pin } — owner, emergency PIN
+    public function unlock(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate(['pin' => ['required', 'digits:4']]);
+        EmergencyService::make()->manualUnlock($wallet, $request->user(), $data['pin']);
+
+        return $this->detail($request, $wallet, 'Emergency wallet unlocked');
+    }
+
+    // POST /wallets/{wallet}/emergency/override  { pin } — owner, transaction PIN
+    public function override(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate(['pin' => ['required', 'digits:4']]);
+        EmergencyService::make()->highBalanceOverride($wallet, $request->user(), $data['pin']);
+
+        return $this->detail($request, $wallet, 'Emergency wallet unlocked by override');
+    }
+
+    // POST /wallets/{wallet}/emergency/lock — owner
+    public function lock(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        EmergencyService::make()->lock($wallet, $request->user());
+
+        return $this->detail($request, $wallet, 'Emergency wallet locked');
+    }
+
+    /**
+     * POST /wallets/{wallet}/emergency/requests
+     * { method: dual_approval, note? } or multipart
+     * { method: document, document_type, file, note? }
+     */
+    public function requestUnlock(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate([
+            'method' => ['required', 'in:' . implode(',', EmergencyUnlockRequest::METHODS)],
+            'document_type' => ['required_if:method,document', 'nullable', 'in:' . implode(',', EmergencyUnlockRequest::DOCUMENT_TYPES)],
+            'file' => ['required_if:method,document', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'], // 10 MB
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $service = EmergencyService::make();
+        $created = $data['method'] === 'document'
+            ? $service->submitDocument($wallet, $request->user(), $data['document_type'], $request->file('file'), $data['note'] ?? null)
+            : $service->requestDualApproval($wallet, $request->user(), $data['note'] ?? null);
+
+        return $this->ok(
+            $data['method'] === 'document' ? 'Document submitted for verification' : 'Unlock request sent',
+            ['request' => $service->serializeRequest($created->load(['requester', 'approver']), $request->user())],
+            201,
+        );
+    }
+
+    // POST /emergency-requests/{emergencyUnlockRequest}/approve — second authorised person
+    public function approve(Request $request, EmergencyUnlockRequest $emergencyUnlockRequest): JsonResponse
+    {
+        if (!$this->visible($request, $emergencyUnlockRequest->wallet)) {
+            return $this->fail('Request not found', 404);
+        }
+        EmergencyService::make()->approveRequest($emergencyUnlockRequest, $request->user());
+
+        return $this->detail($request, $emergencyUnlockRequest->wallet, 'Unlock approved');
+    }
+
+    // POST /emergency-requests/{emergencyUnlockRequest}/reject  { note? }
+    public function reject(Request $request, EmergencyUnlockRequest $emergencyUnlockRequest): JsonResponse
+    {
+        if (!$this->visible($request, $emergencyUnlockRequest->wallet)) {
+            return $this->fail('Request not found', 404);
+        }
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        EmergencyService::make()->rejectRequest($emergencyUnlockRequest, $request->user(), $data['note'] ?? null);
+
+        return $this->detail($request, $emergencyUnlockRequest->wallet, 'Unlock request declined');
+    }
+
+    // POST /emergency-requests/{emergencyUnlockRequest}/cancel — requester
+    public function cancel(Request $request, EmergencyUnlockRequest $emergencyUnlockRequest): JsonResponse
+    {
+        if (!$this->visible($request, $emergencyUnlockRequest->wallet)) {
+            return $this->fail('Request not found', 404);
+        }
+        EmergencyService::make()->cancelRequest($emergencyUnlockRequest, $request->user());
+
+        return $this->detail($request, $emergencyUnlockRequest->wallet, 'Unlock request cancelled');
+    }
+
+    // POST /wallets/{wallet}/emergency/withdraw  { amount, pin } — recipient → own main wallet
+    public function withdraw(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'pin' => ['required', 'digits:4'],
+        ]);
+
+        $service = EmergencyService::make();
+        $result = $service->beneficiaryWithdraw($wallet, $request->user(), $this->toKobo((string) $data['amount']), $data['pin']);
+        $wallet->unsetRelation('emergencySetting');
+
+        return $this->ok('Money sent to your main wallet', [
+            'emergency' => $service->detail($wallet->refresh(), $request->user()),
+            'reference' => $result['reference'],
+        ]);
+    }
+}

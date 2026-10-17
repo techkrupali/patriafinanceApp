@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 
 class Wallet extends Model
@@ -68,6 +69,35 @@ class Wallet extends Model
     public function approvalRequests(): HasMany
     {
         return $this->hasMany(ApprovalRequest::class);
+    }
+
+    public function emergencySetting(): HasOne
+    {
+        return $this->hasOne(EmergencySetting::class);
+    }
+
+    public function emergencyBeneficiaries(): HasMany
+    {
+        return $this->hasMany(EmergencyBeneficiary::class)->orderBy('position');
+    }
+
+    public function emergencyUnlockRequests(): HasMany
+    {
+        return $this->hasMany(EmergencyUnlockRequest::class);
+    }
+
+    /**
+     * Is this an emergency wallet whose access rules still hold it locked? Only
+     * wallets set up through the guided emergency journey carry rules; a bare
+     * emergency wallet (no settings row) behaves like any other wallet.
+     */
+    public function isEmergencyLocked(): bool
+    {
+        if ($this->type !== 'emergency') {
+            return false;
+        }
+
+        return (bool) $this->emergencySetting?->isLocked();
     }
 
     /** Can the given user VIEW this wallet (owner or any active member)? */
@@ -138,9 +168,13 @@ class Wallet extends Model
     /** Can the given user MOVE MONEY out (withdraw/transfer)? Excludes viewers. */
     public function canSpend(User $user): bool
     {
-        // Money can never leave a frozen wallet or one that is currently outside its
-        // scheduled-access window — this blocks EVERYONE, including the owner/co_owner.
+        // Money can never leave a frozen wallet, a locked emergency wallet, or one that
+        // is currently outside its scheduled-access window — this blocks EVERYONE,
+        // including the owner/co_owner.
         if ($this->isFrozen()) {
+            return false;
+        }
+        if ($this->isEmergencyLocked()) {
             return false;
         }
         if (!$this->withinAccessWindow()) {

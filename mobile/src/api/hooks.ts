@@ -26,6 +26,10 @@ import type {
   AutomationsData,
   DisputeCreatedData,
   DisputesPageData,
+  EmergencyDetailData,
+  EmergencyDocumentType,
+  EmergencyRequest,
+  EmergencyWithdrawData,
   FamilyMemberDetailData,
   PendingApprovalData,
   RaiseDisputePayload,
@@ -130,6 +134,8 @@ export const keys = {
   automations: ['automations'] as const,
   automation: (id: number) => ['automations', id] as const,
   walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
+  // ---- Emergency wallets ----
+  emergency: (id: number) => ['wallets', id, 'emergency'] as const,
   // ---- Disputes ----
   disputes: ['disputes'] as const,
   // ---- Referrals ----
@@ -1220,4 +1226,91 @@ export function useSpendRequest(walletId: number) {
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
     },
   });
+}
+
+// ---------- Emergency wallets (unlock / re-lock / recipient payouts) ----------
+
+export function useEmergency(walletId: number) {
+  return useQuery({
+    queryKey: keys.emergency(walletId),
+    queryFn: () => api<EmergencyDetailData>(`/wallets/${walletId}/emergency`),
+    select: (d) => d.emergency,
+  });
+}
+
+/** Every emergency action changes the lock and/or balances — refresh it all. */
+function invalidateEmergency(qc: ReturnType<typeof useQueryClient>, walletId: number) {
+  void qc.invalidateQueries({ queryKey: keys.emergency(walletId) });
+  void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+  void qc.invalidateQueries({ queryKey: keys.wallets });
+  void qc.invalidateQueries({ queryKey: keys.dashboard });
+  void qc.invalidateQueries({ queryKey: keys.notifications });
+  void qc.invalidateQueries({ queryKey: keys.unreadCount });
+}
+
+export function useEmergencyActions(walletId: number) {
+  const qc = useQueryClient();
+  const onSuccess = () => invalidateEmergency(qc, walletId);
+  const post = (path: string, body?: unknown) =>
+    api<EmergencyDetailData>(path, { method: 'POST', body });
+
+  return {
+    /** Owner + the emergency PIN set during setup. */
+    unlock: useMutation({
+      mutationFn: (pin: string) => post(`/wallets/${walletId}/emergency/unlock`, { pin }),
+      onSuccess,
+    }),
+    /** Owner + transaction PIN while the balance is above the override threshold. */
+    override: useMutation({
+      mutationFn: (pin: string) => post(`/wallets/${walletId}/emergency/override`, { pin }),
+      onSuccess,
+    }),
+    lock: useMutation({
+      mutationFn: () => post(`/wallets/${walletId}/emergency/lock`),
+      onSuccess,
+    }),
+    requestDual: useMutation({
+      mutationFn: (note?: string) =>
+        api<{ request: EmergencyRequest }>(`/wallets/${walletId}/emergency/requests`, {
+          method: 'POST',
+          body: { method: 'dual_approval', note },
+        }),
+      onSuccess,
+    }),
+    submitDocument: useMutation({
+      mutationFn: (input: {
+        documentType: EmergencyDocumentType;
+        note?: string;
+        asset: { uri: string; fileName?: string | null; mimeType?: string | null };
+      }) => {
+        const { asset } = input;
+        const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
+        const form = new FormData();
+        form.append('method', 'document');
+        form.append('document_type', input.documentType);
+        if (input.note) form.append('note', input.note);
+        form.append('file', {
+          uri: asset.uri,
+          name: asset.fileName || `document.${ext}`,
+          type: asset.mimeType || 'image/jpeg',
+        } as unknown as Blob);
+        return api<{ request: EmergencyRequest }>(`/wallets/${walletId}/emergency/requests`, {
+          method: 'POST',
+          body: form,
+        });
+      },
+      onSuccess,
+    }),
+    decide: useMutation({
+      mutationFn: (input: { requestId: number; action: 'approve' | 'reject' | 'cancel'; note?: string }) =>
+        post(`/emergency-requests/${input.requestId}/${input.action}`, input.note ? { note: input.note } : undefined),
+      onSuccess,
+    }),
+    /** Recipient → their own main wallet, within limit and access delay. */
+    withdraw: useMutation({
+      mutationFn: (input: { amount: string; pin: string }) =>
+        api<EmergencyWithdrawData>(`/wallets/${walletId}/emergency/withdraw`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+  };
 }

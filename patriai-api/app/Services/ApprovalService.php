@@ -225,6 +225,12 @@ class ApprovalService
             $reference = null;
             $recipient = null;
 
+            // A request approved after its emergency wallet was locked again must not
+            // slip money out past the lock.
+            if ($wallet->isEmergencyLocked()) {
+                throw ValidationException::withMessages(['wallet' => 'This emergency wallet is locked.']);
+            }
+
             switch ($request->action) {
                 case 'withdrawal':
                 case 'transfer_bank':

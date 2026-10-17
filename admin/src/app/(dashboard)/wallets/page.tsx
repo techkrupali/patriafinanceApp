@@ -22,6 +22,7 @@ const TYPES = [
   { value: "main", label: "Main" },
   { value: "shared", label: "Shared" },
   { value: "project", label: "Project" },
+  { value: "emergency", label: "Emergency" },
 ] as const;
 
 export default function WalletsPage() {

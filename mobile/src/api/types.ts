@@ -52,6 +52,10 @@ export interface Wallet {
   status: string;
   /** Scheduled-access window (Wallet Lock feature); null when unrestricted. */
   access_schedule?: AccessSchedule | null;
+  /** Emergency wallet still held by its access rules (false for every other type). */
+  emergency_locked?: boolean;
+  /** Type-specific purpose chosen during guided setup, e.g. "medical". */
+  purpose?: string | null;
   created_at: string | null;
   owner?: WalletOwner;
   my_role?: string;
@@ -288,6 +292,8 @@ export interface WalletDetailData {
   held_amount: string;
   pending_approvals: number;
   recent_transactions: Transaction[];
+  /** Emergency wallets only (null otherwise). */
+  emergency?: EmergencySummary | null;
 }
 
 export interface WalletUpdatedData {
@@ -570,6 +576,142 @@ export interface CreateWalletPayload {
   description?: string;
   /** Naira decimal string */
   target_amount?: string;
+  /** Type-specific purpose key from the guided setup (see lib/walletGuides). */
+  purpose?: string;
+  /** Naira decimal string moved in from `source_wallet_id` at creation. */
+  initial_deposit?: string;
+  source_wallet_id?: number;
+  /** Naira decimal string moved in every month from `source_wallet_id`. */
+  monthly_amount?: string;
+  /** 1–28; defaults to today's day of month. */
+  monthly_day?: number;
+  /** Emergency wallets only — the Step 2 access rules. */
+  emergency?: EmergencyRulesPayload;
+}
+
+// ============================================================================
+// Emergency Wallet (client video "Emergency Wallet instructions", 2026-10-17)
+// ============================================================================
+
+export type EmergencyPurpose = 'medical' | 'funeral' | 'travel' | 'legal' | 'other';
+export type EmergencyRecipientRole = 'beneficiary' | 'fallback';
+export type EmergencyAccessType = 'immediate' | 'delay_7d';
+export type EmergencyUnlockVia = 'manual' | 'dual_approval' | 'document' | 'high_balance' | 'national_crisis';
+export type EmergencyDocumentType = 'death_certificate' | 'legal_notice';
+
+export interface EmergencyRecipientPayload {
+  user_id: number;
+  relationship?: string;
+  role: EmergencyRecipientRole;
+  /** Naira decimal string; omit for "up to the full balance". */
+  withdrawal_limit?: string;
+  access_type: EmergencyAccessType;
+}
+
+export interface EmergencyRulesPayload {
+  purpose: EmergencyPurpose;
+  dual_approval: boolean;
+  approver_user_id?: number;
+  unlock_on_document: boolean;
+  manual_unlock: boolean;
+  unlock_reason?: string;
+  emergency_pin?: string;
+  override_national_crisis: boolean;
+  override_high_balance: boolean;
+  beneficiary_note?: string;
+  beneficiaries: EmergencyRecipientPayload[];
+}
+
+export interface EmergencyPerson {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+export interface EmergencySummary {
+  purpose: EmergencyPurpose;
+  locked: boolean;
+  unlocked_at: string | null;
+  unlocked_via: EmergencyUnlockVia | null;
+  my_emergency_role: 'owner' | 'approver' | 'recipient' | null;
+}
+
+export interface EmergencyRecipient {
+  id: number;
+  user: EmergencyPerson | null;
+  position: number;
+  relationship: string | null;
+  role: EmergencyRecipientRole;
+  /** Naira decimal string, or null when capped only by the balance. */
+  withdrawal_limit: string | null;
+  access_type: EmergencyAccessType;
+  withdrawn: string;
+}
+
+export interface EmergencyRequest {
+  id: number;
+  wallet_id: number;
+  method: 'dual_approval' | 'document';
+  document_type: EmergencyDocumentType | null;
+  has_document: boolean;
+  note: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  requested_by: EmergencyPerson | null;
+  approved_by: EmergencyPerson | null;
+  review_note: string | null;
+  created_at: string | null;
+  decided_at: string | null;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_cancel: boolean;
+}
+
+export interface EmergencyDetail {
+  purpose: EmergencyPurpose;
+  locked: boolean;
+  unlocked_at: string | null;
+  unlocked_via: EmergencyUnlockVia | null;
+  balance: string;
+  rules: {
+    dual_approval: boolean;
+    approver: EmergencyPerson | null;
+    unlock_on_document: boolean;
+    manual_unlock: boolean;
+    unlock_reason: string | null;
+    override_national_crisis: boolean;
+    override_high_balance: boolean;
+    override_balance_threshold: string;
+  };
+  beneficiaries: EmergencyRecipient[];
+  /** Owner always; recipients only once the wallet is unlocked. */
+  beneficiary_note: string | null;
+  requests: EmergencyRequest[];
+  me: {
+    role: 'owner' | 'approver' | 'recipient' | null;
+    can_manual_unlock: boolean;
+    can_override: boolean;
+    can_lock: boolean;
+    can_request_dual: boolean;
+    can_submit_document: boolean;
+    beneficiary: {
+      withdrawal_limit: string | null;
+      withdrawn: string;
+      remaining: string | null;
+      access_type: EmergencyAccessType;
+      access_available_at: string | null;
+      can_withdraw_now: boolean;
+    } | null;
+  };
+}
+
+export interface EmergencyDetailData {
+  emergency: EmergencyDetail;
+}
+
+export interface EmergencyWithdrawData {
+  emergency: EmergencyDetail;
+  reference: string;
 }
 
 export interface UpdateWalletPayload {

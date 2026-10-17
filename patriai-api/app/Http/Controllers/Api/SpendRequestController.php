@@ -65,6 +65,9 @@ class SpendRequestController extends ApiController
         if ($wallet->isFrozen()) {
             return $this->fail('This wallet is frozen. Spending is blocked until it is unfrozen.', 422);
         }
+        if ($wallet->isEmergencyLocked()) {
+            return $this->fail('This emergency wallet is locked. Money can only leave once one of its unlock rules is met.', 422);
+        }
         if (!$wallet->withinAccessWindow()) {
             return $this->fail('This wallet is outside its scheduled access window. Spending is not allowed right now.', 422);
         }

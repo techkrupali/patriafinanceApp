@@ -7,6 +7,7 @@ import {
   IconAlert,
   IconApprovals,
   IconDashboard,
+  IconEmergency,
   IconKyc,
   IconLoans,
   IconProjects,
@@ -40,6 +41,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/users", label: "Users", icon: IconUsers },
       { href: "/kyc", label: "KYC", icon: IconKyc },
+      { href: "/emergency", label: "Emergency", icon: IconEmergency },
       { href: "/support", label: "Support", icon: IconAlert },
     ],
   },

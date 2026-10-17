@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminController;
+use App\Http\Controllers\Api\Admin\EmergencyAdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AuthController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\BankController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DisputeController;
+use App\Http\Controllers\Api\EmergencyController;
 use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\FamilyMemberController;
 use App\Http\Controllers\Api\InvitationController;
@@ -115,6 +117,17 @@ Route::prefix('v1')->group(function () {
 
         // Spend requests (a request-only member asks the owner/co-owners to approve a spend)
         Route::post('wallets/{wallet}/spend-requests', [SpendRequestController::class, 'store'])->middleware('throttle:20,1');
+
+        // Emergency Wallet access rules — unlock / re-lock / recipient payouts.
+        Route::get('wallets/{wallet}/emergency', [EmergencyController::class, 'show']);
+        Route::post('wallets/{wallet}/emergency/unlock', [EmergencyController::class, 'unlock'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/emergency/override', [EmergencyController::class, 'override'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/emergency/lock', [EmergencyController::class, 'lock'])->middleware('throttle:20,1');
+        Route::post('wallets/{wallet}/emergency/requests', [EmergencyController::class, 'requestUnlock'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/emergency/withdraw', [EmergencyController::class, 'withdraw'])->middleware('throttle:10,1');
+        Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyController::class, 'approve'])->middleware('throttle:20,1');
+        Route::post('emergency-requests/{emergencyUnlockRequest}/reject', [EmergencyController::class, 'reject'])->middleware('throttle:20,1');
+        Route::post('emergency-requests/{emergencyUnlockRequest}/cancel', [EmergencyController::class, 'cancel'])->middleware('throttle:20,1');
 
         // Wallet invitations
         Route::get('wallets/{wallet}/invitations', [InvitationController::class, 'walletIndex']);
@@ -227,6 +240,12 @@ Route::prefix('v1')->group(function () {
             Route::get('kyc/{submission}', [AdminController::class, 'kycShow']);
             Route::post('kyc/{submission}/approve', [AdminController::class, 'approveKyc']);
             Route::post('kyc/{submission}/reject', [AdminController::class, 'rejectKyc']);
+            Route::get('emergency-requests', [EmergencyAdminController::class, 'index']);
+            Route::get('emergency-requests/{emergencyUnlockRequest}', [EmergencyAdminController::class, 'show']);
+            Route::get('emergency-requests/{emergencyUnlockRequest}/document', [EmergencyAdminController::class, 'document']);
+            Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyAdminController::class, 'approve']);
+            Route::post('emergency-requests/{emergencyUnlockRequest}/reject', [EmergencyAdminController::class, 'reject']);
+            Route::post('wallets/{wallet}/emergency/crisis-unlock', [EmergencyAdminController::class, 'crisisUnlock']);
         });
     });
 });

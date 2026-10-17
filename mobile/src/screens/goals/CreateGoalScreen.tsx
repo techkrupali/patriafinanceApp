@@ -14,7 +14,7 @@ import { formatMoney, sanitizeAmountInput, groupAmountInput } from '../../lib/fo
 import { selection, notifySuccess } from '../../lib/haptics';
 import { walletVisual } from '../../lib/walletVisual';
 import type { Wallet } from '../../api/types';
-import type { RootScreenProps } from '../../navigation/types';
+import type { EmergencyStepOne, RootScreenProps } from '../../navigation/types';
 
 type GoalType = 'savings' | 'goal' | 'emergency' | 'giving';
 
@@ -24,6 +24,11 @@ const GOAL_TYPES: { value: GoalType; label: string }[] = [
   { value: 'emergency', label: 'Emergency' },
   { value: 'giving', label: 'Giving' },
 ];
+
+/** Seed the emergency journey with the name typed here (purpose still to choose). */
+function emergencyDraft(name: string): EmergencyStepOne {
+  return { name, purpose: 'medical', initialDeposit: '', sourceWalletId: null, monthlyAmount: '' };
+}
 
 export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) {
   const wallets = useWallets();
@@ -161,6 +166,11 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
                 key={t.value}
                 onPress={() => {
                   selection();
+                  // Emergency wallets need access rules — hand off to their own journey.
+                  if (t.value === 'emergency') {
+                    navigation.replace('CreateEmergencyWallet', name.trim() ? { draft: emergencyDraft(name.trim()) } : undefined);
+                    return;
+                  }
                   setGoalType(t.value);
                 }}
                 className={`flex-row items-center rounded px-4 py-3 active:opacity-80 ${

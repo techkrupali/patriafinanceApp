@@ -47,6 +47,7 @@ const LABELS: Record<string, string> = {
   main: "Main",
   shared: "Shared",
   project: "Project",
+  emergency: "Emergency",
   active: "Active",
   suspended: "Suspended",
   frozen: "Frozen",
@@ -132,4 +133,40 @@ const APPROVAL_ACTIONS: Record<string, string> = {
 
 export function approvalActionLabel(action: string): string {
   return APPROVAL_ACTIONS[action] ?? label(action);
+}
+
+// Emergency wallet vocabulary (purposes, unlock routes, documents, recipient
+// access) is kept separate from `label()` so generic words like "document"
+// and "manual" keep their plain meaning elsewhere.
+const EMERGENCY_LABELS: Record<string, string> = {
+  // Purposes
+  medical: "Medical",
+  funeral: "Funeral",
+  travel: "Travel",
+  legal: "Legal",
+  other: "Other",
+  // Unlock routes (mirrors EmergencyService::VIA_LABELS)
+  manual: "Owner's emergency PIN",
+  dual_approval: "Dual approval",
+  document: "Verified document",
+  high_balance: "High-balance override",
+  national_crisis: "National-crisis override",
+  // Uploaded documents
+  death_certificate: "Death certificate",
+  legal_notice: "Legal notice",
+  // Recipient roles + access
+  beneficiary: "Beneficiary",
+  fallback: "Fallback",
+  immediate: "Immediate",
+  delay_7d: "After 7 days",
+};
+
+export function emergencyLabel(value: string): string {
+  return EMERGENCY_LABELS[value] ?? label(value);
+}
+
+/** Document requests read as their document type, e.g. "Death certificate". */
+export function emergencyMethodLabel(method: string, documentType: string | null): string {
+  if (method === "document") return documentType ? emergencyLabel(documentType) : "Document";
+  return emergencyLabel(method);
 }

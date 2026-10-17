@@ -1,189 +1,80 @@
-import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import React from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
-import { Input } from '../../components/Input';
-import { Button } from '../../components/Button';
-import { ErrorText } from '../../components/ErrorText';
-import { colors, outline } from '../../theme';
-import { useCreateWallet } from '../../api/hooks';
+import { colors, outline, radius } from '../../theme';
 import { selection } from '../../lib/haptics';
-import { groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { walletVisual } from '../../lib/walletVisual';
-import type { CreatableWalletType } from '../../api/types';
+import { WALLET_GUIDES, type WalletGuide } from '../../lib/walletGuides';
 import type { RootScreenProps } from '../../navigation/types';
 
-/** Content colour on the green action fill. */
-const ON_GOLD = '#FFFFFF';
-/** Action green container fill (gold retired per client video). */
-const GOLD_CONTAINER = '#006D2F';
-
-interface TypeOption {
-  value: CreatableWalletType;
-  title: string;
-  description: string;
-}
-
-const TYPES: TypeOption[] = [
-  { value: 'shared', title: 'Shared', description: 'Pool money with people you invite. Everyone can see and use it together.' },
-  { value: 'savings', title: 'Savings', description: 'Set money aside and watch it grow toward a target you choose.' },
-  { value: 'goal', title: 'Goal', description: 'Save toward a specific goal amount — a trip, a gadget, a dream.' },
-  { value: 'project', title: 'Project', description: 'Escrow for a project: invite a vendor, fund milestones, and release payment only when work is approved.' },
-  { value: 'emergency', title: 'Emergency', description: 'A rainy-day buffer set aside for the unexpected.' },
-  { value: 'giving', title: 'Giving', description: 'Set aside money for donations, tithes and causes you care about.' },
-  { value: 'joint', title: 'Joint', description: 'Shared with a partner — both of you manage it together.' },
-  { value: 'child', title: 'Child', description: 'Manage money on behalf of a child, with you in control.' },
-  { value: 'spending', title: 'Spending', description: 'Everyday spending, kept separate from your main balance.' },
-];
-
-/** Types that save toward a number — show the optional target-amount field. */
-const TARGETED: CreatableWalletType[] = ['goal', 'savings'];
-
+/**
+ * Guided wallet creation, step one: pick the KIND of wallet. Client (2026-10-17):
+ * "Let's NOT assume users would know how to use the app" — every type explains
+ * what it is for, then opens its own setup journey with its own purposes.
+ */
 export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet'>) {
-  const [type, setType] = useState<CreatableWalletType>('shared');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [target, setTarget] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const create = useCreateWallet();
-
-  const selected = TYPES.find((t) => t.value === type)!;
-  const showTarget = TARGETED.includes(type);
-
-  const submit = () => {
-    setError(null);
-    if (!name.trim()) {
-      setError('Give your wallet a name.');
-      return;
+  const open = (guide: WalletGuide) => {
+    selection();
+    if (guide.type === 'emergency') {
+      navigation.navigate('CreateEmergencyWallet');
+    } else if (guide.type === 'project') {
+      // A Project is an escrow project (vendor + milestones) with its own flow.
+      navigation.navigate('CreateProject');
+    } else {
+      navigation.navigate('WalletSetup', { type: guide.type });
     }
-    // A Project is an escrow project (vendor + milestones), not a plain wallet —
-    // route into the real project flow, which creates its own escrow wallet.
-    if (type === 'project') {
-      navigation.navigate('CreateProject', { name: name.trim() });
-      return;
-    }
-    create.mutate(
-      {
-        type,
-        name: name.trim(),
-        description: description.trim() || undefined,
-        target_amount: showTarget && target.trim() ? target.trim() : undefined,
-      },
-      {
-        onSuccess: (data) => navigation.replace('WalletDetail', { walletId: data.wallet.id }),
-        onError: (e) => setError(e.message),
-      },
-    );
   };
 
   return (
     <Screen withBottomInset>
       <Header title="Create Wallet" />
-      <KeyboardAwareScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-        showsVerticalScrollIndicator={false}
-      >
-          {/* Editorial headline (design: create_first_treasury) */}
-          <Text className="text-[28px] font-extrabold leading-9 tracking-tight text-navy">
-            Create Your Wallet
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+        <Text className="text-[28px] font-extrabold leading-9 tracking-tight text-navy">Choose a Wallet Type</Text>
+        <Text className="mt-2 text-[15px] leading-6 text-muted">
+          Every wallet has its own purpose and rules. Pick the one that fits and we'll guide you through setting it
+          up, step by step.
+        </Text>
+
+        <View className="mt-6" style={{ gap: 12 }}>
+          {WALLET_GUIDES.map((guide) => {
+            const v = walletVisual(guide.type);
+            return (
+              <Pressable
+                key={guide.type}
+                onPress={() => open(guide)}
+                className="flex-row items-start rounded bg-white p-4 active:opacity-90"
+                style={outline.card}
+              >
+                <LinearGradient
+                  colors={v.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ width: 44, height: 44, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name={v.icon} size={20} color={v.onDark ? colors.white : colors.navy} />
+                </LinearGradient>
+                <View className="ml-3.5 flex-1 pr-2">
+                  <Text className="text-[16px] font-bold text-ink">{guide.title}</Text>
+                  <Text className="mt-0.5 text-[13px] leading-5 text-muted">{guide.tagline}</Text>
+                  <Text className="mt-2 text-[12px] font-semibold text-brand">Good for: {guide.goodFor.join(' · ')}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.faded} style={{ marginTop: 12 }} />
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View className="mt-5 flex-row items-start rounded bg-success-soft p-4">
+          <Ionicons name="bulb" size={17} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
+          <Text className="flex-1 text-[12px] leading-5 text-brand-deep">
+            Not sure? Start with a Savings wallet. You can create more wallets any time.
           </Text>
-          <Text className="mt-2 text-[15px] leading-6 text-muted">
-            This is where your money will be stored and managed.
-          </Text>
-
-          {/* Identity block — name + purpose chips */}
-          <View className="mt-6 rounded bg-white p-5" style={outline.card}>
-            <Input
-              label="Wallet Name"
-              icon="pricetag-outline"
-              value={name}
-              onChangeText={setName}
-              placeholder={type === 'shared' ? 'Family Upkeep' : `My ${selected.title} Wallet`}
-              maxLength={100}
-            />
-
-            <Text className="mb-3 mt-5 text-[13px] font-semibold text-muted">
-              Wallet Purpose
-            </Text>
-            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-              {TYPES.map((t) => {
-                const active = type === t.value;
-                const v = walletVisual(t.value);
-                return (
-                  <Pressable
-                    key={t.value}
-                    onPress={() => {
-                      selection();
-                      setType(t.value);
-                    }}
-                    className={`flex-row items-center rounded px-4 py-2.5 active:opacity-90 ${
-                      active ? '' : 'bg-lav'
-                    }`}
-                    style={active ? { backgroundColor: GOLD_CONTAINER } : undefined}
-                  >
-                    <Ionicons
-                      name={v.icon}
-                      size={15}
-                      color={active ? ON_GOLD : colors.muted}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      className={`text-[13px] ${active ? 'font-bold' : 'font-semibold text-muted'}`}
-                      style={active ? { color: ON_GOLD } : undefined}
-                    >
-                      {t.title}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Selected purpose explainer — green tip (design lightbulb box) */}
-          <View className="mt-4 flex-row items-start rounded bg-success-soft p-4">
-            <Ionicons name="bulb" size={17} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
-            <Text className="flex-1 text-[12px] leading-5 text-brand-deep">{selected.description}</Text>
-          </View>
-
-          <Input
-            label="Description (Optional)"
-            icon="document-text-outline"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="What's this wallet for?"
-            maxLength={200}
-            containerClassName="mt-6"
-          />
-
-          {showTarget ? (
-            <Input
-              label="Target Amount (Optional)"
-              icon="flag-outline"
-              value={groupAmountInput(target)}
-              onChangeText={(t) => setTarget(sanitizeAmountInput(t))}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              containerClassName="mt-5"
-            />
-          ) : null}
-          {showTarget ? (
-            <Text className="ml-1 mt-1.5 text-[11px] italic text-muted">You can fund this later</Text>
-          ) : null}
-
-          <ErrorText message={error} className="mt-4" />
-
-          <Button
-            title={type === 'project' ? 'Continue to project setup' : 'Create Wallet'}
-            icon={type === 'project' ? 'arrow-forward' : 'checkmark'}
-            onPress={submit}
-            loading={create.isPending}
-            className="mt-6"
-          />
-      </KeyboardAwareScrollView>
+        </View>
+      </ScrollView>
     </Screen>
   );
 }

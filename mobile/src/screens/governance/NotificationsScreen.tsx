@@ -44,6 +44,12 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('Invitations');
       return;
     }
+    // Emergency wallet events (named recipient/approver, unlock requests, unlocks)
+    // open that wallet's emergency access screen.
+    if (type.startsWith('emergency') && walletId) {
+      navigation.navigate('EmergencyCenter', { walletId });
+      return;
+    }
     // The user was removed from this wallet — it's no longer accessible, so never
     // deep-link into it. Send them to their wallets list instead.
     if (type === 'wallet_member_removed') {

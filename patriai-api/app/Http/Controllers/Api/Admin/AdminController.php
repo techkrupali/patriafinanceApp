@@ -309,6 +309,14 @@ class AdminController extends ApiController
             ],
             'recent_transactions' => $wallet->transactions()->latest()->limit(15)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
+            // Emergency wallets: lock state + whether the owner allowed a national-crisis override.
+            'emergency' => $wallet->type === 'emergency' && $wallet->emergencySetting ? [
+                'purpose' => $wallet->emergencySetting->purpose,
+                'locked' => $wallet->emergencySetting->isLocked(),
+                'unlocked_at' => $wallet->emergencySetting->unlocked_at?->toIso8601String(),
+                'unlocked_via' => $wallet->emergencySetting->unlocked_via,
+                'override_national_crisis' => $wallet->emergencySetting->override_national_crisis,
+            ] : null,
         ]);
     }
 

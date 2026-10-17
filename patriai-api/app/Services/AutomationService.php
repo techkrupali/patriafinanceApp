@@ -197,6 +197,10 @@ class AutomationService
             if ($from->user_id !== $owner->id || $to->user_id !== $owner->id) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallets not both owned by the rule owner', 'period' => $period];
             }
+            // A locked emergency wallet can still be FUNDED by a rule, never drained by one.
+            if ($from->isEmergencyLocked()) {
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Source emergency wallet is locked', 'period' => $period];
+            }
 
             $amount = (int) $locked->amount;
             $available = $from->availableToSpend();

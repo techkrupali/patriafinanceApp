@@ -28,7 +28,8 @@ class WalletService
 
     /**
      * Create a wallet and register its funding virtual account on the banking rails.
-     * $opts may carry 'description' (string) and 'target_amount' (kobo int).
+     * $opts may carry 'description' (string), 'target_amount' (kobo int) and
+     * 'meta' (array, e.g. the type-specific purpose chosen during setup).
      */
     public function createWallet(User $user, string $type, string $name, array $opts = []): Wallet
     {
@@ -58,6 +59,7 @@ class WalletService
             'name' => $name,
             'description' => $opts['description'] ?? null,
             'target_amount' => $opts['target_amount'] ?? null,
+            'meta' => $opts['meta'] ?? null,
             'balance' => 0,
         ]);
 

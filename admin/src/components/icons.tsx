@@ -106,6 +106,20 @@ export function IconKyc({ className }: { className?: string }) {
   );
 }
 
+/** Lifebuoy — emergency wallets. */
+export function IconEmergency({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="m6 6 3.5 3.5" />
+      <path d="m14.5 14.5 3.5 3.5" />
+      <path d="m18 6-3.5 3.5" />
+      <path d="m9.5 14.5-3.5 3.5" />
+    </Svg>
+  );
+}
+
 export function IconLogout({ className }: { className?: string }) {
   return (
     <Svg className={className}>

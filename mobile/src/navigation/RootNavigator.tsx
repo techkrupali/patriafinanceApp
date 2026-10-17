@@ -32,6 +32,10 @@ import { WithdrawScreen } from '../screens/wallet/WithdrawScreen';
 import { TransferScreen } from '../screens/wallet/TransferScreen';
 import { RequestSpendScreen } from '../screens/wallet/RequestSpendScreen';
 import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
+import { WalletSetupScreen } from '../screens/wallet/WalletSetupScreen';
+import { CreateEmergencyWalletScreen } from '../screens/wallet/emergency/CreateEmergencyWalletScreen';
+import { EmergencyAccessRulesScreen } from '../screens/wallet/emergency/EmergencyAccessRulesScreen';
+import { EmergencyCenterScreen } from '../screens/wallet/emergency/EmergencyCenterScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
 import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
 import { AssignAccessScreen } from '../screens/wallet/AssignAccessScreen';
@@ -218,6 +222,10 @@ export function RootNavigator() {
       <RootStack.Screen name="Transfer" component={TransferScreen} />
       <RootStack.Screen name="RequestSpend" component={RequestSpendScreen} />
       <RootStack.Screen name="CreateWallet" component={CreateWalletScreen} />
+      <RootStack.Screen name="WalletSetup" component={WalletSetupScreen} />
+      <RootStack.Screen name="CreateEmergencyWallet" component={CreateEmergencyWalletScreen} />
+      <RootStack.Screen name="EmergencyAccessRules" component={EmergencyAccessRulesScreen} />
+      <RootStack.Screen name="EmergencyCenter" component={EmergencyCenterScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
       <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />
       <RootStack.Screen name="AssignAccess" component={AssignAccessScreen} />

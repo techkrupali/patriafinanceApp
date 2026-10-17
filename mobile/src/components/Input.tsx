@@ -12,6 +12,8 @@ interface InputProps extends TextInputProps {
   icon?: IconName;
   /** Custom right adornment; overrides the automatic password eye toggle. */
   rightAdornment?: React.ReactNode;
+  /** Fixed text before the value, e.g. "₦" on amount fields. */
+  prefix?: string;
   containerClassName?: string;
 }
 
@@ -21,6 +23,7 @@ export function Input({
   error,
   icon,
   rightAdornment,
+  prefix,
   containerClassName = '',
   secureTextEntry,
   ...rest
@@ -54,6 +57,7 @@ export function Input({
             style={{ marginRight: 10 }}
           />
         ) : null}
+        {prefix ? <Text className="mr-2 text-[15px] font-bold text-ink">{prefix}</Text> : null}
         <TextInput
           placeholderTextColor={colors.faded}
           selectionColor={colors.brand}

@@ -26,6 +26,11 @@ interface PinSheetProps {
   error?: string | null;
   onSubmit: (pin: string) => void;
   onClose: () => void;
+  /**
+   * Biometrics auto-submit the cached TRANSACTION PIN, so turn them off when
+   * this sheet asks for a different secret (e.g. an emergency wallet PIN).
+   */
+  allowBiometric?: boolean;
 }
 
 type Mode = 'bio' | 'pin';
@@ -45,9 +50,10 @@ export function PinSheet({
   error,
   onSubmit,
   onClose,
+  allowBiometric = true,
 }: PinSheetProps) {
   const insets = useSafeAreaInsets();
-  const biometricEnabled = useAuth((s) => s.biometricEnabled);
+  const biometricEnabled = useAuth((s) => s.biometricEnabled) && allowBiometric;
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('pin');
   const [bioFailed, setBioFailed] = useState(false);

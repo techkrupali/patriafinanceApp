@@ -181,6 +181,12 @@ abstract class ApiController extends Controller
             'status' => $wallet->status,
             // Scheduled-access window (Wallet Lock feature); null when unrestricted.
             'access_schedule' => $wallet->access_schedule,
+            // Emergency wallet held by its access rules (always false for other types).
+            'emergency_locked' => $wallet->isEmergencyLocked(),
+            // Type-specific purpose chosen during guided setup (e.g. "medical").
+            'purpose' => $wallet->type === 'emergency'
+                ? ($wallet->emergencySetting?->purpose ?? $wallet->meta['purpose'] ?? null)
+                : ($wallet->meta['purpose'] ?? null),
             'created_at' => $wallet->created_at?->toIso8601String(),
         ];
 

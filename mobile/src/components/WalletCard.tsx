@@ -52,6 +52,7 @@ function tileVisual(wallet: Wallet): { bg: string; fg: string } {
 function statusFor(wallet: Wallet, hasTarget: boolean): { label: string; color: string } {
   const st = (wallet.status || 'active').toLowerCase();
   if (st !== 'active') return { label: st.toUpperCase(), color: colors.danger };
+  if (wallet.emergency_locked) return { label: 'Locked', color: colors.navy };
   if (hasTarget) return { label: 'Goal Active', color: colors.muted };
   if (wallet.type === 'main') return { label: 'Standard', color: colors.brand };
   if (wallet.type === 'shared' || wallet.type === 'joint') return { label: 'Shared', color: colors.brand };

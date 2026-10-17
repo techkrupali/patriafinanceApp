@@ -2,6 +2,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
+import type { CreatableWalletType, EmergencyPurpose } from '../api/types';
 
 export type AuthStackParamList = {
   Walkthrough: undefined;
@@ -25,6 +26,17 @@ export type MainTabParamList = {
   More: undefined;
 };
 
+/** Emergency wallet Step 1 answers carried into Step 2 (naira as typed). */
+export interface EmergencyStepOne {
+  name: string;
+  purpose: EmergencyPurpose;
+  /** Raw naira digits; '' = no initial deposit. */
+  initialDeposit: string;
+  sourceWalletId: number | null;
+  /** Raw naira digits; '' = monthly auto-funding off. */
+  monthlyAmount: string;
+}
+
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   /** Full transaction feed (was a tab; now reached from Home → View all). */
@@ -36,7 +48,14 @@ export type RootStackParamList = {
   Withdraw: { walletId: number };
   Transfer: { walletId?: number } | undefined;
   RequestSpend: { walletId: number };
+  /** Guided creation starts by picking the kind of wallet. */
   CreateWallet: undefined;
+  /** Type-specific setup for every type without its own journey. */
+  WalletSetup: { type: CreatableWalletType };
+  // ---- Emergency wallet journey (Step 1 → Step 2) + management ----
+  CreateEmergencyWallet: { draft?: EmergencyStepOne } | undefined;
+  EmergencyAccessRules: { draft: EmergencyStepOne };
+  EmergencyCenter: { walletId: number };
   EditProfile: undefined;
   ChangePassword: undefined;
   ChangePin: undefined;

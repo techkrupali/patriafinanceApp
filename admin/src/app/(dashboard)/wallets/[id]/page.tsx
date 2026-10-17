@@ -4,13 +4,21 @@ import { useRouter } from "next/navigation";
 import { use, useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { formatDate, formatDateTime, label, naira, signedNaira } from "@/lib/format";
+import {
+  emergencyLabel,
+  formatDate,
+  formatDateTime,
+  label,
+  naira,
+  signedNaira,
+} from "@/lib/format";
 import type { ApiWallet, WalletDetailData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Toast, type ToastState } from "@/components/toast";
 import { AdjustBalanceModal } from "@/components/admin/adjust-balance-modal";
+import { CrisisUnlockModal } from "@/components/admin/crisis-unlock-modal";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +44,7 @@ export default function WalletDetailPage({
   const queryClient = useQueryClient();
   const [adjusting, setAdjusting] = useState(false);
   const [freezing, setFreezing] = useState(false);
+  const [crisisUnlocking, setCrisisUnlocking] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
 
@@ -49,6 +58,7 @@ export default function WalletDetailPage({
     queryClient.invalidateQueries({ queryKey: ["admin", "wallets"] });
     queryClient.invalidateQueries({ queryKey: ["admin", "transactions"] });
     queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "emergency-requests"] });
   }
 
   const statusMutation = useMutation({
@@ -86,6 +96,7 @@ export default function WalletDetailPage({
   const isFrozen = wallet?.status === "frozen";
   const isClosed = wallet?.status === "closed";
   const nextStatus: "active" | "frozen" = isFrozen ? "active" : "frozen";
+  const emergency = data?.emergency ?? null;
 
   return (
     <>
@@ -199,6 +210,44 @@ export default function WalletDetailPage({
         </Card>
       </div>
 
+      {/* Emergency rules — emergency wallets only */}
+      {emergency ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Emergency Rules</CardTitle>
+              {emergency.locked && emergency.override_national_crisis ? (
+                <Button variant="danger" size="sm" onClick={() => setCrisisUnlocking(true)}>
+                  National-crisis override
+                </Button>
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Purpose">{emergencyLabel(emergency.purpose)}</Field>
+                <Field name="Lock">
+                  <Badge tone={emergency.locked ? "amber" : "green"}>
+                    {emergency.locked ? "Locked" : "Unlocked"}
+                  </Badge>
+                </Field>
+                {emergency.locked ? (
+                  <Field name="National-crisis override">
+                    {emergency.override_national_crisis ? "Allowed by owner" : "Not allowed"}
+                  </Field>
+                ) : (
+                  <>
+                    <Field name="Unlocked via">
+                      {emergency.unlocked_via ? emergencyLabel(emergency.unlocked_via) : "—"}
+                    </Field>
+                    <Field name="Unlocked">{formatDateTime(emergency.unlocked_at)}</Field>
+                  </>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Members */}
         <Card className="lg:col-span-1">
@@ -292,6 +341,19 @@ export default function WalletDetailPage({
           onClose={() => setAdjusting(false)}
           onSuccess={(msg) => {
             setAdjusting(false);
+            setToast({ tone: "green", message: msg });
+            invalidate();
+          }}
+        />
+      ) : null}
+
+      {crisisUnlocking && wallet ? (
+        <CrisisUnlockModal
+          walletId={id}
+          walletName={wallet.name}
+          onClose={() => setCrisisUnlocking(false)}
+          onSuccess={(msg) => {
+            setCrisisUnlocking(false);
             setToast({ tone: "green", message: msg });
             invalidate();
           }}

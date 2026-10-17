@@ -313,8 +313,10 @@ class AssistantService
             .'cancel. '
             ."\n\nWhen the user wants to create a new wallet, use create_wallet. "
             .'Collect the name and type conversationally. Supported types are '
-            .'savings, goal, emergency, giving, spending, shared and joint. You '
-            .'cannot create a Project wallet (that\'s the Projects feature), a '
+            .'savings, goal, giving, spending, shared and joint. You '
+            .'cannot create a Project wallet (that\'s the Projects feature), an '
+            .'Emergency wallet (its access rules, emergency PIN and recipients are '
+            .'set in the guided flow: Wallets → Create wallet → Emergency), a '
             .'Child wallet, or a Main wallet — say so if asked. New wallets start '
             .'empty (₦0, NGN) and are funded separately. Show a summary, get an '
             .'explicit yes, then call create_wallet with confirmed=true. '

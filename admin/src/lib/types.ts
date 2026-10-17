@@ -23,7 +23,7 @@ export interface AdminListUser extends ApiUser {
 
 export interface ApiWallet {
   id: number;
-  type: "main" | "shared" | "project";
+  type: "main" | "shared" | "project" | "emergency";
   name: string;
   description: string | null;
   currency: string;
@@ -217,6 +217,7 @@ export interface WalletDetailData {
     required_approvals: number;
   };
   recent_transactions: ApiTransaction[];
+  emergency: WalletEmergency | null; // null unless an emergency wallet
 }
 
 export type LoanStatus =
@@ -520,4 +521,99 @@ export interface SupportRequestsData {
 
 export interface SupportRequestDetailData {
   support_request: SupportRequestDetail;
+}
+
+// ---- Emergency wallets (locked until an unlock rule fires) ----
+
+export type EmergencyPurpose = "medical" | "funeral" | "travel" | "legal" | "other";
+export type EmergencyUnlockVia =
+  | "manual"
+  | "dual_approval"
+  | "document"
+  | "high_balance"
+  | "national_crisis";
+export type EmergencyRequestMethod = "dual_approval" | "document";
+export type EmergencyRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type EmergencyDocumentType = "death_certificate" | "legal_notice";
+
+/** Compact user shape used across emergency payloads (EmergencyService::person). */
+export interface EmergencyPerson {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+/** Lock state on GET /admin/wallets/{id} for emergency wallets. */
+export interface WalletEmergency {
+  purpose: EmergencyPurpose;
+  locked: boolean;
+  unlocked_at: string | null;
+  unlocked_via: EmergencyUnlockVia | null;
+  override_national_crisis: boolean; // owner opted in to the admin override
+}
+
+export interface AdminEmergencyRequest {
+  id: number;
+  wallet_id: number;
+  method: EmergencyRequestMethod;
+  document_type: EmergencyDocumentType | null;
+  has_document: boolean;
+  note: string | null; // requester's note
+  status: EmergencyRequestStatus;
+  requested_by: EmergencyPerson | null;
+  approved_by: EmergencyPerson | null; // dual-approval approver
+  review_note: string | null;
+  reviewed_by: string | null; // admin full name
+  created_at: string | null;
+  decided_at: string | null;
+  wallet: {
+    id: number;
+    name: string;
+    balance: string; // naira string
+    owner: { id: number; name: string; email: string } | null;
+    locked: boolean;
+  } | null;
+  // User-side flags from the shared serializer — not used by the admin UI.
+  can_approve: boolean;
+  can_reject: boolean;
+  can_cancel: boolean;
+}
+
+export interface EmergencyRequestsData {
+  requests: AdminEmergencyRequest[];
+  pagination: Pagination;
+}
+
+export interface EmergencyRules {
+  dual_approval: boolean;
+  approver: EmergencyPerson | null;
+  unlock_on_document: boolean;
+  manual_unlock: boolean;
+  unlock_reason: string | null;
+  override_national_crisis: boolean;
+  override_high_balance: boolean;
+  override_balance_threshold: string; // naira string
+}
+
+export interface EmergencyBeneficiary {
+  id: number;
+  user: EmergencyPerson | null;
+  position: number;
+  relationship: string | null;
+  role: "beneficiary" | "fallback";
+  withdrawal_limit: string | null; // naira string, null = no cap
+  access_type: "immediate" | "delay_7d";
+  withdrawn: string; // naira string
+}
+
+export interface EmergencyRequestDetailData {
+  request: AdminEmergencyRequest;
+  rules: EmergencyRules | null;
+  beneficiaries: EmergencyBeneficiary[];
+}
+
+/** POST /admin/wallets/{id}/emergency/crisis-unlock (EmergencyService::summary). */
+export interface CrisisUnlockResult {
+  emergency: Pick<WalletEmergency, "purpose" | "locked" | "unlocked_at" | "unlocked_via">;
 }

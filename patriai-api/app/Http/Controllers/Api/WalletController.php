@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\EmergencyBeneficiary;
+use App\Models\EmergencySetting;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
+use App\Services\EmergencyService;
 use App\Services\KycService;
 use App\Services\WalletService;
+use App\Services\WalletSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -30,7 +34,13 @@ class WalletController extends ApiController
         return $this->ok('Wallets fetched', ['wallets' => $own->concat($member)->values()]);
     }
 
-    // POST /wallets  { type, name, description?, target_amount? }
+    /**
+     * POST /wallets — guided creation.
+     * { type, name, description?, target_amount?, purpose?, initial_deposit?,
+     *   source_wallet_id?, monthly_amount?, monthly_day?, emergency? }
+     * `emergency` (emergency wallets only) carries the Step 2 access rules; see
+     * EmergencyService::configure.
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -38,6 +48,28 @@ class WalletController extends ApiController
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:200'],
             'target_amount' => ['nullable', 'numeric', 'min:0'],
+            'purpose' => ['nullable', 'string', 'max:40'],
+            'initial_deposit' => ['nullable', 'numeric', 'min:0'],
+            'source_wallet_id' => ['nullable', 'integer'],
+            'monthly_amount' => ['nullable', 'numeric', 'min:0'],
+            'monthly_day' => ['nullable', 'integer', 'between:1,28'],
+            'emergency' => ['nullable', 'array'],
+            'emergency.purpose' => ['required_with:emergency', 'in:' . implode(',', EmergencySetting::PURPOSES)],
+            'emergency.dual_approval' => ['sometimes', 'boolean'],
+            'emergency.approver_user_id' => ['nullable', 'integer'],
+            'emergency.unlock_on_document' => ['sometimes', 'boolean'],
+            'emergency.manual_unlock' => ['sometimes', 'boolean'],
+            'emergency.unlock_reason' => ['nullable', 'string', 'max:150'],
+            'emergency.emergency_pin' => ['nullable', 'digits:4'],
+            'emergency.override_national_crisis' => ['sometimes', 'boolean'],
+            'emergency.override_high_balance' => ['sometimes', 'boolean'],
+            'emergency.beneficiary_note' => ['nullable', 'string', 'max:1000'],
+            'emergency.beneficiaries' => ['sometimes', 'array', 'max:3'],
+            'emergency.beneficiaries.*.user_id' => ['required', 'integer'],
+            'emergency.beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
+            'emergency.beneficiaries.*.role' => ['sometimes', 'in:' . implode(',', EmergencyBeneficiary::ROLES)],
+            'emergency.beneficiaries.*.withdrawal_limit' => ['nullable', 'numeric', 'min:0'],
+            'emergency.beneficiaries.*.access_type' => ['sometimes', 'in:' . implode(',', EmergencyBeneficiary::ACCESS_TYPES)],
         ]);
 
         $user = $request->user();
@@ -49,15 +81,23 @@ class WalletController extends ApiController
             return $this->fail('Wallet limit reached for your verification tier. Verify a higher KYC tier to create more wallets.', 422);
         }
 
-        $opts = [];
-        if (($data['description'] ?? null) !== null) {
-            $opts['description'] = $data['description'];
-        }
-        if (($data['target_amount'] ?? null) !== null) {
-            $opts['target_amount'] = $this->toKobo($data['target_amount']);
+        if (!empty($data['emergency']) && $data['type'] !== 'emergency') {
+            return $this->fail('Emergency access rules only apply to emergency wallets', 422);
         }
 
-        $wallet = WalletService::make()->createWallet($user, $data['type'], $data['name'], $opts);
+        // Naira over the wire, kobo from here on. Zero means "not set".
+        $kobo = fn ($naira) => ($naira === null || (float) $naira <= 0) ? null : $this->toKobo((string) $naira);
+
+        $data['target_amount'] = $kobo($data['target_amount'] ?? null);
+        $data['initial_deposit'] = $kobo($data['initial_deposit'] ?? null);
+        $data['monthly_amount'] = $kobo($data['monthly_amount'] ?? null);
+        if (!empty($data['emergency']['beneficiaries'])) {
+            foreach ($data['emergency']['beneficiaries'] as $i => $b) {
+                $data['emergency']['beneficiaries'][$i]['withdrawal_limit'] = $kobo($b['withdrawal_limit'] ?? null);
+            }
+        }
+
+        $wallet = WalletSetupService::make()->create($user, $data);
 
         return $this->ok('Wallet created', ['wallet' => $this->serializeWallet($wallet)], 201);
     }
@@ -93,6 +133,8 @@ class WalletController extends ApiController
             ],
             'held_amount' => number_format($wallet->heldAmount() / 100, 2, '.', ''),
             'pending_approvals' => $wallet->approvalRequests()->where('status', 'pending')->count(),
+            // Emergency wallets only: lock state + the viewer's emergency role.
+            'emergency' => EmergencyService::make()->summary($wallet, $user),
             'recent_transactions' => $wallet->transactions()->latest()->limit(10)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
