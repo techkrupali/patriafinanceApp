@@ -27,7 +27,7 @@ function Splash() {
     <LinearGradient colors={gradients.navyDeep} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }}>
       <StatusBar style="light" />
       <View className="flex-1 items-center justify-center">
-        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-white/10">
+        <View className="h-20 w-20 items-center justify-center rounded bg-white/10">
           <Ionicons name="shield-checkmark" size={38} color={colors.brandGlow} />
         </View>
         <Text className="mt-6 text-2xl font-extrabold tracking-tight text-white">Patriai</Text>

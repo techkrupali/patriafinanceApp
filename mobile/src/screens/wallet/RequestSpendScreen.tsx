@@ -14,7 +14,7 @@ import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline } from '../../theme';
 import { useSpendRequest, useVerifyAccount, useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -164,8 +164,8 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
             {/* Fixed source wallet (read-only) */}
             {from ? (
               <View
-                className="mt-4 flex-row items-center rounded-2xl border border-border bg-white p-4"
-                style={shadow.card}
+                className="mt-4 flex-row items-center rounded border border-border bg-white p-4"
+                style={outline.card}
               >
                 <View className="h-11 w-11 items-center justify-center rounded-full bg-lav-soft">
                   <Ionicons name="wallet-outline" size={20} color={colors.navy} />
@@ -183,7 +183,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
             ) : null}
 
             {/* Amount hero */}
-            <View className="mt-5 overflow-hidden rounded-3xl" style={shadow.hero}>
+            <View className="mt-5 overflow-hidden rounded">
               <LinearGradient
                 colors={gradients.navy}
                 start={{ x: 0, y: 0 }}
@@ -207,7 +207,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
                 </View>
                 {from ? (
                   <View
-                    className="mt-4 rounded-full px-4 py-2"
+                    className="mt-4 rounded px-4 py-2"
                     style={{
                       backgroundColor: exceedsBalance ? 'rgba(239,91,110,0.16)' : 'rgba(255,255,255,0.10)',
                     }}
@@ -231,7 +231,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
             </View>
 
             {/* Destination kind */}
-            <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">To</Text>
+            <Text className="mt-6 text-[13px] font-semibold text-muted">To</Text>
             <View className="mt-2 flex-row" style={{ gap: 8 }}>
               <Chip label="My Wallets" active={kind === 'wallet'} onPress={() => setKind('wallet')} />
               <Chip label="To User" active={kind === 'user'} onPress={() => setKind('user')} />
@@ -254,7 +254,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
                           selection();
                           setDestWalletId(w.id);
                         }}
-                        className={`flex-row items-center justify-between rounded-2xl border p-4 active:opacity-80 ${
+                        className={`flex-row items-center justify-between rounded border p-4 active:opacity-80 ${
                           active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                         }`}
                       >
@@ -276,7 +276,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
 
             {kind === 'user' ? (
               <Input
-                label="Recipient email or phone"
+                label="Recipient Email or Phone"
                 icon="at-outline"
                 value={identifier}
                 onChangeText={setIdentifier}
@@ -289,10 +289,10 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
 
             {kind === 'bank' ? (
               <View className="mt-4">
-                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Bank</Text>
+                <Text className="text-[13px] font-semibold text-muted">Bank</Text>
                 <Pressable
                   onPress={() => setBankPickerOpen(true)}
-                  className="mt-2 flex-row items-center rounded-2xl border border-transparent bg-lav-faint px-4 active:opacity-80"
+                  className="mt-2 flex-row items-center rounded border border-transparent bg-lav-faint px-4 active:opacity-80"
                   style={{ minHeight: 54 }}
                 >
                   <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
@@ -303,7 +303,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
                 </Pressable>
 
                 <Input
-                  label="Account number"
+                  label="Account Number"
                   icon="card-outline"
                   value={accountNumber}
                   onChangeText={(t) => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
@@ -319,7 +319,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
                     <Text className="ml-2 text-sm text-muted">Verifying account…</Text>
                   </View>
                 ) : verified ? (
-                  <View className="mt-3 flex-row items-center self-start rounded-full bg-success-soft px-3.5 py-2">
+                  <View className="mt-3 flex-row items-center self-start rounded bg-success-soft px-3.5 py-2">
                     <Ionicons name="checkmark-circle" size={16} color={colors.brand} style={{ marginRight: 6 }} />
                     <Text className="text-[13px] font-bold text-brand">{verified.account_name}</Text>
                   </View>
@@ -330,7 +330,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
             ) : null}
 
             <Input
-              label="Description (optional)"
+              label="Description (Optional)"
               icon="create-outline"
               value={description}
               onChangeText={setDescription}

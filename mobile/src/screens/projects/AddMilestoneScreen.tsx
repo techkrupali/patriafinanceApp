@@ -81,8 +81,8 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
             </Text>
 
             {/* Amount */}
-            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
-            <View className="mt-2 items-center rounded-3xl bg-lav-faint py-7">
+            <Text className="mt-7 text-[13px] font-semibold text-muted">Amount</Text>
+            <View className="mt-2 items-center rounded bg-lav-faint py-7">
               <View className="flex-row items-center justify-center">
                 <Text className="text-4xl font-extrabold text-faded">₦</Text>
                 <TextInput
@@ -102,7 +102,7 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
             </View>
 
             <Input
-              label="Milestone title"
+              label="Milestone Title"
               icon="flag-outline"
               value={title}
               onChangeText={setTitle}
@@ -112,7 +112,7 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
             />
 
             <Input
-              label="Description (optional)"
+              label="Description (Optional)"
               icon="document-text-outline"
               value={description}
               onChangeText={setDescription}
@@ -122,7 +122,7 @@ export function AddMilestoneScreen({ navigation, route }: RootScreenProps<'AddMi
             />
 
             <Input
-              label="Due date (optional)"
+              label="Due Date (Optional)"
               icon="calendar-outline"
               value={dueDate}
               onChangeText={(t) => setDueDate(t.replace(/[^0-9-]/g, '').slice(0, 10))}

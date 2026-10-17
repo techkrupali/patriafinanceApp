@@ -65,7 +65,7 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
           </Text>
           <View className="mt-6" style={{ gap: 16 }}>
             <Input
-              label="Account password"
+              label="Account Password"
               icon="lock-closed-outline"
               value={password}
               onChangeText={setPassword}
@@ -95,7 +95,7 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
               maxLength={4}
             />
             <Input
-              label="Confirm new PIN"
+              label="Confirm New PIN"
               icon="keypad-outline"
               value={confirmPin}
               onChangeText={(t) => setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 4))}

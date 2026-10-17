@@ -107,7 +107,7 @@ export function AssistantScreen(_props: RootScreenProps<'Assistant'>) {
             return (
               <View key={m.id} className={`mb-3 ${mine ? 'items-end' : 'items-start'}`}>
                 <View
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${mine ? 'bg-navy' : 'bg-white'}`}
+                  className={`max-w-[85%] rounded px-4 py-2.5 ${mine ? 'bg-navy' : 'bg-white'}`}
                   style={!mine ? { borderWidth: 1, borderColor: colors.lavFaint } : undefined}
                 >
                   <Text className={`text-[15px] leading-5 ${mine ? 'text-white' : 'text-ink'}`}>
@@ -139,7 +139,7 @@ export function AssistantScreen(_props: RootScreenProps<'Assistant'>) {
           })}
           {chat.isPending ? (
             <View className="mb-3 items-start">
-              <View className="rounded-2xl bg-white px-4 py-3" style={{ borderWidth: 1, borderColor: colors.lavFaint }}>
+              <View className="rounded bg-white px-4 py-3" style={{ borderWidth: 1, borderColor: colors.lavFaint }}>
                 <ActivityIndicator color={colors.navy} />
               </View>
             </View>
@@ -147,7 +147,7 @@ export function AssistantScreen(_props: RootScreenProps<'Assistant'>) {
         </ScrollView>
 
         <View className="flex-row items-end px-3 pb-2 pt-1" style={{ gap: 8 }}>
-          <View className="flex-1 rounded-3xl bg-white px-4 py-1" style={{ borderWidth: 1, borderColor: colors.lav }}>
+          <View className="flex-1 rounded bg-white px-4 py-1" style={{ borderWidth: 1, borderColor: colors.lav }}>
             <TextInput
               value={input}
               onChangeText={setInput}

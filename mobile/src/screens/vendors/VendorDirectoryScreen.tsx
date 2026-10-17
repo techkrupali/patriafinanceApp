@@ -9,7 +9,7 @@ import { Card } from '../../components/Card';
 import { Input } from '../../components/Input';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline } from '../../theme';
 import { useVendors } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
 import type { VendorListing } from '../../api/types';
@@ -73,7 +73,7 @@ function VendorCard({ vendor, onPress }: { vendor: VendorListing; onPress: () =>
           </Text>
         </View>
 
-        <View className="rounded-full bg-lav-faint px-2.5 py-1">
+        <View className="rounded bg-lav-faint px-2.5 py-1">
           <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
             {categoryLabel(vendor.category)}
           </Text>
@@ -135,8 +135,8 @@ export function VendorDirectoryScreen({ navigation }: RootScreenProps<'VendorDir
     <Pressable
       onPress={openMyProfile}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-      style={shadow.soft}
+      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+      style={outline.card}
     >
       <Ionicons name="person-circle-outline" size={24} color={colors.navy} />
     </Pressable>
@@ -173,10 +173,9 @@ export function VendorDirectoryScreen({ navigation }: RootScreenProps<'VendorDir
                   selection();
                   setCategory(c.value);
                 }}
-                className={`flex-row items-center rounded-full px-4 py-2.5 active:opacity-90 ${
+                className={`flex-row items-center rounded px-4 py-2.5 active:opacity-90 ${
                   active ? 'bg-navy' : 'bg-lav'
                 }`}
-                style={active ? shadow.soft : undefined}
               >
                 <Ionicons
                   name={c.icon}
@@ -239,7 +238,7 @@ export function VendorDirectoryScreen({ navigation }: RootScreenProps<'VendorDir
               <Pressable
                 onPress={() => void query.fetchNextPage()}
                 disabled={query.isFetchingNextPage}
-                className="mt-3 items-center rounded-2xl bg-lav-soft py-3.5 active:opacity-80"
+                className="mt-3 items-center rounded bg-lav-soft py-3.5 active:opacity-80"
               >
                 {query.isFetchingNextPage ? (
                   <ActivityIndicator color={colors.navy} />

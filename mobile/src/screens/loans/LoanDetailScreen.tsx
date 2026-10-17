@@ -8,7 +8,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { useCancelLoan, useLoan } from '../../api/hooks';
 import { statusIconColor } from '../../lib/governance';
 import { dayLabel, formatMoney } from '../../lib/format';
@@ -37,7 +37,7 @@ function ScheduleRow({ item, last }: { item: LoanRepayment; last: boolean }) {
         <Text className="text-[15px] font-semibold text-ink">{formatMoney(item.amount_due)}</Text>
         <Text className="mt-0.5 text-xs text-faded">Due {scheduleDate(item.due_date)}</Text>
       </View>
-      <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+      <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
         <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
         <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
       </View>
@@ -96,13 +96,13 @@ export function LoanDetailScreen({ navigation, route }: RootScreenProps<'LoanDet
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center justify-between">
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                 {loanCategoryLabel(loan.category)}
               </Text>
-              <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+              <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
                 <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
               </View>

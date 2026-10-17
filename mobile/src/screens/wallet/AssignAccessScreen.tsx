@@ -188,7 +188,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
                         {m.email}
                       </Text>
                     </View>
-                    <View className="rounded-full bg-lav-faint px-2.5 py-1">
+                    <View className="rounded bg-lav-faint px-2.5 py-1">
                       <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
                         {roleLabel(m.role)}
                       </Text>
@@ -196,7 +196,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
                   </View>
 
                   {full ? (
-                    <View className="mt-4 flex-row items-center rounded-2xl bg-success-soft p-4">
+                    <View className="mt-4 flex-row items-center rounded bg-success-soft p-4">
                       <Ionicons name="shield-checkmark" size={20} color={colors.brand} style={{ marginRight: 10 }} />
                       <Text className="flex-1 text-[13px] font-medium text-brand">
                         Full access — owners & co-owners can do everything.
@@ -213,7 +213,7 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
                               key={row.key}
                               className={`flex-row items-center py-3 ${i > 0 ? 'border-t border-border' : ''}`}
                             >
-                              <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                              <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                                 <Ionicons name={row.icon} size={20} color={colors.navy} />
                               </View>
                               <View className="flex-1 pr-2">
@@ -237,9 +237,9 @@ export function AssignAccessScreen({ route }: RootScreenProps<'AssignAccess'>) {
                       </View>
 
                       {local.request ? (
-                        <View className="mt-1 rounded-2xl bg-lav-faint p-3">
-                          <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                            Request limit (₦, optional)
+                        <View className="mt-1 rounded bg-lav-faint p-3">
+                          <Text className="text-[13px] font-semibold text-muted">
+                            Request Limit (₦, Optional)
                           </Text>
                           <TextInput
                             value={limits[m.id!] ?? ''}

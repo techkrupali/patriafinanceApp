@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { formatMoney } from '../lib/format';
 import { TransactionRow } from './TransactionListCard';
 import type { TransactionGroupAction } from '../api/types';
@@ -35,7 +35,7 @@ export function TransactionGroupCard({ action, onShowMore }: Props) {
   const { summary, transactions, has_more, target } = action;
 
   return (
-    <View className="mt-2 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="mt-2 rounded bg-white p-4" style={outline.card}>
       {/* Header */}
       <View className="flex-row items-center">
         <Ionicons name={targetIcon(target?.type)} size={16} color={colors.brand} />
@@ -45,7 +45,7 @@ export function TransactionGroupCard({ action, onShowMore }: Props) {
       </View>
 
       {/* Grand-total summary */}
-      <View className="mt-3 rounded-xl bg-lav-faint p-3">
+      <View className="mt-3 rounded bg-lav-faint p-3">
         <Text className="text-2xl font-extrabold tracking-tight text-ink">
           ₦{formatMoney(summary.total_amount)}
         </Text>
@@ -90,7 +90,7 @@ export function TransactionGroupCard({ action, onShowMore }: Props) {
       {has_more ? (
         <Pressable
           onPress={onShowMore}
-          className="mt-2 flex-row items-center justify-center rounded-full bg-lav-faint py-2.5 active:opacity-80"
+          className="mt-2 flex-row items-center justify-center rounded bg-lav-faint py-2.5 active:opacity-80"
         >
           <Text className="text-[13px] font-semibold text-navy">Show more</Text>
           <Ionicons name="chevron-down" size={15} color={colors.navy} style={{ marginLeft: 4 }} />

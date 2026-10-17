@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients, outline, radius } from '../theme';
 import { useAuth } from '../store/auth';
 import { getBiometricSupport, runBiometricPrompt, type BiometricSupport } from '../lib/biometrics';
 import { notifySuccess, selection } from '../lib/haptics';
@@ -80,8 +80,8 @@ export function AppLock({ onUsePassword }: AppLockProps) {
                 }}
               />
               <View
-                className="h-24 w-24 items-center justify-center rounded-3xl bg-white"
-                style={shadow.card}
+                className="h-24 w-24 items-center justify-center rounded bg-white"
+                style={outline.card}
               >
                 <Ionicons name="shield-checkmark" size={46} color={colors.goldDeep} />
               </View>
@@ -114,15 +114,14 @@ export function AppLock({ onUsePassword }: AppLockProps) {
                 style={[
                   {
                     height: 64,
-                    borderRadius: 16,
+                    borderRadius: radius,
                     flexDirection: 'row',
                     alignItems: 'center',
                     paddingHorizontal: 20,
                   },
-                  shadow.gold,
                 ]}
               >
-                <View className="mr-4 h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                <View className="mr-4 h-10 w-10 items-center justify-center rounded bg-white/20">
                   <Ionicons name={support?.icon ?? 'finger-print'} size={22} color={colors.white} />
                 </View>
                 <View className="flex-1">
@@ -143,10 +142,10 @@ export function AppLock({ onUsePassword }: AppLockProps) {
                 selection();
                 onUsePassword();
               }}
-              className="flex-row items-center rounded-2xl bg-white px-5 active:opacity-80"
-              style={[{ height: 64 }, shadow.soft]}
+              className="flex-row items-center rounded bg-white px-5 active:opacity-80"
+              style={[{ height: 64 }, outline.card]}
             >
-              <View className="mr-4 h-10 w-10 items-center justify-center rounded-xl bg-page-top">
+              <View className="mr-4 h-10 w-10 items-center justify-center rounded bg-page-top">
                 <Ionicons name="key-outline" size={20} color={colors.muted} />
               </View>
               <View className="flex-1">
@@ -159,8 +158,8 @@ export function AppLock({ onUsePassword }: AppLockProps) {
           <View className="flex-1" />
 
           {/* Guidance box */}
-          <View className="flex-row items-start rounded-2xl bg-page-top p-4">
-            <View className="mr-3 rounded-xl bg-success-soft p-2">
+          <View className="flex-row items-start rounded bg-page-top p-4">
+            <View className="mr-3 rounded bg-success-soft p-2">
               <Ionicons name="information-circle" size={18} color={colors.brand} />
             </View>
             <Text className="flex-1 text-[13px] leading-5 text-muted">

@@ -9,7 +9,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useWallets } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -36,10 +36,7 @@ function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) 
           colors={visual.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[
-            { height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-            shadow.soft,
-          ]}
+          style={{ height: 44, width: 44, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name={visual.icon} size={20} color={colors.white} />
         </LinearGradient>
@@ -48,7 +45,7 @@ function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) 
             {wallet.name}
           </Text>
         </View>
-        <View className="rounded-full bg-lav-faint px-2.5 py-1">
+        <View className="rounded bg-lav-faint px-2.5 py-1">
           <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">{visual.label}</Text>
         </View>
       </View>
@@ -65,7 +62,7 @@ function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) 
             <Text className="text-[13px] font-bold text-brand">{Math.floor(pct)}%</Text>
           </View>
           {reached ? (
-            <View className="mt-2.5 flex-row items-center self-start rounded-full bg-success-soft px-3 py-1.5">
+            <View className="mt-2.5 flex-row items-center self-start rounded bg-success-soft px-3 py-1.5">
               <Ionicons name="checkmark-circle" size={14} color={colors.brand} style={{ marginRight: 5 }} />
               <Text className="text-[11px] font-bold text-brand">Goal reached 🎉</Text>
             </View>
@@ -103,8 +100,8 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
         navigation.navigate('CreateGoal');
       }}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-      style={shadow.soft}
+      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+      style={outline.card}
     >
       <Ionicons name="add" size={24} color={colors.navy} />
     </Pressable>
@@ -143,7 +140,7 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
                 colors={gradients.navy}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+                style={{ borderRadius: radius, padding: 24 }}
               >
                 <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                   Total saved

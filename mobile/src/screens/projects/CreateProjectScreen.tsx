@@ -15,7 +15,7 @@ import type { RootScreenProps } from '../../navigation/types';
 function InfoRow({ icon, title, body }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string }) {
   return (
     <View className="flex-row items-start">
-      <View className="mr-3 h-9 w-9 items-center justify-center rounded-2xl bg-white">
+      <View className="mr-3 h-9 w-9 items-center justify-center rounded bg-white">
         <Ionicons name={icon} size={18} color={colors.navy} />
       </View>
       <View className="flex-1">
@@ -61,7 +61,7 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
         showsVerticalScrollIndicator={false}
       >
           {/* How escrow works */}
-          <View className="rounded-3xl bg-lav-faint p-5" style={{ gap: 16 }}>
+          <View className="rounded bg-lav-faint p-5" style={{ gap: 16 }}>
             <InfoRow
               icon="lock-closed-outline"
               title="A dedicated escrow wallet"
@@ -75,7 +75,7 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
           </View>
 
           <Input
-            label="Project title"
+            label="Project Title"
             icon="briefcase-outline"
             value={title}
             onChangeText={setTitle}
@@ -85,7 +85,7 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
           />
 
           <Input
-            label="Description (optional)"
+            label="Description (Optional)"
             icon="document-text-outline"
             value={description}
             onChangeText={setDescription}
@@ -95,7 +95,7 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
           />
 
           <Input
-            label="Budget (optional)"
+            label="Budget (Optional)"
             icon="cash-outline"
             value={groupAmountInput(budget)}
             onChangeText={(t) => setBudget(sanitizeAmountInput(t))}

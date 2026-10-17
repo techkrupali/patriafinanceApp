@@ -8,7 +8,7 @@ import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useAssignVendor, useUserSearch } from '../../api/hooks';
 import { initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -75,7 +75,7 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
         </Text>
 
         {/* Mode toggle */}
-        <View className="mt-6 flex-row rounded-2xl bg-page-top p-1" style={{ gap: 4 }}>
+        <View className="mt-6 flex-row rounded bg-page-top p-1" style={{ gap: 4 }}>
           {(['username', 'contact'] as const).map((m) => {
             const active = mode === m;
             return (
@@ -87,8 +87,8 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
                   setError(null);
                   setPicked(null);
                 }}
-                className="flex-1 items-center justify-center rounded-xl py-2.5"
-                style={active ? [{ backgroundColor: colors.white }, shadow.soft] : undefined}
+                className="flex-1 items-center justify-center rounded py-2.5"
+                style={active ? { backgroundColor: colors.white } : undefined}
               >
                 <Text
                   className={`text-[13px] ${active ? 'font-bold' : 'font-medium'}`}
@@ -103,7 +103,7 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
 
         {mode === 'username' ? (
           picked ? (
-            <View className="mt-5 flex-row items-center rounded-2xl bg-success-soft p-3">
+            <View className="mt-5 flex-row items-center rounded bg-success-soft p-3">
               <Avatar user={picked} />
               <View className="ml-3 flex-1 pr-2">
                 <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
@@ -121,7 +121,7 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
                   setPicked(null);
                 }}
                 hitSlop={6}
-                className="rounded-full bg-white px-3 py-1.5 active:opacity-80"
+                className="rounded bg-white px-3 py-1.5 active:opacity-80"
               >
                 <Text className="text-[12px] font-bold text-navy">Change</Text>
               </Pressable>
@@ -157,8 +157,8 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
                         setPicked(u);
                         setError(null);
                       }}
-                      className="mt-2 flex-row items-center rounded-2xl bg-white p-3 active:opacity-90"
-                      style={shadow.soft}
+                      className="mt-2 flex-row items-center rounded bg-white p-3 active:opacity-90"
+                      style={outline.card}
                     >
                       <Avatar user={u} />
                       <View className="ml-3 flex-1 pr-2">
@@ -180,7 +180,7 @@ export function AssignVendorScreen({ navigation, route }: RootScreenProps<'Assig
           )
         ) : (
           <Input
-            label="Vendor email or phone"
+            label="Vendor Email or Phone"
             icon="at-outline"
             value={identifier}
             onChangeText={setIdentifier}

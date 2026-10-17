@@ -110,7 +110,7 @@ export function EditProfileScreen({ navigation }: RootScreenProps<'EditProfile'>
             onPress={changePhoto}
             disabled={uploadAvatar.isPending}
             hitSlop={6}
-            className="mt-3 flex-row items-center rounded-full bg-lav px-4 py-2 active:opacity-80"
+            className="mt-3 flex-row items-center rounded bg-lav px-4 py-2 active:opacity-80"
           >
             <Ionicons name="camera-outline" size={16} color={colors.navy} style={{ marginRight: 6 }} />
             <Text className="text-[13px] font-bold text-navy">
@@ -124,7 +124,7 @@ export function EditProfileScreen({ navigation }: RootScreenProps<'EditProfile'>
         </Text>
         <View className="mt-6" style={{ gap: 16 }}>
           <Input
-            label="First name"
+            label="First Name"
             icon="person-outline"
             value={firstName}
             onChangeText={setFirstName}
@@ -132,7 +132,7 @@ export function EditProfileScreen({ navigation }: RootScreenProps<'EditProfile'>
             autoCapitalize="words"
           />
           <Input
-            label="Last name"
+            label="Last Name"
             icon="person-outline"
             value={lastName}
             onChangeText={setLastName}

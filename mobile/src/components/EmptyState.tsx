@@ -23,7 +23,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <View className={`items-center px-8 py-12 ${className}`}>
-      <View className="mb-4 h-16 w-16 items-center justify-center rounded-3xl bg-lav-soft">
+      <View className="mb-4 h-16 w-16 items-center justify-center rounded bg-lav-soft">
         <Ionicons name={icon} size={26} color={colors.navy} />
       </View>
       <Text className="text-base font-bold text-ink">{title}</Text>

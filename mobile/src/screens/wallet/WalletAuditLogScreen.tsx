@@ -79,7 +79,7 @@ export function WalletAuditLogScreen({ route }: RootScreenProps<'WalletAuditLog'
                   return (
                     <View key={entry.id}>
                       <View className="flex-row items-center py-3">
-                        <View className={`mr-3 h-11 w-11 items-center justify-center rounded-2xl ${visual.tile}`}>
+                        <View className={`mr-3 h-11 w-11 items-center justify-center rounded ${visual.tile}`}>
                           <Ionicons name={visual.icon} size={20} color={visual.color} />
                         </View>
                         <View className="flex-1">
@@ -101,7 +101,7 @@ export function WalletAuditLogScreen({ route }: RootScreenProps<'WalletAuditLog'
                 <Pressable
                   onPress={() => void log.fetchNextPage()}
                   disabled={log.isFetchingNextPage}
-                  className="mt-3 items-center rounded-2xl bg-lav-soft py-3.5 active:opacity-80"
+                  className="mt-3 items-center rounded bg-lav-soft py-3.5 active:opacity-80"
                 >
                   {log.isFetchingNextPage ? (
                     <ActivityIndicator color={colors.navy} />

@@ -58,7 +58,7 @@ export function PhoneInput({
         {label}
       </Text>
       <View
-        className="w-full flex-row items-center rounded-xl pr-4"
+        className="w-full flex-row items-center rounded pr-4"
         style={{
           minHeight: 54,
           backgroundColor: focused ? colors.white : colors.lavSoft,
@@ -68,7 +68,7 @@ export function PhoneInput({
       >
         <Pressable
           onPress={openPicker}
-          className="h-full flex-row items-center rounded-l-xl px-3 active:opacity-70"
+          className="h-full flex-row items-center rounded-l px-3 active:opacity-70"
           hitSlop={4}
         >
           <Text className="text-lg" style={{ marginRight: 6 }}>
@@ -117,7 +117,7 @@ export function PhoneInput({
 
           <View className="px-5 pb-3">
             <View
-              className="w-full flex-row items-center rounded-xl px-4"
+              className="w-full flex-row items-center rounded px-4"
               style={{ minHeight: 48, backgroundColor: colors.lavSoft }}
             >
               <Ionicons name="search" size={18} color={colors.muted} style={{ marginRight: 8 }} />
@@ -149,7 +149,7 @@ export function PhoneInput({
               return (
                 <Pressable
                   onPress={() => pick(item)}
-                  className={`flex-row items-center rounded-2xl px-4 py-3.5 active:opacity-80 ${
+                  className={`flex-row items-center rounded px-4 py-3.5 active:opacity-80 ${
                     active ? 'bg-success-soft' : ''
                   }`}
                 >

@@ -8,7 +8,7 @@ import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useCreateWallet } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
 import { groupAmountInput, sanitizeAmountInput } from '../../lib/format';
@@ -96,9 +96,9 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
           </Text>
 
           {/* Identity block — name + purpose chips */}
-          <View className="mt-6 rounded-3xl bg-white p-5" style={shadow.card}>
+          <View className="mt-6 rounded bg-white p-5" style={outline.card}>
             <Input
-              label="Wallet name"
+              label="Wallet Name"
               icon="pricetag-outline"
               value={name}
               onChangeText={setName}
@@ -106,8 +106,8 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
               maxLength={100}
             />
 
-            <Text className="mb-3 mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Wallet purpose
+            <Text className="mb-3 mt-5 text-[13px] font-semibold text-muted">
+              Wallet Purpose
             </Text>
             <View className="flex-row flex-wrap" style={{ gap: 8 }}>
               {TYPES.map((t) => {
@@ -120,10 +120,10 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
                       selection();
                       setType(t.value);
                     }}
-                    className={`flex-row items-center rounded-full px-4 py-2.5 active:opacity-90 ${
+                    className={`flex-row items-center rounded px-4 py-2.5 active:opacity-90 ${
                       active ? '' : 'bg-lav'
                     }`}
-                    style={active ? [{ backgroundColor: GOLD_CONTAINER }, shadow.soft] : undefined}
+                    style={active ? { backgroundColor: GOLD_CONTAINER } : undefined}
                   >
                     <Ionicons
                       name={v.icon}
@@ -144,13 +144,13 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
           </View>
 
           {/* Selected purpose explainer — green tip (design lightbulb box) */}
-          <View className="mt-4 flex-row items-start rounded-2xl bg-success-soft p-4">
+          <View className="mt-4 flex-row items-start rounded bg-success-soft p-4">
             <Ionicons name="bulb" size={17} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
             <Text className="flex-1 text-[12px] leading-5 text-brand-deep">{selected.description}</Text>
           </View>
 
           <Input
-            label="Description (optional)"
+            label="Description (Optional)"
             icon="document-text-outline"
             value={description}
             onChangeText={setDescription}
@@ -161,7 +161,7 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
 
           {showTarget ? (
             <Input
-              label="Target amount (optional)"
+              label="Target Amount (Optional)"
               icon="flag-outline"
               value={groupAmountInput(target)}
               onChangeText={(t) => setTarget(sanitizeAmountInput(t))}

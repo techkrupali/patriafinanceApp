@@ -19,7 +19,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
-import { colors, shadow } from '../../theme';
+import { colors } from '../../theme';
 import { useApproval, useCancelApproval, useRespondApproval } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { formatMoney, timeLabel } from '../../lib/format';
@@ -131,14 +131,14 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
           }
         >
           {/* Amount hero */}
-          <View className="items-center rounded-3xl bg-navy px-6 py-8" style={shadow.hero}>
+          <View className="items-center rounded bg-navy px-6 py-8">
             <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
               {approvalActionLabel(approval.action)}
             </Text>
             <Text className="mt-2 text-[38px] font-extrabold tracking-tight text-white">
               {formatMoney(approval.amount)}
             </Text>
-            <View className={`mt-3 flex-row items-center rounded-full px-3 py-1.5 ${status.bg}`}>
+            <View className={`mt-3 flex-row items-center rounded px-3 py-1.5 ${status.bg}`}>
               <Ionicons name={status.icon} size={13} color={statusIconColor(status)} style={{ marginRight: 5 }} />
               <Text className={`text-[11px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
             </View>
@@ -176,7 +176,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
 
           {/* Resolution */}
           {approval.executed_transaction_reference ? (
-            <View className="mt-4 flex-row items-center rounded-2xl bg-success-soft p-4">
+            <View className="mt-4 flex-row items-center rounded bg-success-soft p-4">
               <Ionicons name="checkmark-done-circle" size={20} color={colors.brand} style={{ marginRight: 10 }} />
               <View className="flex-1">
                 <Text className="text-[13px] font-bold text-brand">Executed</Text>
@@ -185,7 +185,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
             </View>
           ) : null}
           {approval.fail_reason ? (
-            <View className="mt-4 flex-row items-center rounded-2xl bg-danger-soft p-4">
+            <View className="mt-4 flex-row items-center rounded bg-danger-soft p-4">
               <Ionicons name="alert-circle" size={20} color={colors.danger} style={{ marginRight: 10 }} />
               <Text className="flex-1 text-[13px] font-semibold text-danger">{approval.fail_reason}</Text>
             </View>
@@ -234,7 +234,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
               className="mt-6"
             />
           ) : isPending ? (
-            <View className="mt-6 flex-row items-center justify-center rounded-2xl bg-lav-faint p-4">
+            <View className="mt-6 flex-row items-center justify-center rounded bg-lav-faint p-4">
               <Ionicons name="time-outline" size={16} color={colors.muted} style={{ marginRight: 8 }} />
               <Text className="text-[13px] font-semibold text-muted">
                 {approval.my_responded ? 'You have already responded' : 'Waiting on other approvers'}
@@ -249,7 +249,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
         <GestureHandlerRootView style={{ flex: 1 }}>
         {/* behavior="padding" on BOTH platforms — adjustResize is dead under RN edge-to-edge */}
         <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+          <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="mb-4 flex-row items-start justify-between">
               <View className="flex-1 pr-3">
@@ -264,7 +264,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
                 <Ionicons name="close" size={18} color={colors.muted} />
               </Pressable>
             </View>
-            <View className="rounded-2xl border border-border bg-lav-faint px-4 py-1">
+            <View className="rounded border border-border bg-lav-faint px-4 py-1">
               <TextInput
                 value={note}
                 onChangeText={setNote}

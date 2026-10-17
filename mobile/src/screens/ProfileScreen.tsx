@@ -45,7 +45,7 @@ function Row({
 }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} className="flex-row items-center py-3.5 active:opacity-70">
-      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded-2xl ${tint}`}>
+      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded ${tint}`}>
         <Ionicons name={icon} size={19} color={iconColor} />
       </View>
       <View className="flex-1">
@@ -171,7 +171,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
           <Text className="mt-1 text-sm text-muted">{user?.email}</Text>
           <Text className="mt-0.5 text-sm text-muted">{user?.phone}</Text>
 
-          <View className="mt-4 flex-row items-center rounded-full bg-success-soft px-3.5 py-1.5">
+          <View className="mt-4 flex-row items-center rounded bg-success-soft px-3.5 py-1.5">
             <Ionicons name="ribbon-outline" size={13} color={colors.brand} style={{ marginRight: 5 }} />
             <Text className="text-[11px] font-bold uppercase tracking-widest text-brand">
               KYC Tier {kycTier}
@@ -180,7 +180,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Identity */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Identity</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Identity</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="create-outline"
@@ -200,7 +200,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
             right={
               kyc?.can_upgrade ? (
                 <View className="flex-row items-center">
-                  <View className="mr-2 rounded-full bg-success-soft px-2.5 py-1">
+                  <View className="mr-2 rounded bg-success-soft px-2.5 py-1">
                     <Text className="text-[11px] font-bold text-brand">Verify</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.faded} />
@@ -211,7 +211,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Security */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Security</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Security</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="key-outline"
@@ -252,7 +252,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Finance */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Finance</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Finance</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="cash-outline"
@@ -304,7 +304,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Family */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Family</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Family</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="people-outline"
@@ -326,7 +326,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Collaboration */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Collaboration</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Collaboration</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="shield-checkmark-outline"
@@ -353,7 +353,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </Card>
 
         {/* Support & security */}
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Support &amp; security</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Support &amp; Security</Text>
         <Card className="mt-2 py-1">
           <Row
             icon="shield-outline"
@@ -389,7 +389,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
       <Modal visible={pinModal} transparent animationType="slide" onRequestClose={() => setPinModal(false)}>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+          <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="mb-4 flex-row items-start justify-between">
               <View className="flex-1 pr-3">

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from './Card';
 import { Button } from './Button';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients, radius } from '../theme';
 import { useUpdateAutomation, useRunAutomation, useDeleteAutomation } from '../api/hooks';
 import { formatMoney, timeLabel } from '../lib/format';
 import { selection, notifySuccess } from '../lib/haptics';
@@ -77,10 +77,7 @@ export function AutomationCard({ rule }: { rule: AutomationRule }) {
             colors={gradients.brand}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[
-              { height: 44, width: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-              shadow.soft,
-            ]}
+            style={{ height: 44, width: 44, borderRadius: radius, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}
           >
             <Ionicons name="flash" size={20} color={colors.white} />
           </LinearGradient>
@@ -110,7 +107,7 @@ export function AutomationCard({ rule }: { rule: AutomationRule }) {
       {expanded ? (
         <>
           {/* Route */}
-          <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint px-4 py-3">
+          <View className="mt-4 flex-row items-center rounded bg-lav-faint px-4 py-3">
             <View className="flex-1 pr-2">
               <Text className="text-[10px] font-bold uppercase tracking-wider text-faded">From</Text>
               <Text className="mt-0.5 text-[13px] font-semibold text-ink" numberOfLines={1}>
@@ -141,7 +138,7 @@ export function AutomationCard({ rule }: { rule: AutomationRule }) {
           {/* Meta chips */}
           <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
             {rule.min_balance ? (
-              <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+              <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
                 <Ionicons name="shield-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
                   Keep ≥ {formatMoney(rule.min_balance)}
@@ -149,7 +146,7 @@ export function AutomationCard({ rule }: { rule: AutomationRule }) {
               </View>
             ) : null}
             {rule.last_run_at ? (
-              <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+              <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
                 <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
                   Last run {timeLabel(rule.last_run_at)}
@@ -167,7 +164,7 @@ export function AutomationCard({ rule }: { rule: AutomationRule }) {
               onPress={confirmDelete}
               hitSlop={8}
               disabled={remove.isPending}
-              className="h-14 w-14 items-center justify-center rounded-[18px] bg-danger-soft active:opacity-80"
+              className="h-14 w-14 items-center justify-center rounded bg-danger-soft active:opacity-80"
             >
               {remove.isPending ? (
                 <ActivityIndicator color={colors.danger} />

@@ -8,7 +8,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useDisputes } from '../../api/hooks';
 import { timeLabel } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -52,14 +52,14 @@ function DisputeCard({ dispute }: { dispute: Dispute }) {
     <Card className="mt-3">
       <View className="flex-row items-start">
         <Text className="flex-1 pr-3 text-[15px] font-bold text-ink">{dispute.subject}</Text>
-        <View className={`flex-row items-center rounded-full px-2.5 py-1 ${v.bg}`}>
+        <View className={`flex-row items-center rounded px-2.5 py-1 ${v.bg}`}>
           <Ionicons name={v.icon} size={12} color={PILL_ICON[v.text] ?? colors.muted} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${v.text}`}>{v.label}</Text>
         </View>
       </View>
 
       <View className="mt-2.5 flex-row flex-wrap items-center" style={{ gap: 8 }}>
-        <View className="rounded-full bg-lav-faint px-2.5 py-1">
+        <View className="rounded bg-lav-faint px-2.5 py-1">
           <Text className="text-[11px] font-semibold text-muted">{capitalize(dispute.category)}</Text>
         </View>
         {dispute.reference ? (
@@ -72,7 +72,7 @@ function DisputeCard({ dispute }: { dispute: Dispute }) {
       </Text>
 
       {dispute.status === 'resolved' && dispute.resolution ? (
-        <View className="mt-3 rounded-2xl bg-success-soft p-3.5">
+        <View className="mt-3 rounded bg-success-soft p-3.5">
           <Text className="text-[13px] leading-5 text-navy">
             <Text className="font-bold">Resolution: </Text>
             {dispute.resolution}
@@ -98,8 +98,8 @@ export function DisputesScreen({ navigation }: RootScreenProps<'Disputes'>) {
     <Pressable
       onPress={openRaise}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-      style={shadow.soft}
+      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+      style={outline.card}
     >
       <Ionicons name="add" size={24} color={colors.navy} />
     </Pressable>
@@ -152,7 +152,7 @@ export function DisputesScreen({ navigation }: RootScreenProps<'Disputes'>) {
               <Pressable
                 onPress={() => void query.fetchNextPage()}
                 disabled={query.isFetchingNextPage}
-                className="mt-3 items-center rounded-2xl bg-lav-soft py-3.5 active:opacity-80"
+                className="mt-3 items-center rounded bg-lav-soft py-3.5 active:opacity-80"
               >
                 {query.isFetchingNextPage ? (
                   <ActivityIndicator color={colors.navy} />

@@ -7,7 +7,7 @@ import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { selection } from '../../lib/haptics';
 import type { RootScreenProps } from '../../navigation/types';
 
@@ -78,9 +78,9 @@ export function HelpFaqScreen({ navigation }: RootScreenProps<'HelpFaq'>) {
           colors={gradients.navy}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+          style={{ borderRadius: radius, padding: 24 }}
         >
-          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
+          <View className="h-12 w-12 items-center justify-center rounded bg-white/15">
             <Ionicons name="help-buoy-outline" size={24} color={colors.white} />
           </View>
           <Text className="mt-4 text-2xl font-extrabold text-white">How can we help?</Text>
@@ -114,7 +114,7 @@ export function HelpFaqScreen({ navigation }: RootScreenProps<'HelpFaq'>) {
 
         {/* Footer */}
         <Card className="mt-7 items-center py-7">
-          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-lav-faint">
+          <View className="h-12 w-12 items-center justify-center rounded bg-lav-faint">
             <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.navy} />
           </View>
           <Text className="mt-3 text-lg font-extrabold text-ink">Still need help?</Text>

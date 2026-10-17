@@ -3,7 +3,7 @@ import { ActivityIndicator, Animated, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients, radius } from '../theme';
 import { selection } from '../lib/haptics';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -103,14 +103,13 @@ export function Button({
             style={[
               {
                 minHeight: 54,
-                borderRadius: 18,
+                borderRadius: radius,
                 width: '100%',
                 alignItems: 'center',
                 justifyContent: 'center',
                 paddingHorizontal: 20,
                 paddingVertical: 16,
               },
-              !isDisabled ? shadow.gold : undefined,
               isDisabled ? { opacity: 0.5 } : undefined,
             ]}
           >
@@ -119,7 +118,7 @@ export function Button({
         ) : (
           <View
             style={{ minHeight: 54 }}
-            className={`w-full items-center justify-center rounded-[18px] px-5 py-4 ${surface[variant]} ${
+            className={`w-full items-center justify-center rounded px-5 py-4 ${surface[variant]} ${
               isDisabled ? 'opacity-50' : ''
             }`}
           >

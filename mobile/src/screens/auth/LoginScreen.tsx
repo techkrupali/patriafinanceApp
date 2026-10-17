@@ -7,7 +7,7 @@ import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
 import { PhoneInput } from '../../components/PhoneInput';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { selection } from '../../lib/haptics';
 import { useLogin } from '../../api/hooks';
@@ -23,9 +23,9 @@ import type { User } from '../../api/types';
 
 /**
  * Stitch "Login - The Curated Ledger" (2.1): centered editorial header on the
- * #F6FAFE surface, a white rounded-2xl card with soft shadow holding a tonal
- * Phone/Email segmented toggle, uppercase tracking labels, tonal-fill inputs
- * (12px radius, gold focus), gold-link sign-up row and the gold primary CTA.
+ * #F6FAFE surface, a white outlined card holding a tonal Phone/Email
+ * segmented toggle, Title Case field labels, tonal-fill inputs (3px radius,
+ * gold focus), gold-link sign-up row and the gold primary CTA.
  */
 
 /** Design-system field: tonal fill, 12px radius, gold focus accent. */
@@ -39,14 +39,11 @@ function Field({
 
   return (
     <View className="w-full">
-      <Text
-        className="mb-2 ml-1 text-[11px] font-semibold uppercase text-muted"
-        style={{ letterSpacing: 1.5 }}
-      >
+      <Text className="mb-2 ml-1 text-[13px] font-semibold text-muted">
         {label}
       </Text>
       <View
-        className="w-full flex-row items-center rounded-xl px-4"
+        className="w-full flex-row items-center rounded px-4"
         style={{
           minHeight: 54,
           backgroundColor: focused ? colors.white : colors.lavSoft, // surface-container-high
@@ -92,7 +89,7 @@ function Segment({
   onChange: (key: string) => void;
 }) {
   return (
-    <View className="flex-row rounded-xl bg-page-top p-1">
+    <View className="flex-row rounded bg-page-top p-1">
       {options.map((o) => {
         const active = o.key === value;
         return (
@@ -104,8 +101,8 @@ function Segment({
                 onChange(o.key);
               }
             }}
-            className="flex-1 items-center justify-center rounded-lg py-2"
-            style={active ? [{ backgroundColor: colors.white }, shadow.soft] : undefined}
+            className="flex-1 items-center justify-center rounded py-2"
+            style={active ? { backgroundColor: colors.white } : undefined}
           >
             <Text
               className={`text-sm ${active ? 'font-bold' : 'font-medium'}`}
@@ -256,10 +253,10 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
               void biometricSignIn();
             }}
             disabled={bioBusy}
-            className="mb-5 flex-row items-center rounded-2xl bg-white p-4 active:opacity-90"
-            style={shadow.card}
+            className="mb-5 flex-row items-center rounded bg-white p-4 active:opacity-90"
+            style={outline.card}
           >
-            <View className="mr-4 h-12 w-12 items-center justify-center rounded-xl bg-success-soft">
+            <View className="mr-4 h-12 w-12 items-center justify-center rounded bg-success-soft">
               <Ionicons name={support?.icon ?? 'finger-print'} size={26} color={colors.brand} />
             </View>
             <View className="flex-1">
@@ -272,8 +269,8 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           </Pressable>
         ) : null}
 
-        {/* Login card — editorial shadow, rounded-2xl white surface */}
-        <View className="rounded-2xl bg-white p-6" style={[shadow.card, { gap: 24 }]}>
+        {/* Login card — outlined white surface */}
+        <View className="rounded bg-white p-6" style={[outline.card, { gap: 24 }]}>
           {/* Phone / Email toggle (same identifier field; adjusts keyboard + hint) */}
           <Segment
             options={[
@@ -291,7 +288,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           {mode === 'phone' ? (
             <PhoneInput
               label="Phone Number"
-              labelClassName="mb-2 ml-1 text-[11px] font-semibold uppercase tracking-wider"
+              labelClassName="mb-2 ml-1 text-[13px] font-semibold"
               country={phoneCountry}
               onChangeCountry={setPhoneCountry}
               value={identifier}

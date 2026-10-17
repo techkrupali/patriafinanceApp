@@ -8,7 +8,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { AutomationCard } from '../../components/AutomationCard';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useAutomations } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
 import type { RootScreenProps } from '../../navigation/types';
@@ -26,8 +26,8 @@ export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automa
         navigation.navigate('CreateAutomation');
       }}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-      style={shadow.soft}
+      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+      style={outline.card}
     >
       <Ionicons name="add" size={24} color={colors.navy} />
     </Pressable>

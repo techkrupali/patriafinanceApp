@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { useDashboard } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { tierName } from '../../lib/kyc';
@@ -45,7 +45,7 @@ function Row({
       disabled={!onPress}
       className="flex-row items-center py-3.5 active:opacity-70"
     >
-      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded-2xl ${tint}`}>
+      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded ${tint}`}>
         <Ionicons name={icon} size={19} color={iconColor} />
       </View>
       <View className="flex-1">
@@ -105,10 +105,10 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
               colors={gradients.navy}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+              style={{ borderRadius: radius, padding: 24 }}
             >
               <View className="flex-row items-center">
-                <View className="mr-3.5 h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
+                <View className="mr-3.5 h-12 w-12 items-center justify-center rounded bg-white/15">
                   <Ionicons
                     name={allOn ? 'shield-checkmark' : 'shield-half'}
                     size={26}
@@ -137,7 +137,7 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
             </LinearGradient>
 
             {/* Protection checklist */}
-            <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Protection</Text>
+            <Text className="mt-7 text-[13px] font-bold text-muted">Protection</Text>
             <Card className="mt-3 py-1">
               <Row
                 icon="keypad-outline"
@@ -150,7 +150,7 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
                   hasPin ? (
                     <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
                   ) : (
-                    <View className="rounded-full bg-lav-faint px-2.5 py-1">
+                    <View className="rounded bg-lav-faint px-2.5 py-1">
                       <Text className="text-[11px] font-bold text-brand">Set up</Text>
                     </View>
                   )
@@ -205,13 +205,13 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
             </Card>
 
             {/* Stay safe tips */}
-            <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Stay safe</Text>
+            <Text className="mt-7 text-[13px] font-bold text-muted">Stay Safe</Text>
             <Card className="mt-3 py-1">
               {TIPS.map((tip, i) => (
                 <View key={tip.text}>
                   {i > 0 ? <Divider /> : null}
                   <View className="flex-row items-center py-3.5">
-                    <View className="mr-3.5 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                    <View className="mr-3.5 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                       <Ionicons name={tip.icon} size={18} color={colors.navy} />
                     </View>
                     <Text className="flex-1 text-[13px] leading-5 text-muted">{tip.text}</Text>

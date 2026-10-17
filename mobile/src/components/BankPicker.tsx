@@ -44,7 +44,7 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
         </View>
 
         <View className="px-5 pb-3">
-          <View className="flex-row items-center rounded-2xl bg-lav-faint px-4" style={{ minHeight: 50 }}>
+          <View className="flex-row items-center rounded bg-lav-faint px-4" style={{ minHeight: 50 }}>
             <Ionicons name="search" size={18} color={colors.faded} style={{ marginRight: 8 }} />
             <TextInput
               value={search}
@@ -77,11 +77,11 @@ export function BankPicker({ visible, selectedCode, onSelect, onClose }: BankPic
                     onSelect(item);
                     setSearch('');
                   }}
-                  className={`mb-2 flex-row items-center rounded-2xl p-4 active:opacity-80 ${
+                  className={`mb-2 flex-row items-center rounded p-4 active:opacity-80 ${
                     isSelected ? 'bg-lav' : 'bg-white'
                   }`}
                 >
-                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-soft">
+                  <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-soft">
                     <Text className="text-sm font-bold text-navy">
                       {item.bank_name.charAt(0).toUpperCase()}
                     </Text>

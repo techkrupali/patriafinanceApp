@@ -11,7 +11,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
 import { AutomationCard } from '../../components/AutomationCard';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useWallet, useWalletMembers, useWalletTransactions, useAutomations } from '../../api/hooks';
 import { formatMoney, initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -27,10 +27,10 @@ const TREASURY_HERO = ['#0A2A44', '#011D35'] as const;
 /** Content colour on the green action pills. */
 const ON_GOLD = '#FFFFFF';
 
-/** Uppercase micro section heading (Stitch "RECENT TRANSACTIONS" treatment). */
+/** Title Case section heading ("Recent Transactions" — client: first letters capital, not all caps). */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="text-xs font-extrabold uppercase tracking-widest text-ink">{children}</Text>
+    <Text className="text-sm font-extrabold text-ink">{children}</Text>
   );
 }
 
@@ -42,8 +42,7 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded-2xl bg-[#006D2F] py-4 active:opacity-90"
-      style={shadow.soft}
+      className="flex-1 items-center justify-center rounded bg-[#006D2F] py-4 active:opacity-90"
     >
       <Ionicons name={icon} size={24} color={ON_GOLD} />
       <Text
@@ -207,7 +206,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             colors={heroGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 32, padding: 28, overflow: 'hidden' }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 28, overflow: 'hidden' }}
           >
             {/* Decorative gold wash */}
             <View
@@ -232,8 +231,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 {wallet.name}
               </Text>
               <View
-                className={`rounded-full px-2.5 py-1 ${heroDark ? 'bg-white/20' : 'bg-white'}`}
-                style={!heroDark ? shadow.soft : undefined}
+                className={`rounded px-2.5 py-1 ${heroDark ? 'bg-white/20' : 'bg-white'}`}
+                style={!heroDark ? outline.card : undefined}
               >
                 <Text
                   className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -307,10 +306,10 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
             {wallet.virtual_account ? (
               <Pressable
                 onPress={() => void copyAccount()}
-                className={`mt-5 flex-row items-center self-start rounded-full px-3.5 py-2 active:opacity-80 ${
+                className={`mt-5 flex-row items-center self-start rounded px-3.5 py-2 active:opacity-80 ${
                   heroDark ? 'bg-white/10' : 'bg-white'
                 }`}
-                style={!heroDark ? shadow.soft : undefined}
+                style={!heroDark ? outline.card : undefined}
               >
                 <Ionicons
                   name="card-outline"
@@ -341,7 +340,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           </LinearGradient>
 
           {/* Insight strip */}
-          <View className="mt-3 flex-row items-start rounded-xl bg-page-top p-4">
+          <View className="mt-3 flex-row items-start rounded bg-page-top p-4">
             <Ionicons name="sparkles" size={18} color={colors.goldDeep} style={{ marginRight: 12, marginTop: 1 }} />
             <Text className="flex-1 text-sm font-medium leading-5 text-muted">{insight}</Text>
           </View>
@@ -353,8 +352,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 selection();
                 navigation.navigate('Approvals', { scope: 'to_me' });
               }}
-              className="mt-4 flex-row items-center rounded-2xl bg-navy p-4 active:opacity-90"
-              style={shadow.card}
+              className="mt-4 flex-row items-center rounded bg-navy p-4 active:opacity-90"
             >
               <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-white/15">
                 <Ionicons name="hourglass-outline" size={18} color={colors.brandMint} />
@@ -401,7 +399,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               <SectionTitle>Governance & Rules</SectionTitle>
               {approval || held > 0 ? (
               <View
-                className="mt-3 rounded-2xl p-5"
+                className="mt-3 rounded p-5"
                 style={{ backgroundColor: 'rgba(199,223,255,0.35)', gap: 14 }}
               >
                 {approval ? (
@@ -448,7 +446,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                         navigation.navigate('AssignAccess', { walletId });
                       }}
                       hitSlop={6}
-                      className="flex-row items-center rounded-full px-3.5 py-1.5 active:opacity-80"
+                      className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
                       style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
                     >
                       <Ionicons name="options-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
@@ -462,7 +460,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                         navigation.navigate('InviteMember', { walletId });
                       }}
                       hitSlop={6}
-                      className="flex-row items-center rounded-full px-3.5 py-1.5 active:opacity-80"
+                      className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
                       style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
                     >
                       <Ionicons name="person-add-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
@@ -511,7 +509,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                           </Text>
                         </View>
                         <View className="items-end">
-                          <View className="rounded-full bg-lav-faint px-2.5 py-1">
+                          <View className="rounded bg-lav-faint px-2.5 py-1">
                             <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
                               {roleLabel(m.role)}
                             </Text>
@@ -566,7 +564,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   <Pressable
                     onPress={() => void txns.fetchNextPage()}
                     disabled={txns.isFetchingNextPage}
-                    className="items-center rounded-2xl py-3.5 active:opacity-80"
+                    className="items-center rounded py-3.5 active:opacity-80"
                     style={{ backgroundColor: 'rgba(15,138,68,0.14)' }}
                   >
                     {txns.isFetchingNextPage ? (

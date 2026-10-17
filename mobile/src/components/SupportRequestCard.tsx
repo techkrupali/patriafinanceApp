@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import type { SupportRequestAction } from '../api/types';
 
 interface Props {
@@ -17,7 +17,7 @@ const humanize = (s: string | null) =>
  */
 export function SupportRequestCard({ action }: Props) {
   return (
-    <View className="mt-2 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="mt-2 rounded bg-white p-4" style={outline.card}>
       <View className="flex-row items-center">
         <Ionicons name="headset-outline" size={16} color={colors.brand} />
         <Text className="ml-1.5 text-[13px] font-bold text-ink">Support request submitted</Text>
@@ -27,7 +27,7 @@ export function SupportRequestCard({ action }: Props) {
         Your issue has been sent to our support team. They will review it.
       </Text>
 
-      <View className="mt-3 rounded-xl bg-lav-faint p-3">
+      <View className="mt-3 rounded bg-lav-faint p-3">
         {action.request_id != null ? (
           <Text className="text-[13px] text-ink">
             <Text className="font-semibold">Request</Text> #{action.request_id}

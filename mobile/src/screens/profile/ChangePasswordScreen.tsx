@@ -52,7 +52,7 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
           </Text>
           <View className="mt-6" style={{ gap: 16 }}>
             <Input
-              label="Current password"
+              label="Current Password"
               icon="lock-closed-outline"
               value={current}
               onChangeText={setCurrent}
@@ -60,7 +60,7 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
               secureTextEntry
             />
             <Input
-              label="New password"
+              label="New Password"
               icon="lock-open-outline"
               value={next}
               onChangeText={setNext}
@@ -68,7 +68,7 @@ export function ChangePasswordScreen({ navigation }: RootScreenProps<'ChangePass
               secureTextEntry
             />
             <Input
-              label="Confirm new password"
+              label="Confirm New Password"
               icon="lock-open-outline"
               value={confirm}
               onChangeText={setConfirm}

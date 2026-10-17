@@ -113,7 +113,7 @@ export function PinSheet({
           own root — without this the PIN pad / buttons are dead. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
-        <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+        <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
           <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
 
           <View className="mb-4 flex-row items-start justify-between">
@@ -133,7 +133,7 @@ export function PinSheet({
 
           {/* Payment summary */}
           {amount || recipient ? (
-            <View className="mb-5 rounded-2xl bg-lav-faint p-4">
+            <View className="mb-5 rounded bg-lav-faint p-4">
               {amount ? (
                 <Text className="text-3xl font-extrabold tracking-tight text-ink">{amount}</Text>
               ) : null}
@@ -179,7 +179,7 @@ export function PinSheet({
               {bioFailed ? (
                 <Pressable
                   onPress={() => void tryBiometric()}
-                  className="mt-5 flex-row items-center rounded-full bg-lav px-6 py-2.5 active:opacity-80"
+                  className="mt-5 flex-row items-center rounded bg-lav px-6 py-2.5 active:opacity-80"
                 >
                   <Ionicons name="refresh" size={16} color={colors.navy} style={{ marginRight: 6 }} />
                   <Text className="text-sm font-semibold text-navy">Try again</Text>

@@ -50,7 +50,7 @@ export function DevicesScreen(_props: RootScreenProps<'Devices'>) {
             <View style={{ gap: 10 }}>
               {(devices ?? []).map((d) => (
                 <Card key={d.id} className="flex-row items-center p-4">
-                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav-soft">
                     <Ionicons name={platformIcon[d.platform ?? ''] ?? 'hardware-chip-outline'} size={22} color={colors.navy} />
                   </View>
                   <View className="flex-1">

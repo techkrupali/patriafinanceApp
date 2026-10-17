@@ -15,7 +15,7 @@ interface InputProps extends TextInputProps {
   containerClassName?: string;
 }
 
-/** Filled, rounded input with a floating uppercase label, focus ring and optional password reveal. */
+/** Filled input with a Title Case label, focus ring and optional password reveal. */
 export function Input({
   label,
   error,
@@ -38,12 +38,12 @@ export function Input({
   return (
     <View className={`w-full ${containerClassName}`}>
       {label ? (
-        <Text className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <Text className="mb-2 text-[13px] font-semibold text-muted">
           {label}
         </Text>
       ) : null}
       <View
-        className={`w-full flex-row items-center rounded-2xl border bg-lav-faint px-4 ${borderClass}`}
+        className={`w-full flex-row items-center rounded border bg-lav-faint px-4 ${borderClass}`}
         style={{ minHeight: 54 }}
       >
         {icon ? (

@@ -10,7 +10,7 @@ import { PhoneInput } from '../../components/PhoneInput';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useCreateInvitation, useUserSearch, useWallets } from '../../api/hooks';
 import { ROLE_OPTIONS, roleLabel } from '../../lib/governance';
 import { initials } from '../../lib/format';
@@ -172,7 +172,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         </Text>
 
         {/* Channel selector */}
-        <View className="mt-6 flex-row rounded-2xl bg-page-top p-1" style={{ gap: 4 }}>
+        <View className="mt-6 flex-row rounded bg-page-top p-1" style={{ gap: 4 }}>
           {CHANNELS.map((c) => {
             const active = channel === c.key;
             return (
@@ -184,8 +184,8 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
                   setError(null);
                   setPicked(null);
                 }}
-                className="flex-1 flex-row items-center justify-center rounded-xl py-2.5"
-                style={active ? [{ backgroundColor: colors.white }, shadow.soft] : undefined}
+                className="flex-1 flex-row items-center justify-center rounded py-2.5"
+                style={active ? { backgroundColor: colors.white } : undefined}
               >
                 <Ionicons
                   name={c.icon}
@@ -207,7 +207,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
 
         {isUser ? (
           picked ? (
-            <View className="mt-5 flex-row items-center rounded-2xl bg-success-soft p-3">
+            <View className="mt-5 flex-row items-center rounded bg-success-soft p-3">
               <UserAvatar user={picked} />
               <View className="ml-3 flex-1 pr-2">
                 <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
@@ -225,7 +225,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
                   setPicked(null);
                 }}
                 hitSlop={6}
-                className="rounded-full bg-white px-3 py-1.5 active:opacity-80"
+                className="rounded bg-white px-3 py-1.5 active:opacity-80"
               >
                 <Text className="text-[12px] font-bold text-navy">Change</Text>
               </Pressable>
@@ -263,8 +263,8 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
                         setPicked(u);
                         setError(null);
                       }}
-                      className="mt-2 flex-row items-center rounded-2xl bg-white p-3 active:opacity-90"
-                      style={shadow.soft}
+                      className="mt-2 flex-row items-center rounded bg-white p-3 active:opacity-90"
+                      style={outline.card}
                     >
                       <UserAvatar user={u} />
                       <View className="ml-3 flex-1 pr-2">
@@ -286,7 +286,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
           )
         ) : (
           <Input
-            label="Name (optional)"
+            label="Name (Optional)"
             icon="person-outline"
             value={name}
             onChangeText={setName}
@@ -298,7 +298,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
 
         {isUser ? null : channel === 'email' ? (
           <Input
-            label="Email address"
+            label="Email Address"
             icon="at-outline"
             value={email}
             onChangeText={setEmail}
@@ -310,7 +310,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         ) : (
           <View className="mt-5">
             <PhoneInput
-              label={channel === 'whatsapp' ? 'WhatsApp number' : 'Phone number'}
+              label={channel === 'whatsapp' ? 'WhatsApp Number' : 'Phone Number'}
               country={phoneCountry}
               onChangeCountry={setPhoneCountry}
               value={phoneNational}
@@ -319,7 +319,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
           </View>
         )}
 
-        <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Role</Text>
+        <Text className="mt-6 text-[13px] font-semibold text-muted">Role</Text>
         <View className="mt-2" style={{ gap: 10 }}>
           {ROLE_OPTIONS.map((r) => {
             const active = role === r.value;
@@ -330,7 +330,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
                   selection();
                   setRole(r.value);
                 }}
-                className={`flex-row items-center rounded-2xl border p-4 active:opacity-90 ${
+                className={`flex-row items-center rounded border p-4 active:opacity-90 ${
                   active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                 }`}
               >
@@ -348,7 +348,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
           })}
         </View>
 
-        <View className="mt-5 flex-row items-center rounded-2xl bg-lav-faint p-4">
+        <View className="mt-5 flex-row items-center rounded bg-lav-faint p-4">
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
           <View className="flex-1 pr-2">
             <Text className="text-[15px] font-semibold text-ink">Can approve spends</Text>

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { PinSheet } from './PinSheet';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { useTransfer } from '../api/hooks';
 import { isPendingApproval, type SecureTransferAction } from '../api/types';
 
@@ -58,13 +58,13 @@ export function SecureTransferCard({ action, onResult }: Props) {
   };
 
   return (
-    <View className="mt-2 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="mt-2 rounded bg-white p-4" style={outline.card}>
       <View className="flex-row items-center">
         <Ionicons name="shield-checkmark" size={16} color={colors.brand} />
         <Text className="ml-1.5 text-[13px] font-bold text-ink">Authorize transfer</Text>
       </View>
 
-      <View className="mt-3 rounded-xl bg-lav-faint p-3">
+      <View className="mt-3 rounded bg-lav-faint p-3">
         <Text className="text-2xl font-extrabold tracking-tight text-ink">
           ₦{summary.amount}
         </Text>
@@ -110,7 +110,7 @@ export function SecureTransferCard({ action, onResult }: Props) {
             setPinError(null);
             setPinOpen(true);
           }}
-          className="mt-3 flex-row items-center justify-center rounded-full bg-navy py-3 active:opacity-90"
+          className="mt-3 flex-row items-center justify-center rounded bg-navy py-3 active:opacity-90"
         >
           <Ionicons name="lock-closed" size={16} color={colors.white} style={{ marginRight: 6 }} />
           <Text className="text-[14px] font-bold text-white">Enter PIN to send</Text>

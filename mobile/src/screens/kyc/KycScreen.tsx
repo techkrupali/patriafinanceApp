@@ -7,7 +7,7 @@ import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { useKyc } from '../../api/hooks';
 import { statusIconColor } from '../../lib/governance';
 import { dayLabel, formatMoney } from '../../lib/format';
@@ -139,13 +139,13 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center justify-between">
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                 Current tier
               </Text>
-              <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+              <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
                 <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
               </View>
@@ -170,7 +170,7 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
           {rejected ? (
             <Card className="mt-8 border border-danger-soft">
               <View className="flex-row items-center">
-                <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-danger-soft">
+                <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-danger-soft">
                   <Ionicons name="close-circle" size={22} color={colors.danger} />
                 </View>
                 <View className="flex-1 pr-2">
@@ -182,7 +182,7 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
                   </Text>
                 </View>
               </View>
-              <View className="mt-4 flex-row items-start rounded-2xl bg-danger-soft p-3.5">
+              <View className="mt-4 flex-row items-start rounded bg-danger-soft p-3.5">
                 <Ionicons name="information-circle" size={17} color={colors.danger} style={{ marginRight: 8, marginTop: 1 }} />
                 <Text className="flex-1 text-[13px] leading-5 text-ink">
                   {rejected.review_note?.trim()
@@ -199,7 +199,7 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
               <Text className="mt-8 text-lg font-bold text-ink">Verification under review</Text>
               <Card className="mt-3">
                 <View className="flex-row items-center">
-                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav-soft">
                     <Ionicons name="hourglass-outline" size={22} color={colors.navy} />
                   </View>
                   <View className="flex-1 pr-2">
@@ -213,14 +213,14 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
                   {(() => {
                     const sv = submissionStatusVisual(pending.status);
                     return (
-                      <View className={`flex-row items-center rounded-full px-2.5 py-1 ${sv.bg}`}>
+                      <View className={`flex-row items-center rounded px-2.5 py-1 ${sv.bg}`}>
                         <Ionicons name={sv.icon} size={12} color={statusIconColor(sv)} style={{ marginRight: 4 }} />
                         <Text className={`text-[10px] font-bold uppercase tracking-wider ${sv.text}`}>{sv.label}</Text>
                       </View>
                     );
                   })()}
                 </View>
-                <View className="mt-4 flex-row items-start rounded-2xl bg-lav-faint p-3.5">
+                <View className="mt-4 flex-row items-start rounded bg-lav-faint p-3.5">
                   <Ionicons name="information-circle" size={17} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
                   <Text className="flex-1 text-[13px] leading-5 text-muted">
                     We're reviewing your documents. This usually takes a short while — we'll update your tier
@@ -240,8 +240,8 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
 
               {/* Requirements */}
               <Card className="mt-3">
-                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  What you'll need
+                <Text className="text-[13px] font-semibold text-muted">
+                  What You'll Need
                 </Text>
                 <View className="mt-3" style={{ gap: 12 }}>
                   {next.requirements.map((req) => (
@@ -254,8 +254,8 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
 
                 <View className="mt-4" style={{ height: 1, backgroundColor: colors.border }} />
 
-                <Text className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  What you'll unlock
+                <Text className="mt-4 text-[13px] font-semibold text-muted">
+                  What You'll Unlock
                 </Text>
                 <View className="mt-2">
                   <BenefitRow icon="wallet-outline" label="Wallets" value={`Up to ${next.benefits.max_wallets}`} />
@@ -278,7 +278,7 @@ export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
             </>
           ) : (
             <Card className="mt-8 items-center py-8">
-              <View className="h-16 w-16 items-center justify-center rounded-3xl bg-success-soft">
+              <View className="h-16 w-16 items-center justify-center rounded bg-success-soft">
                 <Ionicons name="shield-checkmark" size={30} color={colors.brand} />
               </View>
               <Text className="mt-4 text-base font-bold text-ink">Fully verified</Text>
@@ -300,7 +300,7 @@ function Divider() {
 function LimitRow({ icon, label, value }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
   return (
     <View className="flex-row items-center py-3.5">
-      <View className="mr-3.5 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+      <View className="mr-3.5 h-10 w-10 items-center justify-center rounded bg-lav-faint">
         <Ionicons name={icon} size={19} color={colors.navy} />
       </View>
       <Text className="flex-1 text-[15px] font-semibold text-ink">{label}</Text>

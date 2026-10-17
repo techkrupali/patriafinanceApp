@@ -3,7 +3,7 @@ import { Modal, Text, View } from 'react-native';
 import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme';
+import { colors, radius } from '../theme';
 import { selection } from '../lib/haptics';
 
 /** Client design tokens (family_switch_modal_updated_layout code.html). */
@@ -64,8 +64,8 @@ export function FamilySwitcherModal({
           className="px-6 pt-4"
           style={{
             backgroundColor: colors.page,
-            borderTopLeftRadius: 40,
-            borderTopRightRadius: 40,
+            borderTopLeftRadius: radius,
+            borderTopRightRadius: radius,
             paddingBottom: (insets.bottom > 0 ? insets.bottom : 12) + 12,
           }}
         >
@@ -94,7 +94,7 @@ export function FamilySwitcherModal({
 
           {/* Active family (the only one today) */}
           <View
-            className="mt-6 flex-row items-center rounded-2xl p-5"
+            className="mt-6 flex-row items-center rounded p-5"
             style={{ backgroundColor: GOLD_CONTAINER_TINT, borderWidth: 2, borderColor: GOLD_CONTAINER }}
           >
             <View
@@ -109,7 +109,7 @@ export function FamilySwitcherModal({
                   {familyName}
                 </Text>
                 <View
-                  className="ml-2 rounded-full px-2 py-0.5"
+                  className="ml-2 rounded px-2 py-0.5"
                   style={{ backgroundColor: GOLD_CONTAINER }}
                 >
                   <Text className="text-[9px] font-bold uppercase" style={{ color: GOLD_INK }}>
@@ -128,7 +128,7 @@ export function FamilySwitcherModal({
 
           {/* Future slot — mirrors the design's dashed "create new" area */}
           <View
-            className="mt-4 items-center rounded-2xl p-6"
+            className="mt-4 items-center rounded p-6"
             style={{ borderWidth: 2, borderStyle: 'dashed', borderColor: DASH }}
           >
             <Text className="text-sm font-semibold text-muted">More families coming soon</Text>
@@ -137,7 +137,7 @@ export function FamilySwitcherModal({
           {/* Confirm — slate secondary button per the design */}
           <Pressable
             onPress={close}
-            className="mt-6 items-center rounded-xl py-4 active:opacity-85"
+            className="mt-6 items-center rounded py-4 active:opacity-85"
             style={{ backgroundColor: colors.muted }}
           >
             <Text className="text-[15px] font-bold text-white">Confirm Selection</Text>

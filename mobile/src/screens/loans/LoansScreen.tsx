@@ -8,7 +8,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useLoans } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -29,11 +29,11 @@ function LoanCard({ loan, onPress }: { loan: Loan; onPress: () => void }) {
         selection();
         onPress();
       }}
-      className="rounded-3xl bg-white p-4 active:opacity-90"
-      style={shadow.soft}
+      className="rounded bg-white p-4 active:opacity-90"
+      style={outline.card}
     >
       <View className="flex-row items-center">
-        <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav">
+        <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav">
           <Ionicons name={cat.icon} size={22} color={colors.navy} />
         </View>
         <View className="flex-1 pr-2">
@@ -48,7 +48,7 @@ function LoanCard({ loan, onPress }: { loan: Loan; onPress: () => void }) {
       </View>
 
       <View className="mt-3 flex-row items-center justify-between">
-        <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+        <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
           <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
@@ -101,7 +101,7 @@ export function LoansScreen({ navigation }: RootScreenProps<'Loans'>) {
               colors={gradients.navy}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+              style={{ borderRadius: radius, padding: 24 }}
             >
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                 Active outstanding
@@ -127,7 +127,7 @@ export function LoansScreen({ navigation }: RootScreenProps<'Loans'>) {
                 disabled={hasActive}
               />
               {hasActive ? (
-                <View className="mt-2.5 flex-row items-start rounded-2xl bg-lav-faint p-3.5">
+                <View className="mt-2.5 flex-row items-start rounded bg-lav-faint p-3.5">
                   <Ionicons name="information-circle" size={17} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
                   <Text className="flex-1 text-[13px] leading-5 text-muted">
                     You already have an active loan. Repay it fully before applying for another.

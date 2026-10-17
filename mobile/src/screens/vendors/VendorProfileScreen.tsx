@@ -9,7 +9,7 @@ import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useVendor } from '../../api/hooks';
 import { selection } from '../../lib/haptics';
 import type { RootScreenProps } from '../../navigation/types';
@@ -30,7 +30,7 @@ const CATEGORY_META: Record<string, { label: string; icon: IconName }> = {
 
 function HeroPill({ icon, label }: { icon: IconName; label: string }) {
   return (
-    <View className="flex-row items-center rounded-full bg-white/15 px-3 py-1.5">
+    <View className="flex-row items-center rounded bg-white/15 px-3 py-1.5">
       <Ionicons name={icon} size={13} color={colors.white} style={{ marginRight: 5 }} />
       <Text className="text-[12px] font-semibold text-white" numberOfLines={1}>
         {label}
@@ -41,7 +41,7 @@ function HeroPill({ icon, label }: { icon: IconName; label: string }) {
 
 function StatTile({ value, label }: { value: string | number; label: string }) {
   return (
-    <View className="flex-1 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
       <Text className="text-[22px] font-extrabold leading-tight text-ink" numberOfLines={1}>
         {value}
       </Text>
@@ -96,7 +96,7 @@ export function VendorProfileScreen({ route, navigation }: RootScreenProps<'Vend
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="items-center">
               <View className="h-20 w-20 items-center justify-center rounded-full bg-white/15">
@@ -131,7 +131,7 @@ export function VendorProfileScreen({ route, navigation }: RootScreenProps<'Vend
           </View>
 
           {/* About */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">About</Text>
+          <Text className="mt-7 text-[13px] font-bold text-muted">About</Text>
           <Card className="mt-3">
             {v.bio ? (
               <Text className="text-[14px] leading-[21px] text-ink">{v.bio}</Text>
@@ -143,12 +143,12 @@ export function VendorProfileScreen({ route, navigation }: RootScreenProps<'Vend
           </Card>
 
           {/* Contact & hire */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-            Work with this vendor
+          <Text className="mt-7 text-[13px] font-bold text-muted">
+            Work With This Vendor
           </Text>
           <Card className="mt-3">
             <View className="flex-row items-start">
-              <View className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+              <View className="mr-3 h-11 w-11 items-center justify-center rounded bg-lav-soft">
                 <Ionicons name="shield-outline" size={20} color={colors.navy} />
               </View>
               <Text className="flex-1 text-[13px] leading-[19px] text-muted">
@@ -156,7 +156,7 @@ export function VendorProfileScreen({ route, navigation }: RootScreenProps<'Vend
               </Text>
             </View>
 
-            <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint px-4 py-3">
+            <View className="mt-4 flex-row items-center rounded bg-lav-faint px-4 py-3">
               <Ionicons name="mail-outline" size={16} color={colors.muted} style={{ marginRight: 10 }} />
               <Text className="flex-1 text-[14px] font-semibold text-ink" numberOfLines={1}>
                 {v.email}

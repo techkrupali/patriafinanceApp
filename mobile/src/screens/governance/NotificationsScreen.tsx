@@ -6,7 +6,7 @@ import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -70,8 +70,8 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
         markAll.mutate();
       }}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-      style={shadow.soft}
+      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+      style={outline.card}
     >
       <Ionicons name="checkmark-done" size={20} color={colors.brand} />
     </Pressable>
@@ -122,12 +122,12 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
                 <Pressable
                   key={n.id}
                   onPress={() => onPress(n)}
-                  className={`flex-row items-center rounded-3xl p-4 active:opacity-90 ${
+                  className={`flex-row items-center rounded p-4 active:opacity-90 ${
                     n.read ? 'bg-white' : 'bg-lav-faint'
                   }`}
-                  style={shadow.soft}
+                  style={outline.card}
                 >
-                  <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-2xl ${v.tile}`}>
+                  <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded ${v.tile}`}>
                     <Ionicons name={v.icon} size={22} color={v.color} />
                   </View>
                   <View className="flex-1 pr-2">
@@ -153,7 +153,7 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
               <Pressable
                 onPress={() => void query.fetchNextPage()}
                 disabled={query.isFetchingNextPage}
-                className="items-center rounded-2xl bg-lav py-3.5 active:opacity-80"
+                className="items-center rounded bg-lav py-3.5 active:opacity-80"
               >
                 {query.isFetchingNextPage ? (
                   <ActivityIndicator color={colors.navy} />

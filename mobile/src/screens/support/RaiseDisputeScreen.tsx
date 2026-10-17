@@ -10,7 +10,7 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { TxnRow } from '../../components/TxnRow';
 import { DateRangeFilter, withinRange, type DateRangeKey } from '../../components/DateRangeFilter';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { formatMoney, humanizeType, timeLabel } from '../../lib/format';
 import { walletVisual } from '../../lib/walletVisual';
 import { selection, notifySuccess } from '../../lib/haptics';
@@ -60,10 +60,10 @@ function SelectRow({
   return (
     <Pressable
       onPress={onPress}
-      className="mt-2 flex-row items-center rounded-3xl bg-white p-4 active:opacity-90"
-      style={shadow.soft}
+      className="mt-2 flex-row items-center rounded bg-white p-4 active:opacity-90"
+      style={outline.card}
     >
-      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-2xl ${tile}`}>
+      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded ${tile}`}>
         <Ionicons name={icon} size={22} color={colors.navy} />
       </View>
       <View className="flex-1 pr-2">
@@ -220,7 +220,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
         </Text>
 
         {/* Category */}
-        <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Category</Text>
+        <Text className="mt-6 text-[13px] font-semibold text-muted">Category</Text>
         <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
           {CATEGORIES.map((c) => {
             const active = category === c.value;
@@ -228,7 +228,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
               <Pressable
                 key={c.value}
                 onPress={() => changeCategory(c.value)}
-                className={`rounded-full px-4 py-2.5 active:opacity-90 ${active ? 'bg-navy' : 'bg-lav'}`}
+                className={`rounded px-4 py-2.5 active:opacity-90 ${active ? 'bg-navy' : 'bg-lav'}`}
               >
                 <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                   {c.label}
@@ -241,7 +241,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
         {/* Record selection (picker categories) */}
         {cfg.picker ? (
           selectedRef ? (
-            <View className="mt-4 flex-row items-center rounded-2xl bg-success-soft p-4">
+            <View className="mt-4 flex-row items-center rounded bg-success-soft p-4">
               <Ionicons name="checkmark-circle" size={20} color={colors.brand} style={{ marginRight: 10 }} />
               <View className="flex-1 pr-2">
                 <Text className="text-[10px] font-bold uppercase tracking-wider text-brand">
@@ -258,7 +258,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
                   setSelectedLabel(null);
                 }}
                 hitSlop={6}
-                className="rounded-full bg-white px-3 py-1.5 active:opacity-80"
+                className="rounded bg-white px-3 py-1.5 active:opacity-80"
               >
                 <Text className="text-[12px] font-bold text-navy">Change</Text>
               </Pressable>
@@ -266,7 +266,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
           ) : (
             <>
               {/* Common date/time filter */}
-              <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">When</Text>
+              <Text className="mt-6 text-[13px] font-semibold text-muted">When</Text>
               <View className="mt-2">
                 <DateRangeFilter value={dateRange} onChange={setDateRange} />
               </View>
@@ -287,7 +287,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
                   <ActivityIndicator color={colors.navy} />
                 </View>
               ) : count === 0 ? (
-                <View className="mt-6 flex-row items-start rounded-2xl bg-lav-faint p-4">
+                <View className="mt-6 flex-row items-start rounded bg-lav-faint p-4">
                   <Ionicons name="funnel-outline" size={16} color={colors.muted} style={{ marginRight: 8, marginTop: 1 }} />
                   <Text className="flex-1 text-[13px] text-muted">
                     No {cfg.label.toLowerCase()} records match these filters. Try a wider date range or a
@@ -364,7 +364,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
         ) : (
           /* 'Other' — no record picker, optional free-text reference */
           <Input
-            label="Reference (optional)"
+            label="Reference (Optional)"
             icon="barcode-outline"
             value={selectedRef ?? ''}
             onChangeText={(t) => setSelectedRef(t)}
@@ -385,7 +385,7 @@ export function RaiseDisputeScreen({ navigation, route }: RootScreenProps<'Raise
         />
 
         <Input
-          label="What happened?"
+          label="What Happened?"
           icon="document-text-outline"
           value={description}
           onChangeText={setDescription}

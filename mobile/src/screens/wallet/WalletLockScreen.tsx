@@ -11,7 +11,7 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { useWallet, useWalletLock } from '../../api/hooks';
 import { selection, notifySuccess } from '../../lib/haptics';
 import type { RootScreenProps } from '../../navigation/types';
@@ -155,13 +155,10 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
             colors={frozen ? gradients.brand : gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center justify-between">
-              <View
-                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/15"
-                style={{ borderRadius: 18 }}
-              >
+              <View className="h-12 w-12 items-center justify-center rounded bg-white/15">
                 <Ionicons
                   name={frozen ? 'lock-closed' : 'lock-open'}
                   size={24}
@@ -169,7 +166,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
                 />
               </View>
               <View
-                className={`rounded-full px-3 py-1 ${frozen ? 'bg-danger-soft' : 'bg-white/20'}`}
+                className={`rounded px-3 py-1 ${frozen ? 'bg-danger-soft' : 'bg-white/20'}`}
               >
                 <Text
                   className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -210,7 +207,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
             />
           )}
 
-          <View className="mt-3 flex-row items-start rounded-2xl bg-lav-faint px-4 py-3">
+          <View className="mt-3 flex-row items-start rounded bg-lav-faint px-4 py-3">
             <Ionicons
               name="information-circle-outline"
               size={16}
@@ -224,13 +221,13 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
           </View>
 
           {/* ---------- Scheduled access ---------- */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-            Scheduled access
+          <Text className="mt-7 text-[13px] font-bold text-muted">
+            Scheduled Access
           </Text>
 
           <Card className="mt-3">
             <View className="flex-row items-center">
-              <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+              <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                 <Ionicons name="time-outline" size={20} color={colors.navy} />
               </View>
               <View className="flex-1 pr-2">
@@ -248,7 +245,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
             </View>
 
             {schedule ? (
-              <View className="mt-3 flex-row items-center rounded-2xl bg-success-soft px-3.5 py-2.5">
+              <View className="mt-3 flex-row items-center rounded bg-success-soft px-3.5 py-2.5">
                 <Ionicons name="calendar-outline" size={16} color={colors.brand} style={{ marginRight: 8 }} />
                 <Text className="flex-1 text-[13px] font-semibold text-brand">
                   {daysSummary(schedule.days)}, {schedule.start}–{schedule.end}
@@ -260,7 +257,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
           {restrict ? (
             <>
               {/* Days */}
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <Text className="mt-7 text-[13px] font-bold text-muted">
                 Days
               </Text>
               <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
@@ -270,8 +267,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
                     <Pressable
                       key={d.value}
                       onPress={() => toggleDay(d.value)}
-                      className={`rounded-full px-4 py-2.5 active:opacity-80 ${on ? 'bg-navy' : 'bg-lav'}`}
-                      style={on ? shadow.soft : undefined}
+                      className={`rounded px-4 py-2.5 active:opacity-80 ${on ? 'bg-navy' : 'bg-lav'}`}
                     >
                       <Text className={`text-[13px] font-semibold ${on ? 'text-white' : 'text-ink'}`}>
                         {d.short}
@@ -282,7 +278,7 @@ export function WalletLockScreen({ route }: RootScreenProps<'WalletLock'>) {
               </View>
 
               {/* Window */}
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <Text className="mt-7 text-[13px] font-bold text-muted">
                 Window
               </Text>
               <View className="mt-3 flex-row" style={{ gap: 12 }}>

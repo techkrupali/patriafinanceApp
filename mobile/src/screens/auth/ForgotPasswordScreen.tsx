@@ -8,7 +8,7 @@ import { Input } from '../../components/Input';
 import { PhoneInput } from '../../components/PhoneInput';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors } from '../../theme';
 import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { selection } from '../../lib/haptics';
 import { useForgotPassword, useResetPassword } from '../../api/hooks';
@@ -94,7 +94,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                 Enter your email or phone number and we'll send you a reset code.
               </Text>
               <View className="mt-6">
-                <View className="mb-5 flex-row rounded-xl bg-page-top p-1">
+                <View className="mb-5 flex-row rounded bg-page-top p-1">
                   {(['phone', 'email'] as const).map((k) => {
                     const active = k === mode;
                     return (
@@ -107,8 +107,8 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                             setError(null);
                           }
                         }}
-                        className="flex-1 items-center justify-center rounded-lg py-2"
-                        style={active ? [{ backgroundColor: colors.white }, shadow.soft] : undefined}
+                        className="flex-1 items-center justify-center rounded py-2"
+                        style={active ? { backgroundColor: colors.white } : undefined}
                       >
                         <Text
                           className={`text-sm ${active ? 'font-bold' : 'font-medium'}`}
@@ -122,7 +122,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                 </View>
                 {mode === 'phone' ? (
                   <PhoneInput
-                    label="Phone number"
+                    label="Phone Number"
                     country={phoneCountry}
                     onChangeCountry={setPhoneCountry}
                     value={phoneNational}
@@ -130,7 +130,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                   />
                 ) : (
                   <Input
-                    label="Email address"
+                    label="Email Address"
                     icon="mail-outline"
                     value={email}
                     onChangeText={setEmail}
@@ -151,13 +151,13 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                 <Text className="font-semibold text-ink">{sentTo ?? resolvedId}</Text>.
               </Text>
               {hint ? (
-                <View className="mt-3 self-start rounded-full bg-lav-faint px-3 py-1">
+                <View className="mt-3 self-start rounded bg-lav-faint px-3 py-1">
                   <Text className="text-xs font-medium text-muted">Dev code: {hint}</Text>
                 </View>
               ) : null}
               <View className="mt-6" style={{ gap: 16 }}>
                 <Input
-                  label="Reset code"
+                  label="Reset Code"
                   icon="keypad-outline"
                   value={code}
                   onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -166,7 +166,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                   maxLength={6}
                 />
                 <Input
-                  label="New password"
+                  label="New Password"
                   icon="lock-closed-outline"
                   value={password}
                   onChangeText={setPassword}
@@ -174,7 +174,7 @@ export function ForgotPasswordScreen({ navigation }: AuthScreenProps<'ForgotPass
                   secureTextEntry
                 />
                 <Input
-                  label="Confirm new password"
+                  label="Confirm New Password"
                   icon="lock-closed-outline"
                   value={passwordConfirm}
                   onChangeText={setPasswordConfirm}

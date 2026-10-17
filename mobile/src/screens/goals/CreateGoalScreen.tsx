@@ -113,7 +113,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
         selection();
         onPress();
       }}
-      className={`flex-row items-center rounded-2xl border p-4 active:opacity-90 ${
+      className={`flex-row items-center rounded border p-4 active:opacity-90 ${
         active ? 'border-brand bg-success-soft' : 'border-border bg-white'
       }`}
     >
@@ -142,7 +142,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
         </Text>
 
         <Input
-          label="Goal name"
+          label="Goal Name"
           icon="flag-outline"
           value={name}
           onChangeText={setName}
@@ -151,7 +151,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
           containerClassName="mt-6"
         />
 
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Goal type</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Goal Type</Text>
         <View className="mt-3 flex-row flex-wrap" style={{ gap: 10 }}>
           {GOAL_TYPES.map((t) => {
             const active = goalType === t.value;
@@ -163,7 +163,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
                   selection();
                   setGoalType(t.value);
                 }}
-                className={`flex-row items-center rounded-full px-4 py-3 active:opacity-80 ${
+                className={`flex-row items-center rounded px-4 py-3 active:opacity-80 ${
                   active ? 'bg-navy' : 'bg-lav'
                 }`}
               >
@@ -182,7 +182,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
         </View>
 
         <Input
-          label="Target amount (₦)"
+          label="Target Amount (₦)"
           icon="cash-outline"
           value={groupAmountInput(target)}
           onChangeText={(t) => setTarget(sanitizeAmountInput(t))}
@@ -191,7 +191,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
           containerClassName="mt-7"
         />
 
-        <View className="mt-6 flex-row items-center rounded-2xl bg-lav-faint p-4">
+        <View className="mt-6 flex-row items-center rounded bg-lav-faint p-4">
           <Ionicons name="repeat-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
           <View className="flex-1 pr-2">
             <Text className="text-[15px] font-semibold text-ink">Auto-save every month</Text>
@@ -212,13 +212,13 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
 
         {autoFund ? (
           <>
-            <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Move from</Text>
+            <Text className="mt-7 text-[13px] font-bold text-muted">Move From</Text>
             {owned.length > 0 ? (
               <View className="mt-3" style={{ gap: 10 }}>
                 {owned.map((w) => renderWalletRow(w, fromId === w.id, () => setFromId(w.id)))}
               </View>
             ) : (
-              <View className="mt-3 flex-row items-start rounded-2xl bg-lav-faint px-4 py-3">
+              <View className="mt-3 flex-row items-start rounded bg-lav-faint px-4 py-3">
                 <Ionicons
                   name="wallet-outline"
                   size={15}
@@ -232,7 +232,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
             )}
 
             <Input
-              label="Monthly amount (₦)"
+              label="Monthly Amount (₦)"
               icon="cash-outline"
               value={groupAmountInput(monthly)}
               onChangeText={(t) => setMonthly(sanitizeAmountInput(t))}
@@ -241,15 +241,15 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
               containerClassName="mt-7"
             />
 
-            <Text className="mt-6 text-[11px] font-bold uppercase tracking-wider text-muted">Day of month</Text>
-            <View className="mt-3 flex-row items-center justify-between rounded-2xl bg-lav-faint p-3">
+            <Text className="mt-6 text-[13px] font-bold text-muted">Day of Month</Text>
+            <View className="mt-3 flex-row items-center justify-between rounded bg-lav-faint p-3">
               <Pressable
                 onPress={() => {
                   selection();
                   setDayOfMonth((n) => Math.max(1, n - 1));
                 }}
                 disabled={dayOfMonth <= 1}
-                className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                className={`h-11 w-11 items-center justify-center rounded bg-white ${
                   dayOfMonth <= 1 ? 'opacity-40' : 'active:opacity-70'
                 }`}
               >
@@ -265,7 +265,7 @@ export function CreateGoalScreen({ navigation }: RootScreenProps<'CreateGoal'>) 
                   setDayOfMonth((n) => Math.min(28, n + 1));
                 }}
                 disabled={dayOfMonth >= 28}
-                className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                className={`h-11 w-11 items-center justify-center rounded bg-white ${
                   dayOfMonth >= 28 ? 'opacity-40' : 'active:opacity-70'
                 }`}
               >

@@ -1,30 +1,27 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients } from '../theme';
 
 /**
  * The Patriai mark — a deep-indigo squircle with a bold monogram "P", a soft
  * inner light, and a single champagne-gold accent bar. Custom, not a stock icon.
  */
-export function Logo({ size = 88, elevated = true }: { size?: number; elevated?: boolean }) {
+export function Logo({ size = 88 }: { size?: number }) {
   const r = size * 0.31;
   return (
     <LinearGradient
       colors={gradients.navy}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: r,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        },
-        elevated ? shadow.hero : undefined,
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: r,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
     >
       {/* soft top-right inner light */}
       <View

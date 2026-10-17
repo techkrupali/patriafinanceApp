@@ -105,7 +105,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
           </Text>
 
           {existing?.verified ? (
-            <View className="mt-4 flex-row items-center rounded-2xl bg-success-soft px-4 py-3">
+            <View className="mt-4 flex-row items-center rounded bg-success-soft px-4 py-3">
               <Ionicons
                 name="shield-checkmark"
                 size={18}
@@ -119,7 +119,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
           ) : null}
 
           <Input
-            label="Business name"
+            label="Business Name"
             icon="storefront-outline"
             value={businessName}
             onChangeText={setBusinessName}
@@ -128,7 +128,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
             containerClassName="mt-6"
           />
 
-          <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">
+          <Text className="mt-6 text-[13px] font-semibold text-muted">
             Category
           </Text>
           <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
@@ -141,7 +141,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
                     selection();
                     setCategory(c.value);
                   }}
-                  className={`flex-row items-center rounded-full px-4 py-2.5 active:opacity-90 ${
+                  className={`flex-row items-center rounded px-4 py-2.5 active:opacity-90 ${
                     active ? 'bg-navy' : 'bg-lav'
                   }`}
                 >
@@ -162,7 +162,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
           </View>
 
           <Input
-            label="Location (optional)"
+            label="Location (Optional)"
             icon="location-outline"
             value={location}
             onChangeText={setLocation}
@@ -172,7 +172,7 @@ export function BecomeVendorScreen({ navigation }: RootScreenProps<'BecomeVendor
           />
 
           <Input
-            label="About your business (optional)"
+            label="About Your Business (Optional)"
             icon="document-text-outline"
             value={bio}
             onChangeText={setBio}

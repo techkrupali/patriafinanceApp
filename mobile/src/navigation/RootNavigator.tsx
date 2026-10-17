@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
-import { colors, shadow } from '../theme';
+import { colors, outline, radius } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
@@ -149,9 +149,9 @@ function MainTabs() {
             style={{
               flex: 1,
               backgroundColor: colors.white,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              ...shadow.tab,
+              borderTopLeftRadius: radius,
+              borderTopRightRadius: radius,
+              ...outline.tab,
             }}
           />
         ),
@@ -162,7 +162,7 @@ function MainTabs() {
               style={{
                 width: 46,
                 height: 28,
-                borderRadius: 12,
+                borderRadius: radius,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: focused ? colors.goldSoft : 'transparent',

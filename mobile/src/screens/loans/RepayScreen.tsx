@@ -125,8 +125,8 @@ export function RepayScreen({ navigation, route }: RootScreenProps<'Repay'>) {
           showsVerticalScrollIndicator={false}
         >
             {/* Amount hero */}
-            <View className="items-center rounded-3xl bg-lav-faint py-8">
-              <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Repay amount</Text>
+            <View className="items-center rounded bg-lav-faint py-8">
+              <Text className="text-[13px] font-semibold text-muted">Repay Amount</Text>
               <View className="mt-2 flex-row items-center justify-center">
                 <Text className="text-4xl font-extrabold text-faded">₦</Text>
                 <TextInput
@@ -150,14 +150,14 @@ export function RepayScreen({ navigation, route }: RootScreenProps<'Repay'>) {
                   selection();
                   setAmount(maxRepay > 0 ? maxRepay.toFixed(2) : '');
                 }}
-                className="flex-1 items-center rounded-2xl bg-lav py-3 active:opacity-80"
+                className="flex-1 items-center rounded bg-lav py-3 active:opacity-80"
               >
                 <Text className="text-[13px] font-bold text-navy">Pay full · {formatMoney(maxRepay)}</Text>
               </Pressable>
             </View>
 
             {/* Source wallet */}
-            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">Pay from</Text>
+            <Text className="mt-7 text-[13px] font-semibold text-muted">Pay From</Text>
             <View className="mt-2" style={{ gap: 10 }}>
               {wallets.map((w) => {
                 const active = w.id === walletId;
@@ -168,7 +168,7 @@ export function RepayScreen({ navigation, route }: RootScreenProps<'Repay'>) {
                       selection();
                       setWalletId(w.id);
                     }}
-                    className={`flex-row items-center justify-between rounded-2xl border p-4 active:opacity-80 ${
+                    className={`flex-row items-center justify-between rounded border p-4 active:opacity-80 ${
                       active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                     }`}
                   >

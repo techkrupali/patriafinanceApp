@@ -8,7 +8,7 @@ import { Button } from '../../components/Button';
 import { PinPad } from '../../components/PinPad';
 import { PhoneInput } from '../../components/PhoneInput';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { useRegister } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
@@ -47,7 +47,7 @@ function Field({
         {label}
       </Text>
       <View
-        className="w-full flex-row items-center rounded-xl px-4"
+        className="w-full flex-row items-center rounded px-4"
         style={{
           minHeight: 54,
           backgroundColor: focused ? colors.white : colors.lavSoft, // surface-container-high
@@ -115,7 +115,7 @@ function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
 function IconBadge({ name }: { name: React.ComponentProps<typeof Ionicons>['name'] }) {
   return (
     <View
-      className="h-20 w-20 items-center justify-center rounded-2xl"
+      className="h-20 w-20 items-center justify-center rounded"
       style={{ backgroundColor: 'rgba(0,109,47,0.12)' }}
     >
       <Ionicons name={name} size={38} color="#006D2F" />
@@ -307,17 +307,17 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
             </Text>
 
             <View className="mt-8" style={{ gap: 20 }}>
-              <Field label="First name" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
-              <Field label="Last name" value={lastName} onChangeText={setLastName} placeholder="Obi" />
+              <Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="Ada" />
+              <Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="Obi" />
               <PhoneInput
-                label="Phone number"
+                label="Phone Number"
                 country={phoneCountry}
                 onChangeCountry={setPhoneCountry}
                 value={phone}
                 onChangeText={setPhone}
               />
               <Field
-                label="Email address"
+                label="Email Address"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
@@ -395,7 +395,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
                 secure
               />
               <Field
-                label="Confirm password"
+                label="Confirm Password"
                 value={passwordConfirm}
                 onChangeText={setPasswordConfirm}
                 placeholder="Re-enter your password"
@@ -424,7 +424,7 @@ export function RegisterScreen({ navigation }: AuthScreenProps<'Register'>) {
           <View className="items-center pt-6">
             <View
               className="h-24 w-24 items-center justify-center rounded-full bg-success-soft"
-              style={shadow.soft}
+              style={outline.card}
             >
               <Ionicons name={support?.icon ?? 'finger-print'} size={46} color={colors.brand} />
             </View>

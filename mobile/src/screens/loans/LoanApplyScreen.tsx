@@ -21,7 +21,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { LoadError } from '../../components/LoadError';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import { useApplyLoan, useLoanEligibility, useWallets } from '../../api/hooks';
 import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -247,7 +247,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               colors={gradients.navy}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: 28, padding: 22 }, shadow.hero]}
+              style={{ borderRadius: radius, padding: 22 }}
             >
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
                 You're eligible for up to
@@ -255,7 +255,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               <Text className="mt-2 text-[34px] font-extrabold leading-tight tracking-tight text-white">
                 {formatMoney(elig.max_amount)}
               </Text>
-              <View className="mt-3 flex-row items-center self-start rounded-full bg-white/15 px-3 py-1.5">
+              <View className="mt-3 flex-row items-center self-start rounded bg-white/15 px-3 py-1.5">
                 <Ionicons name="ribbon-outline" size={13} color={colors.brandGlow} style={{ marginRight: 5 }} />
                 <Text className="text-[11px] font-bold uppercase tracking-wider text-brand-glow">
                   Tier {elig.tier}
@@ -264,8 +264,8 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             </LinearGradient>
 
             {/* Category */}
-            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              What's it for?
+            <Text className="mt-7 text-[13px] font-semibold text-muted">
+              What's It For?
             </Text>
             <View className="mt-3 flex-row flex-wrap justify-between">
               {categories.map((c) => {
@@ -278,12 +278,12 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
                       setCategory(c.value);
                     }}
                     style={{ width: '31.5%', marginBottom: 12 }}
-                    className={`items-center rounded-3xl border px-2 py-4 active:opacity-90 ${
+                    className={`items-center rounded border px-2 py-4 active:opacity-90 ${
                       active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                     }`}
                   >
                     <View
-                      className="h-11 w-11 items-center justify-center rounded-2xl"
+                      className="h-11 w-11 items-center justify-center rounded"
                       style={{ backgroundColor: active ? colors.brand : colors.lavSoft }}
                     >
                       <Ionicons name={c.icon} size={21} color={active ? colors.white : colors.navy} />
@@ -300,10 +300,10 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             </View>
 
             {/* Amount */}
-            <Text className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              How much?
+            <Text className="mt-4 text-[13px] font-semibold text-muted">
+              How Much?
             </Text>
-            <View className="mt-2 items-center rounded-3xl bg-lav-faint py-7">
+            <View className="mt-2 items-center rounded bg-lav-faint py-7">
               <View className="flex-row items-center justify-center">
                 <Text className="text-4xl font-extrabold text-faded">₦</Text>
                 <TextInput
@@ -321,8 +321,8 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             </View>
 
             {/* Tenor */}
-            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Repay over
+            <Text className="mt-7 text-[13px] font-semibold text-muted">
+              Repay Over
             </Text>
             <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
               {TENOR_PRESETS.map((d) => (
@@ -335,7 +335,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               ))}
             </View>
             <Input
-              label="Custom tenor (7–365 days)"
+              label="Custom Tenor (7–365 Days)"
               icon="calendar-outline"
               value={tenor}
               onChangeText={(t) => setTenor(t.replace(/[^0-9]/g, '').slice(0, 3))}
@@ -347,8 +347,8 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             />
 
             {/* Frequency */}
-            <Text className="mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Repayment frequency
+            <Text className="mt-5 text-[13px] font-semibold text-muted">
+              Repayment Frequency
             </Text>
             <View className="mt-2 flex-row" style={{ gap: 8 }}>
               {FREQUENCY_OPTIONS.map((f) => (
@@ -362,8 +362,8 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
             </View>
 
             {/* Disburse wallet */}
-            <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Disburse to
+            <Text className="mt-6 text-[13px] font-semibold text-muted">
+              Disburse To
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2 -mx-1">
               <View className="flex-row px-1" style={{ gap: 8 }}>
@@ -376,7 +376,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
                         selection();
                         setWalletId(w.id);
                       }}
-                      className={`rounded-2xl px-4 py-3 active:opacity-80 ${
+                      className={`rounded px-4 py-3 active:opacity-80 ${
                         active ? 'bg-navy' : 'border border-border bg-white'
                       }`}
                     >
@@ -394,7 +394,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
 
             {/* Purpose */}
             <Input
-              label="Purpose (optional)"
+              label="Purpose (Optional)"
               icon="create-outline"
               value={purpose}
               onChangeText={setPurpose}
@@ -420,7 +420,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
       <Modal visible={reviewOpen} transparent animationType="slide" onRequestClose={() => setReviewOpen(false)}>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+          <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="mb-4 flex-row items-start justify-between">
               <View className="flex-1 pr-3">
@@ -438,7 +438,7 @@ export function LoanApplyScreen({ navigation }: RootScreenProps<'LoanApply'>) {
               </Pressable>
             </View>
 
-            <View className="rounded-2xl bg-lav-faint p-4">
+            <View className="rounded bg-lav-faint p-4">
               <SummaryRow label="Principal" value={formatMoney(amountNum)} />
               <SummaryRow label={`Interest (${Math.round(LOAN_INTEREST_RATE * 100)}%)`} value={formatMoney(estInterest)} border />
               <SummaryRow label="Total repayable" value={formatMoney(estTotal)} border strong />

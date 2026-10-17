@@ -7,7 +7,7 @@ import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/Card';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useFamilyMember } from '../../api/hooks';
 import { formatMoney, timeLabel } from '../../lib/format';
 import { roleLabel } from '../../lib/governance';
@@ -19,7 +19,7 @@ import type { RootScreenProps } from '../../navigation/types';
 
 function Stat({ value, label }: { value: string | number; label: string }) {
   return (
-    <View className="flex-1 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
       <Text className="text-[22px] font-extrabold leading-tight text-ink" numberOfLines={1}>
         {value}
       </Text>
@@ -32,7 +32,7 @@ function Stat({ value, label }: { value: string | number; label: string }) {
 function PermChip({ label, on }: { label: string; on: boolean }) {
   return (
     <View
-      className={`flex-row items-center rounded-full px-2 py-0.5 ${on ? 'bg-success-soft' : 'bg-lav-faint'}`}
+      className={`flex-row items-center rounded px-2 py-0.5 ${on ? 'bg-success-soft' : 'bg-lav-faint'}`}
     >
       <Ionicons
         name={on ? 'checkmark' : 'close'}
@@ -74,14 +74,14 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24, alignItems: 'center' }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24, alignItems: 'center' }}
           >
             <View className="h-20 w-20 items-center justify-center rounded-full bg-white/15">
               <Text className="text-2xl font-bold text-white">{data.person.avatar}</Text>
             </View>
             <Text className="mt-3 text-[22px] font-extrabold text-white">{data.person.name}</Text>
             <Text className="mt-0.5 text-[13px] text-white/60">{data.person.email}</Text>
-            <View className="mt-3 rounded-full bg-white/15 px-3 py-1">
+            <View className="mt-3 rounded bg-white/15 px-3 py-1">
               <Text className="text-[10px] font-bold uppercase tracking-widest text-white">
                 {roleLabel(data.person.role)}
               </Text>
@@ -96,8 +96,8 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
           </View>
 
           {/* Wallet access */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-            Wallet access
+          <Text className="mt-7 text-[13px] font-bold text-muted">
+            Wallet Access
           </Text>
           {data.memberships.map((ms) => {
             const visual = walletVisual(ms.wallet_type as WalletType);
@@ -119,7 +119,7 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
                     style={{
                       height: 40,
                       width: 40,
-                      borderRadius: 14,
+                      borderRadius: radius,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginRight: 12,
@@ -136,7 +136,7 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
                   <Ionicons name="chevron-forward" size={16} color={colors.faded} />
                 </View>
                 {owner ? (
-                  <View className="mt-3 flex-row items-center rounded-2xl bg-success-soft px-3 py-2">
+                  <View className="mt-3 flex-row items-center rounded bg-success-soft px-3 py-2">
                     <Ionicons name="shield-checkmark" size={14} color={colors.brand} style={{ marginRight: 6 }} />
                     <Text className="text-[12px] font-semibold text-brand">Owns this wallet — full access</Text>
                   </View>
@@ -147,7 +147,7 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
                     <PermChip label="Request" on={ms.permissions.request} />
                     <PermChip label="Withdraw" on={ms.permissions.withdraw} />
                     {ms.permissions.request_limit ? (
-                      <View className="rounded-full bg-lav-faint px-2 py-0.5">
+                      <View className="rounded bg-lav-faint px-2 py-0.5">
                         <Text className="text-[10px] font-bold text-muted">
                           Limit {formatMoney(ms.permissions.request_limit)}
                         </Text>
@@ -160,8 +160,8 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
           })}
 
           {/* Recent spend requests */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-            Spend requests
+          <Text className="mt-7 text-[13px] font-bold text-muted">
+            Spend Requests
           </Text>
           {data.recent_requests.length > 0 ? (
             <Card className="mt-3 py-1">
@@ -176,7 +176,7 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
                       }}
                       className="flex-row items-center py-3 active:opacity-70"
                     >
-                      <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                      <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                         <Ionicons name="hand-left-outline" size={18} color={colors.navy} />
                       </View>
                       <View className="flex-1 pr-2">
@@ -189,7 +189,7 @@ export function FamilyMemberScreen({ navigation, route }: RootScreenProps<'Famil
                       </View>
                       <View className="items-end">
                         <Text className="text-[14px] font-bold text-ink">{formatMoney(r.amount)}</Text>
-                        <View className={`mt-1 flex-row items-center rounded-full px-2 py-0.5 ${v.bg}`}>
+                        <View className={`mt-1 flex-row items-center rounded px-2 py-0.5 ${v.bg}`}>
                           <Ionicons name={v.icon} size={10} color={statusIconColor(v)} style={{ marginRight: 3 }} />
                           <Text className={`text-[9px] font-bold uppercase tracking-wider ${v.text}`}>
                             {v.label}

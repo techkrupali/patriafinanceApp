@@ -45,7 +45,7 @@ export function ActivityScreen() {
         <Text className="text-3xl font-extrabold tracking-tight text-ink">Activity</Text>
 
         {/* Search */}
-        <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint px-4" style={{ minHeight: 50 }}>
+        <View className="mt-4 flex-row items-center rounded bg-lav-faint px-4" style={{ minHeight: 50 }}>
           <Ionicons name="search" size={18} color={colors.faded} style={{ marginRight: 8 }} />
           <TextInput
             value={search}
@@ -91,7 +91,7 @@ export function ActivityScreen() {
           ) : (
             sections.map((section) => (
               <View key={section.label} className="mb-5">
-                <Text className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                <Text className="mb-2.5 text-[13px] font-bold text-muted">
                   {section.label}
                 </Text>
                 <View style={{ gap: 10 }}>

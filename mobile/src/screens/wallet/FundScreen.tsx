@@ -46,7 +46,7 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
         <LoadError message={(error as Error).message} onRetry={() => refetch()} />
       ) : data ? (
         <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
-          <View className="flex-row items-center rounded-2xl bg-lav-faint p-4">
+          <View className="flex-row items-center rounded bg-lav-faint p-4">
             <Ionicons name="flash-outline" size={18} color={colors.brand} style={{ marginRight: 8 }} />
             <Text className="flex-1 text-[13px] leading-5 text-muted">
               Transfer to this account from any bank — your wallet credits instantly.
@@ -69,7 +69,7 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
             </View>
             <Pressable
               onPress={() => void copy()}
-              className={`mt-4 flex-row items-center justify-center rounded-2xl py-3.5 active:opacity-80 ${
+              className={`mt-4 flex-row items-center justify-center rounded py-3.5 active:opacity-80 ${
                 copied ? 'bg-success-soft' : 'bg-navy'
               }`}
             >
@@ -89,7 +89,7 @@ export function FundScreen({ route }: RootScreenProps<'Fund'>) {
             </View>
           </Card>
 
-          <View className="mt-5 flex-row items-start rounded-2xl bg-success-soft p-4">
+          <View className="mt-5 flex-row items-start rounded bg-success-soft p-4">
             <Ionicons name="information-circle-outline" size={18} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
             <Text className="flex-1 text-[13px] leading-5 text-brand">{data.note}</Text>
           </View>

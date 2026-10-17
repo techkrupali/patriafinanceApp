@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { selection } from '../lib/haptics';
 
 interface HeaderProps {
@@ -29,8 +29,8 @@ export function Header({ title = '', right, className = '', showBack = true }: H
               navigation.goBack();
             }}
             hitSlop={8}
-            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-            style={shadow.soft}
+            className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+            style={outline.card}
           >
             <Ionicons name="chevron-back" size={22} color={colors.ink} />
           </Pressable>

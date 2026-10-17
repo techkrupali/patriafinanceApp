@@ -6,7 +6,7 @@ import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, shadow } from '../../theme';
+import { colors, outline } from '../../theme';
 import { useApprovals } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import {
@@ -29,11 +29,11 @@ function ApprovalCard({ approval, scope, onPress }: { approval: ApprovalRequest;
         selection();
         onPress();
       }}
-      className="rounded-3xl bg-white p-4 active:opacity-90"
-      style={shadow.soft}
+      className="rounded bg-white p-4 active:opacity-90"
+      style={outline.card}
     >
       <View className="flex-row items-center">
-        <View className="mr-3.5 h-11 w-11 items-center justify-center rounded-2xl bg-lav">
+        <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav">
           <Ionicons name={approvalActionIcon(approval.action)} size={22} color={colors.navy} />
         </View>
         <View className="flex-1 pr-2">
@@ -49,7 +49,7 @@ function ApprovalCard({ approval, scope, onPress }: { approval: ApprovalRequest;
       </View>
 
       <View className="mt-3 flex-row items-center justify-between">
-        <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+        <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
           <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
@@ -71,7 +71,7 @@ export function ApprovalsScreen({ navigation, route }: RootScreenProps<'Approval
       <Header title="Approvals" />
 
       {/* Segments */}
-      <View className="mx-5 mt-1 flex-row rounded-2xl bg-lav-faint p-1">
+      <View className="mx-5 mt-1 flex-row rounded bg-lav-faint p-1">
         {(['to_me', 'mine'] as Scope[]).map((s) => {
           const active = scope === s;
           return (
@@ -81,8 +81,7 @@ export function ApprovalsScreen({ navigation, route }: RootScreenProps<'Approval
                 selection();
                 setScope(s);
               }}
-              className={`flex-1 items-center rounded-xl py-2.5 ${active ? 'bg-white' : ''}`}
-              style={active ? shadow.soft : undefined}
+              className={`flex-1 items-center rounded py-2.5 ${active ? 'bg-white' : ''}`}
             >
               <Text className={`text-[13px] font-bold ${active ? 'text-navy' : 'text-muted'}`}>
                 {s === 'to_me' ? 'To approve' : 'Mine'}

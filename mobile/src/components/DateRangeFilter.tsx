@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { colors, shadow } from '../theme';
+import { colors } from '../theme';
 import { selection } from '../lib/haptics';
 
 /**
@@ -55,8 +55,8 @@ export function DateRangeFilter({
               selection();
               onChange(r.key);
             }}
-            className={`rounded-full px-3.5 py-2 active:opacity-80 ${active ? '' : 'bg-lav'}`}
-            style={active ? [{ backgroundColor: colors.navy }, shadow.soft] : undefined}
+            className={`rounded px-3.5 py-2 active:opacity-80 ${active ? '' : 'bg-lav'}`}
+            style={active ? { backgroundColor: colors.navy } : undefined}
           >
             <Text className={`text-[12px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
               {r.label}

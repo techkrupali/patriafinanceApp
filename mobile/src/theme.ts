@@ -4,12 +4,15 @@ import type { ViewStyle } from 'react-native';
  * Patriai design language — "The Curated Ledger" (client design system,
  * navy+green revision per client video 2026-08-03).
  *
- * High-end editorial family finance: a bright layered surface stack (no hard
- * borders — boundaries come from tonal shifts), a deep treasury navy for hero
- * money cards, and a grounded green for actions and every positive financial
- * signal. The gold scheme is retired ("I do not want to use this colour
- * scheme") — the gold* token NAMES are kept so every screen repaints without
- * edits, but their values now resolve to the green action family.
+ * High-end editorial family finance: a bright layered surface stack, a deep
+ * treasury navy for hero money cards, and a grounded green for actions and
+ * every positive financial signal. The gold scheme is retired ("I do not want
+ * to use this colour scheme") — the gold* token NAMES are kept so every screen
+ * repaints without edits, but their values now resolve to the green action family.
+ *
+ * Style fixes per client video 2026-10-17: every button and box uses the same
+ * small corner radius (`radius`), and there are no drop shadows — light
+ * surfaces are separated by a faint gray outline (`outline`) instead.
  */
 export const colors = {
   // Deep treasury navy (hero money surfaces, dark chips)
@@ -50,9 +53,16 @@ export const colors = {
   roseSoft: '#FFE9E6',
 
   card: '#FFFFFF', // surface-container-lowest
-  border: '#E4E9ED', // soft tonal divider (used sparingly — no-line rule)
+  border: '#E4E9ED', // faint gray outline around light surfaces + dividers
   white: '#FFFFFF',
 } as const;
+
+/**
+ * Corner radius for every button, card, tile, chip and sheet (client: 3px).
+ * Mirrored by `rounded` (borderRadius.DEFAULT) in tailwind.config.js.
+ * True circles (avatars, dots, round icon buttons) stay fully round.
+ */
+export const radius = 3;
 
 /** LinearGradient colour stops (tuples so expo-linear-gradient accepts them). */
 export const gradients = {
@@ -74,42 +84,12 @@ export const gradients = {
   aurora: ['#F0F4F8', '#F6FAFE', '#EFF7F1'] as const,
 } as const;
 
-/** Ambient elevation — on-surface-tinted, never pure black (Curated Ledger). */
-export const shadow: Record<'card' | 'soft' | 'hero' | 'tab' | 'gold', ViewStyle> = {
-  card: {
-    shadowColor: '#171C1F',
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
-  soft: {
-    shadowColor: '#171C1F',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  // Client rule (video 2026-08-03): no deep/heavy shadows — soft blurry only.
-  hero: {
-    shadowColor: '#011D35',
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
-  tab: {
-    shadowColor: '#171C1F',
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 10,
-  },
-  gold: {
-    shadowColor: '#006D2F',
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
+/**
+ * Faint gray outlines that replace drop shadows (client video 2026-10-17:
+ * "remove shadows and use faint gray outline"). Solid navy/green surfaces —
+ * hero cards, primary buttons — need no outline and get neither.
+ */
+export const outline: Record<'card' | 'tab', ViewStyle> = {
+  card: { borderWidth: 1, borderColor: colors.border },
+  tab: { borderTopWidth: 1, borderTopColor: colors.border },
 };

@@ -108,7 +108,7 @@ export function OtpScreen({ route, navigation }: AuthScreenProps<'Otp'>) {
         {/* Brand/context header */}
         <View className="items-center">
           <View
-            className="h-20 w-20 items-center justify-center rounded-2xl"
+            className="h-20 w-20 items-center justify-center rounded"
             style={{ backgroundColor: 'rgba(0,109,47,0.12)' }}
           >
             <MaterialCommunityIcons name="shield-account" size={40} color="#006D2F" />
@@ -134,7 +134,7 @@ export function OtpScreen({ route, navigation }: AuthScreenProps<'Otp'>) {
             return (
               <View
                 key={i}
-                className="h-14 flex-1 items-center justify-center rounded-xl"
+                className="h-14 flex-1 items-center justify-center rounded"
                 style={{
                   backgroundColor: active ? colors.white : colors.lavSoft, // surface-container-high
                   borderWidth: 2,
@@ -166,7 +166,7 @@ export function OtpScreen({ route, navigation }: AuthScreenProps<'Otp'>) {
         />
 
         {hint ? (
-          <View className="mt-4 self-center rounded-full bg-lav-faint px-3 py-1">
+          <View className="mt-4 self-center rounded bg-lav-faint px-3 py-1">
             <Text className="text-xs font-medium text-muted">Dev code: {hint}</Text>
           </View>
         ) : null}

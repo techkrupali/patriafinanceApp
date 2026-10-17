@@ -71,7 +71,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
     <Modal visible={member !== null} transparent animationType="slide" onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="flex-1 justify-end bg-black/50">
-        <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+        <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
           <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
 
           {member ? (
@@ -97,7 +97,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
                 </Pressable>
               </View>
 
-              <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Role</Text>
+              <Text className="mt-6 text-[13px] font-semibold text-muted">Role</Text>
               <View className="mt-2" style={{ gap: 8 }}>
                 {ROLE_OPTIONS.map((r) => {
                   const active = role === r.value;
@@ -108,7 +108,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
                         selection();
                         setRole(r.value);
                       }}
-                      className={`flex-row items-center rounded-2xl border p-3 active:opacity-90 ${
+                      className={`flex-row items-center rounded border p-3 active:opacity-90 ${
                         active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                       }`}
                     >
@@ -126,7 +126,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
                 })}
               </View>
 
-              <View className="mt-4 flex-row items-center rounded-2xl bg-lav-faint p-4">
+              <View className="mt-4 flex-row items-center rounded bg-lav-faint p-4">
                 <Ionicons name="shield-checkmark-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
                 <View className="flex-1 pr-2">
                   <Text className="text-[14px] font-semibold text-ink">Can approve</Text>
@@ -145,7 +145,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
               <Pressable
                 onPress={save}
                 disabled={busy || !dirty}
-                className={`mt-5 items-center justify-center rounded-2xl bg-navy py-4 ${
+                className={`mt-5 items-center justify-center rounded bg-navy py-4 ${
                   busy || !dirty ? 'opacity-50' : 'active:opacity-90'
                 }`}
                 style={{ minHeight: 52 }}
@@ -160,7 +160,7 @@ export function MemberManageModal({ walletId, member, onClose }: MemberManageMod
               <Pressable
                 onPress={confirmRemove}
                 disabled={busy}
-                className="mt-2 flex-row items-center justify-center rounded-2xl py-3.5 active:opacity-70"
+                className="mt-2 flex-row items-center justify-center rounded py-3.5 active:opacity-70"
               >
                 {remove.isPending ? (
                   <ActivityIndicator color={colors.danger} />

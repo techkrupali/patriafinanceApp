@@ -4,7 +4,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useApprovals, useAutomations, useDashboard, useFamily } from '../../api/hooks';
 import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -154,7 +154,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
           colors={gradients.gold}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[{ height: 40, width: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, shadow.gold]}
+          style={{ height: 40, width: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
         >
           <MaterialCommunityIcons name="creation" size={20} color="#FFFFFF" />
         </LinearGradient>
@@ -182,7 +182,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
               colors={['#DFF2E5', '#CBEAD6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: 16, padding: 16 }, shadow.soft]}
+              style={[{ borderRadius: radius, padding: 16 }, outline.card]}
             >
               <View className="flex-row items-start">
                 <MaterialCommunityIcons
@@ -205,13 +205,13 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
                 <View className="mr-2 mt-1 h-7 w-7 items-center justify-center rounded-full bg-gold-soft">
                   <MaterialCommunityIcons name="creation" size={14} color={colors.goldDeep} />
                 </View>
-                <View className="max-w-[82%] rounded-2xl rounded-tl-md bg-white px-4 py-3" style={shadow.soft}>
+                <View className="max-w-[82%] rounded bg-white px-4 py-3" style={outline.card}>
                   <Text className="text-[14px] leading-5 text-ink">{m.text}</Text>
                 </View>
               </View>
             ) : (
               <View key={m.id} className="flex-row justify-end">
-                <View className="max-w-[82%] rounded-2xl rounded-tr-md bg-navy px-4 py-3">
+                <View className="max-w-[82%] rounded bg-navy px-4 py-3">
                   <Text className="text-[14px] leading-5 text-white">{m.text}</Text>
                 </View>
               </View>
@@ -225,7 +225,7 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
             <Pressable
               key={c}
               onPress={() => send(c)}
-              className="rounded-full bg-lav px-4 py-2 active:opacity-80"
+              className="rounded bg-lav px-4 py-2 active:opacity-80"
             >
               <Text className="text-[12px] font-bold text-muted">{c}</Text>
             </Pressable>
@@ -236,8 +236,8 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
       {/* Composer — lifted above the keyboard (edge-to-edge safe) */}
       <View className="px-4 pb-3 pt-1" style={{ marginBottom: kbHeight }}>
         <View
-          className="flex-row items-center rounded-full bg-white px-4"
-          style={[shadow.card, { minHeight: 52 }]}
+          className="flex-row items-center rounded bg-white px-4"
+          style={[outline.card, { minHeight: 52 }]}
         >
           <TextInput
             value={input}

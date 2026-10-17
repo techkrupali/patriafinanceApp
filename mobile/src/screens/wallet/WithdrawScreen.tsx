@@ -124,8 +124,8 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
         showsVerticalScrollIndicator={false}
       >
           {/* Amount hero */}
-          <View className="items-center rounded-3xl bg-lav-faint py-8">
-            <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Amount</Text>
+          <View className="items-center rounded bg-lav-faint py-8">
+            <Text className="text-[13px] font-semibold text-muted">Amount</Text>
             <View className="mt-2 flex-row items-center justify-center">
               <Text className="text-4xl font-extrabold text-faded">₦</Text>
               <TextInput
@@ -140,10 +140,10 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
           </View>
 
           {/* Destination */}
-          <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">Withdraw to</Text>
+          <Text className="mt-7 text-[13px] font-semibold text-muted">Withdraw To</Text>
           <Pressable
             onPress={() => setBankPickerOpen(true)}
-            className="mt-2 flex-row items-center rounded-2xl bg-lav-faint px-4"
+            className="mt-2 flex-row items-center rounded bg-lav-faint px-4"
             style={{ minHeight: 52 }}
           >
             <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
@@ -154,7 +154,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
           </Pressable>
 
           <Input
-            label="Account number"
+            label="Account Number"
             icon="card-outline"
             value={accountNumber}
             onChangeText={(t) => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
@@ -171,7 +171,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
               <Text className="ml-2 text-sm text-muted">Verifying account…</Text>
             </View>
           ) : verified ? (
-            <View className="mt-3 flex-row items-center self-start rounded-full bg-success-soft px-3.5 py-2">
+            <View className="mt-3 flex-row items-center self-start rounded bg-success-soft px-3.5 py-2">
               <Ionicons name="checkmark-circle" size={16} color={colors.brand} style={{ marginRight: 6 }} />
               <Text className="text-[13px] font-bold text-brand">{verified.account_name}</Text>
             </View>
@@ -180,7 +180,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
           )}
 
           <Input
-            label="Description (optional)"
+            label="Description (Optional)"
             icon="create-outline"
             value={description}
             onChangeText={setDescription}

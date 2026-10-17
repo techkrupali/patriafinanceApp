@@ -24,7 +24,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import {
   useApproveMilestone,
   useCancelProject,
@@ -77,8 +77,7 @@ function ProjAction({
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded-2xl bg-[#006D2F] py-4 active:opacity-90"
-      style={shadow.soft}
+      className="flex-1 items-center justify-center rounded bg-[#006D2F] py-4 active:opacity-90"
     >
       <Ionicons name={icon} size={22} color={colors.white} />
       <Text numberOfLines={1} className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">
@@ -133,12 +132,12 @@ function MilestoneCard({
       </View>
 
       <View className="mt-2 flex-row items-center" style={{ gap: 8 }}>
-        <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+        <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
           <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
           <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
         </View>
         {milestone.due_date ? (
-          <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+          <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
             <Ionicons name="calendar-outline" size={11} color={colors.muted} style={{ marginRight: 4 }} />
             <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
               Due {dayLabel(milestone.due_date)}
@@ -152,8 +151,8 @@ function MilestoneCard({
       ) : null}
 
       {milestone.proof ? (
-        <View className="mt-3 rounded-2xl bg-lav-faint p-3.5">
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Vendor’s proof of work</Text>
+        <View className="mt-3 rounded bg-lav-faint p-3.5">
+          <Text className="text-[12px] font-bold text-muted">Vendor’s Proof of Work</Text>
           <Text className="mt-1 text-[13px] leading-5 text-ink">{milestone.proof}</Text>
         </View>
       ) : null}
@@ -161,10 +160,10 @@ function MilestoneCard({
       {/* Evidence (images / videos) */}
       {milestone.evidence.length > 0 || canAddEvidence ? (
         <View className="mt-3">
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Evidence</Text>
+          <Text className="text-[12px] font-bold text-muted">Evidence</Text>
           <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
             {milestone.evidence.map((ev) => (
-              <View key={ev.id} className="h-16 w-16 overflow-hidden rounded-xl bg-lav-faint">
+              <View key={ev.id} className="h-16 w-16 overflow-hidden rounded bg-lav-faint">
                 {ev.kind === 'image' ? (
                   <Image source={{ uri: ev.url }} style={{ width: 64, height: 64 }} />
                 ) : (
@@ -178,7 +177,7 @@ function MilestoneCard({
               <Pressable
                 onPress={() => onAddEvidence(milestone)}
                 disabled={evidenceBusy}
-                className="h-16 w-16 items-center justify-center rounded-xl border border-dashed active:opacity-70"
+                className="h-16 w-16 items-center justify-center rounded border border-dashed active:opacity-70"
                 style={{ borderColor: colors.border }}
               >
                 {evidenceBusy ? (
@@ -453,11 +452,11 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center justify-between">
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">Escrow balance</Text>
-              <View className={`flex-row items-center rounded-full px-2.5 py-1 ${status.bg}`}>
+              <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
                 <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
               </View>
@@ -475,7 +474,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
             {wallet?.virtual_account ? (
               <Pressable
                 onPress={() => void copyAccount()}
-                className="mt-5 flex-row items-center self-start rounded-2xl bg-white/10 px-3.5 py-2 active:opacity-80"
+                className="mt-5 flex-row items-center self-start rounded bg-white/10 px-3.5 py-2 active:opacity-80"
               >
                 <Ionicons name="card-outline" size={15} color={colors.brandGlow} style={{ marginRight: 7 }} />
                 <Text className="text-[13px] font-semibold text-white">
@@ -514,7 +513,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
 
           {/* Team & approvals (owner) — reuses the wallet member + governance screens */}
           {isOwner ? (
-            <View className="mt-4 overflow-hidden rounded-2xl bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
+            <View className="mt-4 overflow-hidden rounded bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
               <Pressable
                 onPress={() => {
                   selection();
@@ -522,7 +521,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                 }}
                 className="flex-row items-center p-4 active:opacity-70"
               >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                   <Ionicons name="person-add-outline" size={19} color={colors.navy} />
                 </View>
                 <View className="flex-1 pr-2">
@@ -539,7 +538,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                 }}
                 className="flex-row items-center p-4 active:opacity-70"
               >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                   <Ionicons name="people-outline" size={19} color={colors.navy} />
                 </View>
                 <View className="flex-1 pr-2">
@@ -556,7 +555,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                 }}
                 className="flex-row items-center p-4 active:opacity-70"
               >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                   <Ionicons name="shield-checkmark-outline" size={19} color={colors.navy} />
                 </View>
                 <View className="flex-1 pr-2">
@@ -601,9 +600,9 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                 selection();
                 navigation.navigate('AssignVendor', { projectId });
               }}
-              className="mt-3 flex-row items-center rounded-3xl border border-dashed border-border bg-white p-4 active:opacity-80"
+              className="mt-3 flex-row items-center rounded border border-dashed border-border bg-white p-4 active:opacity-80"
             >
-              <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav">
+              <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav">
                 <Ionicons name="person-add-outline" size={19} color={colors.navy} />
               </View>
               <View className="flex-1">
@@ -630,7 +629,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                   navigation.navigate('AddMilestone', { projectId });
                 }}
                 hitSlop={6}
-                className="flex-row items-center rounded-full bg-lav px-3.5 py-1.5 active:opacity-80"
+                className="flex-row items-center rounded bg-lav px-3.5 py-1.5 active:opacity-80"
               >
                 <Ionicons name="add" size={16} color={colors.navy} style={{ marginRight: 4 }} />
                 <Text className="text-[12px] font-bold text-navy">Add</Text>
@@ -689,7 +688,7 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
         {/* behavior="padding" on BOTH platforms — adjustResize is dead under RN edge-to-edge */}
         <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
           <View className="flex-1 justify-end bg-black/50">
-            <View className="rounded-t-[32px] bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
+            <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
               <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
               <View className="mb-4 flex-row items-start justify-between">
                 <View className="flex-1 pr-3">
@@ -709,10 +708,10 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
                 </Pressable>
               </View>
 
-              <Text className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <Text className="mb-2 text-[13px] font-semibold text-muted">
                 {isSubmit ? 'Proof of work' : 'Reason (optional)'}
               </Text>
-              <View className="rounded-2xl border border-border bg-lav-faint px-4 py-3">
+              <View className="rounded border border-border bg-lav-faint px-4 py-3">
                 <TextInput
                   value={sheetText}
                   onChangeText={setSheetText}

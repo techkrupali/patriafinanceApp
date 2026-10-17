@@ -11,7 +11,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, radius } from '../../theme';
 import {
   useSync,
   useWallets,
@@ -152,10 +152,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                   colors={gradients.brand}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={[
-                    { height: 64, width: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-                    shadow.soft,
-                  ]}
+                  style={{ height: 64, width: 64, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Ionicons name="heart" size={30} color={colors.white} />
                 </LinearGradient>
@@ -168,12 +165,12 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                 </Text>
               </Card>
 
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Invite your partner
+              <Text className="mt-7 text-[13px] font-bold text-muted">
+                Invite Your Partner
               </Text>
               <Card className="mt-3">
                 <Input
-                  label="Partner's email or phone"
+                  label="Partner's Email or Phone"
                   icon="at-outline"
                   value={identifier}
                   onChangeText={setIdentifier}
@@ -196,7 +193,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
           {/* ---------- B) Pending — initiator ---------- */}
           {sync && sync.status === 'pending' && sync.is_initiator ? (
             <Card className="items-center">
-              <View className="h-16 w-16 items-center justify-center rounded-3xl bg-lav-soft">
+              <View className="h-16 w-16 items-center justify-center rounded bg-lav-soft">
                 <Ionicons name="hourglass-outline" size={28} color={colors.navy} />
               </View>
               <Text className="mt-4 text-center text-lg font-extrabold text-ink">
@@ -259,7 +256,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                 colors={gradients.brand}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+                style={{ borderRadius: radius, padding: 24 }}
               >
                 <View className="flex-row items-center">
                   <View className="mr-3.5 h-14 w-14 items-center justify-center rounded-full bg-white/15">
@@ -274,7 +271,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                     </Text>
                   </View>
                   <View
-                    className={`rounded-full px-3 py-1 ${
+                    className={`rounded px-3 py-1 ${
                       sync.status === 'active' ? 'bg-white/20' : 'bg-black/20'
                     }`}
                   >
@@ -284,7 +281,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                   </View>
                 </View>
                 {sync.status === 'paused' ? (
-                  <View className="mt-4 flex-row items-center rounded-2xl bg-black/15 px-3.5 py-2.5">
+                  <View className="mt-4 flex-row items-center rounded bg-black/15 px-3.5 py-2.5">
                     <Ionicons name="pause-circle" size={16} color={colors.white} style={{ marginRight: 8 }} />
                     <Text className="flex-1 text-[12px] font-medium text-white/90">
                       Sync is paused — sharing is on hold until you resume.
@@ -294,7 +291,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
               </LinearGradient>
 
               {/* Transparency selector */}
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <Text className="mt-7 text-[13px] font-bold text-muted">
                 Transparency
               </Text>
               <View className="mt-3" style={{ gap: 10 }}>
@@ -304,12 +301,12 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
                     <Pressable
                       key={o.value}
                       onPress={() => chooseTransparency(o.value)}
-                      className={`flex-row items-center rounded-2xl border p-4 active:opacity-90 ${
+                      className={`flex-row items-center rounded border p-4 active:opacity-90 ${
                         active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                       }`}
                     >
                       <View
-                        className={`mr-3 h-10 w-10 items-center justify-center rounded-2xl ${
+                        className={`mr-3 h-10 w-10 items-center justify-center rounded ${
                           active ? 'bg-white' : 'bg-lav-faint'
                         }`}
                       >
@@ -332,8 +329,8 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
               {/* Selective wallet chooser */}
               {transparency === 'selective' ? (
                 <>
-                  <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Wallets to share
+                  <Text className="mt-7 text-[13px] font-bold text-muted">
+                    Wallets to Share
                   </Text>
                   {ownedWallets.length > 0 ? (
                     <>
@@ -386,20 +383,20 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
               {/* Shared wallets summary */}
               {sync.wallets.length > 0 ? (
                 <>
-                  <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Shared wallets
+                  <Text className="mt-7 text-[13px] font-bold text-muted">
+                    Shared Wallets
                   </Text>
                   <View className="mt-3" style={{ gap: 10 }}>
                     {sync.wallets.map((w) => (
                       <Card key={w.id} className="flex-row items-center py-4">
-                        <View className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-lav-soft">
+                        <View className="mr-3 h-11 w-11 items-center justify-center rounded bg-lav-soft">
                           <Ionicons name="wallet-outline" size={20} color={colors.navy} />
                         </View>
                         <View className="flex-1 pr-2">
                           <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
                             {w.name}
                           </Text>
-                          <View className="mt-1 self-start rounded-full bg-lav-faint px-2.5 py-1">
+                          <View className="mt-1 self-start rounded bg-lav-faint px-2.5 py-1">
                             <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
                               {w.type}
                             </Text>
@@ -444,7 +441,7 @@ export function SpousalSyncScreen(_props: RootScreenProps<'SpousalSync'>) {
           {/* ---------- E) History ---------- */}
           {history.length > 0 ? (
             <>
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <Text className="mt-7 text-[13px] font-bold text-muted">
                 History
               </Text>
               <Card className="mt-3 py-1">

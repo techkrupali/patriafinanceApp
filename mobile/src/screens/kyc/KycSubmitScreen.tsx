@@ -74,12 +74,12 @@ function SelectGrid<T extends string>({
               { width: '48%', marginBottom: 12 },
               active ? { borderColor: GOLD_CONTAINER } : undefined,
             ]}
-            className={`flex-row items-center rounded-2xl bg-white px-3 py-3 active:opacity-90 ${
+            className={`flex-row items-center rounded bg-white px-3 py-3 active:opacity-90 ${
               active ? 'border-2' : 'border border-border'
             }`}
           >
             <View
-              className="h-9 w-9 items-center justify-center rounded-xl"
+              className="h-9 w-9 items-center justify-center rounded"
               style={{ backgroundColor: active ? GOLD_CONTAINER : colors.lavSoft }}
             >
               <Ionicons name={o.icon} size={18} color={active ? ON_GOLD : colors.navy} />
@@ -99,7 +99,7 @@ function SelectGrid<T extends string>({
 
 function FieldLabel({ children }: { children: string }) {
   return (
-    <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">{children}</Text>
+    <Text className="mt-6 text-[13px] font-semibold text-muted">{children}</Text>
   );
 }
 
@@ -270,11 +270,11 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
                 error={nin.length > 0 && nin.length !== 11 ? 'NIN must be 11 digits' : undefined}
               />
 
-              <FieldLabel>ID document</FieldLabel>
+              <FieldLabel>ID Document</FieldLabel>
               <SelectGrid options={ID_TYPE_OPTIONS} value={idType} onSelect={setIdType} />
 
               <Input
-                label="ID number"
+                label="ID Number"
                 icon="document-text-outline"
                 value={idNumber}
                 onChangeText={setIdNumber}
@@ -290,7 +290,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           {targetTier === 2 ? (
             <>
               <Input
-                label="Residential address"
+                label="Residential Address"
                 icon="home-outline"
                 value={address}
                 onChangeText={setAddress}
@@ -322,12 +322,12 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           {/* ---- Tier 3: Source of funds ---- */}
           {targetTier === 3 ? (
             <>
-              <FieldLabel>Source of funds</FieldLabel>
+              <FieldLabel>Source of Funds</FieldLabel>
               <SelectGrid options={SOURCE_OF_FUNDS_OPTIONS} value={source} onSelect={setSource} />
 
               {isBusiness ? (
                 <Input
-                  label="Business name"
+                  label="Business Name"
                   icon="storefront-outline"
                   value={businessName}
                   onChangeText={setBusinessName}
@@ -348,7 +348,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
               )}
 
               <Input
-                label="Monthly income (optional)"
+                label="Monthly Income (Optional)"
                 icon="cash-outline"
                 value={monthlyIncome}
                 onChangeText={(t) => setMonthlyIncome(t.replace(/[^0-9.]/g, ''))}
@@ -360,7 +360,7 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           ) : null}
 
           {/* Security reassurance (design: encrypted + never stored) */}
-          <View className="mt-7 rounded-2xl bg-page-top p-4">
+          <View className="mt-7 rounded bg-page-top p-4">
             <View className="flex-row items-start">
               <Ionicons name="lock-closed" size={18} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
               <Text className="flex-1 text-[12px] font-semibold leading-5 text-muted">

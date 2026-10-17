@@ -4,6 +4,11 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      // Client style fix (video 2026-10-17): every button/box corner is 3px —
+      // use plain `rounded`. Mirrors `radius` in src/theme.ts.
+      borderRadius: {
+        DEFAULT: '3px',
+      },
       colors: {
         // "The Curated Ledger" — treasury navy + grounded green (gold retired
         // per client video 2026-08-03). Token names stable; values mirror src/theme.ts.

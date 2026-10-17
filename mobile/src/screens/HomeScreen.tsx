@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../components/Screen';
 import { LoadError } from '../components/LoadError';
 import { FamilySwitcherModal } from '../components/FamilySwitcherModal';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients, outline, radius } from '../theme';
 import { useApprovals, useAutomations, useDashboard, useFamily } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { formatMoney, initials } from '../lib/format';
@@ -92,12 +92,12 @@ function WalletCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }
         selection();
         onPress();
       }}
-      className="mr-3 w-[230px] rounded-2xl bg-white p-4 active:opacity-90"
-      style={shadow.soft}
+      className="mr-3 w-[230px] rounded bg-white p-4 active:opacity-90"
+      style={outline.card}
     >
       <View className="flex-row items-start justify-between">
         <View
-          className="h-10 w-10 items-center justify-center rounded-lg"
+          className="h-10 w-10 items-center justify-center rounded"
           style={{ backgroundColor: iconBg }}
         >
           <Ionicons name={v.icon} size={18} color={iconColor} />
@@ -134,7 +134,7 @@ function ActionTile({
           onPress();
         }}
         disabled={disabled}
-        className={`h-[52px] w-[52px] items-center justify-center rounded-xl ${
+        className={`h-[52px] w-[52px] items-center justify-center rounded ${
           disabled ? 'opacity-40' : 'active:opacity-80'
         }`}
         style={{ backgroundColor: GOLD_TILE }}
@@ -160,7 +160,7 @@ function AlertRow({
 }) {
   return (
     <View
-      className="flex-row items-center rounded-xl bg-page-top p-4"
+      className="flex-row items-center rounded bg-page-top p-4"
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
     >
       {icon}
@@ -218,8 +218,8 @@ function GoalCard({
         selection();
         onPress();
       }}
-      className="rounded-2xl bg-white p-4 active:opacity-90"
-      style={[{ width: '48%', marginBottom: 14 }, shadow.soft]}
+      className="rounded bg-white p-4 active:opacity-90"
+      style={[{ width: '48%', marginBottom: 14 }, outline.card]}
     >
       <View className="flex-row items-center justify-between">
         <Ionicons name={v.icon} size={18} color={accent} />
@@ -457,7 +457,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             selection();
             setSwitcherOpen(true);
           }}
-          className="mt-6 flex-row items-center rounded-xl bg-page-top p-4 active:opacity-80"
+          className="mt-6 flex-row items-center rounded bg-page-top p-4 active:opacity-80"
         >
           <View className="flex-1">
             <Text className="text-[15px] font-extrabold text-gold-deep" style={{ letterSpacing: -0.2 }}>
@@ -478,7 +478,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           colors={TREASURY_GRADIENT}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[{ borderRadius: 16, marginTop: 32, padding: 24, overflow: 'hidden' }, shadow.hero]}
+          style={{ borderRadius: radius, marginTop: 32, padding: 24, overflow: 'hidden' }}
         >
           {/* Decorative mint glow (design's blurred circle) */}
           <View
@@ -527,7 +527,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
           {/* Steward commitments strip */}
           <View
-            className="mt-5 flex-row items-center rounded-lg px-3 py-2"
+            className="mt-5 flex-row items-center rounded px-3 py-2"
             style={{ backgroundColor: 'rgba(255,255,255,0.10)' }}
           >
             <MaterialCommunityIcons name="creation" size={15} color={colors.brandMint} />
@@ -541,7 +541,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               selection();
               navigation.navigate('Treasury');
             }}
-            className="mt-4 items-center rounded-xl py-3 active:opacity-85"
+            className="mt-4 items-center rounded py-3 active:opacity-85"
             style={{ backgroundColor: GOLD_BUTTON }}
           >
             <Text className="text-[15px] font-bold" style={{ color: GOLD_INK }}>
@@ -645,7 +645,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
         {/* 7 · Pending Approvals — rows navigate to ApprovalDetail */}
         {pendingReqs.length > 0 ? (
-          <View className="mt-8 rounded-2xl bg-lav-soft p-5">
+          <View className="mt-8 rounded bg-lav-soft p-5">
             <Text className="text-lg font-bold text-ink">Pending Approvals</Text>
             <View className="mt-2">
               {pendingReqs.slice(0, 3).map((r) => (
@@ -668,7 +668,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                 selection();
                 navigation.navigate('CreateGoal');
               }}
-              className="mt-3 items-center rounded-2xl bg-page-top p-6 active:opacity-80"
+              className="mt-3 items-center rounded bg-page-top p-6 active:opacity-80"
             >
               <View className="h-12 w-12 items-center justify-center rounded-full bg-gold-soft">
                 <Ionicons name="flag" size={20} color={colors.goldDeep} />
@@ -697,11 +697,11 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           colors={STEWARD_GRADIENT}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 16, marginTop: 32, padding: 24 }}
+          style={{ borderRadius: radius, marginTop: 32, padding: 24 }}
         >
           <View className="flex-row items-center">
             <View
-              className="h-10 w-10 items-center justify-center rounded-xl"
+              className="h-10 w-10 items-center justify-center rounded"
               style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
             >
               <MaterialCommunityIcons name="robot-happy" size={20} color={colors.white} />
@@ -716,7 +716,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
               selection();
               navigation.navigate('Steward');
             }}
-            className="mt-5 items-center rounded-xl bg-white py-3 active:opacity-85"
+            className="mt-5 items-center rounded bg-white py-3 active:opacity-85"
           >
             <Text className="text-[15px] font-bold" style={{ color: colors.brand }}>
               Ask Steward

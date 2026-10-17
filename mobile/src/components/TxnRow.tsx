@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import type { Transaction } from '../api/types';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { formatMoney, humanizeType, timeLabel } from '../lib/format';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -44,10 +44,10 @@ export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps
   return (
     <Container
       onPress={onPress}
-      className={`flex-row items-center rounded-3xl bg-white p-4 ${onPress ? 'active:opacity-90' : ''} ${className}`}
-      style={shadow.soft}
+      className={`flex-row items-center rounded bg-white p-4 ${onPress ? 'active:opacity-90' : ''} ${className}`}
+      style={outline.card}
     >
-      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded-2xl ${v.tile}`}>
+      <View className={`mr-3.5 h-11 w-11 items-center justify-center rounded ${v.tile}`}>
         <Ionicons name={v.icon} size={22} color={v.tint} />
       </View>
 
@@ -66,7 +66,7 @@ export function TxnRow({ txn, walletName, onPress, className = '' }: TxnRowProps
           {formatMoney(txn.amount)}
         </Text>
         {txn.status !== 'successful' ? (
-          <View className={`mt-1 rounded-full px-2 py-0.5 ${failed ? 'bg-danger-soft' : 'bg-lav-faint'}`}>
+          <View className={`mt-1 rounded px-2 py-0.5 ${failed ? 'bg-danger-soft' : 'bg-lav-faint'}`}>
             <Text
               className={`text-[10px] font-semibold uppercase tracking-wider ${
                 failed ? 'text-danger' : 'text-muted'

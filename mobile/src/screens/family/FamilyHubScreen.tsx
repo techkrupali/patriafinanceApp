@@ -9,7 +9,7 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useFamily, useWallets, useCancelInvitation } from '../../api/hooks';
 import { initials } from '../../lib/format';
 import { roleLabel } from '../../lib/governance';
@@ -21,7 +21,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 function StatTile({ value, label }: { value: number; label: string }) {
   return (
-    <View className="flex-1 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
       <Text className="text-[26px] font-extrabold leading-tight text-ink">{value}</Text>
       <Text className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">{label}</Text>
     </View>
@@ -56,7 +56,7 @@ function MemberRow({ member, onPress }: { member: FamilyMember; onPress?: () => 
         </Text>
       </View>
       <View className="items-end">
-        <View className="rounded-full bg-lav-faint px-2.5 py-1">
+        <View className="rounded bg-lav-faint px-2.5 py-1">
           <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
             {roleLabel(member.role)}
           </Text>
@@ -92,7 +92,7 @@ function InviteRow({
 }) {
   return (
     <View className="flex-row items-center py-3">
-      <View className={`mr-3 h-11 w-11 items-center justify-center rounded-2xl ${tile}`}>
+      <View className={`mr-3 h-11 w-11 items-center justify-center rounded ${tile}`}>
         <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <View className="flex-1 pr-2">
@@ -131,7 +131,7 @@ function SentInviteRow({ inv, subtitle }: { inv: FamilyInvitation; subtitle: str
       subtitle={subtitle}
       right={
         <View className="flex-row items-center" style={{ gap: 8 }}>
-          <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+          <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
             <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
             <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Pending</Text>
           </View>
@@ -167,7 +167,7 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
             className="absolute rounded-full"
             style={{ height: 108, width: 108, borderWidth: 2, borderColor: 'rgba(15,138,68,0.30)' }}
           />
-          <View className="h-20 w-20 items-center justify-center rounded-3xl bg-white" style={shadow.card}>
+          <View className="h-20 w-20 items-center justify-center rounded bg-white" style={outline.card}>
             <Ionicons name="people" size={36} color={colors.goldDeep} />
           </View>
         </View>
@@ -182,8 +182,8 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
 
       {/* Primary Owner — selected role card (gold border, green check) */}
       <View
-        className="mt-8 rounded-3xl bg-white p-5"
-        style={[shadow.card, { borderWidth: 2, borderColor: '#006D2F' }]}
+        className="mt-8 rounded bg-white p-5"
+        style={[outline.card, { borderWidth: 2, borderColor: '#006D2F' }]}
       >
         <View className="flex-row items-center">
           <Ionicons name="star" size={18} color={colors.gold} style={{ marginRight: 8 }} />
@@ -199,7 +199,7 @@ function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWal
       </View>
 
       {/* Building trust note */}
-      <View className="mt-4 flex-row items-start rounded-3xl bg-page-top p-5">
+      <View className="mt-4 flex-row items-start rounded bg-page-top p-5">
         <View className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-gold-soft/60">
           <Ionicons name="people-circle-outline" size={24} color={colors.goldDeep} />
         </View>
@@ -258,8 +258,8 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           <Pressable
             onPress={startInvite}
             hitSlop={8}
-            className="h-11 w-11 items-center justify-center rounded-2xl bg-white active:opacity-70"
-            style={shadow.soft}
+            className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
+            style={outline.card}
           >
             <Ionicons name="person-add" size={20} color={colors.navy} />
           </Pressable>
@@ -289,10 +289,10 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center">
-              <View className="mr-2.5 h-8 w-8 items-center justify-center rounded-xl bg-white/15">
+              <View className="mr-2.5 h-8 w-8 items-center justify-center rounded bg-white/15">
                 <Ionicons name="people" size={16} color={colors.white} />
               </View>
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
@@ -322,7 +322,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           <Button title="Invite member" icon="person-add" onPress={startInvite} className="mt-4" />
 
           {/* Members */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Members</Text>
+          <Text className="mt-7 text-[13px] font-bold text-muted">Members</Text>
           {members.length > 0 ? (
             <Card className="mt-3 py-1">
               {members.map((m, i) => (
@@ -353,7 +353,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           {/* Pending invitations */}
           {hasPending ? (
             <>
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <Text className="mt-7 text-[13px] font-bold text-muted">
                 Pending Invitations
               </Text>
               <Card className="mt-3 py-1">
@@ -372,7 +372,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
                             navigation.navigate('Invitations');
                           }}
                           hitSlop={6}
-                          className="flex-row items-center rounded-full bg-lav px-3.5 py-1.5 active:opacity-80"
+                          className="flex-row items-center rounded bg-lav px-3.5 py-1.5 active:opacity-80"
                         >
                           <Text className="text-[12px] font-bold text-navy">Review</Text>
                         </Pressable>

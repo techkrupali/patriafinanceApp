@@ -76,7 +76,7 @@ export function PendingApprovalNotice({ approval, onViewApprovals, onDone }: Pen
         ) : null}
         <View className="mt-2 flex-row items-center justify-between py-1">
           <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Status</Text>
-          <View className="flex-row items-center rounded-full bg-lav-faint px-2.5 py-1">
+          <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
             <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
             <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Pending</Text>
           </View>

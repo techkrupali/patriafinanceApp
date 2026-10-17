@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { formatMoney } from '../lib/format';
 import type { AssistantTransactionRow, TransactionListAction } from '../api/types';
 
@@ -64,7 +64,7 @@ export function TransactionRow({ t }: { t: AssistantTransactionRow }) {
         >
           {credit ? '+' : '−'}₦{formatMoney(t.amount)}
         </Text>
-        <View className="mt-1 rounded-full px-2 py-0.5" style={{ backgroundColor: chip.bg }}>
+        <View className="mt-1 rounded px-2 py-0.5" style={{ backgroundColor: chip.bg }}>
           <Text className="text-[10px] font-semibold" style={{ color: chip.fg }}>
             {t.status}
           </Text>
@@ -83,7 +83,7 @@ export function TransactionListCard({ action, onShowMore }: Props) {
   const { summary, transactions, has_more } = action;
 
   return (
-    <View className="mt-2 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="mt-2 rounded bg-white p-4" style={outline.card}>
       <View className="flex-row items-center justify-between">
         <Text className="text-[13px] font-bold text-ink">{action.title}</Text>
         {summary.total_amount ? (
@@ -113,7 +113,7 @@ export function TransactionListCard({ action, onShowMore }: Props) {
       {has_more ? (
         <Pressable
           onPress={onShowMore}
-          className="mt-2 flex-row items-center justify-center rounded-full bg-lav-faint py-2.5 active:opacity-80"
+          className="mt-2 flex-row items-center justify-center rounded bg-lav-faint py-2.5 active:opacity-80"
         >
           <Text className="text-[13px] font-semibold text-navy">Show more</Text>
           <Ionicons name="chevron-down" size={15} color={colors.navy} style={{ marginLeft: 4 }} />

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import type { Wallet } from '../api/types';
-import { colors, shadow } from '../theme';
+import { colors, outline } from '../theme';
 import { formatMoney } from '../lib/format';
 import { selection } from '../lib/haptics';
 import { walletVisual } from '../lib/walletVisual';
@@ -76,11 +76,11 @@ export function WalletCard({ wallet, onPress, className = '' }: WalletCardProps)
           onPress();
         }
       }}
-      className={`rounded-2xl bg-white p-4 active:opacity-90 ${className}`}
-      style={shadow.soft}
+      className={`rounded bg-white p-4 active:opacity-90 ${className}`}
+      style={outline.card}
     >
       <View className="flex-row items-center">
-        <View className="h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: tile.bg }}>
+        <View className="h-12 w-12 items-center justify-center rounded" style={{ backgroundColor: tile.bg }}>
           <Ionicons name={s.icon} size={24} color={tile.fg} />
         </View>
 

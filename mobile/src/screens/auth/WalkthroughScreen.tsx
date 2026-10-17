@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
 import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline } from '../../theme';
 import { STORAGE_KEYS } from '../../config';
 import { selection } from '../../lib/haptics';
 import type { AuthScreenProps } from '../../navigation/types';
@@ -82,7 +82,7 @@ function FeatureSlide({ slide }: { slide: Extract<Slide, { kind: 'feature' }> })
           className="absolute rounded-full"
           style={{ height: 150, width: 150, borderWidth: 2, borderColor: 'rgba(15,138,68,0.30)' }}
         />
-        <View className="h-28 w-28 items-center justify-center rounded-3xl bg-white" style={shadow.card}>
+        <View className="h-28 w-28 items-center justify-center rounded bg-white" style={outline.card}>
           <Ionicons name={slide.icon} size={54} color={colors.goldDeep} />
         </View>
       </View>
@@ -97,7 +97,7 @@ function FeatureSlide({ slide }: { slide: Extract<Slide, { kind: 'feature' }> })
             return (
               <View
                 key={c}
-                className={`rounded-full px-3 py-1.5 ${gold ? '' : 'bg-success-soft'}`}
+                className={`rounded px-3 py-1.5 ${gold ? '' : 'bg-success-soft'}`}
                 style={gold ? { backgroundColor: GOLD_CONTAINER } : undefined}
               >
                 <Text
@@ -126,7 +126,6 @@ function StewardSlide() {
           end={{ x: 1, y: 1 }}
           style={[
             { height: 96, width: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
-            shadow.gold,
           ]}
         >
           <Ionicons name="shield-half" size={44} color={colors.white} />
@@ -139,10 +138,10 @@ function StewardSlide() {
         </Text>
       </View>
 
-      <View className="mt-7 rounded-3xl bg-white p-4" style={shadow.card}>
+      <View className="mt-7 rounded bg-white p-4" style={outline.card}>
         {STEWARD_POINTS.map((p, i) => (
           <View key={p.title} className={`flex-row items-start ${i > 0 ? 'mt-4' : ''}`}>
-            <View className="mr-3 h-9 w-9 items-center justify-center rounded-xl bg-gold-soft/60">
+            <View className="mr-3 h-9 w-9 items-center justify-center rounded bg-gold-soft/60">
               <Ionicons name={p.icon} size={18} color={colors.goldDeep} />
             </View>
             <View className="flex-1">
@@ -154,14 +153,14 @@ function StewardSlide() {
       </View>
 
       {/* Interaction preview */}
-      <View className="mt-4 rounded-3xl bg-page-top p-4">
-        <Text className="text-[10px] font-bold uppercase tracking-widest text-muted">
+      <View className="mt-4 rounded bg-page-top p-4">
+        <Text className="text-[12px] font-bold text-muted">
           Interaction Preview
         </Text>
         <View className="mt-3 items-end">
           <View
-            className="rounded-2xl px-4 py-2.5"
-            style={{ backgroundColor: '#C7DFFF', borderTopRightRadius: 4, maxWidth: '80%' }}
+            className="rounded px-4 py-2.5"
+            style={{ backgroundColor: '#C7DFFF', maxWidth: '80%' }}
           >
             <Text className="text-[12px] font-semibold" style={{ color: '#314863' }}>
               Can I afford this?
@@ -176,8 +175,8 @@ function StewardSlide() {
             <Ionicons name="shield-half" size={13} color={ON_GOLD} />
           </View>
           <View
-            className="rounded-2xl bg-white px-4 py-2.5"
-            style={[{ borderTopLeftRadius: 4, maxWidth: '85%' }, shadow.soft]}
+            className="rounded bg-white px-4 py-2.5"
+            style={[{ maxWidth: '85%' }, outline.card]}
           >
             <Text className="text-[12px] leading-4 text-ink">
               Based on your current treasury, it's better to wait 3 days.
@@ -207,7 +206,7 @@ function DoneSlide() {
         />
         <View
           className="h-32 w-32 items-center justify-center rounded-full"
-          style={[{ backgroundColor: GOLD_CONTAINER }, shadow.gold]}
+          style={{ backgroundColor: GOLD_CONTAINER }}
         >
           <Ionicons name="checkmark" size={64} color={ON_GOLD_FIXED} />
         </View>
@@ -219,10 +218,10 @@ function DoneSlide() {
         This is your family’s financial control system — ready to go
       </Text>
 
-      <View className="mt-7 w-full rounded-3xl bg-page-top p-5">
+      <View className="mt-7 w-full rounded bg-page-top p-5">
         {DONE_POINTS.map((p, i) => (
           <View key={p.title} className={`flex-row items-start ${i > 0 ? 'mt-4' : ''}`}>
-            <View className="mr-3 h-8 w-8 items-center justify-center rounded-lg bg-white">
+            <View className="mr-3 h-8 w-8 items-center justify-center rounded bg-white">
               <Ionicons name={p.icon} size={16} color={colors.goldDeep} />
             </View>
             <View className="flex-1">
@@ -264,7 +263,7 @@ export function WalkthroughScreen({ navigation }: AuthScreenProps<'Walkthrough'>
     <Screen withBottomInset>
       {/* Onboarding journey header — Skip + gold progress (design language) */}
       <View className="flex-row items-center justify-between px-6 pt-2">
-        <Text className="text-[10px] font-bold uppercase tracking-widest text-muted">
+        <Text className="text-[12px] font-bold text-muted">
           Onboarding Journey
         </Text>
         <Pressable
@@ -273,7 +272,7 @@ export function WalkthroughScreen({ navigation }: AuthScreenProps<'Walkthrough'>
             void finish();
           }}
           hitSlop={8}
-          className="rounded-full bg-lav px-4 py-2 active:opacity-80"
+          className="rounded bg-lav px-4 py-2 active:opacity-80"
         >
           <Text className="text-[13px] font-bold text-navy">Skip</Text>
         </Pressable>

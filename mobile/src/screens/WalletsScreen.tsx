@@ -8,7 +8,7 @@ import { Button } from '../components/Button';
 import { WalletCard } from '../components/WalletCard';
 import { EmptyState } from '../components/EmptyState';
 import { LoadError } from '../components/LoadError';
-import { colors, gradients, shadow } from '../theme';
+import { colors, gradients, radius } from '../theme';
 import { useMe, useWallets } from '../api/hooks';
 import { formatMoney, initials } from '../lib/format';
 import { selection } from '../lib/haptics';
@@ -139,7 +139,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
               colors={gradients.navy}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[{ marginTop: 20, borderRadius: 28, padding: 24, overflow: 'hidden' }, shadow.hero]}
+              style={{ marginTop: 20, borderRadius: radius, padding: 24, overflow: 'hidden' }}
             >
               {/* Decorative mint wash */}
               <View
@@ -206,10 +206,9 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                       selection();
                       setFilter(f.key);
                     }}
-                    className={`rounded-full px-6 py-2.5 active:opacity-80 ${
+                    className={`rounded px-6 py-2.5 active:opacity-80 ${
                       selected ? 'bg-[#006D2F]' : 'bg-lav-soft'
                     }`}
-                    style={selected ? shadow.soft : undefined}
                   >
                     <Text className={`text-xs font-bold ${selected ? 'text-white' : 'text-muted'}`}>
                       {f.label}
@@ -221,7 +220,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
 
             {/* Wallet list */}
             {visible.length === 0 ? (
-              <View className="mt-5 items-center rounded-2xl bg-lav-faint p-6">
+              <View className="mt-5 items-center rounded bg-lav-faint p-6">
                 <Text className="text-sm font-medium text-muted">No {filter} wallets.</Text>
               </View>
             ) : (
@@ -245,8 +244,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                 selection();
                 navigation.navigate('CreateWallet');
               }}
-              className="mt-8 flex-row items-center justify-center rounded-2xl bg-[#006D2F] py-5 active:opacity-90"
-              style={shadow.gold}
+              className="mt-8 flex-row items-center justify-center rounded bg-[#006D2F] py-5 active:opacity-90"
             >
               <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text className="text-[15px] font-extrabold text-white">Create New Wallet</Text>

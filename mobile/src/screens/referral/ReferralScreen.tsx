@@ -12,7 +12,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients, outline, radius } from '../../theme';
 import { useReferrals, useApplyReferral } from '../../api/hooks';
 import { formatMoney, dayLabel } from '../../lib/format';
 import { selection, notifySuccess } from '../../lib/haptics';
@@ -20,7 +20,7 @@ import type { RootScreenProps } from '../../navigation/types';
 
 function Stat({ value, label }: { value: string | number; label: string }) {
   return (
-    <View className="flex-1 rounded-2xl bg-white p-4" style={shadow.soft}>
+    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
       <Text className="text-[22px] font-extrabold leading-tight text-ink" numberOfLines={1}>
         {value}
       </Text>
@@ -101,10 +101,10 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
             colors={gradients.navy}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[{ borderRadius: 28, padding: 24 }, shadow.hero]}
+            style={{ borderRadius: radius, padding: 24 }}
           >
             <View className="flex-row items-center">
-              <View className="mr-2.5 h-8 w-8 items-center justify-center rounded-xl bg-white/15">
+              <View className="mr-2.5 h-8 w-8 items-center justify-center rounded bg-white/15">
                 <Ionicons name="gift" size={16} color={colors.brandMint} />
               </View>
               <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
@@ -120,13 +120,13 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
           </LinearGradient>
 
           {/* Referral code */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Your code</Text>
+          <Text className="mt-7 text-[13px] font-bold text-muted">Your Code</Text>
           <Card className="mt-3 items-center py-6">
             <Text className="text-[30px] font-extrabold tracking-[6px] text-ink">{data.code}</Text>
             <View className="mt-4 flex-row" style={{ gap: 10 }}>
               <Pressable
                 onPress={() => void copy()}
-                className="flex-row items-center rounded-full bg-lav px-5 py-2.5 active:opacity-80"
+                className="flex-row items-center rounded bg-lav px-5 py-2.5 active:opacity-80"
               >
                 <Ionicons
                   name={copied ? 'checkmark-circle' : 'copy-outline'}
@@ -138,8 +138,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
               </Pressable>
               <Pressable
                 onPress={() => void share()}
-                className="flex-row items-center rounded-full bg-navy px-5 py-2.5 active:opacity-90"
-                style={shadow.soft}
+                className="flex-row items-center rounded bg-navy px-5 py-2.5 active:opacity-90"
               >
                 <Ionicons name="share-social-outline" size={16} color={colors.white} style={{ marginRight: 6 }} />
                 <Text className="text-[13px] font-bold text-white">Share</Text>
@@ -157,12 +156,12 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
           {/* Apply a code */}
           {!applied ? (
             <>
-              <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Have a friend's code?
+              <Text className="mt-7 text-[13px] font-bold text-muted">
+                Have a Friend's Code?
               </Text>
               <Card className="mt-3">
                 <Input
-                  label="Referral code"
+                  label="Referral Code"
                   icon="ticket-outline"
                   value={code}
                   onChangeText={(t) => setCode(t.toUpperCase())}
@@ -184,7 +183,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
               </Card>
             </>
           ) : (
-            <View className="mt-6 flex-row items-center rounded-2xl bg-success-soft p-4">
+            <View className="mt-6 flex-row items-center rounded bg-success-soft p-4">
               <Ionicons name="checkmark-circle" size={20} color={colors.brand} style={{ marginRight: 10 }} />
               <Text className="flex-1 text-[14px] font-semibold text-brand">
                 Referral code applied — welcome aboard!
@@ -193,8 +192,8 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
           )}
 
           {/* Referred people */}
-          <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">
-            People you've referred
+          <Text className="mt-7 text-[13px] font-bold text-muted">
+            People You've Referred
           </Text>
           {data.referred.length > 0 ? (
             <Card className="mt-3 py-1">
@@ -211,7 +210,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
                       <Text className="text-xs text-faded">Joined {dayLabel(p.joined_at)}</Text>
                     </View>
                     <View
-                      className={`flex-row items-center rounded-full px-2.5 py-1 ${
+                      className={`flex-row items-center rounded px-2.5 py-1 ${
                         p.verified ? 'bg-success-soft' : 'bg-lav-faint'
                       }`}
                     >
@@ -238,7 +237,7 @@ export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
             </Card>
           ) : (
             <Card className="mt-3 items-center py-8">
-              <View className="mb-3 h-14 w-14 items-center justify-center rounded-3xl bg-lav-soft">
+              <View className="mb-3 h-14 w-14 items-center justify-center rounded bg-lav-soft">
                 <Ionicons name="people-outline" size={24} color={colors.navy} />
               </View>
               <Text className="text-base font-bold text-ink">No referrals yet</Text>

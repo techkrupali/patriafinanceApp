@@ -144,7 +144,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
           showsVerticalScrollIndicator={false}
         >
             <Input
-              label="Wallet name"
+              label="Wallet Name"
               icon="pricetag-outline"
               value={name}
               onChangeText={setName}
@@ -153,7 +153,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
             />
 
             <Input
-              label="Description (optional)"
+              label="Description (Optional)"
               icon="document-text-outline"
               value={description}
               onChangeText={setDescription}
@@ -163,7 +163,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
             />
 
             {isMain ? (
-              <View className="mt-7 flex-row items-start rounded-2xl bg-lav-faint p-4">
+              <View className="mt-7 flex-row items-start rounded bg-lav-faint p-4">
                 <Ionicons name="information-circle" size={18} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
                 <Text className="flex-1 text-[13px] leading-5 text-muted">
                   Approval controls aren't available on your main wallet.
@@ -171,11 +171,11 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
               </View>
             ) : (
               <>
-                <Text className="mt-8 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  Spending approvals
+                <Text className="mt-8 text-[13px] font-semibold text-muted">
+                  Spending Approvals
                 </Text>
 
-                <View className="mt-2 flex-row items-center rounded-2xl bg-lav-faint p-4">
+                <View className="mt-2 flex-row items-center rounded bg-lav-faint p-4">
                   <Ionicons name="shield-checkmark-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
                   <View className="flex-1 pr-2">
                     <Text className="text-[15px] font-semibold text-ink">Require approval</Text>
@@ -197,7 +197,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                 {approvalEnabled ? (
                   <>
                     <Input
-                      label="Approval threshold (optional)"
+                      label="Approval Threshold (Optional)"
                       icon="cash-outline"
                       value={threshold}
                       onChangeText={(t) => setThreshold(t.replace(/[^0-9.]/g, ''))}
@@ -211,17 +211,17 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                         : 'Leave empty to require approval on every spend.'}
                     </Text>
 
-                    <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                      Approvals required
+                    <Text className="mt-6 text-[13px] font-semibold text-muted">
+                      Approvals Required
                     </Text>
-                    <View className="mt-2 flex-row items-center justify-between rounded-2xl bg-lav-faint p-3">
+                    <View className="mt-2 flex-row items-center justify-between rounded bg-lav-faint p-3">
                       <Pressable
                         onPress={() => {
                           selection();
                           setRequired((n) => Math.max(1, n - 1));
                         }}
                         disabled={required <= 1}
-                        className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                        className={`h-11 w-11 items-center justify-center rounded bg-white ${
                           required <= 1 ? 'opacity-40' : 'active:opacity-70'
                         }`}
                       >
@@ -237,7 +237,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                           setRequired((n) => Math.min(10, n + 1));
                         }}
                         disabled={required >= 10}
-                        className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                        className={`h-11 w-11 items-center justify-center rounded bg-white ${
                           required >= 10 ? 'opacity-40' : 'active:opacity-70'
                         }`}
                       >
@@ -258,10 +258,10 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
 
             {!isMain ? (
               <>
-                <Text className="mt-9 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  Wallet controls
+                <Text className="mt-9 text-[13px] font-semibold text-muted">
+                  Wallet Controls
                 </Text>
-                <View className="mt-2 overflow-hidden rounded-2xl bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
+                <View className="mt-2 overflow-hidden rounded bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
                   <Pressable
                     onPress={() => {
                       selection();
@@ -269,7 +269,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                     }}
                     className="flex-row items-center p-4 active:opacity-70"
                   >
-                    <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                    <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                       <Ionicons name="lock-closed-outline" size={19} color={colors.navy} />
                     </View>
                     <View className="flex-1 pr-2">
@@ -292,7 +292,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                     }}
                     className="flex-row items-center p-4 active:opacity-70"
                   >
-                    <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                    <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                       <Ionicons name="receipt-outline" size={19} color={colors.navy} />
                     </View>
                     <View className="flex-1 pr-2">
@@ -306,11 +306,11 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                 {/* Danger zone — delete/archive (owner only) */}
                 {isOwner ? (
                   <>
-                    <Text className="mt-9 text-[11px] font-semibold uppercase tracking-wider text-danger">
-                      Danger zone
+                    <Text className="mt-9 text-[13px] font-semibold text-danger">
+                      Danger Zone
                     </Text>
                     <View
-                      className="mt-2 overflow-hidden rounded-2xl bg-white"
+                      className="mt-2 overflow-hidden rounded bg-white"
                       style={{ borderWidth: 1, borderColor: colors.border }}
                     >
                       {isArchived ? (
@@ -320,7 +320,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                             disabled={delBusy}
                             className="flex-row items-center p-4 active:opacity-70"
                           >
-                            <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-lav-faint">
+                            <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
                               <Ionicons name="refresh-outline" size={19} color={colors.navy} />
                             </View>
                             <View className="flex-1 pr-2">
@@ -341,7 +341,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                             disabled={delBusy}
                             className="flex-row items-center p-4 active:opacity-70"
                           >
-                            <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-danger-soft">
+                            <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-danger-soft">
                               <Ionicons name="trash-outline" size={19} color={colors.danger} />
                             </View>
                             <View className="flex-1 pr-2">
@@ -359,7 +359,7 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
                           disabled={delBusy}
                           className="flex-row items-center p-4 active:opacity-70"
                         >
-                          <View className="mr-3 h-10 w-10 items-center justify-center rounded-2xl bg-danger-soft">
+                          <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-danger-soft">
                             <Ionicons name="trash-outline" size={19} color={colors.danger} />
                           </View>
                           <View className="flex-1 pr-2">

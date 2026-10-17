@@ -8,7 +8,7 @@ import { Header } from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { ErrorText } from '../../components/ErrorText';
-import { colors, shadow } from '../../theme';
+import { colors, outline, radius } from '../../theme';
 import { useAcceptInvitation, useDeclineInvitation, useMyInvitations } from '../../api/hooks';
 import { walletVisual } from '../../lib/walletVisual';
 import { roleLabel } from '../../lib/governance';
@@ -82,13 +82,13 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
               const v = walletVisual(inv.wallet?.type);
               const busy = actingId === inv.id;
               return (
-                <View key={inv.id} className="rounded-3xl bg-white p-5" style={shadow.card}>
+                <View key={inv.id} className="rounded bg-white p-5" style={outline.card}>
                   <View className="flex-row items-center">
                     <LinearGradient
                       colors={v.gradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
-                      style={{ height: 46, width: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+                      style={{ height: 46, width: 46, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
                     >
                       <Ionicons name={v.icon} size={22} color={v.onDark ? colors.white : colors.navy} />
                     </LinearGradient>
@@ -103,13 +103,13 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
                   </View>
 
                   <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
-                    <View className="rounded-full bg-lav-faint px-2.5 py-1">
+                    <View className="rounded bg-lav-faint px-2.5 py-1">
                       <Text className="text-[11px] font-bold uppercase tracking-wider text-muted">
                         {roleLabel(inv.role)}
                       </Text>
                     </View>
                     {inv.can_approve ? (
-                      <View className="flex-row items-center rounded-full bg-success-soft px-2.5 py-1">
+                      <View className="flex-row items-center rounded bg-success-soft px-2.5 py-1">
                         <Ionicons name="shield-checkmark" size={12} color={colors.brand} style={{ marginRight: 4 }} />
                         <Text className="text-[11px] font-bold text-brand">Approver</Text>
                       </View>
@@ -120,7 +120,7 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
                     <Pressable
                       onPress={() => onDecline(inv)}
                       disabled={busy}
-                      className={`flex-1 items-center justify-center rounded-2xl bg-lav py-3.5 ${
+                      className={`flex-1 items-center justify-center rounded bg-lav py-3.5 ${
                         busy ? 'opacity-50' : 'active:opacity-80'
                       }`}
                     >
@@ -129,7 +129,7 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
                     <Pressable
                       onPress={() => onAccept(inv)}
                       disabled={busy}
-                      className={`flex-1 items-center justify-center rounded-2xl bg-navy py-3.5 ${
+                      className={`flex-1 items-center justify-center rounded bg-navy py-3.5 ${
                         busy ? 'opacity-60' : 'active:opacity-90'
                       }`}
                     >

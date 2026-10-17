@@ -51,11 +51,6 @@ export function SuccessReceipt({ title, subtitle, rows, onDone, onShare }: Succe
                 borderRadius: 42,
                 alignItems: 'center',
                 justifyContent: 'center',
-                shadowColor: colors.brandMint,
-                shadowOpacity: 0.16,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 3,
               }}
             >
               <Ionicons name="checkmark-sharp" size={44} color={colors.white} />

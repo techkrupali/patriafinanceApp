@@ -15,7 +15,7 @@ import { BankPicker } from '../../components/BankPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, shadow } from '../../theme';
+import { colors, gradients } from '../../theme';
 import { useTransfer, useVerifyAccount, useWallets } from '../../api/hooks';
 import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { selection } from '../../lib/haptics';
@@ -191,7 +191,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
           showsVerticalScrollIndicator={false}
         >
             {/* Amount hero */}
-            <View className="overflow-hidden rounded-3xl" style={shadow.hero}>
+            <View className="overflow-hidden rounded">
               <LinearGradient
                 colors={gradients.navy}
                 start={{ x: 0, y: 0 }}
@@ -215,7 +215,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 </View>
                 {from ? (
                   <View
-                    className="mt-4 rounded-full px-4 py-2"
+                    className="mt-4 rounded px-4 py-2"
                     style={{
                       backgroundColor: exceedsBalance ? 'rgba(239,91,110,0.16)' : 'rgba(255,255,255,0.10)',
                     }}
@@ -239,7 +239,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             </View>
 
             {/* Source wallet */}
-            <Text className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">From</Text>
+            <Text className="mt-7 text-[13px] font-semibold text-muted">From</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2 -mx-1">
               <View className="flex-row px-1" style={{ gap: 8 }}>
                 {(wallets ?? []).map((w) => {
@@ -252,8 +252,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                         setFromId(w.id);
                         setDestWalletId(undefined);
                       }}
-                      className={`min-w-[128px] rounded-2xl px-4 py-3.5 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
-                      style={active ? shadow.soft : shadow.card}
+                      className={`min-w-[128px] rounded px-4 py-3.5 ${active ? 'bg-navy' : 'bg-white border border-border'} active:opacity-80`}
                     >
                       <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                         {w.name}
@@ -268,7 +267,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             </ScrollView>
 
             {/* Destination kind */}
-            <Text className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">To</Text>
+            <Text className="mt-6 text-[13px] font-semibold text-muted">To</Text>
             <View className="mt-2 flex-row" style={{ gap: 8 }}>
               <Chip label="My Wallets" active={kind === 'wallet'} onPress={() => setKind('wallet')} />
               <Chip label="To User" active={kind === 'user'} onPress={() => setKind('user')} />
@@ -291,7 +290,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                           selection();
                           setDestWalletId(w.id);
                         }}
-                        className={`flex-row items-center justify-between rounded-2xl border p-4 active:opacity-80 ${
+                        className={`flex-row items-center justify-between rounded border p-4 active:opacity-80 ${
                           active ? 'border-brand bg-success-soft' : 'border-border bg-white'
                         }`}
                       >
@@ -313,7 +312,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
             {kind === 'user' ? (
               <Input
-                label="Recipient email or phone"
+                label="Recipient Email or Phone"
                 icon="at-outline"
                 value={identifier}
                 onChangeText={setIdentifier}
@@ -326,10 +325,10 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
             {kind === 'bank' ? (
               <View className="mt-4">
-                <Text className="text-[11px] font-semibold uppercase tracking-wider text-muted">Bank</Text>
+                <Text className="text-[13px] font-semibold text-muted">Bank</Text>
                 <Pressable
                   onPress={() => setBankPickerOpen(true)}
-                  className="mt-2 flex-row items-center rounded-2xl border border-transparent bg-lav-faint px-4 active:opacity-80"
+                  className="mt-2 flex-row items-center rounded border border-transparent bg-lav-faint px-4 active:opacity-80"
                   style={{ minHeight: 54 }}
                 >
                   <Ionicons name="business-outline" size={19} color={colors.faded} style={{ marginRight: 10 }} />
@@ -340,7 +339,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 </Pressable>
 
                 <Input
-                  label="Account number"
+                  label="Account Number"
                   icon="card-outline"
                   value={accountNumber}
                   onChangeText={(t) => setAccountNumber(t.replace(/[^0-9]/g, '').slice(0, 10))}
@@ -356,7 +355,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                     <Text className="ml-2 text-sm text-muted">Verifying account…</Text>
                   </View>
                 ) : verified ? (
-                  <View className="mt-3 flex-row items-center self-start rounded-full bg-success-soft px-3.5 py-2">
+                  <View className="mt-3 flex-row items-center self-start rounded bg-success-soft px-3.5 py-2">
                     <Ionicons name="checkmark-circle" size={16} color={colors.brand} style={{ marginRight: 6 }} />
                     <Text className="text-[13px] font-bold text-brand">{verified.account_name}</Text>
                   </View>
@@ -367,7 +366,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             ) : null}
 
             <Input
-              label="Description (optional)"
+              label="Description (Optional)"
               icon="create-outline"
               value={description}
               onChangeText={setDescription}

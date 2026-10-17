@@ -111,7 +111,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
         selection();
         onPress();
       }}
-      className={`flex-row items-center rounded-2xl border p-4 active:opacity-90 ${
+      className={`flex-row items-center rounded border p-4 active:opacity-90 ${
         active ? 'border-brand bg-success-soft' : 'border-border bg-white'
       }`}
     >
@@ -149,7 +149,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
           containerClassName="mt-6"
         />
 
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Move from</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Move From</Text>
         <View className="mt-3" style={{ gap: 10 }}>
           {owned.map((w) =>
             renderWalletRow(w, fromId === w.id, () => {
@@ -159,7 +159,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
           )}
         </View>
 
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Move to</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Move To</Text>
         <View className="mt-3" style={{ gap: 10 }}>
           {owned
             .filter((w) => w.id !== fromId)
@@ -176,7 +176,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
           containerClassName="mt-7"
         />
 
-        <Text className="mt-7 text-[11px] font-bold uppercase tracking-wider text-muted">Frequency</Text>
+        <Text className="mt-7 text-[13px] font-bold text-muted">Frequency</Text>
         <View className="mt-3 flex-row" style={{ gap: 10 }}>
           {FREQUENCIES.map((f) => {
             const active = frequency === f.value;
@@ -187,7 +187,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
                   selection();
                   setFrequency(f.value);
                 }}
-                className={`flex-1 items-center rounded-full py-3 active:opacity-80 ${
+                className={`flex-1 items-center rounded py-3 active:opacity-80 ${
                   active ? 'bg-navy' : 'bg-lav'
                 }`}
               >
@@ -210,7 +210,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
                     selection();
                     setDayOfWeek(d.value);
                   }}
-                  className={`rounded-full px-4 py-2 active:opacity-80 ${active ? 'bg-navy' : 'bg-lav'}`}
+                  className={`rounded px-4 py-2 active:opacity-80 ${active ? 'bg-navy' : 'bg-lav'}`}
                 >
                   <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
                     {d.label}
@@ -223,17 +223,17 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
 
         {frequency === 'monthly' ? (
           <>
-            <Text className="mt-6 text-[11px] font-bold uppercase tracking-wider text-muted">
-              Day of month
+            <Text className="mt-6 text-[13px] font-bold text-muted">
+              Day of Month
             </Text>
-            <View className="mt-3 flex-row items-center justify-between rounded-2xl bg-lav-faint p-3">
+            <View className="mt-3 flex-row items-center justify-between rounded bg-lav-faint p-3">
               <Pressable
                 onPress={() => {
                   selection();
                   setDayOfMonth((n) => Math.max(1, n - 1));
                 }}
                 disabled={dayOfMonth <= 1}
-                className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                className={`h-11 w-11 items-center justify-center rounded bg-white ${
                   dayOfMonth <= 1 ? 'opacity-40' : 'active:opacity-70'
                 }`}
               >
@@ -249,7 +249,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
                   setDayOfMonth((n) => Math.min(28, n + 1));
                 }}
                 disabled={dayOfMonth >= 28}
-                className={`h-11 w-11 items-center justify-center rounded-2xl bg-white ${
+                className={`h-11 w-11 items-center justify-center rounded bg-white ${
                   dayOfMonth >= 28 ? 'opacity-40' : 'active:opacity-70'
                 }`}
               >
@@ -260,7 +260,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
         ) : null}
 
         <Input
-          label="Keep a minimum balance (optional)"
+          label="Keep a Minimum Balance (Optional)"
           icon="shield-outline"
           value={minBalance}
           onChangeText={(t) => setMinBalance(t.replace(/[^0-9.]/g, ''))}
@@ -272,7 +272,7 @@ export function CreateAutomationScreen({ navigation, route }: RootScreenProps<'C
           The rule won't run if it would drop below this.
         </Text>
 
-        <View className="mt-6 flex-row items-center rounded-2xl bg-lav-faint p-4">
+        <View className="mt-6 flex-row items-center rounded bg-lav-faint p-4">
           <Ionicons name="flash-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
           <View className="flex-1 pr-2">
             <Text className="text-[15px] font-semibold text-ink">Start active</Text>
