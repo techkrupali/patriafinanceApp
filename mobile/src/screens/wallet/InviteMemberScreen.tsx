@@ -16,7 +16,7 @@ import { ROLE_OPTIONS, roleLabel } from '../../lib/governance';
 import { initials } from '../../lib/format';
 import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
 import { selection } from '../../lib/haptics';
-import type { UserSearchResult } from '../../api/types';
+import type { InvitePermissions, UserSearchResult } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 type Channel = 'user' | 'email' | 'sms' | 'whatsapp';
@@ -57,6 +57,9 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
   const [picked, setPicked] = useState<UserSearchResult | null>(null);
   const [role, setRole] = useState<string>('contributor');
   const [canApprove, setCanApprove] = useState(false);
+  // Per-person access (contributor/admin); other roles have fixed access.
+  const [permissions, setPermissions] = useState<InvitePermissions>({ view: true, fund: true, request: true, withdraw: false });
+  const customAccess = role === 'contributor' || role === 'admin';
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const invite = useCreateInvitation(walletId);
@@ -106,7 +109,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
         return;
       }
       invite.mutate(
-        { invitee_user_id: picked.id, role, can_approve: canApprove },
+        { invitee_user_id: picked.id, role, can_approve: canApprove, permissions: customAccess ? permissions : undefined },
         { onSuccess: () => setSent(true), onError: (e) => setError(e.message) },
       );
       return;
@@ -121,7 +124,7 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
       return;
     }
     invite.mutate(
-      { identifier, role, can_approve: canApprove },
+      { identifier, role, can_approve: canApprove, permissions: customAccess ? permissions : undefined },
       {
         onSuccess: async () => {
           if (isPhone) await openMessenger();
@@ -347,6 +350,30 @@ export function InviteMemberScreen({ navigation, route }: RootScreenProps<'Invit
             );
           })}
         </View>
+
+        {customAccess ? (
+          <View className="mt-5 rounded bg-white p-4" style={outline.card}>
+            <Text className="text-[15px] font-bold text-ink">What They Can Do</Text>
+            {(
+              [
+                { key: 'view', label: 'See Balance & Activity' },
+                { key: 'fund', label: 'Add Money' },
+                { key: 'request', label: 'Request Spends' },
+                { key: 'withdraw', label: 'Withdraw' },
+              ] as { key: keyof InvitePermissions; label: string }[]
+            ).map((p) => (
+              <View key={p.key} className="mt-2 flex-row items-center border-t border-border pt-2">
+                <Text className="flex-1 text-[14px] font-semibold text-ink">{p.label}</Text>
+                <Switch
+                  value={permissions[p.key]}
+                  onValueChange={(v) => setPermissions((cur) => ({ ...cur, [p.key]: v }))}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  thumbColor={colors.white}
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View className="mt-5 flex-row items-center rounded bg-lav-faint p-4">
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />

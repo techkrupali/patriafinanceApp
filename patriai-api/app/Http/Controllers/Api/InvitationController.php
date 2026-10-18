@@ -7,8 +7,10 @@ use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use App\Services\NotificationService;
+use App\Services\SavingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class InvitationController extends ApiController
@@ -36,6 +38,12 @@ class InvitationController extends ApiController
             'identifier' => ['required_without:invitee_user_id', 'nullable', 'string', 'max:150'],
             'role' => ['sometimes', 'in:co_owner,admin,contributor,viewer'],
             'can_approve' => ['sometimes', 'boolean'],
+            // Per-person access, applied when they accept (optional).
+            'permissions' => ['sometimes', 'array'],
+            'permissions.view' => ['sometimes', 'boolean'],
+            'permissions.fund' => ['sometimes', 'boolean'],
+            'permissions.request' => ['sometimes', 'boolean'],
+            'permissions.withdraw' => ['sometimes', 'boolean'],
         ]);
 
         $inviteRole = $data['role'] ?? 'contributor';
@@ -103,6 +111,7 @@ class InvitationController extends ApiController
             'invitee_identifier' => $identifier,
             'role' => $inviteRole,
             'can_approve' => $canApprove,
+            'permissions' => !empty($data['permissions']) ? SavingsService::normalisePermissions($data['permissions']) : null,
             'status' => 'pending',
             'token' => Str::random(40),
             'expires_at' => now()->addDays(7),
@@ -181,17 +190,42 @@ class InvitationController extends ApiController
             return $this->fail('This invitation has expired', 422);
         }
 
-        $member = WalletMember::updateOrCreate(
-            ['wallet_id' => $invitation->wallet_id, 'user_id' => $request->user()->id],
-            [
-                'role' => $invitation->role,
-                'can_approve' => $invitation->can_approve,
-                'status' => 'active',
-                'invited_by' => $invitation->inviter_id,
-            ],
-        );
+        // Savings wallets: optionally start your own auto-save as you join.
+        $data = $request->validate([
+            'source_wallet_id' => ['nullable', 'integer'],
+            'amount' => ['nullable', 'numeric', 'min:1'],
+            'frequency' => ['nullable', 'in:' . implode(',', \App\Models\SavingsPlan::FREQUENCIES)],
+            'day_of_week' => ['nullable', 'integer', 'between:1,7'],
+            'day_of_month' => ['nullable', 'integer', 'between:1,28'],
+        ]);
 
-        $invitation->update(['status' => 'accepted', 'responded_at' => now()]);
+        // All or nothing: a rejected auto-save (e.g. not your wallet) undoes the join.
+        $member = DB::transaction(function () use ($request, $invitation, $data) {
+            $member = WalletMember::updateOrCreate(
+                ['wallet_id' => $invitation->wallet_id, 'user_id' => $request->user()->id],
+                [
+                    'role' => $invitation->role,
+                    'can_approve' => $invitation->can_approve,
+                    'status' => 'active',
+                    'invited_by' => $invitation->inviter_id,
+                ],
+            );
+            SavingsService::applyInvitationPermissions($member, $invitation);
+
+            $invitation->update(['status' => 'accepted', 'responded_at' => now()]);
+
+            if (!empty($data['source_wallet_id'])) {
+                $overrides = array_filter([
+                    'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : null,
+                    'frequency' => $data['frequency'] ?? null,
+                    'day_of_week' => $data['day_of_week'] ?? null,
+                    'day_of_month' => $data['day_of_month'] ?? null,
+                ], fn ($v) => $v !== null);
+                SavingsService::make()->startContribution($invitation->wallet->refresh(), $request->user(), (int) $data['source_wallet_id'], $overrides);
+            }
+
+            return $member;
+        });
 
         \App\Services\AuditService::make()->log($invitation->wallet, $request->user(), 'member_added', $request->user()->fullName() . " joined as {$member->role}", ['member_id' => $member->id, 'user_id' => $member->user_id, 'role' => $member->role, 'invited_by' => $invitation->inviter_id]);
 

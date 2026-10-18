@@ -9,6 +9,7 @@ import { Input } from '../../../components/Input';
 import { Button } from '../../../components/Button';
 import { ErrorText } from '../../../components/ErrorText';
 import { GuidedIntro } from '../../../components/GuidedIntro';
+import { DraftStatus } from '../../../components/DraftStatus';
 import { CheckOption } from '../../../components/CheckOption';
 import { PersonAvatar, PersonPicker } from '../../../components/PersonPicker';
 import {
@@ -21,8 +22,9 @@ import { colors, outline } from '../../../theme';
 import { useCreateWallet } from '../../../api/hooks';
 import { formatMoney } from '../../../lib/format';
 import { notifySuccess, selection } from '../../../lib/haptics';
+import { confirmLeaveSetup, useDraftAutosave } from '../../../lib/drafts';
 import type { UserSearchResult } from '../../../api/types';
-import type { RootScreenProps } from '../../../navigation/types';
+import type { EmergencyRulesDraft, RootScreenProps } from '../../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -49,23 +51,36 @@ function SectionCard({ icon, title, right, children }: { icon: IconName; title: 
  * receives the money once it is. "AI Triggered" was dropped per the client.
  */
 export function EmergencyAccessRulesScreen({ navigation, route }: RootScreenProps<'EmergencyAccessRules'>) {
-  const { draft } = route.params;
+  const { draft, sessionKey } = route.params;
+  const saved = route.params.rules;
   const create = useCreateWallet();
 
-  const [dual, setDual] = useState(false);
-  const [approver, setApprover] = useState<UserSearchResult | null>(null);
-  const [docUnlock, setDocUnlock] = useState(false);
-  const [manual, setManual] = useState(true);
-  const [reason, setReason] = useState('');
+  const [dual, setDual] = useState(saved?.dual ?? false);
+  const [approver, setApprover] = useState<UserSearchResult | null>(saved?.approver ?? null);
+  const [docUnlock, setDocUnlock] = useState(saved?.docUnlock ?? false);
+  const [manual, setManual] = useState(saved?.manual ?? true);
+  const [reason, setReason] = useState(saved?.reason ?? '');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
-  const [crisis, setCrisis] = useState(false);
-  const [highBalance, setHighBalance] = useState(false);
-  const [recipients, setRecipients] = useState<RecipientDraft[]>([]);
+  const [crisis, setCrisis] = useState(saved?.crisis ?? false);
+  const [highBalance, setHighBalance] = useState(saved?.highBalance ?? false);
+  const [recipients, setRecipients] = useState<RecipientDraft[]>(saved?.recipients ?? []);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(Boolean(saved?.note));
+  const [note, setNote] = useState(saved?.note ?? '');
   const [error, setError] = useState<string | null>(null);
+
+  // Same draft as Step 1 (shared session). The emergency PIN is never saved.
+  const autosave = useDraftAutosave({
+    sessionKey,
+    initialDraftId: route.params.draftId,
+    type: 'emergency',
+    name: draft.name,
+    step: 2,
+    totalSteps: 2,
+    data: { rules: { dual, approver, docUnlock, manual, reason, crisis, highBalance, recipients, note } satisfies EmergencyRulesDraft },
+    enabled: true,
+  });
 
   const recipientIds = recipients.map((r) => r.user.id);
 
@@ -126,9 +141,11 @@ export function EmergencyAccessRulesScreen({ navigation, route }: RootScreenProp
             access_type: r.accessType,
           })),
         },
+        draft_id: autosave.draftId ?? undefined,
       },
       {
         onSuccess: (data) => {
+          autosave.stop();
           notifySuccess();
           navigation.popToTop();
           navigation.navigate('WalletDetail', { walletId: data.wallet.id });
@@ -152,6 +169,7 @@ export function EmergencyAccessRulesScreen({ navigation, route }: RootScreenProp
           title="Set Emergency Access Rules"
           subtitle="Decide when this wallet can be unlocked and who receives the money. It stays locked until one of these rules is met."
         />
+        <DraftStatus status={autosave.status} className="mt-2" />
 
         <SectionCard icon="shield" title="Access Configuration">
           <CheckOption
@@ -332,6 +350,18 @@ export function EmergencyAccessRulesScreen({ navigation, route }: RootScreenProp
           onPress={() => navigation.goBack()}
           className="mt-3"
         />
+        <Pressable
+          onPress={() =>
+            confirmLeaveSetup(
+              true,
+              () => navigation.pop(2),
+              () => void autosave.discard().then(() => navigation.pop(2)),
+            )
+          }
+          className="mt-4 items-center py-2"
+        >
+          <Text className="text-[13px] font-semibold text-muted">Finish Later</Text>
+        </Pressable>
       </KeyboardAwareScrollView>
 
       <RecipientSheet

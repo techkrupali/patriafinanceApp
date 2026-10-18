@@ -6,12 +6,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../components/Screen';
 import { Button } from '../components/Button';
 import { WalletCard } from '../components/WalletCard';
+import { DraftWalletCard } from '../components/DraftWalletCard';
 import { EmptyState } from '../components/EmptyState';
 import { LoadError } from '../components/LoadError';
 import { colors, gradients, radius } from '../theme';
-import { useMe, useWallets } from '../api/hooks';
+import { useMe, useWalletDrafts, useWallets } from '../api/hooks';
 import { formatMoney, initials } from '../lib/format';
 import { selection } from '../lib/haptics';
+import { resumeDraft } from '../lib/drafts';
 import type { Wallet } from '../api/types';
 import type { TabScreenProps } from '../navigation/types';
 
@@ -39,6 +41,7 @@ function isGoalWallet(w: Wallet): boolean {
 export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
   const { data: wallets, isLoading, error, refetch, isRefetching } = useWallets();
   const me = useMe();
+  const drafts = useWalletDrafts();
   const [filter, setFilter] = useState<TreasuryFilter>('active');
 
   const stats = useMemo(() => {
@@ -237,6 +240,19 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                 ))}
               </View>
             )}
+
+            {/* Unfinished setups — grayed out until they're completed */}
+            {filter === 'active' && (drafts.data ?? []).length > 0 ? (
+              <View className="mt-7">
+                <Text className="text-sm font-extrabold text-ink">Drafts</Text>
+                <Text className="mt-0.5 text-xs text-muted">Wallets you started setting up. Pick up where you left off.</Text>
+                <View className="mt-3" style={{ gap: 12 }}>
+                  {(drafts.data ?? []).map((d) => (
+                    <DraftWalletCard key={d.id} draft={d} onResume={() => resumeDraft(navigation, d)} />
+                  ))}
+                </View>
+              </View>
+            ) : null}
 
             {/* Create New Wallet CTA */}
             <Pressable

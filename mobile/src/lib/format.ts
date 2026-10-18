@@ -81,6 +81,29 @@ export function timeLabel(iso: string | null | undefined): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${hours}:${mins} ${ampm}`;
 }
 
+// ---- Calendar dates (YYYY-MM-DD, local — no timezone shifts) ----
+
+export function parseYmd(ymd: string | null | undefined): Date | null {
+  const m = ymd ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd) : null;
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+export function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** '2026-10-18' → '18 Oct 2026' */
+export function formatYmd(ymd: string | null | undefined): string {
+  const d = parseYmd(ymd);
+  return d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : '';
+}
+
+/** Today + n months, as YYYY-MM-DD. */
+export function ymdMonthsFromNow(months: number): string {
+  const d = new Date();
+  return toYmd(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()));
+}
+
 /** Humanize a transaction type slug: 'transfer_out' → 'Transfer out' */
 export function humanizeType(type: string): string {
   const s = type.replace(/_/g, ' ');

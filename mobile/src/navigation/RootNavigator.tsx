@@ -36,6 +36,8 @@ import { WalletSetupScreen } from '../screens/wallet/WalletSetupScreen';
 import { CreateEmergencyWalletScreen } from '../screens/wallet/emergency/CreateEmergencyWalletScreen';
 import { EmergencyAccessRulesScreen } from '../screens/wallet/emergency/EmergencyAccessRulesScreen';
 import { EmergencyCenterScreen } from '../screens/wallet/emergency/EmergencyCenterScreen';
+import { SavingsGoalSetupScreen } from '../screens/goals/SavingsGoalSetupScreen';
+import { SavingsPlanScreen } from '../screens/goals/SavingsPlanScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
 import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
 import { AssignAccessScreen } from '../screens/wallet/AssignAccessScreen';
@@ -52,7 +54,6 @@ import { HelpFaqScreen } from '../screens/support/HelpFaqScreen';
 import { SecurityCenterScreen } from '../screens/support/SecurityCenterScreen';
 import { ReferralScreen } from '../screens/referral/ReferralScreen';
 import { GoalsScreen } from '../screens/goals/GoalsScreen';
-import { CreateGoalScreen } from '../screens/goals/CreateGoalScreen';
 import { VendorDirectoryScreen } from '../screens/vendors/VendorDirectoryScreen';
 import { VendorProfileScreen } from '../screens/vendors/VendorProfileScreen';
 import { BecomeVendorScreen } from '../screens/vendors/BecomeVendorScreen';
@@ -226,6 +227,8 @@ export function RootNavigator() {
       <RootStack.Screen name="CreateEmergencyWallet" component={CreateEmergencyWalletScreen} />
       <RootStack.Screen name="EmergencyAccessRules" component={EmergencyAccessRulesScreen} />
       <RootStack.Screen name="EmergencyCenter" component={EmergencyCenterScreen} />
+      <RootStack.Screen name="SavingsGoalSetup" component={SavingsGoalSetupScreen} />
+      <RootStack.Screen name="SavingsPlan" component={SavingsPlanScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
       <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />
       <RootStack.Screen name="AssignAccess" component={AssignAccessScreen} />
@@ -242,7 +245,6 @@ export function RootNavigator() {
       <RootStack.Screen name="SecurityCenter" component={SecurityCenterScreen} />
       <RootStack.Screen name="Referral" component={ReferralScreen} />
       <RootStack.Screen name="Goals" component={GoalsScreen} />
-      <RootStack.Screen name="CreateGoal" component={CreateGoalScreen} />
       <RootStack.Screen name="VendorDirectory" component={VendorDirectoryScreen} />
       <RootStack.Screen name="VendorProfile" component={VendorProfileScreen} />
       <RootStack.Screen name="BecomeVendor" component={BecomeVendorScreen} />

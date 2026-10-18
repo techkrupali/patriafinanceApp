@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from '../../../components/KeyboardAwareScrollView';
 import { Screen } from '../../../components/Screen';
@@ -10,34 +10,100 @@ import { ErrorText } from '../../../components/ErrorText';
 import { GuidedIntro } from '../../../components/GuidedIntro';
 import { PurposeGrid } from '../../../components/PurposeGrid';
 import { FundingSourceSelect } from '../../../components/FundingSourceSelect';
+import { DraftStatus } from '../../../components/DraftStatus';
 import { colors, outline } from '../../../theme';
 import { useWallets } from '../../../api/hooks';
 import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../../lib/format';
 import { EMERGENCY_PURPOSES, walletGuide } from '../../../lib/walletGuides';
-import type { EmergencyPurpose } from '../../../api/types';
-import type { RootScreenProps } from '../../../navigation/types';
+import { confirmLeaveSetup, draftSessionData, newDraftSessionKey, useDraft, useDraftAutosave } from '../../../lib/drafts';
+import type { EmergencyPurpose, WalletDraft } from '../../../api/types';
+import type { EmergencyRulesDraft, RootScreenProps } from '../../../navigation/types';
+
+/** Step 1 answers as kept in the draft (raw form values). */
+interface StepOneDraft {
+  purpose?: EmergencyPurpose | null;
+  deposit?: string;
+  sourceId?: number | null;
+  monthlyOn?: boolean;
+  monthly?: string;
+}
 
 /**
  * Emergency wallet — Step 1 of 2 (client design "Create Emergency Wallet"):
  * what kind of emergency, how much goes in now, from where, and monthly
  * auto-funding. Step 2 sets who can unlock it and who receives the money.
  */
-export function CreateEmergencyWalletScreen({ navigation, route }: RootScreenProps<'CreateEmergencyWallet'>) {
+export function CreateEmergencyWalletScreen(props: RootScreenProps<'CreateEmergencyWallet'>) {
+  const { draft, loading } = useDraft(props.route.params?.draftId);
+  if (props.route.params?.draftId && loading) {
+    return (
+      <Screen>
+        <Header title="Emergency Wallet" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={colors.navy} />
+        </View>
+      </Screen>
+    );
+  }
+  return <StepOneForm {...props} saved={draft} />;
+}
+
+function StepOneForm({ navigation, route, saved }: RootScreenProps<'CreateEmergencyWallet'> & { saved: WalletDraft | null }) {
   const initial = route.params?.draft;
+  const savedOne = ((saved?.data ?? {}) as { stepOne?: StepOneDraft }).stepOne ?? {};
+  const sessionKey = useRef(newDraftSessionKey('emergency')).current;
   const guide = walletGuide('emergency');
   const wallets = useWallets();
   const sources = (wallets.data ?? []).filter((w) => w.my_role === 'owner' && w.status === 'active' && !w.emergency_locked);
 
-  const [name, setName] = useState(initial?.name ?? '');
-  const [purpose, setPurpose] = useState<EmergencyPurpose | null>(initial?.purpose ?? null);
-  const [deposit, setDeposit] = useState(initial?.initialDeposit ?? '');
-  const [chosenSourceId, setSourceId] = useState<number | null>(initial?.sourceWalletId ?? null);
-  const [monthlyOn, setMonthlyOn] = useState(Boolean(initial?.monthlyAmount));
-  const [monthly, setMonthly] = useState(initial?.monthlyAmount ?? '');
+  const [name, setName] = useState(saved?.name ?? initial?.name ?? '');
+  const [purpose, setPurpose] = useState<EmergencyPurpose | null>(savedOne.purpose ?? initial?.purpose ?? null);
+  const [deposit, setDeposit] = useState(savedOne.deposit ?? initial?.initialDeposit ?? '');
+  const [chosenSourceId, setSourceId] = useState<number | null>(savedOne.sourceId ?? initial?.sourceWalletId ?? null);
+  const [monthlyOn, setMonthlyOn] = useState(savedOne.monthlyOn ?? Boolean(initial?.monthlyAmount));
+  const [monthly, setMonthly] = useState(savedOne.monthly ?? initial?.monthlyAmount ?? '');
   const [error, setError] = useState<string | null>(null);
 
-  const sourceId = chosenSourceId ?? sources.find((w) => w.type === 'main')?.id ?? sources[0]?.id ?? null;
+  const autosave = useDraftAutosave({
+    sessionKey,
+    initialDraftId: saved?.id,
+    initialData: saved?.data,
+    type: 'emergency',
+    name,
+    step: 1,
+    totalSteps: 2,
+    data: { stepOne: { purpose, deposit, sourceId: chosenSourceId, monthlyOn, monthly } satisfies StepOneDraft },
+    enabled: Boolean(name.trim() || purpose),
+  });
+
+  // A wallet that's since gone (resumed draft) falls back to Main.
+  const chosen = sources.some((w) => w.id === chosenSourceId) ? chosenSourceId : null;
+  const sourceId = chosen ?? sources.find((w) => w.type === 'main')?.id ?? sources[0]?.id ?? null;
   const source = sources.find((w) => w.id === sourceId);
+
+  // Resuming a draft saved on Step 2: go straight back there.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || saved?.step !== 2 || !purpose || !name.trim()) return;
+    resumed.current = true;
+    goToRules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function goToRules() {
+    navigation.navigate('EmergencyAccessRules', {
+      draft: {
+        name: name.trim(),
+        purpose: purpose!,
+        initialDeposit: Number(deposit) > 0 ? deposit : '',
+        sourceWalletId: sourceId,
+        monthlyAmount: monthlyOn ? monthly : '',
+      },
+      sessionKey,
+      draftId: autosave.draftId,
+      rules: draftSessionData(sessionKey).rules as EmergencyRulesDraft | undefined,
+    });
+  }
 
   const next = () => {
     setError(null);
@@ -62,15 +128,7 @@ export function CreateEmergencyWalletScreen({ navigation, route }: RootScreenPro
       return;
     }
 
-    navigation.navigate('EmergencyAccessRules', {
-      draft: {
-        name: name.trim(),
-        purpose,
-        initialDeposit: Number(deposit) > 0 ? deposit : '',
-        sourceWalletId: sourceId,
-        monthlyAmount: monthlyOn ? monthly : '',
-      },
-    });
+    goToRules();
   };
 
   return (
@@ -82,6 +140,7 @@ export function CreateEmergencyWalletScreen({ navigation, route }: RootScreenPro
         showsVerticalScrollIndicator={false}
       >
         <GuidedIntro step="Step 1 of 2" title="Create Emergency Wallet" subtitle={guide.explainer} />
+        <DraftStatus status={autosave.status} className="mt-2" />
 
         <View className="mt-6 rounded bg-white p-5" style={outline.card}>
           <Input
@@ -148,7 +207,18 @@ export function CreateEmergencyWalletScreen({ navigation, route }: RootScreenPro
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Next: Access Rules" icon="arrow-forward" onPress={next} className="mt-6" />
-          <Button title="Cancel Setup" variant="secondary" onPress={() => navigation.goBack()} className="mt-3" />
+          <Button
+            title="Cancel Setup"
+            variant="secondary"
+            onPress={() =>
+              confirmLeaveSetup(
+                Boolean(autosave.draftId),
+                () => navigation.goBack(),
+                () => void autosave.discard().then(() => navigation.goBack()),
+              )
+            }
+            className="mt-3"
+          />
         </View>
       </KeyboardAwareScrollView>
     </Screen>

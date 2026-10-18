@@ -63,6 +63,8 @@ export interface Wallet {
   description?: string | null;
   /** Naira decimal string, or null when the wallet has no target. */
   target_amount?: string | null;
+  /** YYYY-MM-DD the owner wants to reach the target by (savings goals). */
+  target_date?: string | null;
   approval_enabled?: boolean;
   /** Naira decimal string. null = every spend needs approval. */
   approval_threshold?: string | null;
@@ -142,6 +144,10 @@ export interface WalletInvitation {
   inviter?: PersonRef;
   created_at?: string | null;
   expires_at?: string | null;
+  /** Access chosen for this person at invite time (null = role defaults). */
+  permissions?: InvitePermissions | null;
+  /** Savings wallets: the plan the invitee is joining. */
+  savings?: SavingsSummary | null;
 }
 
 export type ApprovalAction = 'withdrawal' | 'transfer_wallet' | 'transfer_user' | 'transfer_bank';
@@ -294,6 +300,8 @@ export interface WalletDetailData {
   recent_transactions: Transaction[];
   /** Emergency wallets only (null otherwise). */
   emergency?: EmergencySummary | null;
+  /** Savings/goal wallets with a plan (null otherwise). */
+  savings?: SavingsSummary | null;
 }
 
 export interface WalletUpdatedData {
@@ -587,6 +595,120 @@ export interface CreateWalletPayload {
   monthly_day?: number;
   /** Emergency wallets only — the Step 2 access rules. */
   emergency?: EmergencyRulesPayload;
+  // ---- Savings goals (savings + goal wallets) ----
+  /** YYYY-MM-DD, after today. */
+  target_date?: string;
+  milestones?: { title: string; amount: string; due_date?: string }[];
+  contributors?: { user_id: number; can_approve?: boolean; permissions?: InvitePermissions }[];
+  savings_plan?: SavingsPlanPayload;
+  /** The draft this setup came from — deleted once the wallet exists. */
+  draft_id?: number;
+}
+
+// ============================================================================
+// Savings Goals + wallet drafts (client sheet "Savings Wallets", 2026-10-18)
+// ============================================================================
+
+export type SavingsFrequency = 'daily' | 'weekly' | 'monthly';
+
+/** view / fund / request / withdraw chosen per invited person. */
+export interface InvitePermissions {
+  view: boolean;
+  fund: boolean;
+  request: boolean;
+  withdraw: boolean;
+}
+
+export interface SavingsPlanPayload {
+  /** Naira decimal string — what EACH saver puts in per period. */
+  amount: string;
+  frequency: SavingsFrequency;
+  day_of_week?: number;
+  day_of_month?: number;
+  auto_save: boolean;
+  allow_contributor_edit: boolean;
+}
+
+/** A plan or a saver's auto-save, as the API describes it. */
+export interface SavingsTerms {
+  amount: string;
+  frequency: SavingsFrequency;
+  day_of_week: number | null;
+  day_of_month: number | null;
+  /** "₦50.00 monthly on day 5" */
+  label: string;
+}
+
+export interface SavingsSummary extends SavingsTerms {
+  auto_save: boolean;
+  allow_contributor_edit: boolean;
+  target_amount: string | null;
+  target_date: string | null;
+}
+
+export interface SaverAutoSave extends SavingsTerms {
+  enabled: boolean;
+  /** Only shown for the viewer's own auto-save. */
+  source_wallet: { id: number; name: string } | null;
+}
+
+export interface Saver {
+  user: { id: number; name: string; username: string | null; avatar_url: string | null };
+  status: 'owner' | 'member' | 'invited';
+  auto_save: SaverAutoSave | null;
+  total_saved: string;
+  invitation_id?: number;
+}
+
+export interface SavingsDetail {
+  wallet_id: number;
+  balance: string;
+  target_amount: string | null;
+  target_date: string | null;
+  progress: number | null;
+  days_left: number | null;
+  plan: (SavingsTerms & { auto_save: boolean; allow_contributor_edit: boolean }) | null;
+  projection: {
+    per_month: string;
+    projected_date: string | null;
+    on_track: boolean | null;
+    /** Per-person amount (plan frequency) that would hit the target on time. */
+    suggested_amount: string | null;
+    reached: boolean;
+  };
+  milestones: { id: number; title: string; amount: string; due_date: string | null; reached: boolean; overdue: boolean }[];
+  savers: Saver[];
+  me: {
+    is_owner: boolean;
+    is_saver: boolean;
+    can_edit_plan: boolean;
+    can_edit_own_terms: boolean;
+    auto_save: SaverAutoSave | null;
+    can_start_auto_save: boolean;
+  };
+}
+
+export interface SavingsDetailData {
+  savings: SavingsDetail;
+}
+
+/** An unfinished wallet setup, resumable from the wallet list. */
+export interface WalletDraft {
+  id: number;
+  type: CreatableWalletType;
+  name: string | null;
+  step: number;
+  total_steps: number;
+  data: Record<string, unknown>;
+  updated_at: string | null;
+}
+
+export interface WalletDraftsData {
+  drafts: WalletDraft[];
+}
+
+export interface WalletDraftData {
+  draft: WalletDraft;
 }
 
 // ============================================================================
@@ -748,6 +870,8 @@ export interface CreateInvitationPayload {
   invitee_user_id?: number;
   role?: string;
   can_approve?: boolean;
+  /** Per-person access applied when they accept (contributor/admin). */
+  permissions?: InvitePermissions;
 }
 
 /** Slim user shape returned by GET /users/search. */

@@ -9,10 +9,12 @@ import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
+import { DraftWalletCard } from '../../components/DraftWalletCard';
 import { colors, gradients, outline, radius } from '../../theme';
-import { useWallets } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { useWalletDrafts, useWallets } from '../../api/hooks';
+import { formatMoney, formatYmd } from '../../lib/format';
 import { selection } from '../../lib/haptics';
+import { resumeDraft } from '../../lib/drafts';
 import { walletVisual } from '../../lib/walletVisual';
 import type { Wallet } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -58,6 +60,7 @@ function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) 
           <View className="mt-2.5 flex-row items-center justify-between">
             <Text className="flex-1 pr-2 text-[13px] text-muted" numberOfLines={1}>
               {formatMoney(wallet.balance)} of {formatMoney(wallet.target_amount)}
+              {wallet.target_date ? ` · by ${formatYmd(wallet.target_date)}` : ''}
             </Text>
             <Text className="text-[13px] font-bold text-brand">{Math.floor(pct)}%</Text>
           </View>
@@ -82,6 +85,8 @@ function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) 
 
 export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
   const { data, isLoading, error, refetch, isRefetching } = useWallets();
+  const drafts = useWalletDrafts();
+  const goalDrafts = (drafts.data ?? []).filter((d) => GOAL_TYPES.includes(d.type));
 
   const goals = useMemo(
     () => (data ?? []).filter((w) => GOAL_TYPES.includes(w.type)),
@@ -97,7 +102,7 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
     <Pressable
       onPress={() => {
         selection();
-        navigation.navigate('CreateGoal');
+        navigation.navigate('CreateWallet');
       }}
       hitSlop={8}
       className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
@@ -125,17 +130,18 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
             <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
           }
         >
-          {goals.length === 0 ? (
+          {goals.length === 0 && goalDrafts.length === 0 ? (
             <EmptyState
               icon="flag-outline"
               title="No savings goals yet"
               message="Create a goal and watch it grow."
               action={
-                <Button title="Create a goal" icon="add" onPress={() => navigation.navigate('CreateGoal')} />
+                <Button title="Create a goal" icon="add" onPress={() => navigation.navigate('CreateWallet')} />
               }
             />
           ) : (
             <>
+              {goals.length > 0 ? (
               <LinearGradient
                 colors={gradients.navy}
                 start={{ x: 0, y: 0 }}
@@ -152,6 +158,7 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
                   across {goals.length} goal{goals.length === 1 ? '' : 's'}
                 </Text>
               </LinearGradient>
+              ) : null}
 
               {goals.map((w) => (
                 <GoalCard
@@ -160,6 +167,15 @@ export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
                   onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
                 />
               ))}
+
+              {goalDrafts.length > 0 ? (
+                <View className="mt-6" style={{ gap: 12 }}>
+                  <Text className="text-sm font-extrabold text-ink">Unfinished Goals</Text>
+                  {goalDrafts.map((d) => (
+                    <DraftWalletCard key={d.id} draft={d} onResume={() => resumeDraft(navigation, d)} />
+                  ))}
+                </View>
+              ) : null}
             </>
           )}
         </ScrollView>

@@ -14,6 +14,7 @@ class WalletInvitation extends Model
         'invitee_identifier',
         'role',
         'can_approve',
+        'permissions',
         'status',
         'token',
         'expires_at',
@@ -24,6 +25,7 @@ class WalletInvitation extends Model
     {
         return [
             'can_approve' => 'boolean',
+            'permissions' => 'array',
             'expires_at' => 'datetime',
             'responded_at' => 'datetime',
         ];

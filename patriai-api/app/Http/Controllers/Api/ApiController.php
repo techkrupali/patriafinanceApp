@@ -173,6 +173,7 @@ abstract class ApiController extends Controller
             'currency' => $wallet->currency,
             'balance' => $wallet->balanceNaira(),
             'target_amount' => $wallet->target_amount !== null ? number_format($wallet->target_amount / 100, 2, '.', '') : null,
+            'target_date' => $wallet->target_date?->toDateString(),
             'approval_enabled' => (bool) $wallet->approval_enabled,
             'approval_threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
             'required_approvals' => (int) $wallet->required_approvals,
@@ -281,6 +282,12 @@ abstract class ApiController extends Controller
             'invitee_user_id' => $invitation->invitee_user_id,
             'role' => $invitation->role,
             'can_approve' => (bool) $invitation->can_approve,
+            // Access chosen for this person at invite time (null = role defaults).
+            'permissions' => $invitation->permissions ? array_intersect_key($invitation->permissions, array_flip(['view', 'fund', 'request', 'withdraw'])) : null,
+            // Savings wallets: the plan the invitee is joining.
+            'savings' => $invitation->relationLoaded('wallet') && $invitation->wallet
+                ? \App\Services\SavingsService::make()->invitationSummary($invitation->wallet)
+                : null,
             'status' => $invitation->status,
             'expires_at' => $invitation->expires_at?->toIso8601String(),
             'responded_at' => $invitation->responded_at?->toIso8601String(),

@@ -23,6 +23,7 @@ class Wallet extends Model
         'currency',
         'balance',
         'target_amount',
+        'target_date',
         'approval_enabled',
         'approval_threshold',
         'required_approvals',
@@ -38,6 +39,7 @@ class Wallet extends Model
         return [
             'balance' => 'integer',
             'target_amount' => 'integer',
+            'target_date' => 'date',
             'approval_enabled' => 'boolean',
             'approval_threshold' => 'integer',
             'required_approvals' => 'integer',
@@ -84,6 +86,17 @@ class Wallet extends Model
     public function emergencyUnlockRequests(): HasMany
     {
         return $this->hasMany(EmergencyUnlockRequest::class);
+    }
+
+    /** The savings rule every contributor follows (savings/goal wallets). */
+    public function savingsPlan(): HasOne
+    {
+        return $this->hasOne(SavingsPlan::class);
+    }
+
+    public function savingsMilestones(): HasMany
+    {
+        return $this->hasMany(SavingsMilestone::class)->orderBy('position');
     }
 
     /**

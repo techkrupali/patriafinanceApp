@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\SavingsController;
 use App\Http\Controllers\Api\SpendRequestController;
 use App\Http\Controllers\Api\SpousalSyncController;
 use App\Http\Controllers\Api\TransferController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\WalletAuditLogController;
 use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\WalletDraftController;
 use App\Http\Controllers\Api\WalletLockController;
 use App\Http\Controllers\Api\WalletMemberController;
 use App\Http\Controllers\Api\WebhookController;
@@ -117,6 +119,20 @@ Route::prefix('v1')->group(function () {
 
         // Spend requests (a request-only member asks the owner/co-owners to approve a spend)
         Route::post('wallets/{wallet}/spend-requests', [SpendRequestController::class, 'store'])->middleware('throttle:20,1');
+
+        // Savings goals — shared plan, milestones, each saver's own auto-save.
+        Route::get('wallets/{wallet}/savings', [SavingsController::class, 'show']);
+        Route::patch('wallets/{wallet}/savings', [SavingsController::class, 'update'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/savings/contribution', [SavingsController::class, 'startContribution'])->middleware('throttle:20,1');
+        Route::patch('wallets/{wallet}/savings/contribution', [SavingsController::class, 'updateContribution'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/savings/milestones', [SavingsController::class, 'addMilestone'])->middleware('throttle:30,1');
+        Route::delete('wallets/{wallet}/savings/milestones/{milestone}', [SavingsController::class, 'removeMilestone'])->middleware('throttle:30,1');
+
+        // Wallet drafts — auto-saved setup, resumable from the wallet list.
+        Route::get('wallet-drafts', [WalletDraftController::class, 'index']);
+        Route::post('wallet-drafts', [WalletDraftController::class, 'store'])->middleware('throttle:60,1');
+        Route::put('wallet-drafts/{walletDraft}', [WalletDraftController::class, 'update'])->middleware('throttle:120,1');
+        Route::delete('wallet-drafts/{walletDraft}', [WalletDraftController::class, 'destroy'])->middleware('throttle:30,1');
 
         // Emergency Wallet access rules — unlock / re-lock / recipient payouts.
         Route::get('wallets/{wallet}/emergency', [EmergencyController::class, 'show']);

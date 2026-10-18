@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\EmergencyBeneficiary;
 use App\Models\EmergencySetting;
+use App\Models\SavingsPlan;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
 use App\Services\EmergencyService;
 use App\Services\KycService;
+use App\Services\SavingsService;
 use App\Services\WalletService;
 use App\Services\WalletSetupService;
 use Illuminate\Http\JsonResponse;
@@ -36,10 +38,12 @@ class WalletController extends ApiController
 
     /**
      * POST /wallets — guided creation.
-     * { type, name, description?, target_amount?, purpose?, initial_deposit?,
-     *   source_wallet_id?, monthly_amount?, monthly_day?, emergency? }
+     * { type, name, description?, target_amount?, target_date?, purpose?,
+     *   initial_deposit?, source_wallet_id?, monthly_amount?, monthly_day?,
+     *   emergency?, milestones?, contributors?, savings_plan?, draft_id? }
      * `emergency` (emergency wallets only) carries the Step 2 access rules; see
-     * EmergencyService::configure.
+     * EmergencyService::configure. milestones/contributors/savings_plan are the
+     * savings-goal setup (savings + goal wallets); see SavingsService::configure.
      */
     public function store(Request $request): JsonResponse
     {
@@ -70,6 +74,28 @@ class WalletController extends ApiController
             'emergency.beneficiaries.*.role' => ['sometimes', 'in:' . implode(',', EmergencyBeneficiary::ROLES)],
             'emergency.beneficiaries.*.withdrawal_limit' => ['nullable', 'numeric', 'min:0'],
             'emergency.beneficiaries.*.access_type' => ['sometimes', 'in:' . implode(',', EmergencyBeneficiary::ACCESS_TYPES)],
+            // Savings goals.
+            'target_date' => ['nullable', 'date', 'after:today'],
+            'milestones' => ['sometimes', 'array', 'max:' . SavingsService::MAX_MILESTONES],
+            'milestones.*.title' => ['required', 'string', 'max:100'],
+            'milestones.*.amount' => ['required', 'numeric', 'min:1'],
+            'milestones.*.due_date' => ['nullable', 'date'],
+            'contributors' => ['sometimes', 'array', 'max:' . SavingsService::MAX_CONTRIBUTORS],
+            'contributors.*.user_id' => ['required', 'integer'],
+            'contributors.*.can_approve' => ['sometimes', 'boolean'],
+            'contributors.*.permissions' => ['sometimes', 'array'],
+            'contributors.*.permissions.view' => ['sometimes', 'boolean'],
+            'contributors.*.permissions.fund' => ['sometimes', 'boolean'],
+            'contributors.*.permissions.request' => ['sometimes', 'boolean'],
+            'contributors.*.permissions.withdraw' => ['sometimes', 'boolean'],
+            'savings_plan' => ['nullable', 'array'],
+            'savings_plan.amount' => ['required_with:savings_plan', 'numeric', 'min:1'],
+            'savings_plan.frequency' => ['required_with:savings_plan', 'in:' . implode(',', SavingsPlan::FREQUENCIES)],
+            'savings_plan.day_of_week' => ['nullable', 'integer', 'between:1,7'],
+            'savings_plan.day_of_month' => ['nullable', 'integer', 'between:1,28'],
+            'savings_plan.auto_save' => ['sometimes', 'boolean'],
+            'savings_plan.allow_contributor_edit' => ['sometimes', 'boolean'],
+            'draft_id' => ['nullable', 'integer'],
         ]);
 
         $user = $request->user();
@@ -84,6 +110,10 @@ class WalletController extends ApiController
         if (!empty($data['emergency']) && $data['type'] !== 'emergency') {
             return $this->fail('Emergency access rules only apply to emergency wallets', 422);
         }
+        $savingsFields = ['milestones', 'contributors', 'savings_plan'];
+        if (!in_array($data['type'], SavingsService::TYPES, true) && array_filter(array_intersect_key($data, array_flip($savingsFields)))) {
+            return $this->fail('Milestones, contributors and savings plans are for savings and goal wallets', 422);
+        }
 
         // Naira over the wire, kobo from here on. Zero means "not set".
         $kobo = fn ($naira) => ($naira === null || (float) $naira <= 0) ? null : $this->toKobo((string) $naira);
@@ -91,6 +121,12 @@ class WalletController extends ApiController
         $data['target_amount'] = $kobo($data['target_amount'] ?? null);
         $data['initial_deposit'] = $kobo($data['initial_deposit'] ?? null);
         $data['monthly_amount'] = $kobo($data['monthly_amount'] ?? null);
+        foreach ($data['milestones'] ?? [] as $i => $m) {
+            $data['milestones'][$i]['amount'] = $kobo($m['amount']);
+        }
+        if (!empty($data['savings_plan'])) {
+            $data['savings_plan']['amount'] = $kobo($data['savings_plan']['amount'] ?? null);
+        }
         if (!empty($data['emergency']['beneficiaries'])) {
             foreach ($data['emergency']['beneficiaries'] as $i => $b) {
                 $data['emergency']['beneficiaries'][$i]['withdrawal_limit'] = $kobo($b['withdrawal_limit'] ?? null);
@@ -135,6 +171,8 @@ class WalletController extends ApiController
             'pending_approvals' => $wallet->approvalRequests()->where('status', 'pending')->count(),
             // Emergency wallets only: lock state + the viewer's emergency role.
             'emergency' => EmergencyService::make()->summary($wallet, $user),
+            // Savings/goal wallets with a plan: the rule every saver follows.
+            'savings' => SavingsService::make()->invitationSummary($wallet),
             'recent_transactions' => $wallet->transactions()->latest()->limit(10)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);

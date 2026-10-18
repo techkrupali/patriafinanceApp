@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
@@ -7,9 +7,12 @@ import { Header } from '../../components/Header';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
+import { DraftStatus } from '../../components/DraftStatus';
 import { colors } from '../../theme';
 import { useCreateProject } from '../../api/hooks';
 import { groupAmountInput, sanitizeAmountInput } from '../../lib/format';
+import { confirmLeaveSetup, useDraft, useDraftAutosave } from '../../lib/drafts';
+import type { WalletDraft } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 function InfoRow({ icon, title, body }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string }) {
@@ -26,12 +29,37 @@ function InfoRow({ icon, title, body }: { icon: React.ComponentProps<typeof Ioni
   );
 }
 
-export function CreateProjectScreen({ navigation, route }: RootScreenProps<'CreateProject'>) {
-  const [title, setTitle] = useState(route.params?.name ?? '');
-  const [description, setDescription] = useState('');
-  const [budget, setBudget] = useState('');
+export function CreateProjectScreen(props: RootScreenProps<'CreateProject'>) {
+  const { draft, loading } = useDraft(props.route.params?.draftId);
+  if (props.route.params?.draftId && loading) {
+    return (
+      <Screen>
+        <Header title="New project" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={colors.navy} />
+        </View>
+      </Screen>
+    );
+  }
+  return <CreateProjectForm {...props} draft={draft} />;
+}
+
+function CreateProjectForm({ navigation, route, draft }: RootScreenProps<'CreateProject'> & { draft: WalletDraft | null }) {
+  const saved = (draft?.data ?? {}) as { description?: string; budget?: string };
+  const [title, setTitle] = useState(draft?.name ?? route.params?.name ?? '');
+  const [description, setDescription] = useState(saved.description ?? '');
+  const [budget, setBudget] = useState(saved.budget ?? '');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateProject();
+  const autosave = useDraftAutosave({
+    initialDraftId: draft?.id,
+    type: 'project',
+    name: title,
+    step: 1,
+    totalSteps: 1,
+    data: { description, budget },
+    enabled: Boolean(title.trim() || description.trim()),
+  });
 
   const submit = () => {
     setError(null);
@@ -46,7 +74,11 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
         budget: budget.trim() ? budget.trim() : undefined,
       },
       {
-        onSuccess: (data) => navigation.replace('ProjectDetail', { projectId: data.project.id }),
+        onSuccess: (data) => {
+          // Projects are created by their own endpoint, so clear the draft here.
+          void autosave.discard();
+          navigation.replace('ProjectDetail', { projectId: data.project.id });
+        },
         onError: (e) => setError(e.message),
       },
     );
@@ -60,6 +92,7 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
         contentContainerStyle={{ padding: 24, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
       >
+          <DraftStatus status={autosave.status} className="mb-3" />
           {/* How escrow works */}
           <View className="rounded bg-lav-faint p-5" style={{ gap: 16 }}>
             <InfoRow
@@ -110,6 +143,18 @@ export function CreateProjectScreen({ navigation, route }: RootScreenProps<'Crea
           <ErrorText message={error} className="mt-4" />
 
           <Button title="Create project" icon="checkmark" onPress={submit} loading={create.isPending} className="mt-6" />
+          <Button
+            title="Cancel Setup"
+            variant="secondary"
+            onPress={() =>
+              confirmLeaveSetup(
+                Boolean(autosave.draftId),
+                () => navigation.goBack(),
+                () => void autosave.discard().then(() => navigation.goBack()),
+              )
+            }
+            className="mt-3"
+          />
       </KeyboardAwareScrollView>
     </Screen>
   );

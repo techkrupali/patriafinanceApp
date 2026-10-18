@@ -8,8 +8,9 @@ import { Header } from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { ErrorText } from '../../components/ErrorText';
+import { JoinSavingsSheet } from '../../components/JoinSavingsSheet';
 import { colors, outline, radius } from '../../theme';
-import { useAcceptInvitation, useDeclineInvitation, useMyInvitations } from '../../api/hooks';
+import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, type AcceptInvitationOptions } from '../../api/hooks';
 import { walletVisual } from '../../lib/walletVisual';
 import { roleLabel } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
@@ -22,23 +23,38 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
   const decline = useDeclineInvitation();
   const [actingId, setActingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Savings invites: choose the wallet your savings come from before joining.
+  const [joining, setJoining] = useState<WalletInvitation | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const invitations = query.data ?? [];
 
-  const onAccept = (inv: WalletInvitation) => {
-    selection();
+  const acceptWith = (inv: WalletInvitation, options?: AcceptInvitationOptions) => {
     setError(null);
+    setJoinError(null);
     setActingId(inv.id);
-    accept.mutate(inv.id, {
+    accept.mutate(options ? { invitationId: inv.id, options } : inv.id, {
       onSuccess: (data) => {
         setActingId(null);
+        setJoining(null);
         navigation.navigate('WalletDetail', { walletId: data.wallet.id });
       },
       onError: (e) => {
         setActingId(null);
-        setError(e.message);
+        if (options) setJoinError(e.message);
+        else setError(e.message);
       },
     });
+  };
+
+  const onAccept = (inv: WalletInvitation) => {
+    selection();
+    if (inv.savings) {
+      setJoinError(null);
+      setJoining(inv);
+      return;
+    }
+    acceptWith(inv);
   };
 
   const onDecline = (inv: WalletInvitation) => {
@@ -108,6 +124,12 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
                         {roleLabel(inv.role)}
                       </Text>
                     </View>
+                    {inv.savings ? (
+                      <View className="flex-row items-center rounded bg-success-soft px-2.5 py-1">
+                        <Ionicons name="trending-up" size={12} color={colors.brand} style={{ marginRight: 4 }} />
+                        <Text className="text-[11px] font-bold text-brand">Saves {inv.savings.label}</Text>
+                      </View>
+                    ) : null}
                     {inv.can_approve ? (
                       <View className="flex-row items-center rounded bg-success-soft px-2.5 py-1">
                         <Ionicons name="shield-checkmark" size={12} color={colors.brand} style={{ marginRight: 4 }} />
@@ -146,6 +168,14 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
           </View>
         )}
       </ScrollView>
+
+      <JoinSavingsSheet
+        invitation={joining}
+        loading={joining !== null && actingId === joining.id}
+        error={joinError}
+        onConfirm={(options) => joining && acceptWith(joining, options)}
+        onClose={() => setJoining(null)}
+      />
     </Screen>
   );
 }

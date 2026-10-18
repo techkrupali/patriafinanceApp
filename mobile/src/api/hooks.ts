@@ -30,6 +30,11 @@ import type {
   EmergencyDocumentType,
   EmergencyRequest,
   EmergencyWithdrawData,
+  SavingsDetailData,
+  SavingsFrequency,
+  WalletDraft,
+  WalletDraftData,
+  WalletDraftsData,
   FamilyMemberDetailData,
   PendingApprovalData,
   RaiseDisputePayload,
@@ -136,6 +141,9 @@ export const keys = {
   walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
   // ---- Emergency wallets ----
   emergency: (id: number) => ['wallets', id, 'emergency'] as const,
+  // ---- Savings goals + drafts ----
+  savings: (id: number) => ['wallets', id, 'savings'] as const,
+  walletDrafts: ['wallet-drafts'] as const,
   // ---- Disputes ----
   disputes: ['disputes'] as const,
   // ---- Referrals ----
@@ -330,6 +338,9 @@ export function useCreateWallet() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      // The server deletes the draft a wallet was created from.
+      void qc.invalidateQueries({ queryKey: keys.walletDrafts });
+      void qc.invalidateQueries({ queryKey: keys.automations });
     },
   });
 }
@@ -547,11 +558,22 @@ export function useMyInvitations() {
   });
 }
 
+/** Savings wallets: start your own auto-save as you join (all optional). */
+export interface AcceptInvitationOptions {
+  source_wallet_id?: number;
+  amount?: string;
+  frequency?: SavingsFrequency;
+  day_of_week?: number;
+  day_of_month?: number;
+}
+
 export function useAcceptInvitation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (invitationId: number) =>
-      api<InvitationAcceptData>(`/invitations/${invitationId}/accept`, { method: 'POST' }),
+    mutationFn: (input: number | { invitationId: number; options: AcceptInvitationOptions }) =>
+      typeof input === 'number'
+        ? api<InvitationAcceptData>(`/invitations/${input}/accept`, { method: 'POST' })
+        : api<InvitationAcceptData>(`/invitations/${input.invitationId}/accept`, { method: 'POST', body: input.options }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.myInvitations });
       void qc.invalidateQueries({ queryKey: keys.wallets });
@@ -1310,6 +1332,105 @@ export function useEmergencyActions(walletId: number) {
     withdraw: useMutation({
       mutationFn: (input: { amount: string; pin: string }) =>
         api<EmergencyWithdrawData>(`/wallets/${walletId}/emergency/withdraw`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+  };
+}
+
+// ---------- Wallet drafts (auto-saved setup, resumable) ----------
+
+export function useWalletDrafts() {
+  return useQuery({
+    queryKey: keys.walletDrafts,
+    queryFn: () => api<WalletDraftsData>('/wallet-drafts'),
+    select: (d) => d.drafts,
+  });
+}
+
+export interface SaveDraftInput {
+  /** null = create a new draft. */
+  id: number | null;
+  type: WalletDraft['type'];
+  name: string | null;
+  step: number;
+  total_steps: number;
+  data: Record<string, unknown>;
+}
+
+/** Upsert: creates the draft on first save, updates it afterwards. */
+export function useSaveWalletDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: SaveDraftInput) =>
+      id
+        ? api<WalletDraftData>(`/wallet-drafts/${id}`, { method: 'PUT', body })
+        : api<WalletDraftData>('/wallet-drafts', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.walletDrafts }),
+  });
+}
+
+export function useDeleteWalletDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api(`/wallet-drafts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.walletDrafts }),
+  });
+}
+
+// ---------- Savings goals (plan, milestones, my auto-save) ----------
+
+export function useSavings(walletId: number) {
+  return useQuery({
+    queryKey: keys.savings(walletId),
+    queryFn: () => api<SavingsDetailData>(`/wallets/${walletId}/savings`),
+    select: (d) => d.savings,
+  });
+}
+
+export interface SavingsTermsInput {
+  amount?: string;
+  frequency?: SavingsFrequency;
+  day_of_week?: number;
+  day_of_month?: number;
+}
+
+export function useSavingsActions(walletId: number) {
+  const qc = useQueryClient();
+  const onSuccess = () => {
+    void qc.invalidateQueries({ queryKey: keys.savings(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.wallets });
+    void qc.invalidateQueries({ queryKey: keys.automations });
+  };
+  const send = (method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
+    api<SavingsDetailData>(`/wallets/${walletId}/savings${path}`, { method, body });
+
+  return {
+    /** Owner: plan for everyone + target. */
+    updatePlan: useMutation({
+      mutationFn: (input: SavingsTermsInput & {
+        auto_save?: boolean;
+        allow_contributor_edit?: boolean;
+        target_amount?: string | null;
+        target_date?: string | null;
+      }) => send('PATCH', '', input),
+      onSuccess,
+    }),
+    startAutoSave: useMutation({
+      mutationFn: (input: SavingsTermsInput & { source_wallet_id: number }) => send('POST', '/contribution', input),
+      onSuccess,
+    }),
+    updateAutoSave: useMutation({
+      mutationFn: (input: SavingsTermsInput & { source_wallet_id?: number; enabled?: boolean }) =>
+        send('PATCH', '/contribution', input),
+      onSuccess,
+    }),
+    addMilestone: useMutation({
+      mutationFn: (input: { title: string; amount: string; due_date?: string }) => send('POST', '/milestones', input),
+      onSuccess,
+    }),
+    removeMilestone: useMutation({
+      mutationFn: (milestoneId: number) => send('DELETE', `/milestones/${milestoneId}`),
       onSuccess,
     }),
   };

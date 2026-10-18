@@ -666,7 +666,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             <Pressable
               onPress={() => {
                 selection();
-                navigation.navigate('CreateGoal');
+                navigation.navigate('CreateWallet');
               }}
               className="mt-3 items-center rounded bg-page-top p-6 active:opacity-80"
             >

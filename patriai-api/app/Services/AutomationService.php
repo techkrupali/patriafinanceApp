@@ -68,11 +68,65 @@ class AutomationService
         ]);
     }
 
+    /**
+     * A savings contribution: money moves from the saver's OWN wallet into a savings
+     * wallet they may fund (their own, or one they're a member of). The only kind of
+     * rule allowed to pay into a wallet the rule owner doesn't own; runRule re-checks
+     * the fund permission every time it fires.
+     */
+    public function createContributionRule(User $user, Wallet $from, Wallet $savings, array $terms): AutomationRule
+    {
+        if ($from->user_id !== $user->id) {
+            throw ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
+        }
+        if ($from->id === $savings->id) {
+            throw ValidationException::withMessages(['source_wallet_id' => 'Choose a different wallet to save from.']);
+        }
+        if (!$savings->canFund($user)) {
+            throw ValidationException::withMessages(['wallet' => "You can't add money to {$savings->name}."]);
+        }
+        if ((int) $terms['amount'] <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero.']);
+        }
+
+        return AutomationRule::create([
+            'user_id' => $user->id,
+            'name' => "Saving for {$savings->name}",
+            'from_wallet_id' => $from->id,
+            'to_wallet_id' => $savings->id,
+            'savings_contribution' => true,
+            'amount' => (int) $terms['amount'],
+            'frequency' => $terms['frequency'],
+            'day_of_week' => $terms['frequency'] === 'weekly' ? $terms['day_of_week'] : null,
+            'day_of_month' => $terms['frequency'] === 'monthly' ? $terms['day_of_month'] : null,
+            'enabled' => $terms['enabled'] ?? true,
+        ]);
+    }
+
     /** Owner-only edit. Re-validates wallet ownership on any wallet change. */
     public function updateRule(AutomationRule $rule, User $user, array $data): AutomationRule
     {
         if ($rule->user_id !== $user->id) {
             throw ValidationException::withMessages(['rule' => 'You do not own this automation.']);
+        }
+
+        // A savings contribution keeps its destination, and its amount/schedule is the
+        // savings wallet owner's call unless they let contributors edit. Pausing (or
+        // deleting) debits from your own wallet is always allowed.
+        if ($rule->savings_contribution) {
+            if (array_key_exists('to_wallet_id', $data) && (int) $data['to_wallet_id'] !== $rule->to_wallet_id) {
+                throw ValidationException::withMessages(['to_wallet_id' => 'A savings contribution always pays into its savings wallet.']);
+            }
+            $savings = Wallet::find($rule->to_wallet_id);
+            $plan = $savings?->savingsPlan;
+            // Compare values, not keys: the automations endpoint always sends the day
+            // fields (often unchanged nulls), even when only pausing.
+            $changesTerms = collect(['amount', 'frequency', 'day_of_week', 'day_of_month'])
+                ->contains(fn ($key) => array_key_exists($key, $data) && $data[$key] != $rule->{$key});
+            if ($changesTerms && $plan && !$plan->allow_contributor_edit && $savings->user_id !== $user->id) {
+                throw ValidationException::withMessages(['rule' => "The owner of {$savings->name} sets the savings amount and frequency."]);
+            }
+            unset($data['to_wallet_id']);
         }
 
         $update = [];
@@ -194,7 +248,10 @@ class AutomationService
             if ((int) $locked->amount <= 0) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Non-positive amount', 'period' => $period];
             }
-            if ($from->user_id !== $owner->id || $to->user_id !== $owner->id) {
+            // A savings contribution may pay into someone else's savings wallet, but only
+            // while the saver can still fund it (still a member with the fund permission).
+            $savingsOk = $locked->savings_contribution && $to->canFund($owner);
+            if ($from->user_id !== $owner->id || ($to->user_id !== $owner->id && !$savingsOk)) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallets not both owned by the rule owner', 'period' => $period];
             }
             // A locked emergency wallet can still be FUNDED by a rule, never drained by one.

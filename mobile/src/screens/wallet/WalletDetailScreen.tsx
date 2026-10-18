@@ -13,7 +13,7 @@ import { MemberManageModal } from '../../components/MemberManageModal';
 import { AutomationCard } from '../../components/AutomationCard';
 import { colors, gradients, outline, radius } from '../../theme';
 import { useWallet, useWalletMembers, useWalletTransactions, useAutomations } from '../../api/hooks';
-import { formatMoney, initials } from '../../lib/format';
+import { formatMoney, formatYmd, initials } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import { walletVisual } from '../../lib/walletVisual';
 import { canInviteMembers, canManageWallet, roleLabel } from '../../lib/governance';
@@ -378,6 +378,33 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={emergencyLocked ? colors.brandMint : colors.brand} />
+            </Pressable>
+          ) : null}
+
+          {/* Savings goal — the shared plan, milestones and each saver's auto-save */}
+          {wallet.type === 'savings' || wallet.type === 'goal' ? (
+            <Pressable
+              onPress={() => {
+                selection();
+                navigation.navigate('SavingsPlan', { walletId });
+              }}
+              className="mt-4 flex-row items-center rounded bg-white p-4 active:opacity-90"
+              style={outline.card}
+            >
+              <View className="mr-3 h-9 w-9 items-center justify-center rounded bg-success-soft">
+                <Ionicons name="trending-up" size={18} color={colors.brand} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[14px] font-bold text-ink">Savings Plan</Text>
+                <Text className="text-xs text-muted" numberOfLines={1}>
+                  {detail.data?.savings
+                    ? `${detail.data.savings.label}${wallet.target_date ? ` · by ${formatYmd(wallet.target_date)}` : ''}`
+                    : role === 'owner'
+                      ? 'Set a target date, milestones and auto-save'
+                      : 'Progress, milestones and savers'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.faded} />
             </Pressable>
           ) : null}
 

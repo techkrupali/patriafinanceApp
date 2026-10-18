@@ -2,7 +2,8 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
-import type { CreatableWalletType, EmergencyPurpose } from '../api/types';
+import type { CreatableWalletType, EmergencyPurpose, UserSearchResult } from '../api/types';
+import type { RecipientDraft } from '../components/RecipientSheet';
 
 export type AuthStackParamList = {
   Walkthrough: undefined;
@@ -37,6 +38,19 @@ export interface EmergencyStepOne {
   monthlyAmount: string;
 }
 
+/** Emergency wallet Step 2 answers kept in a draft (never the emergency PIN). */
+export interface EmergencyRulesDraft {
+  dual: boolean;
+  approver: UserSearchResult | null;
+  docUnlock: boolean;
+  manual: boolean;
+  reason: string;
+  crisis: boolean;
+  highBalance: boolean;
+  recipients: RecipientDraft[];
+  note: string;
+}
+
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   /** Full transaction feed (was a tab; now reached from Home → View all). */
@@ -51,11 +65,15 @@ export type RootStackParamList = {
   /** Guided creation starts by picking the kind of wallet. */
   CreateWallet: undefined;
   /** Type-specific setup for every type without its own journey. */
-  WalletSetup: { type: CreatableWalletType };
+  WalletSetup: { type: CreatableWalletType; draftId?: number };
   // ---- Emergency wallet journey (Step 1 → Step 2) + management ----
-  CreateEmergencyWallet: { draft?: EmergencyStepOne } | undefined;
-  EmergencyAccessRules: { draft: EmergencyStepOne };
+  CreateEmergencyWallet: { draft?: EmergencyStepOne; draftId?: number } | undefined;
+  /** sessionKey ties both steps to one draft (see lib/drafts). */
+  EmergencyAccessRules: { draft: EmergencyStepOne; sessionKey: string; draftId?: number | null; rules?: EmergencyRulesDraft };
   EmergencyCenter: { walletId: number };
+  // ---- Savings goals (4-step journey) + plan management ----
+  SavingsGoalSetup: { type: 'savings' | 'goal'; draftId?: number };
+  SavingsPlan: { walletId: number };
   EditProfile: undefined;
   ChangePassword: undefined;
   ChangePin: undefined;
@@ -82,7 +100,6 @@ export type RootStackParamList = {
   Referral: undefined;
   // ---- Savings goals ----
   Goals: undefined;
-  CreateGoal: undefined;
   // ---- Vendor discovery ----
   VendorDirectory: undefined;
   VendorProfile: { profileId: number };
@@ -98,7 +115,7 @@ export type RootStackParamList = {
   Repay: { loanId: number };
   // ---- Projects & vendors (Milestone 5) ----
   Projects: undefined;
-  CreateProject: { name?: string } | undefined;
+  CreateProject: { name?: string; draftId?: number } | undefined;
   ProjectDetail: { projectId: number };
   AssignVendor: { projectId: number };
   AddMilestone: { projectId: number };

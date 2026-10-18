@@ -13,6 +13,7 @@ class AutomationRule extends Model
         'name',
         'from_wallet_id',
         'to_wallet_id',
+        'savings_contribution',
         'amount',
         'frequency',
         'day_of_week',
@@ -31,6 +32,7 @@ class AutomationRule extends Model
             'day_of_month' => 'integer',
             'min_balance' => 'integer',
             'enabled' => 'boolean',
+            'savings_contribution' => 'boolean',
             'last_run_at' => 'datetime',
         ];
     }

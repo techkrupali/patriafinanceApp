@@ -21,6 +21,9 @@ export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet
     selection();
     if (guide.type === 'emergency') {
       navigation.navigate('CreateEmergencyWallet');
+    } else if (guide.type === 'savings' || guide.type === 'goal') {
+      // Savings goals: target date, milestones, contributors and a shared plan.
+      navigation.navigate('SavingsGoalSetup', { type: guide.type });
     } else if (guide.type === 'project') {
       // A Project is an escrow project (vendor + milestones) with its own flow.
       navigation.navigate('CreateProject');
