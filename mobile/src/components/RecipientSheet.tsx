@@ -10,13 +10,15 @@ import { Button } from './Button';
 import { ErrorText } from './ErrorText';
 import { colors } from '../theme';
 import { groupAmountInput, sanitizeAmountInput } from '../lib/format';
+import { beneficiaryRank } from '../lib/emergency';
 import { selection } from '../lib/haptics';
 import type { EmergencyAccessType, EmergencyRecipientRole, UserSearchResult } from '../api/types';
 
-/** A recipient as edited in the Emergency Access Rules step (naira as typed). */
+/** A beneficiary as edited in the emergency rules (naira as typed). */
 export interface RecipientDraft {
   user: UserSearchResult;
   relationship: string;
+  /** Follows the position: 1st = beneficiary, 2nd/3rd = fallback. */
   role: EmergencyRecipientRole;
   /** Raw naira digits; '' = up to the full balance. */
   withdrawalLimit: string;
@@ -25,11 +27,6 @@ export interface RecipientDraft {
 
 export const RELATIONSHIPS = ['Spouse', 'Child', 'Parent', 'Sibling', 'Friend', 'Other'];
 
-export const RECIPIENT_ROLE_LABEL: Record<EmergencyRecipientRole, string> = {
-  beneficiary: 'Beneficiary',
-  fallback: 'Fallback Contact',
-};
-
 export const ACCESS_TYPE_LABEL: Record<EmergencyAccessType, string> = {
   immediate: 'Immediate',
   delay_7d: '7-Day Delay',
@@ -37,8 +34,10 @@ export const ACCESS_TYPE_LABEL: Record<EmergencyAccessType, string> = {
 
 interface RecipientSheetProps {
   visible: boolean;
-  /** First recipient defaults to Beneficiary, later ones to Fallback Contact. */
-  defaultRole: EmergencyRecipientRole;
+  /** The slot being filled (0 = 1st beneficiary, 1–2 = fallbacks). */
+  position: number;
+  /** Editing an existing beneficiary (null = adding). */
+  initial?: RecipientDraft | null;
   excludeIds: number[];
   onSave: (recipient: RecipientDraft) => void;
   onClose: () => void;
@@ -75,26 +74,29 @@ function Segment<T extends string>({
   );
 }
 
-/** Bottom sheet to add one "Recipient Upon Unlock" (design: Recipients Upon Unlock → Add New). */
-export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClose }: RecipientSheetProps) {
+/**
+ * Bottom sheet to add or edit one unlock beneficiary (client sheet: "first
+ * beneficiary, second fallback beneficiary, up to third"). The slot decides the
+ * role; fallbacks default to the 7-day delay so the 1st beneficiary goes first.
+ */
+export function RecipientSheet({ visible, position, initial, excludeIds, onSave, onClose }: RecipientSheetProps) {
   const insets = useSafeAreaInsets();
+  const rank = beneficiaryRank(position);
   const [user, setUser] = useState<UserSearchResult | null>(null);
   const [relationship, setRelationship] = useState('');
-  const [role, setRole] = useState<EmergencyRecipientRole>(defaultRole);
   const [limit, setLimit] = useState('');
   const [accessType, setAccessType] = useState<EmergencyAccessType>('immediate');
   const [error, setError] = useState<string | null>(null);
 
-  // Fresh form every time the sheet opens.
+  // Fresh form (or the beneficiary being edited) every time the sheet opens.
   useEffect(() => {
     if (!visible) return;
-    setUser(null);
-    setRelationship('');
-    setRole(defaultRole);
-    setLimit('');
-    setAccessType(defaultRole === 'fallback' ? 'delay_7d' : 'immediate');
+    setUser(initial?.user ?? null);
+    setRelationship(initial?.relationship ?? '');
+    setLimit(initial?.withdrawalLimit ?? '');
+    setAccessType(initial?.accessType ?? (rank.isFallback ? 'delay_7d' : 'immediate'));
     setError(null);
-  }, [visible, defaultRole]);
+  }, [visible, initial, rank.isFallback]);
 
   const save = () => {
     if (!user) {
@@ -105,7 +107,7 @@ export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClo
       setError('Enter a withdrawal limit greater than zero, or leave it empty.');
       return;
     }
-    onSave({ user, relationship, role, withdrawalLimit: limit, accessType });
+    onSave({ user, relationship, role: rank.isFallback ? 'fallback' : 'beneficiary', withdrawalLimit: limit, accessType });
   };
 
   return (
@@ -113,9 +115,14 @@ export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClo
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 justify-end bg-black/50">
           <View className="rounded-t bg-white" style={{ maxHeight: '92%', paddingBottom: insets.bottom + 12 }}>
-            <View className="mt-3 mb-2 h-1.5 w-12 self-center rounded-full bg-lav" />
+            <View className="mb-2 mt-3 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="flex-row items-center px-6 pb-2">
-              <Text className="flex-1 text-lg font-extrabold text-ink">Add Recipient</Text>
+              <View className="flex-1">
+                <Text className="text-lg font-extrabold text-ink">
+                  {initial ? 'Edit' : 'Add'} {rank.title}
+                </Text>
+                <Text className="text-[12px] font-semibold text-brand">{rank.isFallback ? 'Fallback beneficiary' : 'Primary beneficiary'}</Text>
+              </View>
               <Pressable
                 onPress={onClose}
                 hitSlop={8}
@@ -131,8 +138,10 @@ export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClo
               showsVerticalScrollIndicator={false}
             >
               <Text className="text-[13px] leading-5 text-muted">
-                This person can receive money from the wallet once it unlocks. They need a Patriai account so the
-                money reaches them instantly.
+                {rank.isFallback
+                  ? 'A fallback is next in line after your 1st beneficiary — for example if they can\'t act. '
+                  : 'Your 1st beneficiary is first in line to receive the money once the wallet unlocks. '}
+                They need a Patriai account so the money reaches them instantly.
               </Text>
 
               <PersonPicker label="Who" value={user} onChange={setUser} excludeIds={excludeIds} className="mt-4" />
@@ -155,16 +164,6 @@ export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClo
                   );
                 })}
               </View>
-
-              <Text className="mb-2 mt-5 text-[13px] font-semibold text-muted">Role</Text>
-              <Segment
-                options={[
-                  { key: 'beneficiary', label: RECIPIENT_ROLE_LABEL.beneficiary },
-                  { key: 'fallback', label: RECIPIENT_ROLE_LABEL.fallback },
-                ]}
-                value={role}
-                onChange={setRole}
-              />
 
               <Input
                 label="Withdrawal Limit"
@@ -193,7 +192,13 @@ export function RecipientSheet({ visible, defaultRole, excludeIds, onSave, onClo
               </Text>
 
               <ErrorText message={error} className="mt-4" />
-              <Button title="Add Recipient" icon="person-add" iconPosition="left" onPress={save} className="mt-5" />
+              <Button
+                title={initial ? 'Save Beneficiary' : `Add ${rank.title}`}
+                icon={initial ? 'checkmark' : 'person-add'}
+                iconPosition="left"
+                onPress={save}
+                className="mt-5"
+              />
             </KeyboardAwareScrollView>
           </View>
         </View>

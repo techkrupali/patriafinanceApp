@@ -146,7 +146,7 @@ const EMERGENCY_LABELS: Record<string, string> = {
   legal: "Legal",
   other: "Other",
   // Unlock routes (mirrors EmergencyService::VIA_LABELS)
-  manual: "Owner's emergency PIN",
+  manual: "Owner's custom PIN",
   dual_approval: "Dual approval",
   document: "Verified document",
   high_balance: "High-balance override",
@@ -154,9 +154,9 @@ const EMERGENCY_LABELS: Record<string, string> = {
   // Uploaded documents
   death_certificate: "Death certificate",
   legal_notice: "Legal notice",
-  // Recipient roles + access
-  beneficiary: "Beneficiary",
-  fallback: "Fallback",
+  // Beneficiary roles (by order) + access
+  beneficiary: "Primary beneficiary",
+  fallback: "Fallback beneficiary",
   immediate: "Immediate",
   delay_7d: "After 7 days",
 };

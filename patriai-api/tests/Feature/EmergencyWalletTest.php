@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppNotification;
 use App\Models\AutomationRule;
 use App\Models\EmergencyBeneficiary;
 use App\Models\EmergencySetting;
@@ -447,5 +448,157 @@ class EmergencyWalletTest extends TestCase
 
         Sanctum::actingAs(User::factory()->create());
         $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertStatus(404);
+    }
+
+    // ------------------------------------------------- beneficiary order + editing
+
+    public function test_beneficiary_order_sets_the_role_and_fallbacks_default_to_a_delay(): void
+    {
+        $wife = User::factory()->create();
+        $brother = User::factory()->create();
+        $cousin = User::factory()->create();
+        [, , $wallet] = $this->createEmergency([
+            // Roles sent by the client are ignored: the order decides.
+            'beneficiaries' => [
+                ['user_id' => $wife->id, 'role' => 'fallback'],
+                ['user_id' => $brother->id, 'role' => 'beneficiary'],
+                ['user_id' => $cousin->id],
+            ],
+        ]);
+
+        $rows = EmergencyBeneficiary::where('wallet_id', $wallet->id)->orderBy('position')->get();
+        $this->assertSame([$wife->id, $brother->id, $cousin->id], $rows->pluck('user_id')->all());
+        $this->assertSame(['beneficiary', 'fallback', 'fallback'], $rows->pluck('role')->all());
+        $this->assertSame(['immediate', 'delay_7d', 'delay_7d'], $rows->pluck('access_type')->all());
+    }
+
+    private function rulesPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'pin' => '1234',
+            'dual_approval' => false,
+            'unlock_on_document' => false,
+            'manual_unlock' => true,
+            'unlock_reason' => 'Medical emergency',
+            'override_national_crisis' => false,
+            'override_high_balance' => false,
+            'beneficiaries' => [],
+        ], $overrides);
+    }
+
+    public function test_owner_edits_rules_reorders_beneficiaries_and_changes_custom_pin(): void
+    {
+        $wife = User::factory()->create();
+        $brother = User::factory()->create();
+        $cousin = User::factory()->create();
+        [$owner, , $wallet] = $this->createEmergency([
+            'beneficiaries' => [['user_id' => $wife->id, 'withdrawal_limit' => '100'], ['user_id' => $brother->id]],
+        ]);
+        EmergencyBeneficiary::where('wallet_id', $wallet->id)->where('user_id', $wife->id)->update(['withdrawn' => 3_000]);
+
+        $payload = $this->rulesPayload([
+            'emergency_pin' => '9999',
+            'beneficiaries' => [
+                ['user_id' => $brother->id, 'relationship' => 'Brother', 'access_type' => 'immediate'],
+                ['user_id' => $wife->id, 'relationship' => 'Wife', 'withdrawal_limit' => '150'],
+                ['user_id' => $cousin->id],
+            ],
+        ]);
+
+        // The transaction PIN guards every change.
+        $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", array_merge($payload, ['pin' => '0000']))
+            ->assertStatus(422)->assertJsonValidationErrors('pin');
+
+        $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", $payload)->assertOk()
+            ->assertJsonPath('data.emergency.beneficiaries.0.user.id', $brother->id)
+            ->assertJsonPath('data.emergency.beneficiaries.0.role', 'beneficiary')
+            ->assertJsonPath('data.emergency.beneficiaries.1.role', 'fallback')
+            ->assertJsonPath('data.emergency.me.can_edit_rules', true);
+
+        $wifeRow = EmergencyBeneficiary::where('wallet_id', $wallet->id)->where('user_id', $wife->id)->first();
+        $this->assertSame(2, $wifeRow->position);
+        $this->assertSame(3_000, $wifeRow->withdrawn); // kept across the edit
+        $this->assertSame(15_000, $wifeRow->withdrawal_limit);
+        $this->assertSame('beneficiary', WalletMember::where('wallet_id', $wallet->id)->where('user_id', $cousin->id)->value('role'));
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $cousin->id, 'type' => 'emergency_recipient_added']);
+
+        // The new custom PIN replaces the old one.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/emergency/unlock", ['pin' => '4321'])->assertStatus(422);
+        $this->postJson("/api/v1/wallets/{$wallet->id}/emergency/unlock", ['pin' => '9999'])->assertOk();
+
+        // Beneficiaries can't change the rules.
+        Sanctum::actingAs($brother);
+        $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", $payload)->assertStatus(422);
+    }
+
+    public function test_dropping_people_revokes_access_and_cancels_requests_for_switched_off_rules(): void
+    {
+        $wife = User::factory()->create();
+        $brother = User::factory()->create();
+        [$owner, , $wallet] = $this->createEmergency([
+            'dual_approval' => true,
+            'approver_user_id' => $wife->id,
+            'beneficiaries' => [['user_id' => $brother->id]],
+        ]);
+
+        Sanctum::actingAs($brother);
+        $requestId = $this->postJson("/api/v1/wallets/{$wallet->id}/emergency/requests", ['method' => 'dual_approval'])
+            ->assertCreated()->json('data.request.id');
+
+        // Keep manual unlock (and its PIN, by sending none), drop dual approval and everyone else.
+        Sanctum::actingAs($owner);
+        $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", $this->rulesPayload())->assertOk();
+
+        $this->assertSame('cancelled', EmergencyUnlockRequest::find($requestId)->status);
+        $this->assertFalse(WalletMember::where('wallet_id', $wallet->id)->whereIn('user_id', [$wife->id, $brother->id])->exists());
+        $this->assertTrue(Hash::check('4321', $wallet->fresh()->emergencySetting->emergency_pin));
+
+        Sanctum::actingAs($brother);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertStatus(404);
+
+        // Turning manual unlock back on later needs a new custom PIN.
+        Sanctum::actingAs($owner);
+        $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", $this->rulesPayload(['manual_unlock' => false, 'unlock_on_document' => true]))
+            ->assertStatus(422)->assertJsonValidationErrors('emergency.unlock_on_document');
+    }
+
+    public function test_approver_can_withdraw_once_unlocked_and_unlock_reason_is_shared(): void
+    {
+        $wife = User::factory()->create();
+        $wifeMain = $this->makeWallet($wife, 'main', 0);
+        $brother = User::factory()->create();
+        [$owner, , $wallet] = $this->createEmergency([
+            'dual_approval' => true,
+            'approver_user_id' => $wife->id,
+            'beneficiaries' => [['user_id' => $brother->id]],
+        ]);
+        $toWife = fn (string $amount) => $this->postJson('/api/v1/transfers', [
+            'from_wallet_id' => $wallet->id,
+            'amount' => $amount,
+            'pin' => '1234',
+            'destination' => ['kind' => 'wallet', 'wallet_id' => $wifeMain->id],
+        ]);
+
+        // While locked the approver can't move money.
+        Sanctum::actingAs($wife);
+        $toWife('20')->assertStatus(403);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertJsonPath('data.emergency.me.can_spend', false);
+
+        // The owner unlocks with the custom PIN and a reason.
+        Sanctum::actingAs($owner);
+        $this->postJson("/api/v1/wallets/{$wallet->id}/emergency/unlock", ['pin' => '4321', 'reason' => 'Surgery at Reddington'])->assertOk();
+        $this->assertDatabaseHas('wallet_audit_logs', ['wallet_id' => $wallet->id, 'event' => 'emergency_unlocked']);
+        $this->assertStringContainsString('Surgery at Reddington', (string) AppNotification::where('user_id', $brother->id)->where('type', 'emergency_unlocked')->value('body'));
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $wife->id, 'type' => 'emergency_unlocked']);
+
+        // …and now the approver (wife) can withdraw on the owner's behalf.
+        Sanctum::actingAs($wife);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertJsonPath('data.emergency.me.can_spend', true);
+        $toWife('25')->assertOk();
+        $this->assertSame(2_500, $wifeMain->refresh()->balance);
+
+        // A recipient who isn't the approver still only gets their allowance route.
+        Sanctum::actingAs($brother);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertJsonPath('data.emergency.me.can_spend', false);
     }
 }

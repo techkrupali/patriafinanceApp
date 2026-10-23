@@ -36,6 +36,7 @@ import { WalletSetupScreen } from '../screens/wallet/WalletSetupScreen';
 import { CreateEmergencyWalletScreen } from '../screens/wallet/emergency/CreateEmergencyWalletScreen';
 import { EmergencyAccessRulesScreen } from '../screens/wallet/emergency/EmergencyAccessRulesScreen';
 import { EmergencyCenterScreen } from '../screens/wallet/emergency/EmergencyCenterScreen';
+import { EditEmergencyRulesScreen } from '../screens/wallet/emergency/EditEmergencyRulesScreen';
 import { SavingsGoalSetupScreen } from '../screens/goals/SavingsGoalSetupScreen';
 import { SavingsPlanScreen } from '../screens/goals/SavingsPlanScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
@@ -227,6 +228,7 @@ export function RootNavigator() {
       <RootStack.Screen name="CreateEmergencyWallet" component={CreateEmergencyWalletScreen} />
       <RootStack.Screen name="EmergencyAccessRules" component={EmergencyAccessRulesScreen} />
       <RootStack.Screen name="EmergencyCenter" component={EmergencyCenterScreen} />
+      <RootStack.Screen name="EditEmergencyRules" component={EditEmergencyRulesScreen} />
       <RootStack.Screen name="SavingsGoalSetup" component={SavingsGoalSetupScreen} />
       <RootStack.Screen name="SavingsPlan" component={SavingsPlanScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />

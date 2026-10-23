@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\EmergencyBeneficiary;
+use App\Models\EmergencySetting;
 use App\Models\EmergencyUnlockRequest;
 use App\Models\Wallet;
 use App\Services\EmergencyService;
@@ -42,14 +44,17 @@ class EmergencyController extends ApiController
         return $this->detail($request, $wallet, 'Emergency rules fetched');
     }
 
-    // POST /wallets/{wallet}/emergency/unlock  { pin } — owner, emergency PIN
+    // POST /wallets/{wallet}/emergency/unlock  { pin, reason? } — owner, custom PIN + why
     public function unlock(Request $request, Wallet $wallet): JsonResponse
     {
         if (!$this->visible($request, $wallet)) {
             return $this->fail('Wallet not found', 404);
         }
-        $data = $request->validate(['pin' => ['required', 'digits:4']]);
-        EmergencyService::make()->manualUnlock($wallet, $request->user(), $data['pin']);
+        $data = $request->validate([
+            'pin' => ['required', 'digits:4'],
+            'reason' => ['nullable', 'string', 'max:150'],
+        ]);
+        EmergencyService::make()->manualUnlock($wallet, $request->user(), $data['pin'], $data['reason'] ?? null);
 
         return $this->detail($request, $wallet, 'Emergency wallet unlocked');
     }
@@ -64,6 +69,48 @@ class EmergencyController extends ApiController
         EmergencyService::make()->highBalanceOverride($wallet, $request->user(), $data['pin']);
 
         return $this->detail($request, $wallet, 'Emergency wallet unlocked by override');
+    }
+
+    /**
+     * PUT /wallets/{wallet}/emergency/rules — owner changes the rules after setup.
+     * { pin (transaction PIN), purpose?, dual_approval, approver_user_id?,
+     *   unlock_on_document, manual_unlock, unlock_reason?, emergency_pin? (blank
+     *   keeps the current custom PIN), override_*, beneficiary_note?, beneficiaries[] }
+     */
+    public function updateRules(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate([
+            'pin' => ['required', 'digits:4'],
+            'purpose' => ['sometimes', 'in:' . implode(',', EmergencySetting::PURPOSES)],
+            'dual_approval' => ['sometimes', 'boolean'],
+            'approver_user_id' => ['nullable', 'integer'],
+            'unlock_on_document' => ['sometimes', 'boolean'],
+            'manual_unlock' => ['sometimes', 'boolean'],
+            'unlock_reason' => ['nullable', 'string', 'max:150'],
+            'emergency_pin' => ['nullable', 'digits:4'],
+            'override_national_crisis' => ['sometimes', 'boolean'],
+            'override_high_balance' => ['sometimes', 'boolean'],
+            'beneficiary_note' => ['nullable', 'string', 'max:1000'],
+            'beneficiaries' => ['sometimes', 'array', 'max:3'],
+            'beneficiaries.*.user_id' => ['required', 'integer'],
+            'beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
+            'beneficiaries.*.withdrawal_limit' => ['nullable', 'numeric', 'min:0'],
+            'beneficiaries.*.access_type' => ['sometimes', 'in:' . implode(',', EmergencyBeneficiary::ACCESS_TYPES)],
+        ]);
+
+        foreach ($data['beneficiaries'] ?? [] as $i => $b) {
+            $limit = $b['withdrawal_limit'] ?? null;
+            $data['beneficiaries'][$i]['withdrawal_limit'] = ($limit === null || (float) $limit <= 0) ? null : $this->toKobo((string) $limit);
+        }
+        $pin = $data['pin'];
+        unset($data['pin']);
+
+        EmergencyService::make()->updateRules($wallet, $request->user(), $data, $pin);
+
+        return $this->detail($request, $wallet, 'Emergency rules updated');
     }
 
     // POST /wallets/{wallet}/emergency/lock — owner

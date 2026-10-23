@@ -9,7 +9,7 @@ import { FormModal, ModalField } from "./form-modal";
 
 /**
  * Verify or reject the death certificate / legal notice on an emergency
- * unlock request. Verifying unlocks the wallet for its recipients, so the
+ * unlock request. Verifying unlocks the wallet for its beneficiaries, so the
  * copy spells that out; rejecting needs a reason for the requester.
  */
 export function EmergencyDecisionModal({
@@ -51,8 +51,8 @@ export function EmergencyDecisionModal({
   const balance = walletBalance != null ? ` (${naira(walletBalance)})` : "";
   const recipients =
     recipientCount > 0
-      ? `its ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}`
-      : "its recipients";
+      ? `its ${recipientCount} beneficiar${recipientCount === 1 ? "y" : "ies"}`
+      : "its beneficiaries";
 
   return (
     <FormModal

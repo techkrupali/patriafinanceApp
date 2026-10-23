@@ -207,6 +207,15 @@ class Wallet extends Model
             return false;
         }
 
+        // The dual-approval approver (e.g. a spouse) may withdraw from an unlocked
+        // emergency wallet on the owner's behalf (client video 2026-10-17).
+        if ($member->role === 'emergency_approver') {
+            $setting = $this->emergencySetting;
+
+            return $this->type === 'emergency' && $setting && !$setting->isLocked()
+                && $setting->dual_approval && $setting->approver_user_id === $user->id;
+        }
+
         // owner/co_owner spend unconditionally.
         if (in_array($member->role, self::SPENDING_ROLES, true)) {
             return true;

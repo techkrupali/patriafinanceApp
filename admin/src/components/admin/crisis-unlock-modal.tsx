@@ -37,7 +37,7 @@ export function CrisisUnlockModal({
   return (
     <FormModal
       title="National-crisis override"
-      description={`Unlocks ${walletName ? `"${walletName}"` : "this wallet"} now so its recipients can withdraw within their limits. The owner opted in to this override; the owner and recipients are notified.`}
+      description={`Unlocks ${walletName ? `"${walletName}"` : "this wallet"} now so its beneficiaries can withdraw within their limits. The owner opted in to this override; the owner and beneficiaries are notified.`}
       error={error}
       busy={mutation.isPending}
       submitLabel="Unlock wallet"

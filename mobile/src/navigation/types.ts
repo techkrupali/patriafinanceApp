@@ -71,6 +71,8 @@ export type RootStackParamList = {
   /** sessionKey ties both steps to one draft (see lib/drafts). */
   EmergencyAccessRules: { draft: EmergencyStepOne; sessionKey: string; draftId?: number | null; rules?: EmergencyRulesDraft };
   EmergencyCenter: { walletId: number };
+  /** Owner: change rules, beneficiaries and the custom PIN after setup. */
+  EditEmergencyRules: { walletId: number };
   // ---- Savings goals (4-step journey) + plan management ----
   SavingsGoalSetup: { type: 'savings' | 'goal'; draftId?: number };
   SavingsPlan: { walletId: number };

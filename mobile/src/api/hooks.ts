@@ -29,6 +29,7 @@ import type {
   EmergencyDetailData,
   EmergencyDocumentType,
   EmergencyRequest,
+  EmergencyRulesPayload,
   EmergencyWithdrawData,
   SavingsDetailData,
   SavingsFrequency,
@@ -1277,9 +1278,15 @@ export function useEmergencyActions(walletId: number) {
     api<EmergencyDetailData>(path, { method: 'POST', body });
 
   return {
-    /** Owner + the emergency PIN set during setup. */
+    /** Owner + the custom PIN set during setup, with a reason. */
     unlock: useMutation({
-      mutationFn: (pin: string) => post(`/wallets/${walletId}/emergency/unlock`, { pin }),
+      mutationFn: (input: { pin: string; reason?: string }) => post(`/wallets/${walletId}/emergency/unlock`, input),
+      onSuccess,
+    }),
+    /** Owner changes rules/beneficiaries/custom PIN — guarded by the transaction PIN. */
+    updateRules: useMutation({
+      mutationFn: (input: Omit<EmergencyRulesPayload, 'purpose'> & { purpose?: string; pin: string }) =>
+        api<EmergencyDetailData>(`/wallets/${walletId}/emergency/rules`, { method: 'PUT', body: input }),
       onSuccess,
     }),
     /** Owner + transaction PIN while the balance is above the override threshold. */

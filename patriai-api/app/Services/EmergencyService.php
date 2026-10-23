@@ -61,12 +61,83 @@ class EmergencyService
 
     // ------------------------------------------------------------------ setup
 
+    /** Member roles that exist only because of the emergency rules. */
+    private const RULE_ROLES = ['beneficiary', 'emergency_approver'];
+
     /**
      * Persist the access rules of a freshly created emergency wallet. Runs inside
      * the caller's transaction, so any rejection here rolls the wallet back too.
      * Amounts arrive in kobo.
      */
     public function configure(Wallet $wallet, User $owner, array $rules): EmergencySetting
+    {
+        [$approver, $people] = $this->validateRules($owner, $rules);
+
+        $setting = EmergencySetting::create(['wallet_id' => $wallet->id] + $this->settingAttributes($rules, $approver));
+        $this->syncBeneficiaries($wallet, $rules['beneficiaries'] ?? []);
+        $this->syncMembers($wallet, $owner, $people, $approver);
+
+        AuditService::make()->log($wallet, $owner, 'emergency_rules_set', 'Emergency access rules activated — wallet locked', [
+            'dual_approval' => $setting->dual_approval,
+            'unlock_on_document' => $setting->unlock_on_document,
+            'manual_unlock' => $setting->manual_unlock,
+            'beneficiaries' => count($people),
+        ]);
+
+        return $setting;
+    }
+
+    /**
+     * The owner changes the rules after creation — unlock methods, overrides,
+     * beneficiaries (order, limits, access) and the custom PIN. Guarded by the
+     * owner's transaction PIN. Beneficiaries who stay keep what they've withdrawn.
+     */
+    public function updateRules(Wallet $wallet, User $owner, array $rules, string $pin): EmergencySetting
+    {
+        $setting = $this->requireSetting($wallet);
+        $this->requireOwner($wallet, $owner);
+        app(PinService::class)->verify($owner, $pin);
+        [$approver, $people] = $this->validateRules($owner, $rules, $setting);
+        $previousApprover = $setting->dual_approval ? $setting->approver_user_id : null;
+
+        $added = DB::transaction(function () use ($wallet, $owner, $rules, $setting, $approver, $people) {
+            $setting->update($this->settingAttributes($rules, $approver, $setting));
+            $added = $this->syncBeneficiaries($wallet, $rules['beneficiaries'] ?? []);
+            $this->syncMembers($wallet, $owner, $people, $approver);
+
+            // Requests for an unlock method that's now off can never succeed.
+            $off = array_keys(array_filter(['dual_approval' => !$setting->dual_approval, 'document' => !$setting->unlock_on_document]));
+            if ($off) {
+                $wallet->emergencyUnlockRequests()
+                    ->where('status', 'pending')
+                    ->whereIn('method', $off)
+                    ->update(['status' => 'cancelled', 'review_note' => 'The owner turned this unlock method off', 'decided_at' => now()]);
+            }
+
+            return $added;
+        });
+        $wallet->unsetRelation('emergencySetting');
+
+        AuditService::make()->log($wallet, $owner, 'emergency_rules_updated', 'Emergency access rules updated', [
+            'dual_approval' => $setting->dual_approval,
+            'unlock_on_document' => $setting->unlock_on_document,
+            'manual_unlock' => $setting->manual_unlock,
+            'beneficiaries' => count($people),
+            'pin_changed' => !empty($rules['emergency_pin']),
+        ]);
+
+        $newApprover = $approver && $approver->id !== $previousApprover;
+        $this->notifyPeople($wallet, $owner, $added, $newApprover);
+
+        return $setting->refresh();
+    }
+
+    /**
+     * Check a set of rules. Returns [approver|null, beneficiaries keyed by user id].
+     * $existing is the current setting when editing: a custom PIN is then only
+     * required if manual unlock didn't have one yet.
+     */
+    private function validateRules(User $owner, array $rules, ?EmergencySetting $existing = null): array
     {
         $dual = (bool) ($rules['dual_approval'] ?? false);
         $document = (bool) ($rules['unlock_on_document'] ?? false);
@@ -88,20 +159,24 @@ class EmergencyService
             if (trim((string) ($rules['unlock_reason'] ?? '')) === '') {
                 throw ValidationException::withMessages(['emergency.unlock_reason' => 'Add the reason this wallet may be unlocked manually.']);
             }
-            if (!preg_match('/^\d{4}$/', (string) ($rules['emergency_pin'] ?? ''))) {
-                throw ValidationException::withMessages(['emergency.emergency_pin' => 'Create a 4-digit emergency PIN.']);
+            $newPin = (string) ($rules['emergency_pin'] ?? '');
+            if ($newPin !== '' && !preg_match('/^\d{4}$/', $newPin)) {
+                throw ValidationException::withMessages(['emergency.emergency_pin' => 'Your custom PIN must be 4 digits.']);
+            }
+            if ($newPin === '' && !$existing?->emergency_pin) {
+                throw ValidationException::withMessages(['emergency.emergency_pin' => 'Create a 4-digit custom PIN.']);
             }
         }
 
         if (count($beneficiaries) > 3) {
-            throw ValidationException::withMessages(['emergency.beneficiaries' => 'You can add up to 3 recipients.']);
+            throw ValidationException::withMessages(['emergency.beneficiaries' => 'You can add up to 3 beneficiaries.']);
         }
 
         $people = [];
         foreach ($beneficiaries as $i => $b) {
-            $user = $this->resolvePerson($b['user_id'] ?? null, $owner, "emergency.beneficiaries.{$i}.user_id", 'recipient');
+            $user = $this->resolvePerson($b['user_id'] ?? null, $owner, "emergency.beneficiaries.{$i}.user_id", 'beneficiary');
             if (isset($people[$user->id])) {
-                throw ValidationException::withMessages(["emergency.beneficiaries.{$i}.user_id" => "{$user->fullName()} is already a recipient."]);
+                throw ValidationException::withMessages(["emergency.beneficiaries.{$i}.user_id" => "{$user->fullName()} is already a beneficiary."]);
             }
             $people[$user->id] = $user;
         }
@@ -109,82 +184,133 @@ class EmergencyService
         // Someone other than the owner has to be able to present the document.
         if ($document && empty($people) && !$approver) {
             throw ValidationException::withMessages([
-                'emergency.unlock_on_document' => 'Add a recipient or an approver who can submit the death certificate or legal notice.',
+                'emergency.unlock_on_document' => 'Add a beneficiary or an approver who can submit the death certificate or legal notice.',
             ]);
         }
 
-        $setting = EmergencySetting::create([
-            'wallet_id' => $wallet->id,
-            'purpose' => $rules['purpose'],
-            'dual_approval' => $dual,
+        return [$approver, $people];
+    }
+
+    private function settingAttributes(array $rules, ?User $approver, ?EmergencySetting $existing = null): array
+    {
+        $manual = (bool) ($rules['manual_unlock'] ?? false);
+        $newPin = (string) ($rules['emergency_pin'] ?? '');
+
+        return [
+            'purpose' => $rules['purpose'] ?? $existing?->purpose,
+            'dual_approval' => (bool) ($rules['dual_approval'] ?? false),
             'approver_user_id' => $approver?->id,
-            'unlock_on_document' => $document,
+            'unlock_on_document' => (bool) ($rules['unlock_on_document'] ?? false),
             'manual_unlock' => $manual,
             'unlock_reason' => $manual ? trim((string) $rules['unlock_reason']) : null,
-            'emergency_pin' => $manual ? Hash::make((string) $rules['emergency_pin']) : null,
+            // A new custom PIN replaces the old one; leaving it blank keeps it.
+            'emergency_pin' => $manual ? ($newPin !== '' ? Hash::make($newPin) : $existing?->emergency_pin) : null,
             'override_national_crisis' => (bool) ($rules['override_national_crisis'] ?? false),
             'override_high_balance' => (bool) ($rules['override_high_balance'] ?? false),
             'beneficiary_note' => ($rules['beneficiary_note'] ?? null) ?: null,
-        ]);
-
-        foreach ($beneficiaries as $i => $b) {
-            EmergencyBeneficiary::create([
-                'wallet_id' => $wallet->id,
-                'user_id' => (int) $b['user_id'],
-                'position' => $i + 1,
-                'relationship' => ($b['relationship'] ?? null) ?: null,
-                'role' => $b['role'] ?? ($i === 0 ? 'beneficiary' : 'fallback'),
-                'withdrawal_limit' => $b['withdrawal_limit'] ?? null,
-                'access_type' => $b['access_type'] ?? 'immediate',
-            ]);
-        }
-
-        // Recipients and the approver can see the wallet (and its rules) from their
-        // own wallet list. They are read-only members: never spenders.
-        foreach ($people as $user) {
-            $this->addMember($wallet, $user, 'beneficiary', $owner);
-        }
-        if ($approver && !isset($people[$approver->id])) {
-            $this->addMember($wallet, $approver, 'emergency_approver', $owner);
-        }
-
-        AuditService::make()->log($wallet, $owner, 'emergency_rules_set', 'Emergency access rules activated — wallet locked', [
-            'dual_approval' => $dual,
-            'unlock_on_document' => $document,
-            'manual_unlock' => $manual,
-            'recipients' => count($people),
-        ]);
-
-        return $setting;
+        ];
     }
 
-    /** Tell the approver and recipients what they were named for. Call after commit. */
+    /**
+     * Beneficiaries in the owner's order (client sheet: "first beneficiary, second
+     * fallback beneficiary, up to third"): the 1st is the beneficiary, the 2nd and
+     * 3rd are fallbacks, who default to the 7-day delay. Returns newly added user ids.
+     */
+    private function syncBeneficiaries(Wallet $wallet, array $beneficiaries): array
+    {
+        $existing = EmergencyBeneficiary::where('wallet_id', $wallet->id)->get()->keyBy('user_id');
+        $keep = [];
+        $added = [];
+
+        foreach (array_values($beneficiaries) as $i => $b) {
+            $userId = (int) $b['user_id'];
+            $keep[] = $userId;
+            $attributes = [
+                'position' => $i + 1,
+                'role' => $i === 0 ? 'beneficiary' : 'fallback',
+                'relationship' => ($b['relationship'] ?? null) ?: null,
+                'withdrawal_limit' => $b['withdrawal_limit'] ?? null,
+                'access_type' => $b['access_type'] ?? ($i === 0 ? 'immediate' : 'delay_7d'),
+            ];
+            if ($row = $existing->get($userId)) {
+                $row->update($attributes); // keeps what they've already withdrawn
+            } else {
+                EmergencyBeneficiary::create($attributes + ['wallet_id' => $wallet->id, 'user_id' => $userId]);
+                $added[] = $userId;
+            }
+        }
+
+        EmergencyBeneficiary::where('wallet_id', $wallet->id)->whereNotIn('user_id', $keep ?: [0])->delete();
+
+        return $added;
+    }
+
+    /**
+     * Beneficiaries and the approver see the wallet (and its rules) from their own
+     * wallet list as read-only members — never spenders. People dropped from the
+     * rules lose that access, unless they also hold a real role on the wallet.
+     */
+    private function syncMembers(Wallet $wallet, User $owner, array $people, ?User $approver): void
+    {
+        $desired = [];
+        foreach ($people as $user) {
+            $desired[$user->id] = 'beneficiary';
+        }
+        if ($approver && !isset($desired[$approver->id])) {
+            $desired[$approver->id] = 'emergency_approver';
+        }
+
+        WalletMember::where('wallet_id', $wallet->id)
+            ->whereIn('role', self::RULE_ROLES)
+            ->whereNotIn('user_id', array_keys($desired) ?: [0])
+            ->delete();
+
+        foreach ($desired as $userId => $role) {
+            $member = WalletMember::where('wallet_id', $wallet->id)->where('user_id', $userId)->first();
+            if ($member && $member->status === 'active' && !in_array($member->role, self::RULE_ROLES, true)) {
+                continue; // already a real member — don't downgrade them
+            }
+            WalletMember::updateOrCreate(
+                ['wallet_id' => $wallet->id, 'user_id' => $userId],
+                ['role' => $role, 'status' => 'active', 'can_approve' => false, 'invited_by' => $owner->id],
+            );
+        }
+    }
+
+    /** Tell the approver and beneficiaries what they were named for. Call after commit. */
     public function notifyConfigured(Wallet $wallet, User $owner): void
+    {
+        $this->notifyPeople($wallet, $owner, null, true);
+    }
+
+    /** Notify beneficiaries ($onlyUserIds, or all when null) and optionally the approver. */
+    private function notifyPeople(Wallet $wallet, User $owner, ?array $onlyUserIds, bool $approver): void
     {
         $setting = $wallet->emergencySetting;
         if (!$setting) {
             return;
         }
 
-        foreach ($wallet->emergencyBeneficiaries()->with('user')->get() as $b) {
-            if (!$b->user) {
+        $beneficiaries = $wallet->emergencyBeneficiaries()->with('user')->get();
+        foreach ($beneficiaries as $b) {
+            if (!$b->user || ($onlyUserIds !== null && !in_array($b->user_id, $onlyUserIds, true))) {
                 continue;
             }
             $limit = $b->withdrawal_limit !== null ? 'up to ₦' . $this->naira($b->withdrawal_limit) : 'from the balance';
             $when = $b->access_type === 'delay_7d' ? '7 days after it unlocks' : 'as soon as it unlocks';
+            $rank = $b->position === 1 ? 'beneficiary' : 'fallback beneficiary';
             $this->notifications->push(
                 $b->user,
                 'emergency_recipient_added',
-                "{$owner->fullName()} named you an emergency recipient",
+                "{$owner->fullName()} named you an emergency {$rank}",
                 "If {$wallet->name} is ever unlocked, you can receive {$limit}, {$when}.",
                 ['wallet_id' => $wallet->id],
             );
         }
 
-        $approver = $setting->approver;
-        if ($setting->dual_approval && $approver) {
+        if ($approver && $setting->dual_approval && $setting->approver) {
             $this->notifications->push(
-                $approver,
+                $setting->approver,
                 'emergency_approver_added',
                 "{$owner->fullName()} made you an emergency approver",
                 "You can help unlock {$wallet->name} in an emergency — an unlock needs two people to agree.",
@@ -204,14 +330,6 @@ class EmergencyService
         }
 
         return $user;
-    }
-
-    private function addMember(Wallet $wallet, User $user, string $role, User $owner): void
-    {
-        WalletMember::updateOrCreate(
-            ['wallet_id' => $wallet->id, 'user_id' => $user->id],
-            ['role' => $role, 'status' => 'active', 'can_approve' => false, 'invited_by' => $owner->id],
-        );
     }
 
     // ------------------------------------------------------------- authority
@@ -259,8 +377,12 @@ class EmergencyService
 
     // --------------------------------------------------------------- unlocking
 
-    /** Owner unlocks with the emergency PIN chosen during setup. */
-    public function manualUnlock(Wallet $wallet, User $owner, string $pin): EmergencySetting
+    /**
+     * Owner unlocks with the custom PIN chosen during setup and a reason (client:
+     * "the person must provide reason for unlock and an emergency pin"). The reason
+     * defaults to the one set up front and is shared with the beneficiaries.
+     */
+    public function manualUnlock(Wallet $wallet, User $owner, string $pin, ?string $reason = null): EmergencySetting
     {
         $setting = $this->requireSetting($wallet);
         $this->requireOwner($wallet, $owner);
@@ -268,9 +390,13 @@ class EmergencyService
             throw ValidationException::withMessages(['pin' => 'Manual unlock is not enabled for this wallet.']);
         }
         $this->requireLocked($setting);
+        $reason = trim((string) ($reason ?: $setting->unlock_reason));
+        if ($reason === '') {
+            throw ValidationException::withMessages(['reason' => 'Say why you are unlocking this wallet.']);
+        }
         $this->verifyEmergencyPin($wallet, $setting, $pin);
 
-        return $this->unlock($wallet, $owner, 'manual');
+        return $this->unlock($wallet, $owner, 'manual', null, $reason);
     }
 
     /** Owner override with the transaction PIN while the balance is above the threshold. */
@@ -505,7 +631,7 @@ class EmergencyService
     }
 
     /** Flip the wallet to unlocked, close other pending requests and tell everyone. */
-    private function unlock(Wallet $wallet, User $by, string $via, ?int $requestId = null): EmergencySetting
+    private function unlock(Wallet $wallet, User $by, string $via, ?int $requestId = null, ?string $reason = null): EmergencySetting
     {
         $setting = DB::transaction(function () use ($wallet, $by, $via, $requestId) {
             $setting = EmergencySetting::where('wallet_id', $wallet->id)->lockForUpdate()->first();
@@ -524,11 +650,22 @@ class EmergencyService
         $wallet->unsetRelation('emergencySetting');
 
         $how = self::VIA_LABELS[$via] ?? $via;
-        AuditService::make()->log($wallet, $by, 'emergency_unlocked', "Emergency wallet unlocked via {$how}", ['via' => $via]);
+        $why = $reason ? " Reason: {$reason}." : '';
+        AuditService::make()->log($wallet, $by, 'emergency_unlocked', "Emergency wallet unlocked via {$how}" . ($reason ? " — {$reason}" : ''), ['via' => $via, 'reason' => $reason]);
 
         $owner = $wallet->owner;
         if ($owner && $owner->id !== $by->id) {
-            $this->notifications->push($owner, 'emergency_unlocked', "{$wallet->name} was unlocked", "It was unlocked via {$how}.", ['wallet_id' => $wallet->id]);
+            $this->notifications->push($owner, 'emergency_unlocked', "{$wallet->name} was unlocked", "It was unlocked via {$how}.{$why}", ['wallet_id' => $wallet->id]);
+        }
+        // The approver may now withdraw on the owner's behalf.
+        if ($setting->dual_approval && $setting->approver && $setting->approver_user_id !== $by->id) {
+            $this->notifications->push(
+                $setting->approver,
+                'emergency_unlocked',
+                "{$wallet->name} is unlocked",
+                "As its approver you can now withdraw or transfer from it.{$why}",
+                ['wallet_id' => $wallet->id],
+            );
         }
         foreach ($wallet->emergencyBeneficiaries()->with('user')->get() as $b) {
             if (!$b->user || $b->user_id === $by->id) {
@@ -541,7 +678,7 @@ class EmergencyService
                 $b->user,
                 'emergency_unlocked',
                 "{$wallet->name} is unlocked",
-                "You can withdraw your share {$when}.",
+                "You can withdraw your share {$when}.{$why}",
                 ['wallet_id' => $wallet->id],
             );
         }
@@ -560,7 +697,7 @@ class EmergencyService
         }
         $beneficiary = $wallet->emergencyBeneficiaries()->where('user_id', $user->id)->first();
         if (!$beneficiary) {
-            throw ValidationException::withMessages(['amount' => 'You are not a recipient of this wallet.']);
+            throw ValidationException::withMessages(['amount' => 'You are not a beneficiary of this wallet.']);
         }
         $availableAt = $beneficiary->accessAvailableAt($setting->unlocked_at);
         if ($availableAt && $availableAt->isFuture()) {
@@ -589,7 +726,7 @@ class EmergencyService
             return $result;
         });
 
-        AuditService::make()->log($wallet, $user, 'emergency_withdrawal', "{$user->fullName()} received ₦{$this->naira($amountKobo)} as a recipient", ['amount' => $amountKobo]);
+        AuditService::make()->log($wallet, $user, 'emergency_withdrawal', "{$user->fullName()} received ₦{$this->naira($amountKobo)} as a beneficiary", ['amount' => $amountKobo]);
         if ($owner = $wallet->owner) {
             $this->notifications->push(
                 $owner,
@@ -611,13 +748,13 @@ class EmergencyService
         $attempts = (int) Cache::get($key, 0);
         if ($attempts >= self::PIN_MAX_ATTEMPTS) {
             throw ValidationException::withMessages([
-                'pin' => 'Too many incorrect emergency PIN attempts. Try again in ' . self::PIN_LOCK_MINUTES . ' minutes.',
+                'pin' => 'Too many incorrect custom PIN attempts. Try again in ' . self::PIN_LOCK_MINUTES . ' minutes.',
             ]);
         }
         if (!$setting->emergency_pin || !Hash::check($pin, $setting->emergency_pin)) {
             Cache::add($key, 0, now()->addMinutes(self::PIN_LOCK_MINUTES));
             Cache::increment($key);
-            throw ValidationException::withMessages(['pin' => 'Incorrect emergency PIN.']);
+            throw ValidationException::withMessages(['pin' => 'Incorrect custom PIN.']);
         }
         Cache::forget($key);
     }
@@ -699,6 +836,8 @@ class EmergencyService
                 'unlock_on_document' => $setting->unlock_on_document,
                 'manual_unlock' => $setting->manual_unlock,
                 'unlock_reason' => $setting->unlock_reason,
+                // Owner only: whether a custom PIN is already set (editing may keep it).
+                'has_custom_pin' => $isOwner && (bool) $setting->emergency_pin,
                 'override_national_crisis' => $setting->override_national_crisis,
                 'override_high_balance' => $setting->override_high_balance,
                 'override_balance_threshold' => $this->naira($setting->override_balance_threshold),
@@ -718,6 +857,9 @@ class EmergencyService
             'requests' => $requests->map(fn ($r) => $this->serializeRequest($r, $viewer))->values(),
             'me' => [
                 'role' => $this->roleOf($wallet, $setting, $viewer),
+                'can_edit_rules' => $isOwner,
+                // Owner, or the approver once unlocked: may withdraw/transfer directly.
+                'can_spend' => $wallet->canSpend($viewer),
                 'can_manual_unlock' => $isOwner && $locked && $setting->manual_unlock,
                 'can_override' => $isOwner && $locked && $setting->override_high_balance
                     && $wallet->balance > $setting->override_balance_threshold,

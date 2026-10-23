@@ -363,22 +363,22 @@ export default function EmergencyRequestDetailPage({
           </CardContent>
         </Card>
 
-        {/* Recipients — who can withdraw once the wallet unlocks */}
+        {/* Unlock beneficiaries, in order — who can withdraw once the wallet unlocks */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Recipients</CardTitle>
-            <span className="text-xs text-muted">Can withdraw once unlocked</span>
+            <CardTitle>Unlock Beneficiaries</CardTitle>
+            <span className="text-xs text-muted">1st is primary, 2nd–3rd are fallbacks</span>
           </CardHeader>
           {isPending ? (
             <TableSkeleton rows={3} cols={5} />
           ) : data!.beneficiaries.length === 0 ? (
-            <EmptyState message="No recipients on this wallet." />
+            <EmptyState message="No beneficiaries on this wallet." />
           ) : (
             <Table containerClassName="pb-2">
               <THead>
                 <tr>
                   <TH>#</TH>
-                  <TH>Recipient</TH>
+                  <TH>Beneficiary</TH>
                   <TH>Role</TH>
                   <TH className="text-right">Withdrawal limit</TH>
                   <TH>Access</TH>

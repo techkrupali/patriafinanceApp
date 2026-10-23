@@ -139,6 +139,7 @@ Route::prefix('v1')->group(function () {
         Route::post('wallets/{wallet}/emergency/unlock', [EmergencyController::class, 'unlock'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/override', [EmergencyController::class, 'override'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/lock', [EmergencyController::class, 'lock'])->middleware('throttle:20,1');
+        Route::put('wallets/{wallet}/emergency/rules', [EmergencyController::class, 'updateRules'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/requests', [EmergencyController::class, 'requestUnlock'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/withdraw', [EmergencyController::class, 'withdraw'])->middleware('throttle:10,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyController::class, 'approve'])->middleware('throttle:20,1');

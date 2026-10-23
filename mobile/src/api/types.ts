@@ -724,7 +724,8 @@ export type EmergencyDocumentType = 'death_certificate' | 'legal_notice';
 export interface EmergencyRecipientPayload {
   user_id: number;
   relationship?: string;
-  role: EmergencyRecipientRole;
+  /** Informational — the server derives it from the order (1st = beneficiary, rest = fallback). */
+  role?: EmergencyRecipientRole;
   /** Naira decimal string; omit for "up to the full balance". */
   withdrawal_limit?: string;
   access_type: EmergencyAccessType;
@@ -801,6 +802,8 @@ export interface EmergencyDetail {
     unlock_on_document: boolean;
     manual_unlock: boolean;
     unlock_reason: string | null;
+    /** Owner only: a custom PIN is already set (editing may keep it). */
+    has_custom_pin: boolean;
     override_national_crisis: boolean;
     override_high_balance: boolean;
     override_balance_threshold: string;
@@ -811,6 +814,9 @@ export interface EmergencyDetail {
   requests: EmergencyRequest[];
   me: {
     role: 'owner' | 'approver' | 'recipient' | null;
+    can_edit_rules: boolean;
+    /** Owner, or the approver once unlocked: may withdraw/transfer directly. */
+    can_spend: boolean;
     can_manual_unlock: boolean;
     can_override: boolean;
     can_lock: boolean;

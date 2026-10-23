@@ -12,19 +12,20 @@ import { ErrorText } from '../../../components/ErrorText';
 import { LoadError } from '../../../components/LoadError';
 import { PinSheet } from '../../../components/PinSheet';
 import { PersonAvatar } from '../../../components/PersonPicker';
-import { ACCESS_TYPE_LABEL, RECIPIENT_ROLE_LABEL } from '../../../components/RecipientSheet';
+import { ACCESS_TYPE_LABEL } from '../../../components/RecipientSheet';
 import { colors, outline } from '../../../theme';
 import { useEmergency, useEmergencyActions } from '../../../api/hooks';
 import { dayLabel, formatMoney, groupAmountInput, sanitizeAmountInput, timeLabel } from '../../../lib/format';
 import { notifySuccess, selection } from '../../../lib/haptics';
 import { purposeLabel } from '../../../lib/walletGuides';
+import { beneficiaryRank } from '../../../lib/emergency';
 import type { EmergencyDocumentType, EmergencyRequest, EmergencyUnlockVia } from '../../../api/types';
 import type { RootScreenProps } from '../../../navigation/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const VIA_LABEL: Record<EmergencyUnlockVia, string> = {
-  manual: 'the owner\'s emergency PIN',
+  manual: 'the owner\'s custom PIN',
   dual_approval: 'dual approval',
   document: 'a verified document',
   high_balance: 'the high-balance override',
@@ -73,7 +74,7 @@ function RuleRow({ icon, on, title, detail }: { icon: IconName; on: boolean; tit
  * viewer may use (owner PIN, override, dual-approval request/approval, document
  * submission), recipients' payouts, and the rules the owner set up.
  */
-export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCenter'>) {
+export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'EmergencyCenter'>) {
   const { walletId } = route.params;
   const detail = useEmergency(walletId);
   const actions = useEmergencyActions(walletId);
@@ -82,12 +83,15 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
   const [pinMode, setPinMode] = useState<PinMode>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [requestNote, setRequestNote] = useState('');
+  // Manual unlock needs a reason (prefilled from setup) as well as the custom PIN.
+  const [unlockReason, setUnlockReason] = useState<string | null>(null);
   const [docType, setDocType] = useState<EmergencyDocumentType>('death_certificate');
   const [docNote, setDocNote] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const me = e?.me;
+  const reasonForUnlock = (unlockReason ?? e?.rules.unlock_reason ?? '').trim();
   const mine = me?.beneficiary;
   const pinBusy = actions.unlock.isPending || actions.override.isPending || actions.withdraw.isPending;
 
@@ -101,7 +105,7 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
       },
       onError: (err: Error) => setPinError(err.message),
     };
-    if (pinMode === 'unlock') actions.unlock.mutate(pin, done);
+    if (pinMode === 'unlock') actions.unlock.mutate({ pin, reason: reasonForUnlock || undefined }, done);
     else if (pinMode === 'override') actions.override.mutate(pin, done);
     else if (pinMode === 'withdraw') actions.withdraw.mutate({ amount, pin }, done);
   };
@@ -151,7 +155,7 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
 
   const decide = (r: EmergencyRequest, action: 'approve' | 'reject' | 'cancel') => {
     const titles = {
-      approve: ['Approve this unlock?', 'The wallet unlocks right away and recipients can start withdrawing.'],
+      approve: ['Approve this unlock?', 'The wallet unlocks right away and beneficiaries can start withdrawing.'],
       reject: ['Decline this unlock?', 'The wallet stays locked.'],
       cancel: ['Cancel your request?', 'You can ask again later.'],
     } as const;
@@ -212,10 +216,33 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
           <ErrorText message={error} className="mt-4" />
 
           {/* Owner actions */}
-          {me.can_manual_unlock || me.can_override || me.can_lock ? (
+          {me.can_manual_unlock || me.can_override || me.can_lock || me.can_edit_rules ? (
             <Section title="Your Controls">
               {me.can_manual_unlock ? (
-                <Button title="Unlock with Emergency PIN" icon="key" iconPosition="left" onPress={() => setPinMode('unlock')} />
+                <View className="rounded bg-white p-4" style={outline.card}>
+                  <Input
+                    label="Reason for Unlocking"
+                    value={unlockReason ?? e.rules.unlock_reason ?? ''}
+                    onChangeText={setUnlockReason}
+                    placeholder="e.g., Medical Emergency"
+                    maxLength={150}
+                  />
+                  <Text className="ml-1 mt-1.5 text-[12px] text-muted">Your beneficiaries will see this reason.</Text>
+                  <Button
+                    title="Unlock with Custom PIN"
+                    icon="key"
+                    iconPosition="left"
+                    onPress={() => {
+                      if (!reasonForUnlock) {
+                        setError('Say why you are unlocking this wallet.');
+                        return;
+                      }
+                      setError(null);
+                      setPinMode('unlock');
+                    }}
+                    className="mt-4"
+                  />
+                </View>
               ) : null}
               {me.can_override ? (
                 <Button
@@ -229,10 +256,36 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
               {me.can_lock ? (
                 <Button title="Lock Wallet Again" icon="lock-closed" iconPosition="left" variant="secondary" loading={actions.lock.isPending} onPress={confirmLock} />
               ) : null}
+              {me.can_edit_rules ? (
+                <Button
+                  title="Edit Rules & Beneficiaries"
+                  icon="create"
+                  iconPosition="left"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('EditEmergencyRules', { walletId })}
+                />
+              ) : null}
             </Section>
           ) : null}
 
-          {/* Recipient allowance */}
+          {/* The approver can act for the owner once the wallet is unlocked. */}
+          {me.role === 'approver' && me.can_spend ? (
+            <Section title="Act for the Owner">
+              <Text className="text-[13px] leading-5 text-muted">
+                As the approver you can withdraw or transfer from this wallet while it's unlocked.
+              </Text>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <View className="flex-1">
+                  <Button title="Withdraw" icon="cash" iconPosition="left" onPress={() => navigation.navigate('Withdraw', { walletId })} />
+                </View>
+                <View className="flex-1">
+                  <Button title="Transfer" icon="swap-horizontal" iconPosition="left" variant="secondary" onPress={() => navigation.navigate('Transfer', { walletId })} />
+                </View>
+              </View>
+            </Section>
+          ) : null}
+
+          {/* Beneficiary allowance */}
           {mine ? (
             <Section title="Your Share">
               <View className="rounded bg-white p-4" style={outline.card}>
@@ -392,11 +445,16 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
                 title="Dual Approval"
                 detail={e.rules.approver ? `Additional approver: ${e.rules.approver.name}` : null}
               />
-              <RuleRow icon="document-text" on={e.rules.unlock_on_document} title="Unlock on Death Certificate or Legal Notice" />
+              <RuleRow
+                icon="document-text"
+                on={e.rules.unlock_on_document}
+                title="Death Emergency Unlock"
+                detail="Unlocks once Patriai verifies a death certificate or legal notice"
+              />
               <RuleRow
                 icon="key"
                 on={e.rules.manual_unlock}
-                title="Manual Unlock by Owner"
+                title="Manual Unlock with Custom PIN"
                 detail={e.rules.unlock_reason ? `Reason: ${e.rules.unlock_reason}` : null}
               />
               <RuleRow icon="globe" on={e.rules.override_national_crisis} title="Override in National Crises" />
@@ -408,22 +466,24 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
             </View>
           </Section>
 
-          <Section title="Recipients Upon Unlock">
+          <Section title="Unlock Beneficiaries">
             {e.beneficiaries.length === 0 ? (
-              <Text className="text-[13px] text-muted">No recipients were added.</Text>
+              <Text className="text-[13px] text-muted">No beneficiaries were added.</Text>
             ) : (
-              e.beneficiaries.map((b) => (
+              e.beneficiaries.map((b, i) => (
                 <View key={b.id} className="rounded bg-white p-4" style={outline.card}>
+                  <View className={`mb-3 self-start rounded px-2 py-0.5 ${i === 0 ? 'bg-success-soft' : 'bg-lav'}`}>
+                    <Text className={`text-[11px] font-bold ${i === 0 ? 'text-brand' : 'text-navy'}`}>
+                      {beneficiaryRank(i).title} · {beneficiaryRank(i).role}
+                    </Text>
+                  </View>
                   <View className="flex-row items-center">
                     <PersonAvatar name={b.user?.name ?? '?'} avatarUrl={b.user?.avatar_url} />
                     <View className="ml-3 flex-1">
                       <Text className="text-[15px] font-bold text-ink" numberOfLines={1}>
                         {b.user?.name ?? 'Former user'}
                       </Text>
-                      <Text className="text-[12px] text-muted">
-                        {b.relationship ? `${b.relationship} • ` : ''}
-                        {RECIPIENT_ROLE_LABEL[b.role]}
-                      </Text>
+                      {b.relationship ? <Text className="text-[12px] text-muted">{b.relationship}</Text> : null}
                     </View>
                   </View>
                   <View className="mt-3 flex-row border-t border-border pt-3">
@@ -441,7 +501,7 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
             )}
             {e.beneficiary_note ? (
               <View className="rounded bg-page-top p-4">
-                <Text className="text-[12px] font-semibold text-muted">Message for Recipients</Text>
+                <Text className="text-[12px] font-semibold text-muted">Message for Beneficiaries</Text>
                 <Text className="mt-1 text-[14px] leading-5 text-ink">{e.beneficiary_note}</Text>
               </View>
             ) : null}
@@ -451,10 +511,10 @@ export function EmergencyCenterScreen({ route }: RootScreenProps<'EmergencyCente
 
       <PinSheet
         visible={pinMode !== null}
-        title={pinMode === 'unlock' ? 'Emergency PIN' : pinMode === 'override' ? 'Confirm override' : 'Authorize withdrawal'}
+        title={pinMode === 'unlock' ? 'Custom PIN' : pinMode === 'override' ? 'Confirm override' : 'Authorize withdrawal'}
         subtitle={
           pinMode === 'unlock'
-            ? 'Enter the emergency PIN you created for this wallet.'
+            ? 'Enter the custom PIN you created for this wallet.'
             : pinMode === 'override'
               ? 'Enter your transaction PIN to unlock this wallet.'
               : 'Enter your transaction PIN.'
