@@ -321,4 +321,105 @@ class SavingsGoalTest extends TestCase
         $this->deleteJson("/api/v1/wallet-drafts/{$id}")->assertOk();
         $this->assertNull(WalletDraft::find($id));
     }
+
+    // ------------------------------------------------- remaining sheet items
+
+    public function test_contributor_can_join_without_auto_save_and_start_later_on_the_plan(): void
+    {
+        $friend = User::factory()->create();
+        $friendMain = $this->makeWallet($friend, 'main', 0);
+        [, , $wallet] = $this->createGoal($friend);
+        $invite = WalletInvitation::where('wallet_id', $wallet->id)->firstOrFail();
+
+        // Join only — no wallet chosen, no auto-save yet.
+        Sanctum::actingAs($friend);
+        $this->postJson("/api/v1/invitations/{$invite->id}/accept")->assertOk();
+        $this->assertFalse(AutomationRule::where('user_id', $friend->id)->exists());
+        $this->getJson("/api/v1/wallets/{$wallet->id}/savings")->assertOk()
+            ->assertJsonPath('data.savings.me.can_start_auto_save', true)
+            ->assertJsonPath('data.savings.me.auto_save', null);
+
+        // Start later. Without the owner's permission to adjust, the plan's terms apply.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/savings/contribution", [
+            'source_wallet_id' => $friendMain->id,
+            'amount' => '999',
+            'frequency' => 'daily',
+        ])->assertCreated()
+            ->assertJsonPath('data.savings.me.auto_save.amount', '50.00')
+            ->assertJsonPath('data.savings.me.auto_save.frequency', 'monthly')
+            ->assertJsonPath('data.savings.me.auto_save.day_of_month', 5);
+
+        // Only one auto-save per person.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/savings/contribution", ['source_wallet_id' => $friendMain->id])->assertStatus(422);
+    }
+
+    public function test_owner_plan_change_keeps_a_contributors_own_amount(): void
+    {
+        $friend = User::factory()->create();
+        $friendMain = $this->makeWallet($friend, 'main', 0);
+        [$owner, , $wallet] = $this->createGoal($friend, ['allow_contributor_edit' => true]);
+        $invite = WalletInvitation::where('wallet_id', $wallet->id)->firstOrFail();
+
+        // The friend picks their own amount (allowed) but keeps the plan's schedule.
+        Sanctum::actingAs($friend);
+        $this->postJson("/api/v1/invitations/{$invite->id}/accept", ['source_wallet_id' => $friendMain->id, 'amount' => '20'])->assertOk();
+
+        // The owner raises the amount and moves everyone to weekly.
+        Sanctum::actingAs($owner);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/savings", ['amount' => '80', 'frequency' => 'weekly', 'day_of_week' => 5])->assertOk();
+
+        $friendRule = AutomationRule::where('user_id', $friend->id)->where('to_wallet_id', $wallet->id)->firstOrFail();
+        $ownerRule = AutomationRule::where('user_id', $owner->id)->where('to_wallet_id', $wallet->id)->firstOrFail();
+        $this->assertSame(2_000, $friendRule->amount);  // their own amount survives
+        $this->assertSame('weekly', $friendRule->frequency); // the shared schedule applies to all
+        $this->assertSame(5, $friendRule->day_of_week);
+        $this->assertSame(8_000, $ownerRule->amount);
+    }
+
+    public function test_regular_invite_screen_carries_per_person_permissions(): void
+    {
+        $owner = User::factory()->create();
+        $friend = User::factory()->create();
+        $wallet = $this->makeWallet($owner, 'savings', 0);
+        Sanctum::actingAs($owner);
+
+        $invite = $this->postJson("/api/v1/wallets/{$wallet->id}/invitations", [
+            'invitee_user_id' => $friend->id,
+            'role' => 'contributor',
+            'permissions' => ['view' => true, 'fund' => true, 'request' => false, 'withdraw' => true],
+        ])->assertCreated()->json('data.invitation');
+        $this->assertFalse($invite['permissions']['request']);
+
+        Sanctum::actingAs($friend);
+        $this->postJson("/api/v1/invitations/{$invite['id']}/accept")->assertOk();
+        $member = WalletMember::where('wallet_id', $wallet->id)->where('user_id', $friend->id)->firstOrFail();
+        $this->assertFalse($member->permissions['request']);
+        $this->assertTrue($member->permissions['withdraw']);
+        $this->assertTrue($wallet->canSpend($friend)); // withdraw mirrors the spend grant
+    }
+
+    public function test_any_wallet_type_created_from_a_draft_clears_it_and_drafts_are_capped(): void
+    {
+        $user = User::factory()->create();
+        $main = $this->makeWallet($user, 'main', 10_000);
+        Sanctum::actingAs($user);
+
+        $draftId = $this->postJson('/api/v1/wallet-drafts', [
+            'type' => 'giving', 'name' => 'Church', 'step' => 1, 'total_steps' => 1, 'data' => ['purpose' => 'tithe'],
+        ])->assertCreated()->json('data.draft.id');
+        $this->getJson('/api/v1/wallet-drafts')->assertJsonPath('data.drafts.0.data.purpose', 'tithe');
+
+        $this->postJson('/api/v1/wallets', ['type' => 'giving', 'name' => 'Church', 'purpose' => 'tithe', 'draft_id' => $draftId])->assertCreated();
+        $this->assertNull(WalletDraft::find($draftId));
+
+        // Someone else's draft id is never deleted by your wallet creation.
+        $other = WalletDraft::create(['user_id' => User::factory()->create()->id, 'type' => 'shared', 'step' => 1, 'total_steps' => 1, 'data' => []]);
+        $this->postJson('/api/v1/wallets', ['type' => 'shared', 'name' => 'Home', 'draft_id' => $other->id])->assertCreated();
+        $this->assertNotNull(WalletDraft::find($other->id));
+
+        // No more than 20 unfinished setups.
+        WalletDraft::insert(array_fill(0, 20, ['user_id' => $user->id, 'type' => 'savings', 'step' => 1, 'total_steps' => 4, 'created_at' => now(), 'updated_at' => now()]));
+        $this->postJson('/api/v1/wallet-drafts', ['type' => 'savings'])->assertStatus(422);
+        $this->assertNotNull($main);
+    }
 }
