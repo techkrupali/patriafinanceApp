@@ -11,7 +11,7 @@ import { Button } from '../components/Button';
 import { PinPad } from '../components/PinPad';
 import { colors, gradients } from '../theme';
 import { useDashboard, useLogoutApi } from '../api/hooks';
-import { useAuth } from '../store/auth';
+import { useAuth, useTxnPinLength } from '../store/auth';
 import { initials } from '../lib/format';
 import { tierName } from '../lib/kyc';
 import {
@@ -64,6 +64,7 @@ function Divider() {
 export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
   const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
+  const pinLength = useTxnPinLength();
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
   const setBiometricEnabled = useAuth((s) => s.setBiometricEnabled);
   const logoutLocal = useAuth((s) => s.logout);
@@ -119,7 +120,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
 
   const onCaptureChange = async (next: string) => {
     setCapturePin(next);
-    if (next.length === 4) {
+    if (next.length === pinLength) {
       await saveTxnPin(next);
       await setBiometricEnabled(true);
       notifySuccess();
@@ -213,17 +214,22 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         {/* Security */}
         <Text className="mt-7 text-[13px] font-bold text-muted">Security</Text>
         <Card className="mt-2 py-1">
-          <Row
-            icon="key-outline"
-            title="Change password"
-            subtitle="Update your sign-in password"
-            onPress={() => navigation.navigate('ChangePassword')}
-          />
-          <Divider />
+          {/* Phone sign-ups log in with their PIN and have no password to change. */}
+          {user?.has_password !== false ? (
+            <>
+              <Row
+                icon="key-outline"
+                title="Change password"
+                subtitle="Update your sign-in password"
+                onPress={() => navigation.navigate('ChangePassword')}
+              />
+              <Divider />
+            </>
+          ) : null}
           <Row
             icon="keypad-outline"
             title="Change transaction PIN"
-            subtitle="4-digit PIN used to authorize money"
+            subtitle={`${pinLength}-digit PIN used to authorize money`}
             onPress={() => navigation.navigate('ChangePin')}
           />
           <Divider />
@@ -406,7 +412,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
                 <Ionicons name="close" size={18} color={colors.muted} />
               </Pressable>
             </View>
-            <PinPad value={capturePin} onChange={(v) => void onCaptureChange(v)} />
+            <PinPad value={capturePin} onChange={(v) => void onCaptureChange(v)} length={pinLength} />
           </View>
         </View>
         </GestureHandlerRootView>

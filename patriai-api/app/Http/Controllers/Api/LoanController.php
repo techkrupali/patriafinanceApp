@@ -104,7 +104,7 @@ class LoanController extends ApiController
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
             'wallet_id' => ['required', 'integer'],
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
         ]);
 

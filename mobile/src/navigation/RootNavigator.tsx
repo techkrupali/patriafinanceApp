@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
@@ -10,13 +10,17 @@ import { colors, outline, radius } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
-// Auth screens
-import { WalkthroughScreen } from '../screens/auth/WalkthroughScreen';
+// Auth screens (client prototype onboarding + log in)
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
+import { PhoneScreen } from '../screens/auth/PhoneScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
-import { RegisterScreen } from '../screens/auth/RegisterScreen';
-import { OtpScreen } from '../screens/auth/OtpScreen';
-import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
+import { CodeScreen } from '../screens/auth/CodeScreen';
+import { DetailsScreen } from '../screens/auth/DetailsScreen';
+import { CreatePinScreen } from '../screens/auth/CreatePinScreen';
+import { PurposeScreen } from '../screens/auth/PurposeScreen';
+import { WalletReadyScreen } from '../screens/auth/WalletReadyScreen';
+import { UnlockScreen } from '../screens/auth/UnlockScreen';
+import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
 
 // Tab screens
 import { HomeScreen } from '../screens/HomeScreen';
@@ -109,8 +113,18 @@ const RulesTab = (props: Record<string, unknown>) => (
   <AutomationsScreen {...(props as unknown as React.ComponentProps<typeof AutomationsScreen>)} />
 );
 
-function MainTabs() {
+function MainTabs({ navigation }: NativeStackScreenProps<RootStackParamList, 'Tabs'>) {
   const insets = useSafeAreaInsets();
+  const postAuthRoute = useAuth((s) => s.postAuthRoute);
+  const clearPostAuthRoute = useAuth((s) => s.clearPostAuthRoute);
+
+  // A next step picked at the end of onboarding (or "I have an invite") opens on top of Home.
+  useEffect(() => {
+    if (!postAuthRoute) return;
+    clearPostAuthRoute();
+    navigation.navigate(postAuthRoute);
+  }, [postAuthRoute, clearPostAuthRoute, navigation]);
+
   return (
     <Tabs.Navigator
       screenOptions={({ route }) => ({
@@ -204,11 +218,15 @@ export function RootNavigator() {
     return (
       <AuthStack.Navigator screenOptions={{ headerShown: false }}>
         <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
-        <AuthStack.Screen name="Walkthrough" component={WalkthroughScreen} />
+        <AuthStack.Screen name="Phone" component={PhoneScreen} />
         <AuthStack.Screen name="Login" component={LoginScreen} />
-        <AuthStack.Screen name="Register" component={RegisterScreen} />
-        <AuthStack.Screen name="Otp" component={OtpScreen} />
-        <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <AuthStack.Screen name="Code" component={CodeScreen} />
+        <AuthStack.Screen name="Details" component={DetailsScreen} />
+        <AuthStack.Screen name="CreatePin" component={CreatePinScreen} />
+        <AuthStack.Screen name="Purpose" component={PurposeScreen} options={{ gestureEnabled: false }} />
+        <AuthStack.Screen name="WalletReady" component={WalletReadyScreen} options={{ gestureEnabled: false }} />
+        <AuthStack.Screen name="Unlock" component={UnlockScreen} />
+        <AuthStack.Screen name="ForgotPin" component={ForgotPinScreen} />
       </AuthStack.Navigator>
     );
   }

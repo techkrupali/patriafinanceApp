@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PhoneAuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReferralController;
@@ -43,6 +44,17 @@ Route::prefix('v1')->group(function () {
         Route::post('otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
         Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
         Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
+
+        // Phone-first onboarding and log-in (client prototype ONB-03…12, ACC-01/02).
+        // Each route keeps its own per-IP counter (third throttle argument), so one
+        // sign-up's several calls don't use up another's allowance; codes per number
+        // are limited separately in OtpService.
+        Route::post('phone/start', [PhoneAuthController::class, 'start'])->middleware('throttle:10,1,phone-start');
+        Route::post('phone/verify', [PhoneAuthController::class, 'verify'])->middleware('throttle:10,1,phone-verify');
+        Route::post('phone/register', [PhoneAuthController::class, 'register'])->middleware('throttle:10,1,phone-register');
+        Route::post('phone/login', [PhoneAuthController::class, 'login'])->middleware('throttle:10,1,phone-login');
+        Route::post('pin/forgot', [PhoneAuthController::class, 'forgotPin'])->middleware('throttle:5,1,pin-forgot');
+        Route::post('pin/reset', [PhoneAuthController::class, 'resetPin'])->middleware('throttle:5,1,pin-reset');
     });
 
     // Banking rails webhook (server-to-server)
@@ -58,6 +70,7 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/change-password', [ProfileController::class, 'changePassword']);
         Route::post('profile/change-pin', [ProfileController::class, 'changePin']);
         Route::post('profile/verify-pin', [ProfileController::class, 'verifyPin'])->middleware('throttle:10,1');
+        Route::put('profile/onboarding', [ProfileController::class, 'onboarding']);
         Route::post('devices', [ProfileController::class, 'registerDevice']);
         Route::get('devices', [ProfileController::class, 'devices']);
         Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');

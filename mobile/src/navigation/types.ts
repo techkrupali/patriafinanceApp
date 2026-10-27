@@ -2,16 +2,51 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
-import type { CreatableWalletType, EmergencyPurpose, UserSearchResult } from '../api/types';
+import type { CreatableWalletType, EmergencyPurpose, OtpChannel, PhoneAccount, UserSearchResult } from '../api/types';
 import type { RecipientDraft } from '../components/RecipientSheet';
 
+/** ONB-05 answers carried to the PIN step, where the account is created. */
+export interface SignupDetails {
+  first_name: string;
+  last_name: string;
+  email: string;
+  /** YYYY-MM-DD */
+  date_of_birth: string;
+}
+
+/**
+ * Phone-first onboarding and log-in, per the client prototype:
+ * Welcome → Phone → Code → Details → CreatePin → Purpose → WalletReady, and
+ * Welcome → Login → Code → Unlock for an existing account.
+ */
 export type AuthStackParamList = {
-  Walkthrough: undefined;
   Welcome: undefined;
+  /** ONB-03 */
+  Phone: undefined;
+  /** ACC-01 */
   Login: undefined;
-  Register: undefined;
-  Otp: { identifier: string; purpose: 'verify' | 'login'; sentTo?: string; debugOtp?: string };
-  ForgotPassword: undefined;
+  /** ONB-04, shared by sign-up and log-in. */
+  Code: {
+    /** E.164 */
+    phone: string;
+    channel: OtpChannel;
+    resendIn: number;
+    flow: 'signup' | 'login';
+    debugOtp?: string;
+  };
+  /** ONB-05 */
+  /** serverErrors: the PIN step sends us back when the server rejects a detail. */
+  Details: { phoneToken: string; serverErrors?: { name?: string; email?: string; dob?: string } };
+  /** ONB-06 + ONB-07, then ONB-08 once the account exists. */
+  CreatePin: { phoneToken: string; details: SignupDetails };
+  /** ONB-09 */
+  Purpose: undefined;
+  /** ONB-12 */
+  WalletReady: undefined;
+  /** ACC-02 */
+  Unlock: { phoneToken: string; account: PhoneAccount };
+  /** Forgot PIN: a code to the email on file, then a new PIN. */
+  ForgotPin: { phoneToken: string; account: PhoneAccount };
 };
 
 /**

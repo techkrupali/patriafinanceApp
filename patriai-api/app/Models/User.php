@@ -15,6 +15,9 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    /** Answers to "What brings you to Patriai?" (onboarding ONB-09). */
+    public const ONBOARDING_PURPOSES = ['household', 'school_goals', 'project', 'ajo', 'children', 'vendor'];
+
     /**
      * Privilege fields (role, kyc_tier, status) are deliberately NOT fillable:
      * they must never be settable from a request-controlled array. The few
@@ -29,6 +32,10 @@ class User extends Authenticatable
         'phone',
         'password',
         'pin',
+        'pin_length',
+        'date_of_birth',
+        'language',
+        'onboarding_purposes',
         'avatar_url',
         'username',
         'referral_code',
@@ -49,6 +56,9 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'kyc_tier' => 'integer',
+            'pin_length' => 'integer',
+            'date_of_birth' => 'date',
+            'onboarding_purposes' => 'array',
         ];
     }
 

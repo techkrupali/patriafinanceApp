@@ -43,7 +43,7 @@ class SpendRequestController extends ApiController
         // {wallet}, so there is no from_wallet_id here.
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],
             'destination.wallet_id' => ['required_if:destination.kind,wallet', 'nullable', 'integer'],

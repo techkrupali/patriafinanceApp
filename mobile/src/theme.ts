@@ -93,3 +93,54 @@ export const outline: Record<'card' | 'tab', ViewStyle> = {
   card: { borderWidth: 1, borderColor: colors.border },
   tab: { borderTopWidth: 1, borderTopColor: colors.border },
 };
+
+/**
+ * Client prototype design system (prototype.patriai.app, captured 2026-10-27;
+ * see prototype-designs/ds/patriai/tokens.css). Screens rebuilt to the
+ * prototype use these instead of the tokens above — onboarding first.
+ */
+export const pt = {
+  emerald900: '#08392F',
+  emerald700: '#0B5D4B',
+  emerald500: '#1FA07A',
+  emerald300: '#5FD3A5',
+  emerald100: '#DFF3EA',
+  emerald50: '#F3F7F4',
+  gold500: '#F2A93B',
+  gold100: '#FCEBCC',
+
+  surface: '#F3F7F4',
+  raised: '#FFFFFF',
+  sunken: '#E3ECE6',
+  ink: '#0E1A16',
+  inkMuted: '#3D5249',
+  inkSubtle: '#56695F',
+  line: '#D3E3DA',
+  lineStrong: '#6F8A7E',
+  brand: '#0B5D4B',
+  brandSoft: '#DFF3EA',
+  onBrand: '#FFFFFF',
+  danger: '#B3311A',
+  dangerSoft: '#FBE3DD',
+  info: '#1D5FA8',
+  infoSoft: '#E1ECF9',
+  focus: '#1D5FA8',
+  /** Welcome-screen pager dots and body copy on the dark emerald canvas. */
+  dotIdle: '#2E5A4F',
+  onDarkMuted: '#CFE3DA',
+} as const;
+
+/** Prototype radii: xs chips · sm buttons/inputs · md cards · lg hero cards. */
+export const ptRadius = { xs: 6, sm: 12, md: 18, lg: 28 } as const;
+
+/**
+ * Plus Jakarta Sans by weight. Custom fonts on Android pick the face from the
+ * family name, not fontWeight, so each weight is its own family.
+ */
+export const ptFont = {
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_500Medium',
+  semibold: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_700Bold',
+  extrabold: 'PlusJakartaSans_800ExtraBold',
+} as const;

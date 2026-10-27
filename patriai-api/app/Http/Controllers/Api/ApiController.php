@@ -17,11 +17,15 @@ use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use App\Services\KycService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 abstract class ApiController extends Controller
 {
+    /** Transaction PIN: 6 digits for phone sign-ups, 4 for accounts made before them. */
+    protected const TXN_PIN = 'regex:/^(\d{4}|\d{6})$/';
+
     /**
      * Kobo the user has committed to sending OUT to third parties today. Used to
      * enforce the per-KYC-tier daily limit. This counts money genuinely leaving to
@@ -142,6 +146,51 @@ abstract class ApiController extends Controller
         return response()->json($payload, $code);
     }
 
+    /**
+     * Best-effort normalize a phone identifier to the stored E.164 form
+     * (+<code><national>). Clients send E.164 directly; this also rescues loose
+     * inputs (spaces/dashes, a "00" international prefix, or a bare local
+     * trunk-0 number, which we treat as the primary market — Nigeria, +234).
+     */
+    protected function normalizePhone(string $raw): string
+    {
+        $trimmed = trim($raw);
+        $hasPlus = str_starts_with($trimmed, '+');
+        $digits = preg_replace('/\D/', '', $trimmed);
+
+        if ($digits === '') {
+            return $trimmed;
+        }
+        if ($hasPlus) {
+            return '+' . $digits;
+        }
+        if (str_starts_with($digits, '00')) {
+            return '+' . substr($digits, 2);
+        }
+        if (str_starts_with($digits, '0')) {
+            return '+234' . ltrim($digits, '0');
+        }
+
+        return '+' . $digits;
+    }
+
+    /** Record the device a session was opened from (Devices screen, push tokens). */
+    protected function recordDevice(Request $request, User $user): void
+    {
+        if (!$request->filled('device_id')) {
+            return;
+        }
+
+        $user->devices()->updateOrCreate(
+            ['device_id' => $request->input('device_id')],
+            [
+                'device_name' => $request->input('device_name'),
+                'platform' => $request->input('platform'),
+                'last_active_at' => now(),
+            ],
+        );
+    }
+
     protected function serializeUser(User $user): array
     {
         return [
@@ -159,6 +208,11 @@ abstract class ApiController extends Controller
             'email_verified' => (bool) $user->email_verified_at,
             'phone_verified' => (bool) $user->phone_verified_at,
             'has_pin' => (bool) $user->pin,
+            'has_password' => $user->password !== null,
+            'pin_length' => (int) ($user->pin_length ?? 4),
+            'language' => $user->language ?? 'en',
+            'date_of_birth' => $user->date_of_birth?->toDateString(),
+            'onboarding_purposes' => $user->onboarding_purposes ?? [],
             'created_at' => $user->created_at?->toIso8601String(),
         ];
     }

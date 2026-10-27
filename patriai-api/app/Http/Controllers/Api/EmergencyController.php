@@ -65,7 +65,7 @@ class EmergencyController extends ApiController
         if (!$this->visible($request, $wallet)) {
             return $this->fail('Wallet not found', 404);
         }
-        $data = $request->validate(['pin' => ['required', 'digits:4']]);
+        $data = $request->validate(['pin' => ['required', self::TXN_PIN]]);
         EmergencyService::make()->highBalanceOverride($wallet, $request->user(), $data['pin']);
 
         return $this->detail($request, $wallet, 'Emergency wallet unlocked by override');
@@ -83,7 +83,7 @@ class EmergencyController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
         $data = $request->validate([
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
             'purpose' => ['sometimes', 'in:' . implode(',', EmergencySetting::PURPOSES)],
             'dual_approval' => ['sometimes', 'boolean'],
             'approver_user_id' => ['nullable', 'integer'],
@@ -195,7 +195,7 @@ class EmergencyController extends ApiController
         }
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
         ]);
 
         $service = EmergencyService::make();

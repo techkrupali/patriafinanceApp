@@ -249,7 +249,7 @@ class WalletController extends ApiController
             'account_number' => ['required', 'digits:10'],
             'account_name' => ['required', 'string', 'max:150'],
             'bank_name' => ['required', 'string', 'max:150'],
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
         ]);

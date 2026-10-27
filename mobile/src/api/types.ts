@@ -16,6 +16,13 @@ export interface User {
   email_verified: boolean;
   phone_verified: boolean;
   has_pin: boolean;
+  /** False for phone sign-ups, who log in with their PIN and never set a password. */
+  has_password: boolean;
+  /** Transaction PIN length: 6 for phone sign-ups, 4 for older accounts. */
+  pin_length: 4 | 6;
+  language: 'en' | 'pcm';
+  date_of_birth: string | null;
+  onboarding_purposes: string[];
   created_at: string | null;
 }
 
@@ -242,15 +249,35 @@ export interface AuthSessionData {
   token: string;
 }
 
-// Register no longer returns a token — the session starts at OTP verification.
-export interface RegisterData {
-  user: User;
-  otp_sent_to: string;
+export type OtpChannel = 'sms' | 'whatsapp';
+
+export interface PhoneStartData {
+  /** Masked phone number the code went to. */
+  sent_to: string;
+  channel: OtpChannel;
+  /** Seconds before another code can be requested. */
+  resend_in: number;
   debug_otp?: string;
 }
 
-export interface OtpRequestData {
-  sent_to?: string;
+/** Who owns a verified phone number, enough to greet them on the PIN screen. */
+export interface PhoneAccount {
+  first_name: string;
+  initials: string;
+  avatar_url: string | null;
+  pin_length: 4 | 6;
+}
+
+export interface PhoneVerifyData {
+  /** Short-lived proof that this phone was verified; spent by register/login/PIN reset. */
+  phone_token: string;
+  /** null when the number has no account yet (sign-up continues). */
+  account: PhoneAccount | null;
+}
+
+export interface PinForgotData {
+  /** Masked email the reset code went to. */
+  sent_to: string;
   debug_otp?: string;
 }
 
@@ -415,18 +442,15 @@ export interface DeviceMeta {
   platform: 'android' | 'ios' | 'web';
 }
 
-export interface RegisterPayload extends DeviceMeta {
+export interface PhoneRegisterPayload {
+  phone_token: string;
   first_name: string;
   last_name: string;
   email: string;
-  phone: string;
-  password: string;
+  /** YYYY-MM-DD */
+  date_of_birth: string;
   pin: string;
-}
-
-export interface LoginPayload extends DeviceMeta {
-  identifier: string;
-  password: string;
+  language: 'en' | 'pcm';
 }
 
 export type TransferDestination =

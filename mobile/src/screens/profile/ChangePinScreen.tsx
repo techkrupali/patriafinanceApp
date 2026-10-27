@@ -7,14 +7,21 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { useChangePin } from '../../api/hooks';
-import { useAuth } from '../../store/auth';
+import { useAuth, useTxnPinLength } from '../../store/auth';
 import { saveTxnPin } from '../../lib/biometrics';
 import type { RootScreenProps } from '../../navigation/types';
 
+/** New PINs are 6 digits (client prototype); older 4-digit PINs move up on change. */
+const NEW_PIN_LENGTH = 6;
+
 export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
   const user = useAuth((s) => s.user);
+  const setUser = useAuth((s) => s.setUser);
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
   const hasPin = user?.has_pin ?? true;
+  // Phone sign-ups have no password; their current PIN is the check.
+  const needsPassword = user?.has_password !== false;
+  const currentLength = useTxnPinLength();
 
   const [password, setPassword] = useState('');
   const [currentPin, setCurrentPin] = useState('');
@@ -25,16 +32,16 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
 
   const submit = () => {
     setError(null);
-    if (!password) {
+    if (needsPassword && !password) {
       setError('Enter your password to confirm it is you.');
       return;
     }
-    if (hasPin && currentPin.length !== 4) {
-      setError('Enter your current 4-digit PIN.');
+    if (hasPin && currentPin.length !== currentLength) {
+      setError(`Enter your current ${currentLength}-digit PIN.`);
       return;
     }
-    if (newPin.length !== 4) {
-      setError('New PIN must be exactly 4 digits.');
+    if (newPin.length !== NEW_PIN_LENGTH) {
+      setError(`New PIN must be exactly ${NEW_PIN_LENGTH} digits.`);
       return;
     }
     if (newPin !== confirmPin) {
@@ -42,11 +49,16 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
       return;
     }
     change.mutate(
-      { password, new_pin: newPin, ...(hasPin ? { current_pin: currentPin } : {}) },
+      {
+        new_pin: newPin,
+        ...(needsPassword ? { password } : {}),
+        ...(hasPin ? { current_pin: currentPin } : {}),
+      },
       {
         onSuccess: async () => {
           // Keep the biometric-cached PIN in sync so authorize keeps working.
           if (biometricEnabled) await saveTxnPin(newPin);
+          if (user) await setUser({ ...user, has_pin: true, pin_length: NEW_PIN_LENGTH });
           Alert.alert('PIN updated', 'Your transaction PIN has been changed.', [
             { text: 'OK', onPress: () => navigation.goBack() },
           ]);
@@ -64,45 +76,47 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
             Your PIN authorizes every transfer and withdrawal. Keep it secret.
           </Text>
           <View className="mt-6" style={{ gap: 16 }}>
-            <Input
-              label="Account Password"
-              icon="lock-closed-outline"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Your password"
-              secureTextEntry
-            />
+            {needsPassword ? (
+              <Input
+                label="Account Password"
+                icon="lock-closed-outline"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Your password"
+                secureTextEntry
+              />
+            ) : null}
             {hasPin ? (
               <Input
                 label="Current PIN"
                 icon="keypad-outline"
                 value={currentPin}
-                onChangeText={(t) => setCurrentPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
-                placeholder="••••"
+                onChangeText={(t) => setCurrentPin(t.replace(/[^0-9]/g, '').slice(0, currentLength))}
+                placeholder={'•'.repeat(currentLength)}
                 keyboardType="number-pad"
                 secureTextEntry
-                maxLength={4}
+                maxLength={currentLength}
               />
             ) : null}
             <Input
               label="New PIN"
               icon="keypad-outline"
               value={newPin}
-              onChangeText={(t) => setNewPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
-              placeholder="••••"
+              onChangeText={(t) => setNewPin(t.replace(/[^0-9]/g, '').slice(0, NEW_PIN_LENGTH))}
+              placeholder="••••••"
               keyboardType="number-pad"
               secureTextEntry
-              maxLength={4}
+              maxLength={NEW_PIN_LENGTH}
             />
             <Input
               label="Confirm New PIN"
               icon="keypad-outline"
               value={confirmPin}
-              onChangeText={(t) => setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
-              placeholder="••••"
+              onChangeText={(t) => setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, NEW_PIN_LENGTH))}
+              placeholder="••••••"
               keyboardType="number-pad"
               secureTextEntry
-              maxLength={4}
+              maxLength={NEW_PIN_LENGTH}
             />
           </View>
           <ErrorText message={error} className="mt-4" />

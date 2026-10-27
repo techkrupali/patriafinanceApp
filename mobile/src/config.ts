@@ -12,6 +12,6 @@ export const STORAGE_KEYS = {
   deviceId: 'patriai.device_id',
   /** Transaction PIN cached behind biometrics for Google-Pay style authorize. */
   txnPin: 'patriai.txn_pin',
-  /** Set once the first-run feature tour has been seen/skipped. */
-  walkthroughSeen: 'patriai.walkthrough_seen',
+  /** App language chosen on the phone-number screen: 'en' | 'pcm' (Pidgin). */
+  language: 'patriai.language',
 } as const;

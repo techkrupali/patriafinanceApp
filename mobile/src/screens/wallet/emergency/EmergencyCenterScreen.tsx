@@ -522,6 +522,8 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
         amount={pinMode === 'withdraw' && amount ? formatMoney(amount) : undefined}
         recipient={pinMode === 'withdraw' ? 'To your main wallet' : undefined}
         allowBiometric={pinMode !== 'unlock'}
+        // The emergency wallet's custom PIN is its own 4-digit secret.
+        length={pinMode === 'unlock' ? 4 : undefined}
         loading={pinBusy}
         error={pinError}
         onSubmit={submitPin}

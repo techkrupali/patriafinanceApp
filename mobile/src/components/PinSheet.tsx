@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PinPad } from './PinPad';
 import { ErrorText } from './ErrorText';
 import { colors } from '../theme';
-import { useAuth } from '../store/auth';
+import { useAuth, useTxnPinLength } from '../store/auth';
 import {
   getBiometricSupport,
   getTxnPin,
@@ -31,6 +31,8 @@ interface PinSheetProps {
    * this sheet asks for a different secret (e.g. an emergency wallet PIN).
    */
   allowBiometric?: boolean;
+  /** Digits to collect; defaults to the person's transaction PIN length. */
+  length?: number;
 }
 
 type Mode = 'bio' | 'pin';
@@ -51,8 +53,11 @@ export function PinSheet({
   onSubmit,
   onClose,
   allowBiometric = true,
+  length,
 }: PinSheetProps) {
   const insets = useSafeAreaInsets();
+  const txnPinLength = useTxnPinLength();
+  const pinLength = length ?? txnPinLength;
   const biometricEnabled = useAuth((s) => s.biometricEnabled) && allowBiometric;
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('pin');
@@ -108,7 +113,7 @@ export function PinSheet({
   const handleChange = (next: string) => {
     if (loading) return;
     setPin(next);
-    if (next.length === 4) onSubmit(next);
+    if (next.length === pinLength) onSubmit(next);
   };
 
   const showBioKey = biometricEnabled && support?.available;
@@ -200,6 +205,7 @@ export function PinSheet({
               <PinPad
                 value={pin}
                 onChange={handleChange}
+                length={pinLength}
                 onBiometric={showBioKey ? () => void tryBiometric() : undefined}
                 biometricIcon={support?.icon}
               />

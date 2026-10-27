@@ -93,37 +93,52 @@ class ProfileController extends ApiController
         return $this->ok('Password changed successfully');
     }
 
-    // POST /profile/change-pin
+    // POST /profile/change-pin  { current_pin?, new_pin, password? }
     public function changePin(Request $request): JsonResponse
     {
+        $user = $request->user();
         $data = $request->validate([
-            'current_pin' => [Rule::requiredIf(fn () => $request->user()->pin !== null), 'nullable', 'digits:4'],
-            'new_pin' => ['required', 'digits:4'],
-            'password' => ['required', 'string'],
+            'current_pin' => [Rule::requiredIf(fn () => $user->pin !== null), 'nullable', self::TXN_PIN],
+            'new_pin' => ['required', self::TXN_PIN],
+            // Phone sign-ups have no password; their current PIN is the check.
+            'password' => [Rule::requiredIf(fn () => $user->password !== null), 'nullable', 'string'],
         ]);
 
-        $user = $request->user();
-
-        if (!Hash::check($data['password'], $user->password)) {
+        if ($user->password !== null && !Hash::check($data['password'], $user->password)) {
             return $this->fail('Password is incorrect');
         }
-        if ($user->pin && (!($data['current_pin'] ?? null) || !Hash::check($data['current_pin'], $user->pin))) {
-            return $this->fail('Current PIN is incorrect');
+        if ($user->pin) {
+            // Same lockout as payments, so this can't be used to guess the PIN.
+            app(\App\Services\PinService::class)->verify($user, $data['current_pin']);
         }
 
-        $user->update(['pin' => Hash::make($data['new_pin'])]);
+        $user->update(['pin' => Hash::make($data['new_pin']), 'pin_length' => strlen($data['new_pin'])]);
 
-        return $this->ok('Transaction PIN updated');
+        return $this->ok('Transaction PIN updated', ['user' => $this->serializeUser($user)]);
     }
 
     // POST /profile/verify-pin
     public function verifyPin(Request $request): JsonResponse
     {
-        $data = $request->validate(['pin' => ['required', 'digits:4']]);
+        $data = $request->validate(['pin' => ['required', self::TXN_PIN]]);
 
         app(\App\Services\PinService::class)->verify($request->user(), $data['pin']);
 
         return $this->ok('PIN verified');
+    }
+
+    // PUT /profile/onboarding  { purposes[] } — ONB-09 "What brings you to Patriai?"
+    public function onboarding(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'purposes' => ['present', 'array', 'max:' . count(User::ONBOARDING_PURPOSES)],
+            'purposes.*' => ['string', 'distinct', Rule::in(User::ONBOARDING_PURPOSES)],
+        ]);
+
+        $user = $request->user();
+        $user->update(['onboarding_purposes' => array_values($data['purposes'])]);
+
+        return $this->ok('Saved', ['user' => $this->serializeUser($user)]);
     }
 
     // POST /devices  (register / update push token)

@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
  * WHY THIS DOES NOT MOVE MONEY DIRECTLY
  * -------------------------------------
  * The only ad-hoc transfer path (POST /transfers → TransferController::store)
- * REQUIRES the user's 4-digit transaction PIN, which PinService::verify() checks
+ * REQUIRES the user's transaction PIN, which PinService::verify() checks
  * before any money moves. The PIN is the transaction authorization and must never
  * be seen, collected, or transmitted by the AI. There is no PIN-less transfer
  * path, and creating one would be an unsafe workaround. So this tool:

@@ -5,6 +5,9 @@ import type { User } from '../api/types';
 
 export type AuthStatus = 'loading' | 'authed' | 'guest';
 
+/** Where "Next steps" on the wallet-ready screen sends a brand-new user. */
+export type PostOnboardingRoute = 'Kyc' | 'FamilyHub' | 'CreateWallet' | 'Invitations';
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -14,7 +17,18 @@ interface AuthState {
   hasStoredSession: boolean;
   hydrate: () => Promise<void>;
   setSession: (user: User, token: string) => Promise<void>;
-  /** Persist a token without marking the app authed (e.g. right after register, before OTP). */
+  /**
+   * Persist a brand-new account's session without entering the app, so the
+   * last onboarding screens (ONB-09, ONB-12) can call the API first.
+   */
+  beginOnboarding: (user: User, token: string) => Promise<void>;
+  /** Leave onboarding for the app, optionally opening a next-step screen. */
+  finishOnboarding: (next?: PostOnboardingRoute) => void;
+  /** Read once by the main tabs after onboarding, then cleared. */
+  postAuthRoute: PostOnboardingRoute | null;
+  /** Set before signing in (e.g. "I have an invite") to open that screen once inside. */
+  setPostAuthRoute: (route: PostOnboardingRoute | null) => void;
+  clearPostAuthRoute: () => void;
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
   /** Restore the persisted session after a successful biometric prompt. */
   unlockStoredSession: () => Promise<boolean>;
@@ -42,6 +56,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   status: 'loading',
   biometricEnabled: false,
   hasStoredSession: false,
+  postAuthRoute: null,
 
   hydrate: async () => {
     try {
@@ -75,6 +90,22 @@ export const useAuth = create<AuthState>((set, get) => ({
     await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user));
     set({ user, token, status: 'authed', hasStoredSession: true });
   },
+
+  beginOnboarding: async (user, token) => {
+    await SecureStore.setItemAsync(STORAGE_KEYS.token, token);
+    await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user));
+    // hasStoredSession stays false until the app is entered, so turning on
+    // biometrics mid-onboarding doesn't swap the screen for the app lock.
+    set({ user, token });
+  },
+
+  finishOnboarding: (next) => {
+    if (!get().token) return;
+    set({ status: 'authed', hasStoredSession: true, postAuthRoute: next ?? get().postAuthRoute });
+  },
+
+  setPostAuthRoute: (route) => set({ postAuthRoute: route }),
+  clearPostAuthRoute: () => set({ postAuthRoute: null }),
 
   setBiometricEnabled: async (enabled) => {
     if (enabled) {
@@ -115,3 +146,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false });
   },
 }));
+
+/** Length of the signed-in person's transaction PIN (6 for phone sign-ups, 4 for older accounts). */
+export function useTxnPinLength(): number {
+  return useAuth((s) => s.user?.pin_length ?? 4);
+}

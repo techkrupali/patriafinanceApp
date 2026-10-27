@@ -92,3 +92,23 @@ export function toE164(dial: string, national: string): string {
 export function isValidE164(value: string): boolean {
   return /^\+[1-9]\d{7,14}$/.test(value);
 }
+
+/** Display grouping for a national number as typed: NG 8034127790 → "803 412 7790". */
+export function formatNational(dial: string, digits: string): string {
+  const d = digits.replace(/\D/g, '');
+  if (dial === '234') {
+    const n = d.replace(/^0/, '');
+    const lead = d.length - n.length; // keep a typed trunk 0 as-is
+    const parts = [n.slice(0, 3), n.slice(3, 6), n.slice(6)].filter(Boolean);
+    return (lead ? '0' : '') + parts.join(' ');
+  }
+  return d.replace(/(\d{3})(?=\d)/g, '$1 ');
+}
+
+/** "+2348034127790" → "+234 803 412 7790", using the longest matching dial code. */
+export function formatE164(e164: string): string {
+  const digits = e164.replace(/\D/g, '');
+  const match = COUNTRIES.filter((c) => digits.startsWith(c.dial)).sort((a, b) => b.dial.length - a.dial.length)[0];
+  if (!match) return e164;
+  return `+${match.dial} ${formatNational(match.dial, digits.slice(match.dial.length))}`;
+}

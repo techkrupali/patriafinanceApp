@@ -11,7 +11,7 @@ import { getBiometricSupport, runBiometricPrompt, type BiometricSupport } from '
 import { notifySuccess, selection } from '../lib/haptics';
 
 interface AppLockProps {
-  /** Escape hatch: sign in with the password form instead of biometrics. */
+  /** Escape hatch: log in with phone number and PIN instead of biometrics. */
   onUsePassword: () => void;
 }
 
@@ -136,7 +136,7 @@ export function AppLock({ onUsePassword }: AppLockProps) {
               </LinearGradient>
             </Pressable>
 
-            {/* Secondary — password fallback */}
+            {/* Secondary — phone + PIN log-in fallback */}
             <Pressable
               onPress={() => {
                 selection();
@@ -149,8 +149,8 @@ export function AppLock({ onUsePassword }: AppLockProps) {
                 <Ionicons name="key-outline" size={20} color={colors.muted} />
               </View>
               <View className="flex-1">
-                <Text className="text-sm font-bold text-ink">Use password instead</Text>
-                <Text className="text-xs text-muted">Sign in with your password</Text>
+                <Text className="text-sm font-bold text-ink">Log in another way</Text>
+                <Text className="text-xs text-muted">With your phone number and PIN</Text>
               </View>
             </Pressable>
           </View>

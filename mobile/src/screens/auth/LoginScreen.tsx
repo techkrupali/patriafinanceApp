@@ -1,364 +1,81 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
-import { Ionicons } from '@expo/vector-icons';
-import { Screen } from '../../components/Screen';
-import { Button } from '../../components/Button';
-import { PhoneInput } from '../../components/PhoneInput';
-import { ErrorText } from '../../components/ErrorText';
-import { colors, outline } from '../../theme';
-import { DEFAULT_COUNTRY, toE164, isValidE164, type Country } from '../../lib/phone';
-import { selection } from '../../lib/haptics';
-import { useLogin } from '../../api/hooks';
-import { ApiError } from '../../api/client';
-import { useAuth } from '../../store/auth';
-import {
-  getBiometricSupport,
-  runBiometricPrompt,
-  type BiometricSupport,
-} from '../../lib/biometrics';
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import { pt } from '../../theme';
+import { PtStepScreen } from '../../components/pt/PtStepScreen';
+import { PtPhoneField } from '../../components/pt/PtPhoneField';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtLogo } from '../../components/pt/PtLogo';
+import { PtText } from '../../components/pt/PtText';
+import { usePhoneStart } from '../../api/hooks';
+import { useOnboardingCopy } from '../../lib/onboardingCopy';
+import { DEFAULT_COUNTRY, isValidE164, toE164, type Country } from '../../lib/phone';
 import type { AuthScreenProps } from '../../navigation/types';
-import type { User } from '../../api/types';
 
 /**
- * Stitch "Login - The Curated Ledger" (2.1): centered editorial header on the
- * #F6FAFE surface, a white outlined card holding a tonal Phone/Email
- * segmented toggle, Title Case field labels, tonal-fill inputs (3px radius,
- * gold focus), gold-link sign-up row and the gold primary CTA.
+ * ACC-01 Log in: logo, "Welcome back", one phone field with the dial code
+ * inside. A code to the phone comes next, then the PIN (ACC-02).
  */
-
-/** Design-system field: tonal fill, 12px radius, gold focus accent. */
-function Field({
-  label,
-  secure,
-  ...rest
-}: TextInputProps & { label: string; secure?: boolean }) {
-  const [focused, setFocused] = useState(false);
-  const [reveal, setReveal] = useState(false);
-
-  return (
-    <View className="w-full">
-      <Text className="mb-2 ml-1 text-[13px] font-semibold text-muted">
-        {label}
-      </Text>
-      <View
-        className="w-full flex-row items-center rounded px-4"
-        style={{
-          minHeight: 54,
-          backgroundColor: focused ? colors.white : colors.lavSoft, // surface-container-high
-          borderWidth: 1.5,
-          borderColor: focused ? colors.goldDeep : 'transparent',
-        }}
-      >
-        <TextInput
-          placeholderTextColor={colors.faded}
-          selectionColor={colors.goldDeep}
-          cursorColor={colors.goldDeep}
-          secureTextEntry={secure && !reveal}
-          className="flex-1 py-3.5 text-[15px]"
-          {...rest}
-          onFocus={(e) => {
-            setFocused(true);
-            rest.onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            rest.onBlur?.(e);
-          }}
-          style={[{ color: colors.ink, fontWeight: '500' }, rest.style]}
-        />
-        {secure ? (
-          <Pressable onPress={() => setReveal((r) => !r)} hitSlop={10} className="pl-2">
-            <Ionicons name={reveal ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.muted} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-/** Tonal segmented toggle (surface-container-low track, white active pill, gold label). */
-function Segment({
-  options,
-  value,
-  onChange,
-}: {
-  options: { key: string; label: string }[];
-  value: string;
-  onChange: (key: string) => void;
-}) {
-  return (
-    <View className="flex-row rounded bg-page-top p-1">
-      {options.map((o) => {
-        const active = o.key === value;
-        return (
-          <Pressable
-            key={o.key}
-            onPress={() => {
-              if (!active) {
-                selection();
-                onChange(o.key);
-              }
-            }}
-            className="flex-1 items-center justify-center rounded py-2"
-            style={active ? { backgroundColor: colors.white } : undefined}
-          >
-            <Text
-              className={`text-sm ${active ? 'font-bold' : 'font-medium'}`}
-              style={{ color: active ? colors.goldDeep : colors.muted }}
-            >
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
-  const [identifier, setIdentifier] = useState('');
-  const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'phone' | 'email'>('phone');
+  const copy = useOnboardingCopy();
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [bioBusy, setBioBusy] = useState(false);
-  const [support, setSupport] = useState<BiometricSupport | null>(null);
-
-  const login = useLogin();
-  const setSession = useAuth((s) => s.setSession);
-  const setBiometricEnabled = useAuth((s) => s.setBiometricEnabled);
-  const biometricEnabled = useAuth((s) => s.biometricEnabled);
-  const hasStoredSession = useAuth((s) => s.hasStoredSession);
-  const unlockStoredSession = useAuth((s) => s.unlockStoredSession);
-
-  useEffect(() => {
-    void getBiometricSupport().then(setSupport);
-  }, []);
-
-  const offerBiometric = async (user: User, token: string) => {
-    try {
-      if (!support?.available || biometricEnabled) {
-        await setSession(user, token);
-        return;
-      }
-      Alert.alert(
-        `Enable ${support.label}?`,
-        `Use ${support.label} to sign in faster next time.`,
-        [
-          { text: 'Not now', style: 'cancel', onPress: () => void setSession(user, token) },
-          {
-            text: 'Enable',
-            onPress: async () => {
-              const ok = await runBiometricPrompt(`Confirm to enable ${support.label}`);
-              if (ok) await setBiometricEnabled(true);
-              await setSession(user, token);
-            },
-          },
-        ],
-        { cancelable: false },
-      );
-    } catch {
-      await setSession(user, token);
-    }
-  };
+  const start = usePhoneStart();
 
   const submit = () => {
+    const phone = toE164(country.dial, national);
+    if (!isValidE164(phone)) {
+      setError(copy.phone.invalid);
+      return;
+    }
     setError(null);
-    // Phone logs in with the same clean E.164 value that was registered.
-    const cleaned = mode === 'phone' ? toE164(phoneCountry.dial, identifier) : identifier.trim();
-    if (!password || (mode === 'email' ? !cleaned : !identifier.trim())) {
-      setError('Enter your email/phone and password.');
-      return;
-    }
-    if (mode === 'phone' && !isValidE164(cleaned)) {
-      setError('Enter a valid phone number for the selected country.');
-      return;
-    }
-    login.mutate(
-      { identifier: cleaned, password },
+    start.mutate(
+      { phone, channel: 'sms' },
       {
-        onSuccess: (data) => void offerBiometric(data.user, data.token),
-        onError: (e) => {
-          // Unverified account: the server auto-sent a verify OTP — go finish it.
-          // The fail() helper rides the payload under `errors` (plain strings).
-          const extra =
-            e instanceof ApiError
-              ? ((e.errors ?? e.data) as { code?: string; identifier?: string } | undefined)
-              : undefined;
-          if (e instanceof ApiError && e.statusCode === 403 && extra?.code === 'unverified') {
-            navigation.navigate('Otp', { identifier: extra.identifier ?? cleaned, purpose: 'verify' });
-            return;
-          }
-          setError(e.message);
-        },
+        onSuccess: (data) =>
+          navigation.navigate('Code', {
+            phone,
+            channel: data.channel,
+            resendIn: data.resend_in,
+            flow: 'login',
+            debugOtp: data.debug_otp,
+          }),
+        onError: (e) => setError(e.message),
       },
     );
   };
 
-  const biometricSignIn = async () => {
-    setError(null);
-    setBioBusy(true);
-    try {
-      const ok = await runBiometricPrompt('Sign in to Patriai');
-      if (ok) {
-        const restored = await unlockStoredSession();
-        if (!restored) setError('No saved session found. Please log in with your password.');
-      }
-    } finally {
-      setBioBusy(false);
-    }
-  };
-
-  const canBiometric = biometricEnabled && hasStoredSession && support?.available;
-
   return (
-    <Screen withBottomInset>
-      {/* Top bar: back + centered brand wordmark (design's fixed nav) */}
-      <View className="flex-row items-center px-5 py-3" style={{ minHeight: 56 }}>
-        <View className="w-10">
-          {navigation.canGoBack() ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.goBack();
-              }}
-              hitSlop={8}
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-            >
-              <Ionicons name="arrow-back" size={22} color={colors.goldDeep} />
-            </Pressable>
-          ) : null}
+    <PtStepScreen
+      onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      gap={16}
+      footer={
+        <View style={{ gap: 4 }}>
+          <PtButton title={copy.continue} onPress={submit} loading={start.isPending} />
+          <PtButton title={copy.login.createAccount} variant="ghost" onPress={() => navigation.replace('Phone')} />
         </View>
-        <Text className="flex-1 text-center text-2xl font-extrabold tracking-tight text-ink">
-          Patriai
-        </Text>
-        <View className="w-10" />
+      }
+    >
+      <PtLogo height={28} />
+      <View style={{ gap: 6, paddingTop: 24 }}>
+        <PtText variant="headline" accessibilityRole="header">
+          {copy.login.title}
+        </PtText>
+        <PtText color={pt.inkMuted}>{copy.login.subtitle}</PtText>
       </View>
-
-      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
-        {/* Welcome section */}
-        <View className="mb-8 items-center">
-          <Text className="text-3xl font-extrabold tracking-tight text-ink">Welcome Back</Text>
-          <Text className="mt-2 text-center text-base leading-6 text-muted">
-            Access your family treasury and stay in control.
-          </Text>
-        </View>
-
-        {canBiometric ? (
-          <Pressable
-            onPress={() => {
-              selection();
-              void biometricSignIn();
-            }}
-            disabled={bioBusy}
-            className="mb-5 flex-row items-center rounded bg-white p-4 active:opacity-90"
-            style={outline.card}
-          >
-            <View className="mr-4 h-12 w-12 items-center justify-center rounded bg-success-soft">
-              <Ionicons name={support?.icon ?? 'finger-print'} size={26} color={colors.brand} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-base font-bold text-ink">Sign in with {support?.label}</Text>
-              <Text className="mt-0.5 text-[13px] text-muted">
-                {bioBusy ? 'Authenticating…' : 'Fastest way back into your account'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.faded} />
-          </Pressable>
-        ) : null}
-
-        {/* Login card — outlined white surface */}
-        <View className="rounded bg-white p-6" style={[outline.card, { gap: 24 }]}>
-          {/* Phone / Email toggle (same identifier field; adjusts keyboard + hint) */}
-          <Segment
-            options={[
-              { key: 'phone', label: 'Phone' },
-              { key: 'email', label: 'Email' },
-            ]}
-            value={mode}
-            onChange={(k) => {
-              setMode(k as 'phone' | 'email');
-              setIdentifier('');
-              setError(null);
-            }}
-          />
-
-          {mode === 'phone' ? (
-            <PhoneInput
-              label="Phone Number"
-              labelClassName="mb-2 ml-1 text-[13px] font-semibold"
-              country={phoneCountry}
-              onChangeCountry={setPhoneCountry}
-              value={identifier}
-              onChangeText={setIdentifier}
-              placeholder="e.g. 8012345678"
-            />
-          ) : (
-            <Field
-              label="Email Address"
-              value={identifier}
-              onChangeText={setIdentifier}
-              placeholder="you@example.com"
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          )}
-
-          <View>
-            <Field
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Your password"
-              secure
-            />
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('ForgotPassword');
-              }}
-              className="mt-3 self-end"
-              hitSlop={6}
-            >
-              <Text className="text-sm font-semibold" style={{ color: colors.goldDeep }}>
-                Forgot password?
-              </Text>
-            </Pressable>
-          </View>
-
-          <ErrorText message={error} />
-
-          <View>
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('Register');
-              }}
-              hitSlop={6}
-              className="mb-4 self-start"
-            >
-              <Text className="text-sm font-medium" style={{ color: colors.goldDeep }}>
-                Don’t have an account? <Text className="font-bold">Sign Up</Text>
-              </Text>
-            </Pressable>
-
-            <Button title="Log In" onPress={submit} loading={login.isPending} />
-          </View>
-        </View>
-
-        {/* Decorative asymmetric ledger bars */}
-        <View className="mt-10 flex-row justify-center" style={{ gap: 8, opacity: 0.2 }}>
-          <View className="h-1 w-12 rounded-full" style={{ backgroundColor: colors.goldDeep }} />
-          <View className="h-1 w-4 rounded-full" style={{ backgroundColor: colors.muted }} />
-          <View className="h-1 w-2 rounded-full" style={{ backgroundColor: colors.lav }} />
-        </View>
-
-        <Text className="mt-6 text-center text-[11px] text-faded">
-          By continuing, you agree to our <Text className="underline">Terms & Privacy Policy</Text>
-        </Text>
-      </KeyboardAwareScrollView>
-    </Screen>
+      <PtPhoneField
+        label={copy.phone.label}
+        layout="inline"
+        country={country}
+        onChangeCountry={setCountry}
+        value={national}
+        onChange={(d) => {
+          setNational(d);
+          setError(null);
+        }}
+        error={error}
+        autoFocus
+      />
+    </PtStepScreen>
   );
 }

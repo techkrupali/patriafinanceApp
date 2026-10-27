@@ -154,7 +154,7 @@ class AppKnowledgeTool implements AssistantTool
             'sending_money' => [
                 'title' => 'Sending money',
                 'answer' => 'Open a wallet and tap Transfer, or ask me. You can send to another of your wallets, to a '
-                    .'Patriai user, or to a bank account. Every transfer is authorised with your 4-digit transaction PIN, '
+                    .'Patriai user, or to a bank account. Every transfer is authorised with your transaction PIN, '
                     .'which you enter on the secure screen — I never see or handle it. I can set the transfer up and hand '
                     .'you to that secure screen to finish it.',
             ],
@@ -213,7 +213,7 @@ class AppKnowledgeTool implements AssistantTool
             ],
             'pin_and_security' => [
                 'title' => 'PIN & security',
-                'answer' => 'Every spend is protected by your 4-digit transaction PIN, which you enter only on the secure '
+                'answer' => 'Every spend is protected by your transaction PIN, which you enter only on the secure '
                     .'screen — it is never shared with me and I can never see, store, or ask for it. Too many wrong attempts '
                     .'temporarily locks it. You can also enable biometric (Face/Fingerprint) unlock. Never share your PIN, '
                     .'password, or any one-time code with anyone.',

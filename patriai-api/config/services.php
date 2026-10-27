@@ -57,4 +57,14 @@ return [
         'webhook_secret' => env('MATRIX_WEBHOOK_SECRET'),
     ],
 
+    // SMS + WhatsApp delivery for phone sign-up codes (Termii). Without a key,
+    // codes are only written to the log (fine for local dev, not for launch).
+    'termii' => [
+        'api_key' => env('TERMII_API_KEY'),
+        'base_url' => env('TERMII_BASE_URL', 'https://api.ng.termii.com'),
+        'sender_id' => env('TERMII_SENDER_ID', 'Patriai'),
+        // Termii route for SMS: "dnd" reaches DND-listed Nigerian numbers.
+        'sms_channel' => env('TERMII_SMS_CHANNEL', 'dnd'),
+    ],
+
 ];

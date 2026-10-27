@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Transaction-PIN verification with a per-user failed-attempt lockout.
  *
- * The 4-digit PIN is the second factor guarding withdrawals and transfers,
+ * The transaction PIN (6 digits; 4 on older accounts) is the second factor guarding withdrawals and transfers,
  * so a stolen Sanctum token alone must not be able to brute-force it. Per-IP
  * route throttling is not enough (IP rotation defeats it) — this locks the
  * *account's* PIN after too many wrong tries regardless of source.

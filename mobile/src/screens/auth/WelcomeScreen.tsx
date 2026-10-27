@@ -1,166 +1,148 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
-import { STORAGE_KEYS } from '../../config';
-import { Screen } from '../../components/Screen';
-import { Button } from '../../components/Button';
-import { colors } from '../../theme';
+import React, { useEffect, useRef, useState } from 'react';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { pt, ptFont } from '../../theme';
+import { LogoMark, PtLogo } from '../../components/pt/PtLogo';
+import { PtButton } from '../../components/pt/PtButton';
+import { useOnboardingCopy } from '../../lib/onboardingCopy';
+import { selection } from '../../lib/haptics';
+import { useAuth } from '../../store/auth';
 import type { AuthScreenProps } from '../../navigation/types';
 
+const SLIDE_MS = 5000;
+
 /**
- * Stitch "Patria | Secure Entry" splash — milk-white canvas (#FDFCFB) with a
- * soft radial green glow, the PATRIA wordmark in deep navy with wide tracking,
- * green hairlines around "LEGACY & WEALTH", pulsing green dots and the
- * encryption badge above the entry actions (navy+green scheme per client).
+ * ONB-01 Welcome: emerald canvas with the oversized logo rings, the
+ * "See it. Agree on it. Grow it." headline, three swipeable lines of copy with
+ * pager dots, the mint Create account button, and Log in / I have an invite.
  */
-
-/** One gold pulse dot (design: opacity 0.3→1, scale 0.8→1.1, staggered). */
-function PulseDot({ delay }: { delay: number }) {
-  const v = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration: 750, useNativeDriver: true }),
-        Animated.timing(v, { toValue: 0, duration: 750, useNativeDriver: true }),
-      ]),
-    );
-    const anim = Animated.sequence([Animated.delay(delay), loop]);
-    anim.start();
-    return () => anim.stop();
-  }, [v, delay]);
-
-  return (
-    <Animated.View
-      style={{
-        height: 8,
-        width: 8,
-        borderRadius: 999,
-        backgroundColor: colors.goldDeep,
-        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.1] }) }],
-      }}
-    />
-  );
-}
-
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
-  // First run only: show the feature tour before anything else.
-  useEffect(() => {
-    let alive = true;
-    void SecureStore.getItemAsync(STORAGE_KEYS.walkthroughSeen)
-      .then((seen) => {
-        if (alive && !seen) navigation.replace('Walkthrough');
-      })
-      .catch(() => {
-        // Storage hiccup — skip the tour rather than block the app.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [navigation]);
+  const copy = useOnboardingCopy();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const setPostAuthRoute = useAuth((s) => s.setPostAuthRoute);
+  const [slide, setSlide] = useState(0);
+  const [touched, setTouched] = useState(false);
+  const pager = useRef<ScrollView>(null);
+  const pageWidth = width - 48;
 
-  // Gentle wordmark entrance.
-  const markScale = useRef(new Animated.Value(0.85)).current;
-  const markOpacity = useRef(new Animated.Value(0)).current;
-  const bodyOpacity = useRef(new Animated.Value(0)).current;
-
+  // Rotate the copy until the person swipes it themselves.
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(markScale, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-        Animated.timing(markOpacity, { toValue: 1, duration: 520, useNativeDriver: true }),
-      ]),
-      Animated.timing(bodyOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-    ]).start();
-  }, [markScale, markOpacity, bodyOpacity]);
+    if (touched) return;
+    const t = setTimeout(() => {
+      const next = (slide + 1) % copy.welcome.slides.length;
+      pager.current?.scrollTo({ x: next * pageWidth, animated: true });
+      setSlide(next);
+    }, SLIDE_MS);
+    return () => clearTimeout(t);
+  }, [slide, touched, pageWidth, copy.welcome.slides.length]);
+
+  // The artwork is drawn for a 390pt-wide frame; scale it with the screen.
+  const s = width / 390;
+
+  const start = (invite: boolean) => {
+    // An invite is matched to the phone number at sign-up; open it once inside.
+    setPostAuthRoute(invite ? 'Invitations' : null);
+    navigation.navigate('Phone');
+  };
 
   return (
-    <Screen withBottomInset>
-      {/* Milk-white base over the app aurora, per the splash design */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FDFCFB' }]} />
+    <View style={{ flex: 1, backgroundColor: pt.emerald900, overflow: 'hidden' }}>
+      <StatusBar style="light" />
+
+      <View pointerEvents="none" style={{ position: 'absolute', left: -6.4 * s, top: 143.6 * s }}>
+        <LogoMark
+          size={492.8 * s}
+          stroke={5}
+          seedR={11}
+          seedCy={75}
+          colors={{ outer: pt.emerald700, middle: pt.emerald500, seed: pt.gold500 }}
+        />
       </View>
 
-      <View className="flex-1 items-center justify-center px-8">
-        {/* Radial green glow approximation (green scheme per client video) */}
-        <View pointerEvents="none" style={styles.glowOuter} />
-        <View pointerEvents="none" style={styles.glowInner} />
+      <View style={{ position: 'absolute', left: 24, top: insets.top + 16 }}>
+        <PtLogo height={30} onDark />
+      </View>
 
-        <Animated.View
-          style={{ opacity: markOpacity, transform: [{ scale: markScale }] }}
-          className="items-center"
-        >
+      <View style={{ flex: 1, justifyContent: 'flex-end', paddingHorizontal: 24, paddingBottom: Math.max(insets.bottom, 12) + 22 }}>
+        <View style={{ gap: 16 }}>
           <Text
-            style={{
-              fontSize: 52,
-              fontWeight: '900',
-              letterSpacing: 7,
-              marginRight: -7, // optical centering: RN adds trailing letterSpacing
-              color: colors.navy, // on-secondary-fixed #011D35
-              includeFontPadding: false,
-            }}
+            accessibilityRole="header"
+            style={{ fontFamily: ptFont.extrabold, fontSize: 40, lineHeight: 44, letterSpacing: -1.2, color: pt.emerald50 }}
           >
-            PATRIA
+            {copy.welcome.lines[0]}
+            {'\n'}
+            {copy.welcome.lines[1]}
+            {'\n'}
+            <Text style={{ color: pt.gold500 }}>{copy.welcome.lines[2]}</Text>
           </Text>
 
-          <View className="mt-4 flex-row items-center justify-center" style={{ gap: 8 }}>
-            <View style={styles.hairline} />
-            <Text
-              className="text-[10px] font-semibold uppercase"
-              style={{ letterSpacing: 3, color: 'rgba(73,96,124,0.6)' }}
-            >
-              Legacy & Wealth
-            </Text>
-            <View style={styles.hairline} />
+          <ScrollView
+            ref={pager}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScrollBeginDrag={() => setTouched(true)}
+            onMomentumScrollEnd={(e) => setSlide(Math.round(e.nativeEvent.contentOffset.x / pageWidth))}
+          >
+            {copy.welcome.slides.map((body) => (
+              <Text
+                key={body}
+                style={{ width: pageWidth, fontFamily: ptFont.regular, fontSize: 16, lineHeight: 24, color: pt.onDarkMuted }}
+              >
+                {body}
+              </Text>
+            ))}
+          </ScrollView>
+
+          <View
+            accessibilityLabel={`Slide ${slide + 1} of ${copy.welcome.slides.length}`}
+            style={{ flexDirection: 'row', gap: 6, marginTop: 4, marginBottom: 8 }}
+          >
+            {copy.welcome.slides.map((body, i) => (
+              <View
+                key={body}
+                style={{
+                  width: i === slide ? 22 : 6,
+                  height: 6,
+                  borderRadius: 999,
+                  backgroundColor: i === slide ? pt.emerald300 : pt.dotIdle,
+                }}
+              />
+            ))}
           </View>
-        </Animated.View>
+
+          <PtButton title={copy.welcome.createAccount} variant="mint" onPress={() => start(false)} />
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Pressable
+              onPress={() => {
+                selection();
+                setPostAuthRoute(null);
+                navigation.navigate('Login');
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              style={{ paddingVertical: 12 }}
+            >
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.emerald300 }}>{copy.welcome.logIn}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                selection();
+                start(true);
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              style={{ paddingVertical: 12 }}
+            >
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.emerald300 }}>{copy.welcome.invite}</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
-
-      <Animated.View style={{ opacity: bodyOpacity }} className="items-center px-6 pb-4">
-        {/* Pulse indicator */}
-        <View className="flex-row" style={{ gap: 8 }}>
-          <PulseDot delay={0} />
-          <PulseDot delay={200} />
-          <PulseDot delay={400} />
-        </View>
-
-        {/* Encryption badge */}
-        <View className="mt-5 flex-row items-center" style={{ gap: 6, opacity: 0.4 }}>
-          <Ionicons name="lock-closed" size={13} color={colors.ink} />
-          <Text className="text-[10px] font-medium uppercase text-ink" style={{ letterSpacing: 0.5 }}>
-            256-bit Encrypted Environment
-          </Text>
-        </View>
-
-        <View className="mt-7 w-full" style={{ gap: 14 }}>
-          <Button title="Get Started" icon="arrow-forward" onPress={() => navigation.navigate('Register')} />
-          <Button title="Log In" variant="secondary" onPress={() => navigation.navigate('Login')} />
-        </View>
-      </Animated.View>
-    </Screen>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  glowOuter: {
-    position: 'absolute',
-    width: 420,
-    height: 420,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15,138,68,0.05)',
-  },
-  glowInner: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15,138,68,0.08)',
-  },
-  hairline: {
-    height: StyleSheet.hairlineWidth * 2,
-    width: 32,
-    backgroundColor: '#006D2F', // green hairline (gold retired per client)
-  },
-});

@@ -13,6 +13,10 @@ class OtpService
 {
     private const TTL_MINUTES = 10;
     private const MAX_ATTEMPTS = 5;
+    /** Seconds before another code can go out on the same channel. */
+    public const RESEND_SECONDS = 60;
+    /** Codes per identifier per hour, across channels. */
+    private const HOURLY_CAP = 10;
 
     /**
      * Create and dispatch an OTP for the identifier (email or phone).
@@ -39,6 +43,28 @@ class OtpService
         $this->deliver($identifier, $purpose, $code, $channel);
 
         return $code;
+    }
+
+    /**
+     * Seconds until another code may be sent to this identifier on this channel
+     * (0 = now). Also enforces the hourly cap so a number can't be flooded.
+     */
+    public function cooldown(string $identifier, string $purpose, string $channel): int
+    {
+        $sentThisHour = OtpCode::where('identifier', $identifier)
+            ->where('created_at', '>=', now()->subHour())
+            ->count();
+        if ($sentThisHour >= self::HOURLY_CAP) {
+            throw ValidationException::withMessages(['phone' => 'Too many codes sent to this number. Try again in an hour.']);
+        }
+
+        $last = OtpCode::where('identifier', $identifier)
+            ->where('purpose', $purpose)
+            ->where('channel', $channel)
+            ->latest('id')
+            ->first();
+
+        return $last ? max(0, self::RESEND_SECONDS - (int) $last->created_at->diffInSeconds(now())) : 0;
     }
 
     /** Verify and consume an OTP. Throws ValidationException on failure. */
@@ -74,10 +100,19 @@ class OtpService
 
     private function deliver(string $identifier, string $purpose, string $code, string $channel): void
     {
-        // Email channel via Laravel Mail (log driver in dev, SMTP/Resend in prod).
-        // SMS channel wires to Termii in Milestone 4.
-        // Delivery failures must NOT break auth flows — the code is already persisted,
-        // and password login works without it. Log and move on if the mailer is down.
+        // SMS / WhatsApp go through Termii; email through Laravel Mail (log driver
+        // in dev, SMTP/Resend in prod). Delivery failures must NOT break auth flows —
+        // the code is already persisted and the person can ask for it again.
+        if (in_array($channel, ['sms', 'whatsapp'], true)) {
+            SmsService::make()->send(
+                $identifier,
+                "Your Patriai code is {$code}. It expires in " . self::TTL_MINUTES . ' minutes. Never share it with anyone.',
+                $channel,
+            );
+
+            return;
+        }
+
         if ($channel === 'email' && str_contains($identifier, '@')) {
             try {
                 Mail::raw(

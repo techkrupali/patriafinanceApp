@@ -28,7 +28,7 @@ class TransferController extends ApiController
         $data = $request->validate([
             'from_wallet_id' => ['required', 'integer', 'exists:wallets,id'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'pin' => ['required', 'digits:4'],
+            'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],

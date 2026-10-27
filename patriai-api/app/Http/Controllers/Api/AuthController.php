@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
-use App\Models\WalletInvitation;
-use App\Services\NotificationService;
+use App\Services\AccountSetupService;
 use App\Services\OtpService;
-use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,61 +50,8 @@ class AuthController extends ApiController
             return $user;
         });
 
-        // Referral: link the new account to the owner of a valid code, if supplied.
-        // Tracking only — no money is credited here.
-        if (!empty($data['referral_code'])) {
-            $referrer = User::whereRaw('lower(referral_code) = ?', [strtolower(trim($data['referral_code']))])
-                ->where('id', '!=', $user->id)
-                ->first();
-            if ($referrer) {
-                $user->referred_by = $referrer->id;
-                $user->save();
-                NotificationService::make()->push(
-                    $referrer,
-                    'referral_joined',
-                    'New referral',
-                    "{$user->fullName()} joined with your code.",
-                    ['user_id' => $user->id],
-                );
-            }
-        }
-
-        // Give the new account its own shareable referral code + @username.
-        $user->ensureReferralCode();
-        $user->ensureUsername();
-
-        // Main wallet + funding virtual account on the banking rails.
-        WalletService::make()->createWallet($user, 'main', 'Main Wallet');
-
-        // Link any invitations that were addressed to this person before they had an
-        // account (by email or phone) so they surface immediately under /invitations.
-        $pendingInvites = WalletInvitation::where('status', 'pending')
-            ->whereNull('invitee_user_id')
-            ->where(function ($q) use ($user) {
-                $q->whereRaw('lower(invitee_identifier) = ?', [mb_strtolower($user->email)])
-                    ->orWhere('invitee_identifier', $user->phone);
-            })
-            ->get();
-
-        foreach ($pendingInvites as $invite) {
-            $invite->update(['invitee_user_id' => $user->id]);
-            $invite->load(['wallet', 'inviter']);
-            NotificationService::make()->push(
-                $user,
-                'invitation_received',
-                'Invitation to join ' . ($invite->wallet?->name ?? 'a wallet'),
-                ($invite->inviter?->fullName() ?: 'Someone') . ' invited you to join ' . ($invite->wallet?->name ?? 'a wallet') . " as {$invite->role}.",
-                [
-                    'invitation_id' => $invite->id,
-                    'wallet_id' => $invite->wallet_id,
-                    'wallet_name' => $invite->wallet?->name,
-                    'role' => $invite->role,
-                ],
-            );
-        }
-
-        $user->refresh(); // pick up DB-level defaults (role, status, kyc_tier)
-        $this->registerDevice($request, $user);
+        AccountSetupService::make()->setUp($user, $data['referral_code'] ?? null);
+        $this->recordDevice($request, $user);
         $code = $this->otp->issue($user->email, 'verify');
 
         // No token until the email is verified — the client takes the OTP screen
@@ -156,7 +101,7 @@ class AuthController extends ApiController
         }
 
         $user->update(['last_login_at' => now()]);
-        $this->registerDevice($request, $user);
+        $this->recordDevice($request, $user);
 
         return $this->ok('Login successful', [
             'user' => $this->serializeUser($user),
@@ -219,7 +164,7 @@ class AuthController extends ApiController
         $user->last_login_at = now();
         $user->save();
 
-        $this->registerDevice($request, $user);
+        $this->recordDevice($request, $user);
 
         return $this->ok('OTP verified', [
             'user' => $this->serializeUser($user),
@@ -276,51 +221,7 @@ class AuthController extends ApiController
             return User::where('email', strtolower($identifier))->first();
         }
 
-        return User::where('phone', self::normalizePhone($identifier))->first();
-    }
-
-    /**
-     * Best-effort normalize a phone identifier to the stored E.164 form
-     * (+<code><national>). Clients send E.164 directly; this also rescues loose
-     * inputs (spaces/dashes, a "00" international prefix, or a bare local
-     * trunk-0 number, which we treat as the primary market — Nigeria, +234).
-     */
-    private static function normalizePhone(string $raw): string
-    {
-        $trimmed = trim($raw);
-        $hasPlus = str_starts_with($trimmed, '+');
-        $digits = preg_replace('/\D/', '', $trimmed);
-
-        if ($digits === '') {
-            return $trimmed;
-        }
-        if ($hasPlus) {
-            return '+' . $digits;
-        }
-        if (str_starts_with($digits, '00')) {
-            return '+' . substr($digits, 2);
-        }
-        if (str_starts_with($digits, '0')) {
-            return '+234' . ltrim($digits, '0');
-        }
-
-        return '+' . $digits;
-    }
-
-    private function registerDevice(Request $request, User $user): void
-    {
-        if (!$request->filled('device_id')) {
-            return;
-        }
-
-        $user->devices()->updateOrCreate(
-            ['device_id' => $request->input('device_id')],
-            [
-                'device_name' => $request->input('device_name'),
-                'platform' => $request->input('platform'),
-                'last_active_at' => now(),
-            ],
-        );
+        return User::where('phone', $this->normalizePhone($identifier))->first();
     }
 
     private function maskEmail(string $email): string

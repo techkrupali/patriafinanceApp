@@ -66,7 +66,6 @@ import type {
   LoanEligibility,
   LoanRepayResultData,
   LoansData,
-  LoginPayload,
   MeData,
   MemberUpdatedData,
   MilestoneApprovedData,
@@ -74,13 +73,10 @@ import type {
   MilestoneData,
   NotificationReadData,
   NotificationsPageData,
-  OtpRequestData,
   ProjectCreatedData,
   ProjectDetailData,
   ProjectMutatedData,
   ProjectsData,
-  RegisterData,
-  RegisterPayload,
   RepayLoanPayload,
   RespondApprovalPayload,
   SubmitKycPayload,
@@ -101,6 +97,11 @@ import type {
   WalletUpdatedData,
   WithdrawData,
   WithdrawPayload,
+  OtpChannel,
+  PhoneRegisterPayload,
+  PhoneStartData,
+  PhoneVerifyData,
+  PinForgotData,
 } from './types';
 
 type ApprovalScope = 'to_me' | 'mine';
@@ -191,10 +192,11 @@ export function useWalletTransactions(id: number) {
   });
 }
 
-export function useFundingDetails(id: number) {
+export function useFundingDetails(id: number, enabled = true) {
   return useQuery({
     queryKey: keys.funding(id),
     queryFn: () => api<FundingDetailsData>(`/wallets/${id}/funding-details`),
+    enabled,
   });
 }
 
@@ -268,58 +270,60 @@ export function useActivity() {
 
 // ---------- Auth mutations ----------
 
-export function useLogin() {
+export function usePhoneStart() {
   return useMutation({
-    mutationFn: async (input: { identifier: string; password: string }) => {
+    mutationFn: (input: { phone: string; channel: OtpChannel }) =>
+      api<PhoneStartData>('/auth/phone/start', { method: 'POST', body: input }),
+  });
+}
+
+export function usePhoneVerify() {
+  return useMutation({
+    mutationFn: (input: { phone: string; code: string }) =>
+      api<PhoneVerifyData>('/auth/phone/verify', { method: 'POST', body: input }),
+  });
+}
+
+/** Creates the account (phone already verified) and returns the first session. */
+export function usePhoneRegister() {
+  return useMutation({
+    mutationFn: async (input: PhoneRegisterPayload) => {
       const device = await getDeviceMeta();
-      const payload: LoginPayload = { ...input, ...device };
-      return api<AuthSessionData>('/auth/login', { method: 'POST', body: payload });
+      return api<AuthSessionData>('/auth/phone/register', { method: 'POST', body: { ...input, ...device } });
     },
   });
 }
 
-export function useRegister() {
+export function usePinLogin() {
   return useMutation({
-    mutationFn: async (
-      input: Omit<RegisterPayload, 'device_id' | 'device_name' | 'platform'>,
-    ) => {
+    mutationFn: async (input: { phone_token: string; pin: string }) => {
       const device = await getDeviceMeta();
-      const payload: RegisterPayload = { ...input, ...device };
-      return api<RegisterData>('/auth/register', { method: 'POST', body: payload });
+      return api<AuthSessionData>('/auth/phone/login', { method: 'POST', body: { ...input, ...device } });
     },
   });
 }
 
-export function useRequestOtp() {
+export function usePinForgot() {
   return useMutation({
-    mutationFn: (input: { identifier: string; purpose: 'login' | 'verify' | 'reset' }) =>
-      api<OtpRequestData>('/auth/otp/request', { method: 'POST', body: input }),
+    mutationFn: (input: { phone_token: string }) =>
+      api<PinForgotData>('/auth/pin/forgot', { method: 'POST', body: input }),
   });
 }
 
-export function useVerifyOtp() {
+export function usePinReset() {
   return useMutation({
-    mutationFn: async (input: { identifier: string; purpose: 'login' | 'verify'; code: string }) => {
+    mutationFn: async (input: { phone_token: string; code: string; pin: string }) => {
       const device = await getDeviceMeta();
-      return api<AuthSessionData>('/auth/otp/verify', {
-        method: 'POST',
-        body: { ...input, ...device },
-      });
+      return api<AuthSessionData>('/auth/pin/reset', { method: 'POST', body: { ...input, ...device } });
     },
   });
 }
 
-export function useForgotPassword() {
+/** ONB-09 answers; the server returns the updated user. */
+export function useSaveOnboarding() {
   return useMutation({
-    mutationFn: (input: { identifier: string }) =>
-      api<OtpRequestData>('/auth/forgot-password', { method: 'POST', body: input }),
-  });
-}
-
-export function useResetPassword() {
-  return useMutation({
-    mutationFn: (input: { identifier: string; code: string; password: string }) =>
-      api('/auth/reset-password', { method: 'POST', body: input }),
+    mutationFn: (input: { purposes: string[] }) =>
+      api<MeData>('/profile/onboarding', { method: 'PUT', body: input }),
   });
 }
 
@@ -443,7 +447,7 @@ export function useChangePassword() {
 
 export function useChangePin() {
   return useMutation({
-    mutationFn: (input: { current_pin?: string; new_pin: string; password: string }) =>
+    mutationFn: (input: { current_pin?: string; new_pin: string; password?: string }) =>
       api('/profile/change-pin', { method: 'POST', body: input }),
   });
 }
