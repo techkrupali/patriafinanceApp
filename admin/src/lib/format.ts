@@ -48,6 +48,19 @@ const LABELS: Record<string, string> = {
   shared: "Shared",
   project: "Project",
   emergency: "Emergency",
+  savings: "Savings",
+  goal: "Goal",
+  giving: "Giving",
+  joint: "Joint",
+  child: "Child",
+  spending: "Spending",
+  // Wallet roles
+  owner: "Owner",
+  co_owner: "Co-owner",
+  admin: "Admin",
+  contributor: "Contributor",
+  viewer: "Viewer",
+  vendor: "Vendor",
   active: "Active",
   suspended: "Suspended",
   frozen: "Frozen",
@@ -169,4 +182,31 @@ export function emergencyLabel(value: string): string {
 export function emergencyMethodLabel(method: string, documentType: string | null): string {
   if (method === "document") return documentType ? emergencyLabel(documentType) : "Document";
   return emergencyLabel(method);
+}
+
+/** "What brings you to Patriai?" answers, worded as the app shows them (ONB-09). */
+export const ONBOARDING_PURPOSES: Record<string, string> = {
+  household: "Run our household money together",
+  school_goals: "Save for school fees and goals",
+  project: "Fund a building or family project",
+  ajo: "Run a contribution circle (ajo)",
+  children: "Manage my children's money",
+  vendor: "I'm a vendor or contractor",
+};
+
+export function purposeLabel(key: string): string {
+  return ONBOARDING_PURPOSES[key] ?? label(key);
+}
+
+export function languageLabel(lang: string | null | undefined): string {
+  return lang === "pcm" ? "Pidgin" : "English";
+}
+
+const DAYS = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/** "Every day" / "Every Monday" / "Monthly on the 25th". */
+export function scheduleLabel(r: { frequency: string; day_of_week: number | null; day_of_month: number | null }): string {
+  if (r.frequency === "weekly") return `Every ${DAYS[r.day_of_week ?? 0] || "week"}`;
+  if (r.frequency === "monthly") return `Monthly on day ${r.day_of_month ?? "?"}`;
+  return "Every day";
 }

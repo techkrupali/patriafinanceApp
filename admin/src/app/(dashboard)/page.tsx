@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { label, naira } from "@/lib/format";
+import { label, naira, ONBOARDING_PURPOSES } from "@/lib/format";
 import type { StatsData } from "@/lib/types";
 import { useAuth } from "@/stores/auth";
 import { PageHeader } from "@/components/page-header";
@@ -146,6 +146,51 @@ function FlowBar({
   );
 }
 
+/** One labelled share-of-total bar ("Main · 12 · 40%"). */
+function ShareBar({ name, count, total }: { name: string; count: number; total: number }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <li>
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium text-ink">{name}</span>
+        <span className="shrink-0 tabular-nums text-muted">
+          {count.toLocaleString()} · {pct}%
+        </span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-lavender/40">
+        <div
+          className="h-full rounded-full bg-brand transition-all"
+          style={{ width: `${Math.max(pct, 2)}%` }}
+        />
+      </div>
+    </li>
+  );
+}
+
+/** A setup gap on the API server that changes what customers see. */
+function SetupNotice({
+  tone,
+  title,
+  children,
+}: {
+  tone: "amber" | "blue";
+  title: string;
+  children: React.ReactNode;
+}) {
+  const t = ATTENTION_TONES[tone];
+  return (
+    <div className={cn("flex items-start gap-4 rounded-2xl border p-4", t.card)}>
+      <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", t.icon)}>
+        <IconClock className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <p className={cn("text-sm", t.hint)}>{children}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data, isPending, isError, error } = useQuery({
@@ -240,6 +285,11 @@ export default function DashboardPage() {
   const flowMax = Math.max(inV, outV, 1);
   const walletTotal = data.wallets.total;
   const byType = Object.entries(data.wallets.by_type);
+  const { signups } = data;
+  const joined = signups.phone + signups.password;
+  const purposes = Object.keys(ONBOARDING_PURPOSES)
+    .map((key) => [key, signups.purposes[key] ?? 0] as const)
+    .sort((a, b) => b[1] - a[1]);
 
   return (
     <>
@@ -250,6 +300,21 @@ export default function DashboardPage() {
 
       {/* Needs attention */}
       <SectionHeading title="Needs attention" />
+      {!data.system.sms_configured || !data.system.ai_configured ? (
+        <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {!data.system.sms_configured ? (
+            <SetupNotice tone="amber" title="Sign-up codes aren't being sent">
+              New customers can&apos;t receive their SMS/WhatsApp code. Set TERMII_API_KEY
+              on the API server; until then codes are only written to the server log.
+            </SetupNotice>
+          ) : null}
+          {!data.system.ai_configured ? (
+            <SetupNotice tone="blue" title="Steward is on built-in answers">
+              Set ANTHROPIC_API_KEY on the API server to turn on the AI assistant.
+            </SetupNotice>
+          ) : null}
+        </div>
+      ) : null}
       {attention.length === 0 ? (
         <Card className="flex items-center gap-4 px-5 py-5">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
@@ -321,8 +386,19 @@ export default function DashboardPage() {
 
       {/* Portfolio */}
       <SectionHeading title="Portfolio" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Total Wallets" value={walletTotal.toLocaleString()} />
+        <StatCard
+          label="Running Rules"
+          value={data.rules.active.toLocaleString()}
+          accent="green"
+          hint={`${data.rules.paused.toLocaleString()} paused`}
+        />
+        <StatCard
+          label="Pending Invites"
+          value={data.invitations.pending.toLocaleString()}
+          hint="Sent, not yet accepted"
+        />
         <StatCard
           label="Active Loans"
           value={data.loans.active.toLocaleString()}
@@ -368,28 +444,9 @@ export default function DashboardPage() {
               <p className="text-sm text-muted">No wallets yet.</p>
             ) : (
               <ul className="space-y-4">
-                {byType.map(([type, count]) => {
-                  const pct =
-                    walletTotal > 0
-                      ? Math.round((count / walletTotal) * 100)
-                      : 0;
-                  return (
-                    <li key={type}>
-                      <div className="mb-1.5 flex items-center justify-between text-sm">
-                        <span className="font-medium text-ink">{label(type)}</span>
-                        <span className="tabular-nums text-muted">
-                          {count.toLocaleString()} · {pct}%
-                        </span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-lavender/40">
-                        <div
-                          className="h-full rounded-full bg-brand transition-all"
-                          style={{ width: `${Math.max(pct, 2)}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
+                {byType.map(([type, count]) => (
+                  <ShareBar key={type} name={label(type)} count={count} total={walletTotal} />
+                ))}
               </ul>
             )}
           </CardContent>
@@ -428,6 +485,56 @@ export default function DashboardPage() {
                   {naira(Math.abs(inV - outV))}
                 </span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sign-ups */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>What Brings People to Patriai</CardTitle>
+            <span className="text-xs text-muted">
+              {signups.answered_purposes.toLocaleString()} answered
+            </span>
+          </CardHeader>
+          <CardContent>
+            {signups.answered_purposes === 0 ? (
+              <p className="text-sm text-muted">No answers yet.</p>
+            ) : (
+              <ul className="space-y-4">
+                {purposes.map(([key, count]) => (
+                  <ShareBar
+                    key={key}
+                    name={ONBOARDING_PURPOSES[key]}
+                    count={count}
+                    total={signups.answered_purposes}
+                  />
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>How People Joined</CardTitle>
+            <span className="text-xs text-muted">{joined.toLocaleString()} accounts</span>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <ul className="space-y-4">
+              <ShareBar name="Phone + PIN" count={signups.phone} total={joined} />
+              <ShareBar name="Email + password (older accounts)" count={signups.password} total={joined} />
+            </ul>
+            <div className="border-t border-line pt-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                App language
+              </p>
+              <ul className="space-y-4">
+                <ShareBar name="English" count={signups.languages.en} total={joined} />
+                <ShareBar name="Pidgin" count={signups.languages.pcm} total={joined} />
+              </ul>
             </div>
           </CardContent>
         </Card>

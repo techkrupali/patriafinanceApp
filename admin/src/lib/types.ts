@@ -14,6 +14,15 @@ export interface ApiUser {
   email_verified: boolean;
   phone_verified: boolean;
   has_pin: boolean;
+  username: string | null;
+  /** False for phone sign-ups (phone + code + PIN); true for older email + password accounts. */
+  has_password: boolean;
+  /** 6 for phone sign-ups, 4 for older accounts until they change it. */
+  pin_length: 4 | 6;
+  language: "en" | "pcm";
+  date_of_birth: string | null;
+  /** Answers to "What brings you to Patriai?" at sign-up. */
+  onboarding_purposes: string[];
   created_at: string | null;
 }
 
@@ -21,9 +30,21 @@ export interface AdminListUser extends ApiUser {
   total_balance: string; // naira string e.g. "1500.00"
 }
 
+export type WalletType =
+  | "main"
+  | "shared"
+  | "project"
+  | "savings"
+  | "goal"
+  | "emergency"
+  | "giving"
+  | "joint"
+  | "child"
+  | "spending";
+
 export interface ApiWallet {
   id: number;
-  type: "main" | "shared" | "project" | "emergency";
+  type: WalletType;
   name: string;
   description: string | null;
   currency: string;
@@ -118,6 +139,24 @@ export interface StatsData {
   kyc: {
     pending: number;
   };
+  signups: {
+    /** Joined with phone + code + PIN. */
+    phone: number;
+    /** Older email + password accounts. */
+    password: number;
+    languages: { en: number; pcm: number };
+    /** "What brings you to Patriai?" answer counts. */
+    purposes: Record<string, number>;
+    answered_purposes: number;
+  };
+  rules: { active: number; paused: number };
+  invitations: { pending: number };
+  system: {
+    /** Termii key set: sign-up codes go out by SMS/WhatsApp. */
+    sms_configured: boolean;
+    /** Anthropic key set: Steward uses the AI assistant. */
+    ai_configured: boolean;
+  };
 }
 
 export type ApprovalAction =
@@ -174,8 +213,37 @@ export interface UserProject extends ProjectDetail {
 /** KYC submission summary (serializeKycSubmission without payload). */
 export type KycSubmissionSummary = Omit<KycSubmission, "payload">;
 
+/** A rule the user set to move money on its own (Rules tab). */
+export interface UserAutomation {
+  id: number;
+  name: string;
+  from_wallet: string | null;
+  to_wallet: string | null;
+  amount: string; // naira string
+  frequency: "daily" | "weekly" | "monthly";
+  day_of_week: number | null;
+  day_of_month: number | null;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_on: string | null;
+}
+
+/** A pending wallet invite the user sent or received. */
+export interface UserInvitation {
+  id: number;
+  direction: "sent" | "received";
+  wallet: string | null;
+  invitee: string;
+  inviter: string | null;
+  role: string;
+  created_at: string | null;
+  expires_at: string | null;
+}
+
 export interface UserDetailData {
   user: ApiUser;
+  automations: UserAutomation[];
+  invitations: UserInvitation[];
   wallets: ApiWallet[];
   devices: UserDevice[];
   recent_transactions: ApiTransaction[];

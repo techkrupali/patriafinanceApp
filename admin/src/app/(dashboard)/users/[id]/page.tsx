@@ -11,8 +11,11 @@ import {
   formatDateTime,
   kycTierName,
   label,
+  languageLabel,
   loanCategoryLabel,
   naira,
+  purposeLabel,
+  scheduleLabel,
   signedNaira,
 } from "@/lib/format";
 import type { ApiUser, ApiWallet, UserDetailData } from "@/lib/types";
@@ -221,22 +224,51 @@ export default function UserDetailPage({
                 </div>
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
                   <Field name="Phone">{user!.phone}</Field>
+                  <Field name="Username">{user!.username ? `@${user!.username}` : "—"}</Field>
+                  <Field name="Sign-up">
+                    <Badge tone={user!.has_password ? "gray" : "green"}>
+                      {user!.has_password ? "Email + password" : "Phone + PIN"}
+                    </Badge>
+                  </Field>
                   <Field name="KYC Tier">
                     <Badge tone="blue">Tier {user!.kyc_tier}</Badge>
-                  </Field>
-                  <Field name="Email verified">
-                    <Badge tone={user!.email_verified ? "green" : "gray"}>
-                      {user!.email_verified ? "Verified" : "Unverified"}
-                    </Badge>
                   </Field>
                   <Field name="Phone verified">
                     <Badge tone={user!.phone_verified ? "green" : "gray"}>
                       {user!.phone_verified ? "Verified" : "Unverified"}
                     </Badge>
                   </Field>
-                  <Field name="PIN set">{user!.has_pin ? "Yes" : "No"}</Field>
+                  {/* Phone sign-ups prove their phone, not their email; only password accounts verify email. */}
+                  {user!.has_password ? (
+                    <Field name="Email verified">
+                      <Badge tone={user!.email_verified ? "green" : "gray"}>
+                        {user!.email_verified ? "Verified" : "Unverified"}
+                      </Badge>
+                    </Field>
+                  ) : null}
+                  <Field name="Transaction PIN">
+                    {user!.has_pin ? `${user!.pin_length} digits` : "Not set"}
+                  </Field>
+                  <Field name="Language">{languageLabel(user!.language)}</Field>
+                  <Field name="Date of birth">{user!.date_of_birth ? formatDate(user!.date_of_birth) : "—"}</Field>
                   <Field name="Joined">{formatDate(user!.created_at)}</Field>
                 </dl>
+                <div className="mt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    What brought them
+                  </p>
+                  {user!.onboarding_purposes.length === 0 ? (
+                    <p className="mt-1 text-sm text-muted">Not answered</p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {user!.onboarding_purposes.map((p) => (
+                        <Badge key={p} tone="green">
+                          {purposeLabel(p)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </CardContent>
@@ -465,6 +497,100 @@ export default function UserDetailPage({
                       <StatusBadge status={k.status} />
                     </TD>
                     <TD className="text-muted">{formatDate(k.created_at)}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      {/* Rules + Pending invites */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Rules</CardTitle>
+            {!isPending && (
+              <span className="text-xs text-muted">
+                {data!.automations.filter((r) => r.enabled).length} running
+              </span>
+            )}
+          </CardHeader>
+          {isPending ? (
+            <TableSkeleton rows={3} cols={3} />
+          ) : data!.automations.length === 0 ? (
+            <EmptyState message="No rules." />
+          ) : (
+            <Table containerClassName="pb-2">
+              <THead>
+                <tr>
+                  <TH>Rule</TH>
+                  <TH className="text-right">Amount</TH>
+                  <TH>Schedule</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data!.automations.map((r) => (
+                  <TR key={r.id}>
+                    <TD>
+                      <p className="flex items-center gap-2 font-semibold">
+                        {r.name}
+                        {r.enabled ? null : <Badge tone="gray">Paused</Badge>}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {r.from_wallet ?? "—"} → {r.to_wallet ?? "—"}
+                      </p>
+                    </TD>
+                    <TD className="text-right font-semibold">{naira(r.amount)}</TD>
+                    <TD>
+                      <p>{scheduleLabel(r)}</p>
+                      <p className="text-xs text-muted">
+                        {r.enabled && r.next_run_on
+                          ? `Next ${formatDate(r.next_run_on)}`
+                          : r.last_run_at
+                            ? `Last ${formatDate(r.last_run_at)}`
+                            : "—"}
+                      </p>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Invites</CardTitle>
+          </CardHeader>
+          {isPending ? (
+            <TableSkeleton rows={3} cols={4} />
+          ) : data!.invitations.length === 0 ? (
+            <EmptyState message="No pending invites." />
+          ) : (
+            <Table containerClassName="pb-2">
+              <THead>
+                <tr>
+                  <TH>Wallet</TH>
+                  <TH>Person</TH>
+                  <TH>Role</TH>
+                  <TH>Expires</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data!.invitations.map((i) => (
+                  <TR key={i.id}>
+                    <TD>
+                      <p className="font-semibold">{i.wallet ?? "—"}</p>
+                      <p className="text-xs text-muted">{i.direction === "sent" ? "Sent" : "Received"}</p>
+                    </TD>
+                    <TD className="text-muted">
+                      {i.direction === "sent" ? i.invitee : `From ${i.inviter ?? "someone"}`}
+                    </TD>
+                    <TD>
+                      <Badge tone="gray">{label(i.role)}</Badge>
+                    </TD>
+                    <TD className="text-muted">{formatDate(i.expires_at)}</TD>
                   </TR>
                 ))}
               </TBody>

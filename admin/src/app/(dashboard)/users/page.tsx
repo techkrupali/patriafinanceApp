@@ -22,6 +22,7 @@ export default function UsersPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [signup, setSignup] = useState("");
   const [page, setPage] = useState(1);
 
   // Debounce free-text search so we don't hammer the API per keystroke.
@@ -34,8 +35,8 @@ export default function UsersPage() {
   }, [searchInput]);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["admin", "users", { search, status, page }],
-    queryFn: () => api<UsersData>(`/api/v1/admin/users${qs({ search, status, page })}`),
+    queryKey: ["admin", "users", { search, status, signup, page }],
+    queryFn: () => api<UsersData>(`/api/v1/admin/users${qs({ search, status, signup, page })}`),
   });
 
   return (
@@ -48,7 +49,7 @@ export default function UsersPage() {
             <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input
               className="pl-9"
-              placeholder="Search name, email or phone..."
+              placeholder="Search name, @username, email or phone..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search users"
@@ -66,10 +67,22 @@ export default function UsersPage() {
             <option value="active">Active</option>
             <option value="suspended">Suspended</option>
           </Select>
+          <Select
+            value={signup}
+            onChange={(e) => {
+              setSignup(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter by sign-up"
+          >
+            <option value="">All sign-ups</option>
+            <option value="phone">Phone + PIN</option>
+            <option value="password">Email + password</option>
+          </Select>
         </div>
 
         {isPending ? (
-          <TableSkeleton rows={8} cols={7} />
+          <TableSkeleton rows={8} cols={8} />
         ) : isError ? (
           <ErrorState message={error.message} />
         ) : data.users.length === 0 ? (
@@ -82,6 +95,7 @@ export default function UsersPage() {
                   <TH>Name</TH>
                   <TH>Email</TH>
                   <TH>Phone</TH>
+                  <TH>Sign-up</TH>
                   <TH>KYC Tier</TH>
                   <TH>Status</TH>
                   <TH className="text-right">Total Balance</TH>
@@ -94,6 +108,11 @@ export default function UsersPage() {
                     <TD className="font-semibold">{u.full_name}</TD>
                     <TD className="text-muted">{u.email}</TD>
                     <TD className="text-muted">{u.phone}</TD>
+                    <TD>
+                      <Badge tone={u.has_password ? "gray" : "green"}>
+                        {u.has_password ? "Email" : "Phone"}
+                      </Badge>
+                    </TD>
                     <TD>
                       <Badge tone="blue">Tier {u.kyc_tier}</Badge>
                     </TD>

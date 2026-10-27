@@ -20,9 +20,15 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 const TYPES = [
   { value: "", label: "All" },
   { value: "main", label: "Main" },
+  { value: "savings", label: "Savings" },
+  { value: "goal", label: "Goal" },
+  { value: "spending", label: "Spending" },
   { value: "shared", label: "Shared" },
+  { value: "joint", label: "Joint" },
+  { value: "child", label: "Child" },
   { value: "project", label: "Project" },
   { value: "emergency", label: "Emergency" },
+  { value: "giving", label: "Giving" },
 ] as const;
 
 export default function WalletsPage() {
@@ -51,7 +57,7 @@ export default function WalletsPage() {
 
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-          <div className="flex items-center gap-1.5" role="group" aria-label="Filter by type">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by type">
             {TYPES.map((t) => (
               <button
                 key={t.value}
@@ -75,7 +81,7 @@ export default function WalletsPage() {
             <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input
               className="pl-9"
-              placeholder="Search virtual account number..."
+              placeholder="Search name or account no..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search wallets"

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\AppNotification;
 use App\Models\ApprovalRequest;
+use App\Models\AutomationRule;
 use App\Models\KycSubmission;
 use App\Models\Loan;
 use App\Models\Milestone;
@@ -13,6 +14,7 @@ use App\Models\SupportRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\WalletInvitation;
 use App\Services\KycService;
 use App\Services\LoanService;
 use App\Services\NotificationService;
@@ -72,7 +74,53 @@ class AdminController extends ApiController
             'kyc' => [
                 'pending' => KycSubmission::where('status', 'pending')->count(),
             ],
+            'signups' => $this->signupStats(),
+            'rules' => [
+                'active' => AutomationRule::where('enabled', true)->count(),
+                'paused' => AutomationRule::where('enabled', false)->count(),
+            ],
+            'invitations' => [
+                'pending' => WalletInvitation::where('status', 'pending')
+                    ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                    ->count(),
+            ],
+            // Without these keys phone sign-up codes are only logged, and Steward answers offline.
+            'system' => [
+                'sms_configured' => !empty(config('services.termii.api_key')),
+                'ai_configured' => !empty(config('services.anthropic.api_key')),
+            ],
         ]);
+    }
+
+    /**
+     * How customers joined (phone + PIN vs the older email + password), the
+     * app language they use, and what brought them (onboarding ONB-09).
+     */
+    private function signupStats(): array
+    {
+        $customers = User::where('role', 'user');
+        $purposes = array_fill_keys(User::ONBOARDING_PURPOSES, 0);
+        (clone $customers)->whereNotNull('onboarding_purposes')->select(['id', 'onboarding_purposes'])
+            ->chunkById(500, function ($users) use (&$purposes) {
+                foreach ($users as $u) {
+                    foreach ((array) $u->onboarding_purposes as $p) {
+                        if (array_key_exists($p, $purposes)) {
+                            $purposes[$p]++;
+                        }
+                    }
+                }
+            });
+
+        return [
+            'phone' => (clone $customers)->whereNull('password')->count(),
+            'password' => (clone $customers)->whereNotNull('password')->count(),
+            'languages' => [
+                'en' => (clone $customers)->where('language', 'en')->count(),
+                'pcm' => (clone $customers)->where('language', 'pcm')->count(),
+            ],
+            'purposes' => $purposes,
+            'answered_purposes' => (clone $customers)->whereNotNull('onboarding_purposes')->count(),
+        ];
     }
 
     // GET /admin/users?search=&status=&page=
@@ -85,9 +133,13 @@ class AdminController extends ApiController
                     ->where('email', 'ilike', "%{$s}%")
                     ->orWhere('phone', 'ilike', "%{$s}%")
                     ->orWhere('first_name', 'ilike', "%{$s}%")
-                    ->orWhere('last_name', 'ilike', "%{$s}%"));
+                    ->orWhere('last_name', 'ilike', "%{$s}%")
+                    ->orWhere('username', 'ilike', "%{$s}%"));
             })
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            // signup=phone: joined with phone + PIN; signup=password: older email + password accounts.
+            ->when($request->query('signup') === 'phone', fn ($q) => $q->whereNull('password'))
+            ->when($request->query('signup') === 'password', fn ($q) => $q->whereNotNull('password'))
             ->withSum('wallets as total_balance', 'balance')
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
@@ -131,6 +183,41 @@ class AdminController extends ApiController
                 ->map(fn ($r) => $this->serializeApprovalRequest($r)),
             'kyc_submissions' => KycSubmission::where('user_id', $user->id)->latest()->get()
                 ->map(fn ($s) => $this->serializeKycSubmission($s)),
+            // Money the user has set to move on its own (Rules tab), and invites waiting.
+            'automations' => AutomationRule::with(['fromWallet:id,name', 'toWallet:id,name'])
+                ->where('user_id', $user->id)->latest()->get()
+                ->map(fn (AutomationRule $r) => [
+                    'id' => $r->id,
+                    'name' => $r->name,
+                    'from_wallet' => $r->fromWallet?->name,
+                    'to_wallet' => $r->toWallet?->name,
+                    'amount' => number_format($r->amount / 100, 2, '.', ''),
+                    'frequency' => $r->frequency,
+                    'day_of_week' => $r->day_of_week,
+                    'day_of_month' => $r->day_of_month,
+                    'enabled' => (bool) $r->enabled,
+                    'last_run_at' => $r->last_run_at?->toIso8601String(),
+                    'next_run_on' => $r->nextRunOn(now())?->toDateString(),
+                ]),
+            'invitations' => WalletInvitation::with(['wallet:id,name', 'inviter:id,first_name,last_name,name'])
+                ->where('status', 'pending')
+                ->where(function ($q) use ($user) {
+                    $q->where('inviter_id', $user->id)->orWhere('invitee_user_id', $user->id);
+                    if ($user->phone) {
+                        $q->orWhere('invitee_identifier', $user->phone);
+                    }
+                })
+                ->latest()->limit(20)->get()
+                ->map(fn (WalletInvitation $i) => [
+                    'id' => $i->id,
+                    'direction' => $i->inviter_id === $user->id ? 'sent' : 'received',
+                    'wallet' => $i->wallet?->name,
+                    'invitee' => $i->invitee_identifier,
+                    'inviter' => $i->inviter?->fullName(),
+                    'role' => $i->role,
+                    'created_at' => $i->created_at?->toIso8601String(),
+                    'expires_at' => $i->expires_at?->toIso8601String(),
+                ]),
             'summary' => [
                 'total_in' => number_format(
                     (int) Transaction::whereIn('wallet_id', $walletIds)
@@ -214,7 +301,9 @@ class AdminController extends ApiController
     {
         $wallets = Wallet::with('owner')
             ->when($request->query('type'), fn ($q, $t) => $q->where('type', $t))
-            ->when($request->query('search'), fn ($q, $s) => $q->where('virtual_account', 'ilike', "%{$s}%"))
+            ->when($request->query('search'), fn ($q, $s) => $q->where(fn ($w) => $w
+                ->where('virtual_account', 'ilike', "%{$s}%")
+                ->orWhere('name', 'ilike', "%{$s}%")))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
 
