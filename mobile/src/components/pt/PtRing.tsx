@@ -11,8 +11,11 @@ export function PtRing({
   color = pt.gold500,
   track = pt.sunken,
   labelColor = pt.ink,
+  caption,
 }: {
   percent: number;
+  /** Small line under the %, e.g. "funded" (WAL-02). */
+  caption?: string;
   size?: number;
   stroke?: number;
   color?: string;
@@ -46,9 +49,19 @@ export function PtRing({
           />
         ) : null}
       </Svg>
-      <Text style={{ fontFamily: ptFont.extrabold, fontSize: size >= 80 ? 22 : 12, letterSpacing: -0.24, color: labelColor }}>
+      <Text
+        style={{
+          fontFamily: ptFont.extrabold,
+          fontSize: size >= 140 ? 34 : size >= 80 ? 22 : 12,
+          letterSpacing: size >= 140 ? -1 : -0.24,
+          color: labelColor,
+        }}
+      >
         {Math.round(p)}%
       </Text>
+      {caption ? (
+        <Text style={{ fontFamily: ptFont.medium, fontSize: 12, lineHeight: 16, color: pt.inkMuted }}>{caption}</Text>
+      ) : null}
     </View>
   );
 }

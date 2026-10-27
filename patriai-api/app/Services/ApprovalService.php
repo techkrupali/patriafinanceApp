@@ -54,10 +54,10 @@ class ApprovalService
     {
         $approvers = $wallet->eligibleApprovers($initiator->id);
 
-        // Store the wallet's configured requirement verbatim. Do NOT clamp it down
-        // to the current eligible-approver count — clamping would let a required=2
-        // request be satisfied by a single sign-off.
-        $required = max(1, (int) $wallet->required_approvals);
+        // Store the wallet's requirement verbatim (its "who decides" rule, or the
+        // fixed count). Do NOT clamp it down to the current eligible-approver count
+        // — clamping would let a required=2 request be satisfied by a single sign-off.
+        $required = $wallet->requiredApprovalsFor($initiator);
 
         // Guard against a stuck request: if fewer OTHER members can approve than the
         // requirement demands (e.g. an approver was removed after config), reject the
@@ -79,7 +79,7 @@ class ApprovalService
             'required_approvals' => $required,
             'approvals_count' => 0,
             'status' => 'pending',
-            'expires_at' => now()->addHours(48),
+            'expires_at' => now()->addHours($wallet->approvalExpiryHours()),
         ]);
 
         $title = 'Approval needed: ₦' . $this->naira($amountKobo) . ' ' . $this->actionLabel($action);

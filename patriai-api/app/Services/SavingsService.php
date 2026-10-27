@@ -125,13 +125,13 @@ class SavingsService
         }
     }
 
-    /** Tell every invited saver about the plan. Call after commit. */
-    public function notifyInvited(Wallet $wallet, User $owner): void
+    /** Tell every invited saver about the plan, except invites told another way. Call after commit. */
+    public function notifyInvited(Wallet $wallet, User $owner, array $exceptInvitationIds = []): void
     {
         $plan = $wallet->savingsPlan;
         $pace = $plan ? ' — ₦' . $this->naira($plan->amount) . ' ' . $this->frequencyLabel($plan) : '';
 
-        $wallet->invitations()->where('status', 'pending')->with('invitee')->get()->each(function (WalletInvitation $inv) use ($wallet, $owner, $pace) {
+        $wallet->invitations()->where('status', 'pending')->whereNotIn('id', $exceptInvitationIds)->with('invitee')->get()->each(function (WalletInvitation $inv) use ($wallet, $owner, $pace) {
             if (!$inv->invitee) {
                 return;
             }

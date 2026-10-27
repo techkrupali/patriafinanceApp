@@ -103,7 +103,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
       case 'wallet':
         return navigation.navigate('CreateWallet');
       case 'goal':
-        return navigation.navigate('SavingsGoalSetup', { type: 'goal' });
+        return navigation.navigate('GoalWalletSetup');
       case 'invite': {
         const t = inviteTarget(wallets.data);
         return t.screen === 'InviteMember' ? navigation.navigate(t.screen, t.params) : navigation.navigate(t.screen);
@@ -342,7 +342,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                 <Pressable
                   onPress={() => {
                     selection();
-                    navigation.navigate('SavingsGoalSetup', { type: 'goal' });
+                    navigation.navigate('GoalWalletSetup');
                   }}
                   accessibilityRole="button"
                   style={{ width: 92, alignItems: 'center', gap: 6 }}

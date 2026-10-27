@@ -61,6 +61,8 @@ class AutomationController extends ApiController
                     'wallet_type' => $wallet->type,
                     'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
                     'required_approvals' => (int) $wallet->required_approvals,
+                    'approval_mode' => $wallet->approvalMode(),
+                    'goal_locked' => $wallet->isGoalLocked(),
                     'approvers' => $approvers,
                 ];
             })

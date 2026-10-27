@@ -140,7 +140,7 @@ export function StewardScreen({ navigation }: TabScreenProps<'Steward'>) {
       return {
         text: 'Pick something to save for, like school fees or rent, and I will keep everyone on track.',
         cta: 'Start a goal',
-        go: () => navigation.navigate('SavingsGoalSetup', { type: 'goal' }),
+        go: () => navigation.navigate('GoalWalletSetup'),
       };
     }
     const hasRule = (automations.data ?? []).some((r) => r.enabled && r.to_wallet.id === focusGoal.wallet_id);

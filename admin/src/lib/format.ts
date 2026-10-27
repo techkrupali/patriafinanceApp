@@ -62,6 +62,8 @@ const LABELS: Record<string, string> = {
   viewer: "Viewer",
   vendor: "Vendor",
   active: "Active",
+  invited: "Invited",
+  removed: "Removed",
   suspended: "Suspended",
   frozen: "Frozen",
   closed: "Closed",
@@ -209,4 +211,19 @@ export function scheduleLabel(r: { frequency: string; day_of_week: number | null
   if (r.frequency === "weekly") return `Every ${DAYS[r.day_of_week ?? 0] || "week"}`;
   if (r.frequency === "monthly") return `Monthly on day ${r.day_of_month ?? "?"}`;
   return "Every day";
+}
+
+/** How an approval is decided: "Any one approver" / "Everyone" / "Most approvers". */
+export function approvalModeLabel(mode: string | null | undefined, required: number): string {
+  if (mode === "any") return "Any one approver";
+  if (mode === "all") return "Everyone who approves";
+  if (mode === "majority") return "Most approvers";
+  return `${required} approval${required === 1 ? "" : "s"}`;
+}
+
+/** 1 → "1st", 25 → "25th". */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }

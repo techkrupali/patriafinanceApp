@@ -1,83 +1,105 @@
-import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { colors, outline, radius } from '../../theme';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { PtStepScreen } from '../../components/pt/PtStepScreen';
+import { PtButton } from '../../components/pt/PtButton';
 import { selection } from '../../lib/haptics';
-import { walletVisual } from '../../lib/walletVisual';
-import { WALLET_GUIDES, type WalletGuide } from '../../lib/walletGuides';
+import type { CreatableWalletType } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
+type Icon = (color: string) => React.ReactNode;
+
+const TYPES: { type: CreatableWalletType; title: string; tagline: string; icon: Icon }[] = [
+  { type: 'goal', title: 'Goal', tagline: 'School fees, rent, a car', icon: (c) => <Feather name="target" size={20} color={c} /> },
+  { type: 'spending', title: 'Spending', tagline: 'Monthly household budget', icon: (c) => <Feather name="shopping-bag" size={19} color={c} /> },
+  { type: 'savings', title: 'Savings', tagline: 'Put money aside, lock it', icon: (c) => <MaterialCommunityIcons name="piggy-bank-outline" size={21} color={c} /> },
+  { type: 'project', title: 'Project', tagline: 'Building, pay by milestone', icon: (c) => <MaterialCommunityIcons name="hard-hat" size={20} color={c} /> },
+  { type: 'joint', title: 'Joint', tagline: 'Run money with a partner', icon: (c) => <Feather name="users" size={19} color={c} /> },
+  { type: 'child', title: 'Child', tagline: 'Allowance and requests', icon: (c) => <Feather name="smile" size={20} color={c} /> },
+  { type: 'emergency', title: 'Emergency', tagline: 'Release only when agreed', icon: (c) => <Feather name="life-buoy" size={20} color={c} /> },
+  { type: 'giving', title: 'Giving', tagline: 'Tithes, offerings, support', icon: (c) => <Feather name="heart" size={19} color={c} /> },
+];
+
+function TypeCard({ item, on, onPress }: { item: (typeof TYPES)[number]; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={() => {
+        selection();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      accessibilityLabel={`${item.title}. ${item.tagline}`}
+      style={{
+        flex: 1,
+        minHeight: 130,
+        borderRadius: ptRadius.md,
+        padding: 14,
+        gap: 10,
+        backgroundColor: on ? pt.brandSoft : pt.raised,
+        borderWidth: 2,
+        borderColor: on ? pt.brand : 'transparent',
+      }}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: on ? pt.brand : pt.brandSoft,
+        }}
+      >
+        {item.icon(on ? pt.onBrand : pt.brand)}
+      </View>
+      <View style={{ gap: 2 }}>
+        <Text style={{ fontFamily: ptFont.bold, fontSize: 17, lineHeight: 22, color: on ? pt.brand : pt.ink }}>{item.title}</Text>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>{item.tagline}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 /**
- * Guided wallet creation, step one: pick the KIND of wallet. Client (2026-10-17):
- * "Let's NOT assume users would know how to use the app" — every type explains
- * what it is for, then opens its own setup journey with its own purposes.
+ * WCR-01 "What's this wallet for?" — the first step of guided wallet creation.
+ * Goal continues into the prototype's WCR flow; the other types keep their own
+ * setup journeys (Savings goals, Emergency, Project, and the guided setup).
  */
 export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet'>) {
-  const open = (guide: WalletGuide) => {
-    selection();
-    if (guide.type === 'emergency') {
-      navigation.navigate('CreateEmergencyWallet');
-    } else if (guide.type === 'savings' || guide.type === 'goal') {
-      // Savings goals: target date, milestones, contributors and a shared plan.
-      navigation.navigate('SavingsGoalSetup', { type: guide.type });
-    } else if (guide.type === 'project') {
-      // A Project is an escrow project (vendor + milestones) with its own flow.
-      navigation.navigate('CreateProject');
-    } else {
-      navigation.navigate('WalletSetup', { type: guide.type });
-    }
+  const [type, setType] = useState<CreatableWalletType>('goal');
+
+  const next = () => {
+    if (type === 'goal') navigation.navigate('GoalWalletSetup');
+    else if (type === 'savings') navigation.navigate('SavingsGoalSetup', { type });
+    else if (type === 'emergency') navigation.navigate('CreateEmergencyWallet');
+    else if (type === 'project') navigation.navigate('CreateProject');
+    else navigation.navigate('WalletSetup', { type });
   };
 
+  const rows = [0, 2, 4, 6].map((i) => TYPES.slice(i, i + 2));
+
   return (
-    <Screen withBottomInset>
-      <Header title="Create Wallet" />
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
-        <Text className="text-[28px] font-extrabold leading-9 tracking-tight text-navy">Choose a Wallet Type</Text>
-        <Text className="mt-2 text-[15px] leading-6 text-muted">
-          Every wallet has its own purpose and rules. Pick the one that fits and we'll guide you through setting it
-          up, step by step.
-        </Text>
-
-        <View className="mt-6" style={{ gap: 12 }}>
-          {WALLET_GUIDES.map((guide) => {
-            const v = walletVisual(guide.type);
-            return (
-              <Pressable
-                key={guide.type}
-                onPress={() => open(guide)}
-                className="flex-row items-start rounded bg-white p-4 active:opacity-90"
-                style={outline.card}
-              >
-                <LinearGradient
-                  colors={v.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ width: 44, height: 44, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons name={v.icon} size={20} color={v.onDark ? colors.white : colors.navy} />
-                </LinearGradient>
-                <View className="ml-3.5 flex-1 pr-2">
-                  <Text className="text-[16px] font-bold text-ink">{guide.title}</Text>
-                  <Text className="mt-0.5 text-[13px] leading-5 text-muted">{guide.tagline}</Text>
-                  <Text className="mt-2 text-[12px] font-semibold text-brand">Good for: {guide.goodFor.join(' · ')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.faded} style={{ marginTop: 12 }} />
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View className="mt-5 flex-row items-start rounded bg-success-soft p-4">
-          <Ionicons name="bulb" size={17} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
-          <Text className="flex-1 text-[12px] leading-5 text-brand-deep">
-            Not sure? Start with a Savings wallet. You can create more wallets any time.
-          </Text>
-        </View>
-      </ScrollView>
-    </Screen>
+    <PtStepScreen
+      onBack={() => navigation.goBack()}
+      closeIcon
+      progress={{ step: 1, total: 5 }}
+      title="What's this wallet for?"
+      subtitle="Each type comes with sensible rules you can change later."
+      gap={20}
+      footer={<PtButton title="Continue" onPress={next} />}
+    >
+      <View style={{ gap: 12 }}>
+        {rows.map((row) => (
+          <View key={row[0].type} style={{ flexDirection: 'row', gap: 12 }}>
+            {row.map((item) => (
+              <TypeCard key={item.type} item={item} on={item.type === type} onPress={() => setType(item.type)} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </PtStepScreen>
   );
 }

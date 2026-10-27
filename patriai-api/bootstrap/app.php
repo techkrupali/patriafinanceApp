@@ -37,4 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Run due automation rules (scheduled auto-transfers). Idempotent per period,
         // so an hourly cadence safely fires daily/weekly/monthly rules.
         $schedule->command('automations:run')->hourly();
+
+        // Monthly "time to save" reminders on each wallet's chosen day (WCR-11).
+        $schedule->command('wallets:remind-savers')->dailyAt('09:00');
     })->create();

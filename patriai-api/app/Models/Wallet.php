@@ -15,6 +15,15 @@ class Wallet extends Model
     /** Roles that may move money out UNCONDITIONALLY. Others need an explicit can_spend grant. */
     public const SPENDING_ROLES = ['owner', 'co_owner'];
 
+    /**
+     * Who decides a spend that needs approval (WCR-09 / WAL-08): the first yes
+     * from any approver, every approver, or more than half of them.
+     */
+    public const APPROVAL_MODES = ['any', 'all', 'majority'];
+
+    /** How long an approval request waits for answers. */
+    public const APPROVAL_EXPIRY_HOURS = [24, 48, 72];
+
     protected $fillable = [
         'user_id',
         'type',
@@ -344,9 +353,68 @@ class Wallet extends Model
         return $member?->role;
     }
 
+    /** The chosen "who decides" rule, or null for a fixed required_approvals count. */
+    public function approvalMode(): ?string
+    {
+        $mode = $this->meta['approval_mode'] ?? null;
+
+        return in_array($mode, self::APPROVAL_MODES, true) ? $mode : null;
+    }
+
+    /**
+     * "Lock until goal is reached": until the balance reaches the target, every
+     * spend needs every approver's yes, whatever its size.
+     */
+    public function isGoalLocked(): bool
+    {
+        return ($this->meta['lock_until_goal'] ?? false) === true
+            && $this->target_amount !== null
+            && $this->target_amount > 0
+            && $this->balance < $this->target_amount;
+    }
+
+    public function approvalExpiryHours(): int
+    {
+        $hours = (int) ($this->meta['approval_expiry_hours'] ?? 48);
+
+        return in_array($hours, self::APPROVAL_EXPIRY_HOURS, true) ? $hours : 48;
+    }
+
+    /** Day of the month members are reminded to save (1–28), or null. */
+    public function reminderDay(): ?int
+    {
+        $day = $this->meta['reminder_day'] ?? null;
+
+        return is_int($day) && $day >= 1 && $day <= 28 ? $day : null;
+    }
+
+    /**
+     * Yeses a spend started by $initiator needs. The initiator's own request
+     * counts as their yes, so "everyone" means every OTHER approver.
+     */
+    public function requiredApprovalsFor(User $initiator): int
+    {
+        $mode = $this->isGoalLocked() ? 'all' : $this->approvalMode();
+        if ($mode === null) {
+            return max(1, (int) $this->required_approvals);
+        }
+
+        $approvers = $this->eligibleApprovers();
+        $others = $approvers->reject(fn ($id) => $id === $initiator->id)->count();
+
+        return match ($mode) {
+            'any' => 1,
+            'all' => max(1, $others),
+            'majority' => max(1, intdiv($approvers->count(), 2) + 1 - ($approvers->contains($initiator->id) ? 1 : 0)),
+        };
+    }
+
     /** Does a spend of this amount require approval on this wallet? */
     public function approvalRequiredFor(int $amountKobo): bool
     {
+        if ($this->isGoalLocked()) {
+            return true;
+        }
         if (!$this->approval_enabled) {
             return false;
         }

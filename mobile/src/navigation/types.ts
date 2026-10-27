@@ -99,10 +99,15 @@ export type RootStackParamList = {
   WalletDetail: { walletId: number };
   Fund: { walletId: number };
   Withdraw: { walletId: number };
-  Transfer: { walletId?: number } | undefined;
+  /** walletId = from; toWalletId pre-picks a wallet to move money into. */
+  Transfer: { walletId?: number; toWalletId?: number } | undefined;
   RequestSpend: { walletId: number };
   /** Guided creation starts by picking the kind of wallet. */
   CreateWallet: undefined;
+  /** WCR-02 → WCR-11: a goal wallet, private or shared, with people and approvals. */
+  GoalWalletSetup: { draftId?: number } | undefined;
+  /** WCR-12: the new wallet's account details; `invited` are first names. */
+  WalletCreated: { walletId: number; invited: string[] };
   /** Type-specific setup for every type without its own journey. */
   WalletSetup: { type: CreatableWalletType; draftId?: number };
   // ---- Emergency wallet journey (Step 1 → Step 2) + management ----

@@ -156,6 +156,10 @@ export function useDraftAutosave({
     stop: () => {
       session.stopped = true;
     },
+    /** Creating failed after stop() — keep saving the setup. */
+    resume: () => {
+      session.stopped = false;
+    },
     /** The user chose to throw this setup away. */
     discard: async () => {
       session.stopped = true;
@@ -193,8 +197,10 @@ export function resumeDraft(navigator: { navigate: (...args: never[]) => void },
   const navigation = navigator as unknown as NativeStackNavigationProp<RootStackParamList>;
   switch (draft.type) {
     case 'savings':
-    case 'goal':
       navigation.navigate('SavingsGoalSetup', { type: draft.type, draftId: draft.id });
+      return;
+    case 'goal':
+      navigation.navigate('GoalWalletSetup', { draftId: draft.id });
       return;
     case 'emergency':
       navigation.navigate('CreateEmergencyWallet', { draftId: draft.id });

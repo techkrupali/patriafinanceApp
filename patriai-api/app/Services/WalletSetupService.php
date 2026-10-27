@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletDraft;
+use App\Models\WalletInvitation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,17 +25,20 @@ class WalletSetupService
         private readonly WalletService $wallets,
         private readonly EmergencyService $emergency,
         private readonly SavingsService $savings,
+        private readonly InvitationService $invitations,
     ) {}
 
     public static function make(): self
     {
-        return new self(WalletService::make(), EmergencyService::make(), SavingsService::make());
+        return new self(WalletService::make(), EmergencyService::make(), SavingsService::make(), InvitationService::make());
     }
 
     /**
      * $data keys: type, name, description?, target_amount?, target_date?, purpose?,
      * initial_deposit?, source_wallet_id?, monthly_amount?, monthly_day?,
-     * emergency?, milestones?, contributors?, savings_plan?, draft_id?
+     * emergency?, milestones?, contributors?, savings_plan?, mode?, members?,
+     * approval? {threshold, mode, lock_until_goal, expiry_hours}, reminder_day?,
+     * draft_id?
      */
     public function create(User $user, array $data): Wallet
     {
@@ -45,15 +49,33 @@ class WalletSetupService
             ? $this->resolveSource($user, $data['source_wallet_id'] ?? null, $deposit)
             : null;
 
-        $wallet = DB::transaction(function () use ($user, $data, $deposit, $monthly, $source) {
+        $invited = [];
+        $wallet = DB::transaction(function () use ($user, $data, $deposit, $monthly, $source, &$invited) {
+            $approval = $data['approval'] ?? null;
+            $meta = array_filter([
+                'purpose' => $data['purpose'] ?? null,
+                'mode' => $data['mode'] ?? null,
+                'approval_mode' => $approval['mode'] ?? null,
+                'lock_until_goal' => !empty($approval['lock_until_goal']) ? true : null,
+                'approval_expiry_hours' => isset($approval['expiry_hours']) ? (int) $approval['expiry_hours'] : null,
+                'reminder_day' => isset($data['reminder_day']) ? (int) $data['reminder_day'] : null,
+            ], fn ($v) => $v !== null && $v !== '');
             $opts = array_filter([
                 'description' => $data['description'] ?? null,
                 'target_amount' => $data['target_amount'] ?? null,
                 'target_date' => $data['target_date'] ?? null,
-                'meta' => !empty($data['purpose']) ? ['purpose' => $data['purpose']] : null,
+                'meta' => $meta ?: null,
             ], fn ($v) => $v !== null);
 
             $wallet = $this->wallets->createWallet($user, $data['type'], $data['name'], $opts);
+
+            if ($approval !== null) {
+                $wallet->update([
+                    'approval_enabled' => true,
+                    'approval_threshold' => $approval['threshold'] ?? null,
+                    'required_approvals' => 1,
+                ]);
+            }
 
             if ($data['type'] === 'emergency' && !empty($data['emergency'])) {
                 $this->emergency->configure($wallet, $user, $data['emergency']);
@@ -62,6 +84,8 @@ class WalletSetupService
             if (in_array($data['type'], SavingsService::TYPES, true)) {
                 $this->savings->configure($wallet, $user, $data, $source);
             }
+
+            $invited = $this->inviteMembers($wallet, $user, $data['members'] ?? []);
 
             if ($deposit > 0) {
                 $this->wallets->transferBetweenWallets($source, $wallet, $deposit, $user, "Initial deposit to {$wallet->name}");
@@ -90,10 +114,48 @@ class WalletSetupService
             $this->emergency->notifyConfigured($wallet, $user);
         }
         if (in_array($wallet->type, SavingsService::TYPES, true)) {
-            $this->savings->notifyInvited($wallet, $user);
+            $this->savings->notifyInvited($wallet, $user, array_map(fn ($i) => $i[0]->id, $invited));
+        }
+        foreach ($invited as [$invitation, $invitee]) {
+            $this->invitations->deliver($invitation, $wallet, $user, $invitee);
         }
 
         return $wallet;
+    }
+
+    /**
+     * WCR-08: invite the people picked for the wallet, each with their role.
+     * Co-owners approve by their role; contributors and viewers never do.
+     *
+     * @return list<array{0: WalletInvitation, 1: ?User}>
+     */
+    private function inviteMembers(Wallet $wallet, User $owner, array $members): array
+    {
+        $out = [];
+        foreach (array_values($members) as $i => $m) {
+            if (!empty($m['user_id'])) {
+                $invitee = User::find((int) $m['user_id']);
+                if (!$invitee || $invitee->status !== 'active') {
+                    throw ValidationException::withMessages(["members.{$i}.user_id" => 'Choose a Patriai user to invite.']);
+                }
+                $identifier = $this->invitations->identifierFor($invitee);
+            } else {
+                $identifier = trim((string) ($m['identifier'] ?? ''));
+                if ($identifier === '') {
+                    throw ValidationException::withMessages(["members.{$i}.identifier" => 'Enter a phone number to invite.']);
+                }
+                $invitee = $this->invitations->resolveInvitee($identifier);
+            }
+
+            try {
+                $invitation = $this->invitations->create($wallet, $owner, $invitee, $identifier, $m['role']);
+            } catch (ValidationException $e) {
+                throw ValidationException::withMessages(["members.{$i}" => collect($e->errors())->flatten()->first()]);
+            }
+            $out[] = [$invitation, $invitee];
+        }
+
+        return $out;
     }
 
     /** The funding source must be the user's own spendable wallet with enough available. */

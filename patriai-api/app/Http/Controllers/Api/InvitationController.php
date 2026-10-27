@@ -6,15 +6,13 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
+use App\Services\InvitationService;
 use App\Services\NotificationService;
 use App\Services\SavingsService;
-use App\Services\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class InvitationController extends ApiController
 {
@@ -51,14 +49,16 @@ class InvitationController extends ApiController
 
         $inviteRole = $data['role'] ?? 'contributor';
         $canApprove = $request->boolean('can_approve');
+        $invitations = InvitationService::make();
 
         // Resolve the invitee. In-app (existing user) path takes an id directly;
         // otherwise fall back to email/phone identifier resolution.
         if (!empty($data['invitee_user_id'])) {
             $invitee = User::find($data['invitee_user_id']);
-            $identifier = $invitee->username ? '@' . $invitee->username : ($invitee->email ?? $invitee->phone ?? (string) $invitee->id);
+            $identifier = $invitations->identifierFor($invitee);
         } else {
             $identifier = trim($data['identifier']);
+            $invitee = null;
         }
 
         // Role ceiling: an inviter may never grant a role that outranks (or
@@ -74,53 +74,23 @@ class InvitationController extends ApiController
             return $this->fail('A viewer cannot be given approval rights', 422);
         }
 
-        if (empty($data['invitee_user_id'])) {
-            $invitee = str_contains($identifier, '@')
-                ? User::where('email', strtolower($identifier))->first()
-                : User::where('phone', $identifier)->first();
+        $invitee ??= $invitations->resolveInvitee($identifier);
+
+        try {
+            $invitation = $invitations->create(
+                $wallet,
+                $request->user(),
+                $invitee,
+                $identifier,
+                $inviteRole,
+                $canApprove,
+                $data['permissions'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            return $this->fail(collect($e->errors())->flatten()->first(), 422);
         }
 
-        if ($invitee && $invitee->id === $request->user()->id) {
-            return $this->fail('You cannot invite yourself', 422);
-        }
-
-        if ($invitee) {
-            $alreadyMember = $wallet->members()
-                ->where('user_id', $invitee->id)
-                ->where('status', 'active')
-                ->exists();
-            if ($alreadyMember || $invitee->id === $wallet->user_id) {
-                return $this->fail('This person is already a member of the wallet', 422);
-            }
-        }
-
-        $duplicate = $wallet->invitations()
-            ->where('status', 'pending')
-            ->where(function ($q) use ($identifier, $invitee) {
-                $q->where('invitee_identifier', $identifier);
-                if ($invitee) {
-                    $q->orWhere('invitee_user_id', $invitee->id);
-                }
-            })
-            ->exists();
-        if ($duplicate) {
-            return $this->fail('A pending invitation already exists for this person', 422);
-        }
-
-        $invitation = WalletInvitation::create([
-            'wallet_id' => $wallet->id,
-            'inviter_id' => $request->user()->id,
-            'invitee_user_id' => $invitee?->id,
-            'invitee_identifier' => $identifier,
-            'role' => $inviteRole,
-            'can_approve' => $canApprove,
-            'permissions' => !empty($data['permissions']) ? SavingsService::normalisePermissions($data['permissions']) : null,
-            'status' => 'pending',
-            'token' => Str::random(40),
-            'expires_at' => now()->addDays(7),
-        ]);
-
-        $this->deliver($invitation, $wallet, $request->user(), $invitee);
+        $invitations->deliver($invitation, $wallet, $request->user(), $invitee);
 
         return $this->ok('Invitation sent', [
             'invitation' => $this->serializeInvitation($invitation->load(['wallet', 'inviter'])),
@@ -274,51 +244,11 @@ class InvitationController extends ApiController
         // A fresh week to respond, then the same message again.
         $invitation->update(['expires_at' => now()->addDays(7)]);
         $invitee = $invitation->invitee_user_id ? User::find($invitation->invitee_user_id) : null;
-        $this->deliver($invitation, $wallet, $request->user(), $invitee);
+        InvitationService::make()->deliver($invitation, $wallet, $request->user(), $invitee);
 
         return $this->ok('Invitation sent again', [
             'invitation' => $this->serializeInvitation($invitation->load(['wallet', 'inviter'])),
         ]);
-    }
-
-    /**
-     * Tell the invitee: in the app when they already have an account, otherwise
-     * by SMS (phone number) or email, with how to join.
-     */
-    private function deliver(WalletInvitation $invitation, Wallet $wallet, User $inviter, ?User $invitee): void
-    {
-        if ($invitee) {
-            NotificationService::make()->push(
-                $invitee,
-                'invitation_received',
-                "Invitation to join {$wallet->name}",
-                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->role}.",
-                [
-                    'invitation_id' => $invitation->id,
-                    'wallet_id' => $wallet->id,
-                    'wallet_name' => $wallet->name,
-                    'role' => $invitation->role,
-                ],
-            );
-
-            return;
-        }
-
-        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai. "
-            . 'Get the Patriai app and sign up with this ' . (str_contains($invitation->invitee_identifier, '@') ? 'email' : 'number')
-            . ' to accept. The invite lasts 7 days.';
-
-        if (str_contains($invitation->invitee_identifier, '@')) {
-            try {
-                Mail::raw($message, fn ($m) => $m->to($invitation->invitee_identifier)->subject("Join {$wallet->name} on Patriai"));
-            } catch (\Throwable $e) {
-                Log::warning("Invitation email to {$invitation->invitee_identifier} failed: {$e->getMessage()}");
-            }
-
-            return;
-        }
-
-        SmsService::make()->send($invitation->invitee_identifier, $message);
     }
 
     // DELETE /wallets/{wallet}/invitations/{invitation}

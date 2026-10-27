@@ -209,6 +209,8 @@ class HomeTabsTest extends TestCase
                 'wallet_type' => 'project',
                 'threshold' => '100000.00',
                 'required_approvals' => 2,
+                'approval_mode' => null,
+                'goal_locked' => false,
                 'approvers' => ['Ngozi', 'Emeka'],
             ]]);
 

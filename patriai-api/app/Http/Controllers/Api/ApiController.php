@@ -258,6 +258,13 @@ abstract class ApiController extends Controller
             'purpose' => $wallet->type === 'emergency'
                 ? ($wallet->emergencySetting?->purpose ?? $wallet->meta['purpose'] ?? null)
                 : ($wallet->meta['purpose'] ?? null),
+            // Guided creation choices (WCR-02/09/11).
+            'mode' => $wallet->meta['mode'] ?? null,
+            'approval_mode' => $wallet->approvalMode(),
+            'lock_until_goal' => ($wallet->meta['lock_until_goal'] ?? false) === true,
+            'goal_locked' => $wallet->isGoalLocked(),
+            'approval_expiry_hours' => $wallet->approvalExpiryHours(),
+            'reminder_day' => $wallet->reminderDay(),
             'created_at' => $wallet->created_at?->toIso8601String(),
         ];
 

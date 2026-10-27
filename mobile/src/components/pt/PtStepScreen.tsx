@@ -23,7 +23,7 @@ function useAndroidKeyboardHeight() {
   return height;
 }
 
-export function PtBackButton({ onPress }: { onPress: () => void }) {
+export function PtBackButton({ onPress, close = false }: { onPress: () => void; close?: boolean }) {
   return (
     <Pressable
       onPress={() => {
@@ -32,16 +32,35 @@ export function PtBackButton({ onPress }: { onPress: () => void }) {
       }}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel="Back"
+      accessibilityLabel={close ? 'Close' : 'Back'}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
     >
-      <Feather name="chevron-left" size={26} color={pt.ink} />
+      <Feather name={close ? 'x' : 'chevron-left'} size={close ? 24 : 26} color={pt.ink} />
     </Pressable>
+  );
+}
+
+/** WCR step bar: one segment per step, filled up to the current one. */
+export function PtProgressBar({ step, total }: { step: number; total: number }) {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Step ${step} of ${total}`}
+      style={{ flex: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 8 }}
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < step ? pt.brand : pt.sunken }} />
+      ))}
+    </View>
   );
 }
 
 interface PtStepScreenProps {
   onBack?: () => void;
+  /** Show × instead of the back chevron (first step of a flow). */
+  closeIcon?: boolean;
+  /** Segmented step bar beside the back button. */
+  progress?: { step: number; total: number };
   /** Right side of the top row, e.g. the language toggle. */
   headerRight?: React.ReactNode;
   /** Overline above the title, e.g. "STEP 1 OF 5". */
@@ -63,6 +82,8 @@ interface PtStepScreenProps {
  */
 export function PtStepScreen({
   onBack,
+  closeIcon = false,
+  progress,
   headerRight,
   step,
   title,
@@ -114,8 +135,9 @@ export function PtStepScreen({
           paddingHorizontal: 12,
         }}
       >
-        {onBack ? <PtBackButton onPress={onBack} /> : <View style={{ width: 44 }} />}
-        {headerRight ? <View style={{ marginRight: 8 }}>{headerRight}</View> : null}
+        {onBack ? <PtBackButton onPress={onBack} close={closeIcon} /> : <View style={{ width: 44 }} />}
+        {progress ? <PtProgressBar step={progress.step} total={progress.total} /> : null}
+        {headerRight ? <View style={{ marginRight: 8 }}>{headerRight}</View> : progress ? <View style={{ width: 12 }} /> : null}
       </View>
 
       {scroll ? (

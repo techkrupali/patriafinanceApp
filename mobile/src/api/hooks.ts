@@ -349,6 +349,8 @@ export function useCreateWallet() {
       // The server deletes the draft a wallet was created from.
       void qc.invalidateQueries({ queryKey: keys.walletDrafts });
       void qc.invalidateQueries({ queryKey: keys.automations });
+      // People invited during setup show on the Family tab.
+      void qc.invalidateQueries({ queryKey: keys.family });
     },
   });
 }
@@ -514,11 +516,12 @@ export function useRemoveMember(walletId: number) {
 
 // ---------- Invitations ----------
 
-export function useWalletInvitations(walletId: number) {
+export function useWalletInvitations(walletId: number, enabled = true) {
   return useQuery({
     queryKey: keys.walletInvitations(walletId),
     queryFn: () => api<InvitationsData>(`/wallets/${walletId}/invitations`),
     select: (d) => d.invitations,
+    enabled,
   });
 }
 

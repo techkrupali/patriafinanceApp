@@ -78,7 +78,23 @@ export interface Wallet {
   /** Naira decimal string. null = every spend needs approval. */
   approval_threshold?: string | null;
   required_approvals?: number;
+  // ---- Guided creation (WCR-02/09/11) ----
+  /** Private (just you) or shared (family adds money and sees everything). */
+  mode?: 'private' | 'shared' | null;
+  /** Who decides a spend that needs a yes; null = the fixed required_approvals. */
+  approval_mode?: ApprovalMode | null;
+  /** Owner chose "Lock until goal is reached". */
+  lock_until_goal?: boolean;
+  /** Locked right now: every spend needs everyone's yes until the target is reached. */
+  goal_locked?: boolean;
+  /** How long approval requests wait for answers. */
+  approval_expiry_hours?: number;
+  /** Day of the month savers get a reminder (1–28), or null. */
+  reminder_day?: number | null;
 }
+
+/** "Any one approver", "everyone", or "more than half". */
+export type ApprovalMode = 'any' | 'all' | 'majority';
 
 export interface Transaction {
   id: number;
@@ -96,6 +112,8 @@ export interface Transaction {
   description: string | null;
   counterparty: Record<string, unknown> | null;
   created_at: string | null;
+  /** Who moved the money (wallet activity only). */
+  by?: { id: number; first_name: string } | null;
 }
 
 /** Per-member granular access matrix ("Assign Wallet Access & Roles"). */
@@ -144,8 +162,8 @@ export interface WalletInvitation {
   role: string;
   can_approve: boolean;
   status?: string;
-  /** The email/phone the invite was sent to (wallet-scoped list). */
-  identifier?: string | null;
+  /** The phone, email or @username the invite was sent to. */
+  invitee_identifier?: string | null;
   email?: string | null;
   phone?: string | null;
   /** Present on the "my invitations" list. */
@@ -687,6 +705,13 @@ export interface CreateWalletPayload {
   milestones?: { title: string; amount: string; due_date?: string }[];
   contributors?: { user_id: number; can_approve?: boolean; permissions?: InvitePermissions }[];
   savings_plan?: SavingsPlanPayload;
+  // ---- Guided creation (WCR-02 → WCR-11) ----
+  mode?: 'private' | 'shared';
+  /** People to invite: an account by id, or a phone number / email for someone new. */
+  members?: { user_id?: number; identifier?: string; role: 'co_owner' | 'contributor' | 'viewer' }[];
+  /** "When does money need a yes?" — threshold null means any amount. */
+  approval?: { threshold: string | null; mode: ApprovalMode; lock_until_goal?: boolean; expiry_hours?: number };
+  reminder_day?: number;
   /** The draft this setup came from — deleted once the wallet exists. */
   draft_id?: number;
 }
@@ -1553,6 +1578,8 @@ export interface ApprovalRuleSummary {
   /** Naira decimal string; null = every payment needs a yes. */
   threshold: string | null;
   required_approvals: number;
+  approval_mode?: ApprovalMode | null;
+  goal_locked?: boolean;
   /** First names of the people who can approve. */
   approvers: string[];
 }

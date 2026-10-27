@@ -5,11 +5,13 @@ import { use, useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
+  approvalModeLabel,
   emergencyLabel,
   formatDate,
   formatDateTime,
   label,
   naira,
+  ordinal,
   signedNaira,
 } from "@/lib/format";
 import type { ApiWallet, WalletDetailData } from "@/lib/types";
@@ -163,8 +165,25 @@ export default function WalletDetailPage({
                     <Field name="Description">{wallet!.description}</Field>
                   </div>
                 ) : null}
+                {wallet!.mode ? (
+                  <Field name="Who it's for">
+                    <Badge tone={wallet!.mode === "shared" ? "green" : "gray"}>
+                      {wallet!.mode === "shared" ? "Shared" : "Private"}
+                    </Badge>
+                  </Field>
+                ) : null}
                 {wallet!.target_amount ? (
-                  <Field name="Target">{naira(wallet!.target_amount)}</Field>
+                  <Field name="Target">
+                    {naira(wallet!.target_amount)}
+                    {wallet!.target_date ? (
+                      <span className="block text-xs font-normal text-muted">
+                        by {formatDate(wallet!.target_date)}
+                      </span>
+                    ) : null}
+                  </Field>
+                ) : null}
+                {wallet!.reminder_day ? (
+                  <Field name="Save reminder">Monthly, on the {ordinal(wallet!.reminder_day)}</Field>
                 ) : null}
               </dl>
             )}
@@ -197,9 +216,22 @@ export default function WalletDetailPage({
                     Transfers at or above this amount need sign-off
                   </span>
                 </Field>
-                <Field name="Required approvals">
-                  {data!.approval.required_approvals}
+                <Field name="Who decides">
+                  {approvalModeLabel(wallet!.approval_mode, data!.approval.required_approvals)}
                 </Field>
+                <Field name="Requests expire after">
+                  {wallet!.approval_expiry_hours ?? 48} hours
+                </Field>
+                {wallet!.lock_until_goal ? (
+                  <Field name="Lock until goal is reached">
+                    <Badge tone={wallet!.goal_locked ? "amber" : "green"}>
+                      {wallet!.goal_locked ? "Locked" : "Goal reached"}
+                    </Badge>
+                    <span className="mt-1 block text-xs font-normal text-muted">
+                      Until the target is reached, every payment needs everyone&apos;s yes
+                    </span>
+                  </Field>
+                ) : null}
               </dl>
             ) : (
               <p className="text-sm text-muted">
@@ -269,19 +301,41 @@ export default function WalletDetailPage({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-ink">{m.name}</p>
                       <p className="truncate text-xs text-muted">{m.email}</p>
-                      <Badge tone="gray" className="mt-1.5 capitalize">
-                        {m.role}
+                      <Badge tone="gray" className="mt-1.5">
+                        {label(m.role)}
                       </Badge>
                     </div>
-                    {m.can_approve ? (
-                      <Badge tone="green">Can approve</Badge>
-                    ) : (
-                      <Badge tone="gray">View only</Badge>
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {/* Owners and co-owners approve by their role; others only when allowed. */}
+                      {m.can_approve || ["owner", "co_owner", "admin"].includes(m.role) ? (
+                        <Badge tone="green">Approver</Badge>
+                      ) : null}
+                      {m.status !== "active" ? <Badge tone="amber">{label(m.status)}</Badge> : null}
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
+            {!isPending && data!.invitations.length > 0 ? (
+              <div className="mt-6 border-t border-line pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Invited, not answered yet
+                </p>
+                <ul className="mt-3 space-y-3">
+                  {data!.invitations.map((inv) => (
+                    <li key={inv.id} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-ink">{inv.invitee}</p>
+                        <p className="truncate text-xs text-muted">
+                          By {inv.inviter ?? "—"} · expires {formatDate(inv.expires_at)}
+                        </p>
+                      </div>
+                      <Badge tone="amber">{label(inv.role)}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

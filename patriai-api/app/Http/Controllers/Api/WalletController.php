@@ -100,6 +100,19 @@ class WalletController extends ApiController
             'savings_plan.day_of_month' => ['nullable', 'integer', 'between:1,28'],
             'savings_plan.auto_save' => ['sometimes', 'boolean'],
             'savings_plan.allow_contributor_edit' => ['sometimes', 'boolean'],
+            // Guided creation (WCR-02/08/09/11): who it's for, who's in it, when
+            // money needs a yes, and a monthly reminder to save.
+            'mode' => ['nullable', 'in:private,shared'],
+            'members' => ['sometimes', 'array', 'max:' . SavingsService::MAX_CONTRIBUTORS],
+            'members.*.user_id' => ['nullable', 'integer', 'required_without:members.*.identifier'],
+            'members.*.identifier' => ['nullable', 'string', 'max:150'],
+            'members.*.role' => ['required', 'in:co_owner,contributor,viewer'],
+            'approval' => ['nullable', 'array'],
+            'approval.threshold' => ['nullable', 'numeric', 'min:0'],
+            'approval.mode' => ['sometimes', 'in:' . implode(',', Wallet::APPROVAL_MODES)],
+            'approval.lock_until_goal' => ['sometimes', 'boolean'],
+            'approval.expiry_hours' => ['sometimes', 'integer', 'in:' . implode(',', Wallet::APPROVAL_EXPIRY_HOURS)],
+            'reminder_day' => ['nullable', 'integer', 'between:1,28'],
             'draft_id' => ['nullable', 'integer'],
         ]);
 
@@ -115,6 +128,23 @@ class WalletController extends ApiController
         if (!empty($data['emergency']) && $data['type'] !== 'emergency') {
             return $this->fail('Emergency access rules only apply to emergency wallets', 422);
         }
+        if (($data['mode'] ?? null) === 'private' && !empty($data['members'])) {
+            return $this->fail("A private wallet is just you. Choose Shared to invite people.", 422);
+        }
+        if (in_array($data['type'], ['emergency', 'project'], true) && (!empty($data['members']) || !empty($data['approval']))) {
+            return $this->fail('Emergency and project wallets set up their people and approvals in their own steps', 422);
+        }
+        if (!empty($data['approval']['lock_until_goal']) && !((float) ($data['target_amount'] ?? 0) > 0)) {
+            return $this->fail('Set a target to lock the wallet until the goal is reached', 422);
+        }
+        // Phone numbers in any local format → E.164, so they match accounts.
+        foreach ($data['members'] ?? [] as $i => $m) {
+            $id = trim((string) ($m['identifier'] ?? ''));
+            if ($id !== '' && !str_contains($id, '@')) {
+                $data['members'][$i]['identifier'] = $this->normalizePhone($id);
+            }
+        }
+
         $savingsFields = ['milestones', 'contributors', 'savings_plan'];
         if (!in_array($data['type'], SavingsService::TYPES, true) && array_filter(array_intersect_key($data, array_flip($savingsFields)))) {
             return $this->fail('Milestones, contributors and savings plans are for savings and goal wallets', 422);
@@ -131,6 +161,9 @@ class WalletController extends ApiController
         }
         if (!empty($data['savings_plan'])) {
             $data['savings_plan']['amount'] = $kobo($data['savings_plan']['amount'] ?? null);
+        }
+        if (!empty($data['approval'])) {
+            $data['approval']['threshold'] = $kobo($data['approval']['threshold'] ?? null);
         }
         if (!empty($data['emergency']['beneficiaries'])) {
             foreach ($data['emergency']['beneficiaries'] as $i => $b) {
@@ -192,13 +225,17 @@ class WalletController extends ApiController
         }
 
         $txns = $wallet->transactions()
+            ->with('user:id,first_name,last_name,name')
             ->when($request->query('type'), fn ($q, $t) => $q->where('type', $t))
             ->when($request->query('direction'), fn ($q, $d) => $q->where('direction', $d))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
 
         return $this->ok('Transactions fetched', [
-            'transactions' => collect($txns->items())->map(fn ($t) => $this->serializeTransaction($t)),
+            // "by": who moved the money, so a shared wallet reads "Emeka added money".
+            'transactions' => collect($txns->items())->map(fn ($t) => $this->serializeTransaction($t) + [
+                'by' => $t->user ? ['id' => $t->user->id, 'first_name' => $t->user->first_name ?: $t->user->fullName()] : null,
+            ]),
             'pagination' => [
                 'page' => $txns->currentPage(),
                 'per_page' => $txns->perPage(),
@@ -417,7 +454,8 @@ class WalletController extends ApiController
             && str_starts_with($e->errors()['banking'][0] ?? '', 'Your withdrawal is processing');
     }
 
-    // PATCH /wallets/{wallet}  { name?, description?, approval_enabled?, approval_threshold?, required_approvals? }
+    // PATCH /wallets/{wallet}  { name?, description?, approval_enabled?, approval_threshold?, required_approvals?,
+    //                          approval_mode?, lock_until_goal?, approval_expiry_hours?, reminder_day? }
     public function updateSettings(Request $request, Wallet $wallet): JsonResponse
     {
         if (!$wallet->isAccessibleBy($request->user())) {
@@ -435,11 +473,15 @@ class WalletController extends ApiController
             'approval_enabled' => ['sometimes', 'boolean'],
             'approval_threshold' => ['nullable', 'numeric', 'min:0'],
             'required_approvals' => ['sometimes', 'integer', 'min:1'],
+            'approval_mode' => ['sometimes', 'nullable', 'in:' . implode(',', Wallet::APPROVAL_MODES)],
+            'lock_until_goal' => ['sometimes', 'boolean'],
+            'approval_expiry_hours' => ['sometimes', 'integer', 'in:' . implode(',', Wallet::APPROVAL_EXPIRY_HOURS)],
+            'reminder_day' => ['sometimes', 'nullable', 'integer', 'between:1,28'],
         ]);
 
         // Approval-governance fields are owner-only. Co-owners may edit
         // name/description but must not be able to change who can spend how much.
-        $governanceFields = ['approval_enabled', 'approval_threshold', 'required_approvals'];
+        $governanceFields = ['approval_enabled', 'approval_threshold', 'required_approvals', 'approval_mode', 'lock_until_goal', 'approval_expiry_hours'];
         $touchesGovernance = false;
         foreach ($governanceFields as $field) {
             if ($request->exists($field)) {
@@ -488,6 +530,30 @@ class WalletController extends ApiController
         }
         if ($request->exists('required_approvals')) {
             $update['required_approvals'] = (int) $data['required_approvals'];
+        }
+
+        $meta = $wallet->meta ?? [];
+        if ($request->exists('approval_mode')) {
+            $meta['approval_mode'] = $data['approval_mode'];
+        } elseif ($request->exists('required_approvals')) {
+            // A fixed count replaces the "who decides" rule.
+            $meta['approval_mode'] = null;
+        }
+        if ($request->exists('lock_until_goal')) {
+            if ($request->boolean('lock_until_goal') && !($wallet->target_amount > 0)) {
+                return $this->fail('Set a target to lock the wallet until the goal is reached', 422);
+            }
+            $meta['lock_until_goal'] = $request->boolean('lock_until_goal') ?: null;
+        }
+        if ($request->exists('approval_expiry_hours')) {
+            $meta['approval_expiry_hours'] = (int) $data['approval_expiry_hours'];
+        }
+        if ($request->exists('reminder_day')) {
+            $meta['reminder_day'] = $data['reminder_day'] !== null ? (int) $data['reminder_day'] : null;
+        }
+        $meta = array_filter($meta, fn ($v) => $v !== null);
+        if ($meta !== ($wallet->meta ?? [])) {
+            $update['meta'] = $meta ?: null;
         }
 
         $wallet->update($update);

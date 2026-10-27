@@ -1,74 +1,147 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { TxnRow } from '../../components/TxnRow';
-import { EmptyState } from '../../components/EmptyState';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { PtBackButton } from '../../components/pt/PtStepScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtRing } from '../../components/pt/PtRing';
+import { PtAvatar, AVATAR_CYCLE } from '../../components/pt/PtAvatar';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtCard, PtRow } from '../../components/pt/PtList';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
-import { AutomationCard } from '../../components/AutomationCard';
-import { colors, gradients, outline, radius } from '../../theme';
-import { useWallet, useWalletMembers, useWalletTransactions, useAutomations } from '../../api/hooks';
-import { formatMoney, formatYmd, initials } from '../../lib/format';
-import { selection } from '../../lib/haptics';
-import { walletVisual } from '../../lib/walletVisual';
+import {
+  useAutomations,
+  useFundingDetails,
+  useWallet,
+  useWalletInvitations,
+  useWalletMembers,
+  useWalletTransactions,
+} from '../../api/hooks';
+import { useAuth } from '../../store/auth';
+import { agoLabel, formatNaira, formatYmd, humanizeType, initials } from '../../lib/format';
+import { approvalSummary, joinNames, ordinal } from '../../lib/goalPlan';
+import { formatE164 } from '../../lib/phone';
 import { canInviteMembers, canManageWallet, roleLabel } from '../../lib/governance';
-import type { WalletMember } from '../../api/types';
+import { notifySuccess, selection } from '../../lib/haptics';
+import type { Transaction, WalletMember } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+type Tab = 'activity' | 'members' | 'rules' | 'account';
 
-/** Main-treasury hero: deep treasury navy (client video: "this deep blue"). */
-const TREASURY_HERO = ['#062B23', '#08392F'] as const;
-/** Content colour on the green action pills. */
-const ON_GOLD = '#FFFFFF';
+const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** Title Case section heading ("Recent Transactions" — client: first letters capital, not all caps). */
-function SectionTitle({ children }: { children: React.ReactNode }) {
+/** "Today, 9:12 am" · "Yesterday" · "1 Oct". */
+function whenLabel(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const today = new Date();
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
+  if (days === 0) {
+    const h = d.getHours() % 12 || 12;
+    return `Today, ${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+  }
+  if (days === 1) return 'Yesterday';
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== today.getFullYear() ? ` ${d.getFullYear()}` : ''}`;
+}
+
+/** "Emeka added money" when someone else paid in; otherwise the description. */
+function activityTitle(t: Transaction, myId: number | undefined): string {
+  if (t.direction === 'credit' && t.by && t.by.id !== myId) return `${t.by.first_name} added money`;
+  return t.description || humanizeType(t.type);
+}
+
+const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] || 'Someone';
+
+/** WAL-02 underline tabs. */
+function Tabs({ tabs, value, onChange }: { tabs: { key: Tab; label: string }[]; value: Tab; onChange: (t: Tab) => void }) {
   return (
-    <Text className="text-sm font-extrabold text-ink">{children}</Text>
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 22, borderBottomWidth: 1, borderBottomColor: pt.line }}>
+      {tabs.map((t) => {
+        const on = t.key === value;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => {
+              selection();
+              onChange(t.key);
+            }}
+            // "button" on web: RNGH's Pressable ignores taps on role=tab elements there.
+            accessibilityRole={Platform.select({ web: 'button', default: 'tab' })}
+            accessibilityState={{ selected: on }}
+            style={{ paddingTop: 8, paddingBottom: 10, borderBottomWidth: 3, borderBottomColor: on ? pt.brand : 'transparent', marginBottom: -1 }}
+          >
+            <Text style={{ fontFamily: on ? ptFont.bold : ptFont.medium, fontSize: 16, color: on ? pt.brand : pt.inkMuted }}>{t.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
-/** Green action pill — icon over an uppercase label (Fund / Withdraw / Transfer / Request). */
-function ActionButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+/** Card linking to a part of the wallet that lives on its own screen. */
+function LinkCard({
+  icon,
+  title,
+  subtitle,
+  tone = 'light',
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Feather>['name'];
+  title: string;
+  subtitle: string;
+  tone?: 'light' | 'dark';
+  onPress: () => void;
+}) {
+  const dark = tone === 'dark';
   return (
     <Pressable
       onPress={() => {
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded bg-[#0B5D4B] py-4 active:opacity-90"
+      accessibilityRole="button"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 14,
+        borderRadius: ptRadius.md,
+        backgroundColor: dark ? pt.emerald900 : pt.raised,
+      }}
     >
-      <Ionicons name={icon} size={24} color={ON_GOLD} />
-      <Text
-        numberOfLines={1}
-        className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white"
-      >
-        {label}
-      </Text>
+      <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? 'rgba(255,255,255,0.12)' : pt.brandSoft }}>
+        <Feather name={icon} size={18} color={dark ? pt.emerald300 : pt.brand} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: dark ? '#FFFFFF' : pt.ink }}>{title}</Text>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: dark ? pt.onDarkMuted : pt.inkMuted }} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={dark ? pt.emerald300 : pt.inkSubtle} />
     </Pressable>
   );
 }
 
-/** Row inside the tonal Governance & Rules card. */
-function GovRow({ icon, text }: { icon: IconName; text: string }) {
-  return (
-    <View className="flex-row items-center">
-      <Ionicons name={icon} size={18} color={colors.muted} style={{ marginRight: 14 }} />
-      <Text className="flex-1 text-sm font-medium text-[#3D5249]">{text}</Text>
-    </View>
-  );
-}
-
+/**
+ * WAL-02 Wallet detail: progress ring (or balance) with who's in it, Add money /
+ * Pay from wallet, then Activity · Members · Rules · Account. Emergency rules,
+ * the savings plan and pending approvals link out from above the tabs.
+ */
 export function WalletDetailScreen({ navigation, route }: RootScreenProps<'WalletDetail'>) {
   const { walletId } = route.params;
+  const insets = useSafeAreaInsets();
+  const me = useAuth((s) => s.user);
   const detail = useWallet(walletId);
   const txns = useWalletTransactions(walletId);
+  const automations = useAutomations();
+  const [tab, setTab] = useState<Tab>('activity');
   const [copied, setCopied] = useState(false);
   const [manageMember, setManageMember] = useState<WalletMember | null>(null);
 
@@ -78,104 +151,267 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const approval = detail.data?.approval;
   const held = parseFloat(detail.data?.held_amount ?? '0');
   const pending = detail.data?.pending_approvals ?? 0;
-  const allTxns = txns.data?.pages.flatMap((p) => p.transactions) ?? [];
-  const visual = walletVisual(wallet?.type);
-
-  // Automation rules that move money in or out of THIS wallet — shown in the
-  // Governance & Rules section so a rule created here appears immediately.
-  const automations = useAutomations();
-  const walletRules = (automations.data ?? []).filter(
-    (r) => r.from_wallet.id === walletId || r.to_wallet.id === walletId,
-  );
-
-  const canManage = canManageWallet(role);
-  const canInvite = canInviteMembers(role);
-  // Spend actions (Withdraw/Transfer) 403 unless the server says this member may
-  // spend. Owner/co_owner always can; admin/contributor only with an explicit
-  // can_spend grant. Trust the backend's my_can_spend flag and fall back to the
-  // role gate only if the field is absent (older payloads).
-  const canSpend =
-    detail.data?.my_can_spend ??
-    (role != null && ['owner', 'co_owner'].includes(role));
-  // Members who can't spend directly but hold the "Request" permission can raise
-  // a spend request that the owner approves.
-  // A locked emergency wallet blocks spend requests too — its rules decide when
-  // money may leave, via the Emergency Access screen.
   const emergency = detail.data?.emergency ?? null;
   const emergencyLocked = emergency?.locked ?? false;
-  const canRequest = (detail.data?.my_can_request ?? false) && !emergencyLocked;
-  // Members with ids (for management) — only fetched when the user can manage.
-  const richMembers = useWalletMembers(walletId, canManage);
-
-  const target = parseFloat(wallet?.target_amount ?? '');
-  const balanceNum = parseFloat(wallet?.balance ?? '0');
-  const hasTarget = Number.isFinite(target) && target > 0;
-  const targetPct = hasTarget ? Math.min((balanceNum / target) * 100, 100) : 0;
-
-  // The main treasury gets the dark-gold editorial hero; other types keep their
-  // recognisable walletVisual material.
   const isMain = wallet?.type === 'main';
-  const heroGradient = isMain ? TREASURY_HERO : visual.gradient;
-  const heroDark = isMain ? true : visual.onDark;
-  const heroSub = heroDark ? 'rgba(255,255,255,0.5)' : 'rgba(23,28,31,0.45)';
-  const heroDivider = heroDark ? 'rgba(255,255,255,0.12)' : 'rgba(23,28,31,0.08)';
-  const available = Math.max(balanceNum - held, 0);
 
-  // Derived one-line insight (Stitch "AI insight" strip) from real wallet state.
-  const insight = emergencyLocked
-    ? 'This emergency wallet is locked. Anyone can add money, but it only leaves when one of its access rules is met.'
-    : !canSpend
-    ? canRequest
-      ? 'You can request spends on this wallet — the owner reviews and approves them before money moves.'
-      : 'You have view-only access to this wallet — withdrawals and transfers are disabled for your role.'
-    : held > 0
-      ? `${formatMoney(held)} is currently held against pending approvals.`
-      : 'This wallet is currently fully available for use.';
+  const canManage = canManageWallet(role);
+  const canInvite = canInviteMembers(role) && !isMain;
+  const canSpend = detail.data?.my_can_spend ?? (role != null && ['owner', 'co_owner'].includes(role));
+  const canRequest = (detail.data?.my_can_request ?? false) && !emergencyLocked;
+  const richMembers = useWalletMembers(walletId, canManage);
+  const invites = useWalletInvitations(walletId, canInvite);
+  const funding = useFundingDetails(walletId, tab === 'account');
+
+  const balance = parseFloat(wallet?.balance ?? '0');
+  const target = parseFloat(wallet?.target_amount ?? '');
+  const hasTarget = Number.isFinite(target) && target > 0;
+  const pct = hasTarget ? Math.min((balance / target) * 100, 100) : 0;
+  const shared = members.length > 1 || wallet?.mode === 'shared';
+  const allTxns = txns.data?.pages.flatMap((p) => p.transactions) ?? [];
+  const walletRules = (automations.data ?? []).filter((r) => r.from_wallet.id === walletId || r.to_wallet.id === walletId);
+  const pendingInvites = canInvite ? invites.data ?? [] : [];
+  const approvers = members.filter((m) => ['owner', 'co_owner', 'admin'].includes(m.role) || m.can_approve).map((m) => firstName(m.name));
 
   const refresh = () => {
     void detail.refetch();
     void txns.refetch();
     if (canManage) void richMembers.refetch();
-  };
-
-  const copyAccount = async () => {
-    if (!wallet?.virtual_account) return;
-    selection();
-    await Clipboard.setStringAsync(wallet.virtual_account);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+    if (canInvite) void invites.refetch();
   };
 
   const openManage = (m: WalletMember) => {
-    // Match the embed member to its rich counterpart (which carries the member id).
     const rich = (richMembers.data ?? []).find((r) => r.user_id === m.user_id);
-    if (!rich?.id) return;
-    if (rich.role === 'owner') return;
+    if (!rich?.id || rich.role === 'owner') return;
     selection();
     setManageMember(rich);
   };
 
-  return (
-    <Screen>
-      {/* Header — gold uppercase title, kebab settings (Stitch treatment) */}
-      <View className="flex-row items-center px-5 py-3" style={{ minHeight: 56 }}>
-        {navigation.canGoBack() ? (
-          <Pressable
-            onPress={() => {
-              selection();
-              navigation.goBack();
-            }}
-            hitSlop={10}
-            className="mr-2 h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-            style={{ marginLeft: -8 }}
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.goldDeep} />
-          </Pressable>
+  const account = funding.data?.account_number ?? wallet?.virtual_account ?? null;
+  const copyAccount = async () => {
+    if (!account) return;
+    selection();
+    await Clipboard.setStringAsync(account);
+    notifySuccess();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+  const shareAccount = () => {
+    if (!account) return;
+    selection();
+    void Share.share({
+      message: `Pay into ${wallet?.name ?? 'our wallet'} on Patriai\nAccount number: ${account}${funding.data?.bank_name ? `\nBank: ${funding.data.bank_name}` : ''}${funding.data?.account_name ? `\nName: ${funding.data.account_name}` : ''}`,
+    });
+  };
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'activity', label: 'Activity' },
+    ...(isMain ? [] : [{ key: 'members' as const, label: 'Members' }]),
+    { key: 'rules', label: 'Rules' },
+    { key: 'account', label: 'Account' },
+  ];
+
+  const payFromWallet = canSpend
+    ? () => navigation.navigate('Transfer', { walletId })
+    : canRequest
+      ? () => navigation.navigate('RequestSpend', { walletId })
+      : null;
+
+  // ------------------------------------------------------------------ tabs
+  const activity = txns.isLoading ? (
+    <ActivityIndicator color={pt.brand} style={{ marginTop: 24 }} />
+  ) : txns.error ? (
+    <LoadError message={(txns.error as Error).message} onRetry={() => void txns.refetch()} />
+  ) : allTxns.length === 0 ? (
+    <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.inkMuted, paddingVertical: 20, textAlign: 'center' }}>
+      No money in or out yet. Add money to get started.
+    </Text>
+  ) : (
+    <View>
+      {allTxns.map((t) => {
+        const credit = t.direction === 'credit';
+        return (
+          <View key={t.id} style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: credit ? pt.brandSoft : pt.sunken }}>
+              <Feather name={credit ? 'arrow-down-left' : 'arrow-up-right'} size={18} color={credit ? pt.brand : pt.inkMuted} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 16, lineHeight: 22, color: pt.ink }} numberOfLines={1}>
+                {activityTitle(t, me?.id)}
+              </Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }} numberOfLines={1}>
+                {whenLabel(t.created_at)}
+                {t.status !== 'successful' ? ` · ${humanizeType(t.status)}` : ''}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: credit ? pt.emerald500 : pt.ink }}>
+              {credit ? '+' : '−'}
+              {formatNaira(t.amount)}
+            </Text>
+          </View>
+        );
+      })}
+      {txns.hasNextPage ? (
+        <PtButton title="Show more" variant="ghost" loading={txns.isFetchingNextPage} onPress={() => void txns.fetchNextPage()} />
+      ) : null}
+    </View>
+  );
+
+  const membersTab = (
+    <View style={{ gap: 12, paddingTop: 8 }}>
+      <PtCard>
+        {members.map((m, i) => {
+          const isOwner = m.role === 'owner';
+          const tappable = canManage && !isOwner && richMembers.isSuccess;
+          const you = m.user_id === me?.id;
+          return (
+            <PtRow
+              key={m.user_id}
+              minHeight={64}
+              last={i === members.length - 1 && pendingInvites.length === 0}
+              left={<PtAvatar initials={initials(m.name)} tone={isOwner ? 'brand' : AVATAR_CYCLE[i % AVATAR_CYCLE.length]} />}
+              title={`${m.name}${you ? ' (you)' : ''}`}
+              subtitle={roleLabel(m.role)}
+              right={m.can_approve || ['owner', 'co_owner'].includes(m.role) ? <PtChip label="Approver" tone="brand" /> : undefined}
+              onPress={tappable ? () => openManage(m) : undefined}
+            />
+          );
+        })}
+        {pendingInvites.map((inv, i) => (
+          <PtRow
+            key={`inv-${inv.id}`}
+            minHeight={64}
+            last={i === pendingInvites.length - 1}
+            left={<PtAvatar initials="+" tone="dashed" />}
+            title={inv.invitee_identifier?.startsWith('+') ? formatE164(inv.invitee_identifier) : inv.invitee_identifier ?? 'Invited'}
+            subtitle={`Invited ${agoLabel(inv.created_at)} · ${roleLabel(inv.role).toLowerCase()}`}
+            right={<PtChip label="Pending" tone="warning" />}
+          />
+        ))}
+      </PtCard>
+      {canInvite ? <PtButton title="Add someone to this wallet" variant="secondary" onPress={() => navigation.navigate('InviteMember', { walletId })} /> : null}
+      {canManage && members.length > 1 ? (
+        <PtButton title="Access and permissions" variant="ghost" onPress={() => navigation.navigate('AssignAccess', { walletId })} />
+      ) : null}
+    </View>
+  );
+
+  const approvalLine = !approval?.enabled
+    ? wallet?.goal_locked
+      ? `Locked until ${formatNaira(wallet.target_amount)} is reached. Taking money out early needs everyone's yes.`
+      : 'Approvals are off. Owners and co-owners can pay out directly.'
+    : wallet?.approval_mode
+      ? approvalSummary({
+          mode: wallet.approval_mode,
+          threshold: approval.threshold ? parseFloat(approval.threshold) : null,
+          approvers,
+          lockUntilGoal: wallet.goal_locked ?? false,
+        })
+      : `${approval.threshold ? `Payments over ${formatNaira(approval.threshold)}` : 'Every payment'} need${approval.threshold ? '' : 's'} ${approval.required_approvals} yes${approval.required_approvals === 1 ? '' : 'es'} from ${joinNames(approvers) || 'an approver'}.`;
+
+  const rulesTab = (
+    <View style={{ gap: 12, paddingTop: 8 }}>
+      <PtCard>
+        <PtRow
+          minHeight={64}
+          left={<Feather name="shield" size={20} color={pt.brand} />}
+          title="When money needs a yes"
+          subtitle={approvalLine}
+          onPress={role === 'owner' ? () => navigation.navigate('WalletSettings', { walletId }) : undefined}
+          chevron={role === 'owner'}
+          last={!approval?.enabled && !wallet?.reminder_day && held <= 0}
+        />
+        {approval?.enabled ? (
+          <PtRow
+            left={<Feather name="clock" size={20} color={pt.brand} />}
+            title="Requests expire after"
+            right={`${wallet?.approval_expiry_hours ?? 48} hours`}
+            last={!wallet?.reminder_day && held <= 0}
+          />
         ) : null}
-        <Text
-          className="flex-1 text-[16px] font-extrabold uppercase tracking-wider text-gold-deep"
-          numberOfLines={1}
-        >
+        {wallet?.reminder_day ? (
+          <PtRow
+            left={<Feather name="bell" size={20} color={pt.brand} />}
+            title="Monthly reminder"
+            right={`On the ${ordinal(wallet.reminder_day)}`}
+            last={held <= 0}
+          />
+        ) : null}
+        {held > 0 ? (
+          <PtRow left={<Feather name="lock" size={20} color={pt.brand} />} title="Held for approvals" right={formatNaira(held)} last />
+        ) : null}
+      </PtCard>
+
+      {walletRules.length > 0 ? (
+        <PtCard>
+          {walletRules.map((r, i) => (
+            <PtRow
+              key={r.id}
+              minHeight={64}
+              last={i === walletRules.length - 1}
+              left={<Feather name="repeat" size={20} color={r.enabled ? pt.brand : pt.inkSubtle} />}
+              title={r.name}
+              subtitle={`${r.from_wallet.name} → ${r.to_wallet.name} · ${r.enabled ? r.next_run_hint : 'Paused'}`}
+              right={<Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{formatNaira(r.amount)}</Text>}
+            />
+          ))}
+        </PtCard>
+      ) : null}
+      {role === 'owner' ? (
+        <PtButton
+          title="New rule"
+          variant="secondary"
+          onPress={() => navigation.navigate('CreateAutomation', isMain ? { fromWalletId: walletId } : { toWalletId: walletId })}
+        />
+      ) : null}
+    </View>
+  );
+
+  const accountTab = (
+    <View style={{ gap: 12, paddingTop: 8 }}>
+      <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 18, gap: 12 }}>
+        <Text style={{ fontFamily: ptFont.medium, fontSize: 13, color: pt.inkMuted }}>Anyone can pay into this wallet directly</Text>
+        {account ? (
+          <Text style={{ fontFamily: MONO, fontWeight: '700', fontSize: 22, letterSpacing: 1, color: pt.ink }} selectable>
+            {account.replace(/^(\d{3})(\d{3})(\d+)$/, '$1 $2 $3')}
+          </Text>
+        ) : funding.isLoading ? (
+          <ActivityIndicator color={pt.brand} style={{ alignSelf: 'flex-start' }} />
+        ) : (
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>
+            {funding.error ? (funding.error as Error).message : 'The account number is being set up.'}
+          </Text>
+        )}
+        <View style={{ height: 1, backgroundColor: pt.line }} />
+        {[
+          ['Bank', funding.data?.bank_name ?? wallet?.virtual_account_bank ?? '—'],
+          ['Account name', funding.data?.account_name ?? '—'],
+        ].map(([label, value]) => (
+          <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 15, color: pt.inkMuted }}>{label}</Text>
+            <Text style={{ flex: 1, textAlign: 'right', fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{value}</Text>
+          </View>
+        ))}
+        {account ? (
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+            <PtButton title={copied ? 'Copied' : 'Copy'} variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => void copyAccount()} />
+            <PtButton title="Share" variant="secondary" size="sm" style={{ flex: 1 }} onPress={shareAccount} />
+          </View>
+        ) : null}
+      </View>
+      <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted, paddingHorizontal: 4 }}>
+        This account only accepts money. Paying out still follows the wallet's approval rules.
+      </Text>
+    </View>
+  );
+
+  // ------------------------------------------------------------------ screen
+  return (
+    <View style={{ flex: 1, backgroundColor: pt.surface, paddingTop: insets.top + 4 }}>
+      <StatusBar style="dark" />
+      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
+        {navigation.canGoBack() ? <PtBackButton onPress={() => navigation.goBack()} /> : <View style={{ width: 44 }} />}
+        <Text style={{ flex: 1, textAlign: 'center', fontFamily: ptFont.bold, fontSize: 18, color: pt.ink }} numberOfLines={1} accessibilityRole="header">
           {wallet?.name ?? 'Wallet'}
         </Text>
         {canManage ? (
@@ -184,468 +420,123 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               selection();
               navigation.navigate('WalletSettings', { walletId });
             }}
-            hitSlop={10}
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-            style={{ marginRight: -8 }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Wallet settings"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Ionicons name="ellipsis-vertical" size={20} color={colors.muted} />
+            <Feather name="settings" size={22} color={pt.ink} />
           </Pressable>
-        ) : null}
+        ) : (
+          <View style={{ width: 44 }} />
+        )}
       </View>
 
       {detail.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.goldDeep} />
-        </View>
+        <ActivityIndicator color={pt.brand} style={{ marginTop: 80 }} />
       ) : detail.error ? (
         <LoadError message={(detail.error as Error).message} onRetry={refresh} />
       ) : wallet ? (
         <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 32, gap: 20 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={detail.isRefetching} onRefresh={refresh} tintColor={colors.goldDeep} />
-          }
+          refreshControl={<RefreshControl refreshing={detail.isRefetching} onRefresh={refresh} tintColor={pt.brand} />}
         >
-          {/* Balance hero — editorial card with breakdown row */}
-          <LinearGradient
-            colors={heroGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: radius, padding: 28, overflow: 'hidden' }}
-          >
-            {/* Decorative gold wash */}
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: -48,
-                right: -48,
-                height: 176,
-                width: 176,
-                borderRadius: 88,
-                backgroundColor: heroDark ? 'rgba(95,211,165,0.10)' : 'rgba(255,255,255,0.35)',
-              }}
-            />
-
-            <View className="flex-row items-center justify-between">
-              <Text
-                className="flex-1 pr-3 text-[11px] font-bold uppercase"
-                style={{ letterSpacing: 2.5, color: heroDark ? 'rgba(255,255,255,0.7)' : colors.goldDeep }}
-                numberOfLines={1}
-              >
-                {wallet.name}
-              </Text>
-              <View
-                className={`rounded px-2.5 py-1 ${heroDark ? 'bg-white/20' : 'bg-white'}`}
-                style={!heroDark ? outline.card : undefined}
-              >
-                <Text
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
-                    heroDark ? 'text-brand-glow' : 'text-brand'
-                  }`}
-                >
-                  {wallet.status}
-                </Text>
-              </View>
-            </View>
-
-            <Text
-              className={`mt-2 text-[38px] font-extrabold leading-tight tracking-tight ${
-                heroDark ? 'text-white' : 'text-ink'
-              }`}
-            >
-              {formatMoney(wallet.balance)}
+          {/* Hero */}
+          <View style={{ alignItems: 'center', gap: 10 }}>
+            {hasTarget ? <PtRing percent={pct} size={150} stroke={14} caption="funded" /> : null}
+            <Text style={{ fontFamily: ptFont.extrabold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, color: pt.ink, marginTop: hasTarget ? 6 : 12 }}>
+              {formatNaira(wallet.balance)}
             </Text>
-
-            {/* Breakdown row */}
-            <View
-              className="mt-6 flex-row items-center justify-between pt-5"
-              style={{ borderTopWidth: 1, borderColor: heroDivider }}
-            >
-              <View>
-                <Text className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: heroSub }}>
-                  Available
-                </Text>
-                <Text
-                  className="mt-1 text-[13px] font-bold"
-                  style={{ color: heroDark ? colors.brandGlow : colors.brand }}
-                >
-                  {formatMoney(available)}
-                </Text>
-              </View>
-              <View className="items-center">
-                <Text className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: heroSub }}>
-                  Held
-                </Text>
-                <Text className={`mt-1 text-[13px] font-bold ${heroDark ? 'text-white' : 'text-ink'}`}>
-                  {formatMoney(held)}
-                </Text>
-              </View>
-              <View className="items-end">
-                <Text className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: heroSub }}>
-                  Target
-                </Text>
-                <Text className={`mt-1 text-[13px] font-bold ${heroDark ? 'text-white' : 'text-ink'}`}>
-                  {hasTarget ? formatMoney(wallet.target_amount) : '—'}
-                </Text>
-              </View>
-            </View>
-
-            {hasTarget ? (
-              <View className="mt-4">
-                <View
-                  className="h-2 overflow-hidden rounded-full"
-                  style={{ backgroundColor: heroDark ? 'rgba(255,255,255,0.15)' : 'rgba(23,28,31,0.08)' }}
-                >
-                  <View
-                    className="h-2 rounded-full"
-                    style={{ width: `${Math.max(targetPct, 2)}%`, backgroundColor: '#5FD3A5' }}
-                  />
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted, textAlign: 'center' }}>
+              {hasTarget
+                ? [
+                    `of ${formatNaira(target)}`,
+                    wallet.target_date ? `due ${formatYmd(wallet.target_date)}` : null,
+                    balance < target ? `${formatNaira(target - balance)} to go` : 'goal reached',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : held > 0
+                  ? `${formatNaira(Math.max(balance - held, 0))} available · ${formatNaira(held)} held for approvals`
+                  : `${humanizeType(wallet.type)} wallet`}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+              {members.length > 1 ? (
+                <View style={{ flexDirection: 'row' }}>
+                  {members.slice(0, 3).map((m, i) => (
+                    <View key={m.user_id} style={{ marginLeft: i === 0 ? 0 : -8, borderRadius: 18, borderWidth: 2, borderColor: pt.surface }}>
+                      <PtAvatar initials={initials(m.name)} tone={m.role === 'owner' ? 'brand' : AVATAR_CYCLE[i % AVATAR_CYCLE.length]} size={30} />
+                    </View>
+                  ))}
                 </View>
-                <Text className="mt-1.5 text-[11px]" style={{ color: heroDark ? 'rgba(255,255,255,0.7)' : colors.muted }}>
-                  {Math.floor(targetPct)}% of {formatMoney(wallet.target_amount)} target
-                </Text>
-              </View>
-            ) : null}
-
-            {wallet.virtual_account ? (
-              <Pressable
-                onPress={() => void copyAccount()}
-                className={`mt-5 flex-row items-center self-start rounded px-3.5 py-2 active:opacity-80 ${
-                  heroDark ? 'bg-white/10' : 'bg-white'
-                }`}
-                style={!heroDark ? outline.card : undefined}
-              >
-                <Ionicons
-                  name="card-outline"
-                  size={15}
-                  color={heroDark ? colors.brandMint : colors.goldDeep}
-                  style={{ marginRight: 7 }}
-                />
-                <Text className={`text-[13px] font-semibold ${heroDark ? 'text-white' : 'text-ink'}`}>
-                  {wallet.virtual_account}
-                  {wallet.virtual_account_bank ? ` · ${wallet.virtual_account_bank}` : ''}
-                </Text>
-                <Ionicons
-                  name={copied ? 'checkmark-circle' : 'copy-outline'}
-                  size={15}
-                  color={
-                    copied
-                      ? heroDark
-                        ? colors.brandGlow
-                        : colors.brand
-                      : heroDark
-                        ? colors.white
-                        : colors.muted
-                  }
-                  style={{ marginLeft: 8 }}
-                />
-              </Pressable>
-            ) : null}
-          </LinearGradient>
-
-          {/* Insight strip */}
-          <View className="mt-3 flex-row items-start rounded bg-page-top p-4">
-            <Ionicons name="sparkles" size={18} color={colors.goldDeep} style={{ marginRight: 12, marginTop: 1 }} />
-            <Text className="flex-1 text-sm font-medium leading-5 text-muted">{insight}</Text>
-          </View>
-
-          {/* Emergency protection — lock state + way into the unlock rules */}
-          {emergency ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('EmergencyCenter', { walletId });
-              }}
-              className={`mt-4 flex-row items-center rounded p-4 active:opacity-90 ${emergencyLocked ? 'bg-navy' : 'bg-success-soft'}`}
-            >
-              <View className={`mr-3 h-9 w-9 items-center justify-center rounded ${emergencyLocked ? 'bg-white/15' : 'bg-white'}`}>
-                <Ionicons
-                  name={emergencyLocked ? 'lock-closed' : 'lock-open'}
-                  size={18}
-                  color={emergencyLocked ? colors.brandMint : colors.brand}
-                />
-              </View>
-              <View className="flex-1">
-                <Text className={`text-[14px] font-bold ${emergencyLocked ? 'text-white' : 'text-brand-deep'}`}>
-                  {emergencyLocked ? 'Locked by Emergency Rules' : 'Unlocked'}
-                </Text>
-                <Text className={`text-xs ${emergencyLocked ? 'text-white/60' : 'text-brand-deep'}`}>
-                  {emergency.my_emergency_role === 'recipient'
-                    ? 'See your share and how this wallet unlocks'
-                    : 'Unlock rules, recipients and requests'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={emergencyLocked ? colors.brandMint : colors.brand} />
-            </Pressable>
-          ) : null}
-
-          {/* Savings goal — the shared plan, milestones and each saver's auto-save */}
-          {wallet.type === 'savings' || wallet.type === 'goal' ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('SavingsPlan', { walletId });
-              }}
-              className="mt-4 flex-row items-center rounded bg-white p-4 active:opacity-90"
-              style={outline.card}
-            >
-              <View className="mr-3 h-9 w-9 items-center justify-center rounded bg-success-soft">
-                <Ionicons name="trending-up" size={18} color={colors.brand} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[14px] font-bold text-ink">Savings Plan</Text>
-                <Text className="text-xs text-muted" numberOfLines={1}>
-                  {detail.data?.savings
-                    ? `${detail.data.savings.label}${wallet.target_date ? ` · by ${formatYmd(wallet.target_date)}` : ''}`
-                    : role === 'owner'
-                      ? 'Set a target date, milestones and auto-save'
-                      : 'Progress, milestones and savers'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-            </Pressable>
-          ) : null}
-
-          {/* Pending approvals banner */}
-          {pending > 0 ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('Approvals', { scope: 'to_me' });
-              }}
-              className="mt-4 flex-row items-center rounded bg-navy p-4 active:opacity-90"
-            >
-              <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-white/15">
-                <Ionicons name="hourglass-outline" size={18} color={colors.brandMint} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[14px] font-bold text-white">
-                  {pending} pending approval{pending === 1 ? '' : 's'}
-                </Text>
-                <Text className="text-xs text-white/60">Review spends waiting on this wallet</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.brandMint} />
-            </Pressable>
-          ) : null}
-
-          {/* Primary actions — gold pills. Spend buttons stay hidden for roles that
-              can't spend (they 403); request-only members see "Request". */}
-          <View className="mt-6 flex-row" style={{ gap: 12 }}>
-            <ActionButton icon="add-circle" label="Fund" onPress={() => navigation.navigate('Fund', { walletId })} />
-            {canSpend ? (
-              <>
-                <ActionButton icon="cash" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId })} />
-                <ActionButton icon="swap-horizontal" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId })} />
-              </>
-            ) : canRequest ? (
-              <ActionButton icon="hand-left" label="Request" onPress={() => navigation.navigate('RequestSpend', { walletId })} />
-            ) : null}
-            {role === 'owner' ? (
-              <ActionButton
-                icon="repeat"
-                label="Rule"
-                onPress={() =>
-                  navigation.navigate(
-                    'CreateAutomation',
-                    wallet.type === 'main' ? { fromWalletId: walletId } : { toWalletId: walletId },
-                  )
-                }
-              />
-            ) : null}
-          </View>
-
-          {/* Governance & Rules — approvals summary + this wallet's automation rules */}
-          {approval || held > 0 || walletRules.length > 0 ? (
-            <View className="mt-7">
-              <SectionTitle>Governance & Rules</SectionTitle>
-              {approval || held > 0 ? (
-              <View
-                className="mt-3 rounded p-5"
-                style={{ backgroundColor: 'rgba(199,223,255,0.35)', gap: 14 }}
-              >
-                {approval ? (
-                  <GovRow
-                    icon={approval.enabled ? 'shield-checkmark' : 'shield-outline'}
-                    text={
-                      approval.enabled
-                        ? approval.threshold
-                          ? `Approval required for spends over ${formatMoney(approval.threshold)}`
-                          : 'Approval required for every spend'
-                        : 'Approvals are off for this wallet'
-                    }
-                  />
-                ) : null}
-                {approval?.enabled && (approval.required_approvals ?? 1) > 1 ? (
-                  <GovRow
-                    icon="people-circle"
-                    text={`${approval.required_approvals} approvals needed per spend`}
-                  />
-                ) : null}
-                {held > 0 ? (
-                  <GovRow icon="lock-closed" text={`${formatMoney(held)} held for pending approvals`} />
-                ) : null}
-              </View>
               ) : null}
-              {walletRules.map((r) => (
-                <AutomationCard key={r.id} rule={r} />
-              ))}
+              {shared ? <PtChip label="Shared" tone="brand" icon="circle" /> : null}
+              {approval?.enabled ? <PtChip label="Approvals on" tone="neutral" icon="lock" /> : null}
+              {wallet.goal_locked ? <PtChip label="Locked until reached" tone="warning" icon="lock" /> : null}
+              {wallet.status === 'frozen' ? <PtChip label="Frozen" tone="danger" icon="pause" /> : null}
+            </View>
+          </View>
+
+          {/* Actions */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <PtButton title="Add money" onPress={() => navigation.navigate('Fund', { walletId })} />
+            </View>
+            {payFromWallet ? (
+              <View style={{ flex: 1 }}>
+                <PtButton title={canSpend ? 'Pay from wallet' : 'Ask to pay'} variant="secondary" onPress={payFromWallet} />
+              </View>
+            ) : null}
+          </View>
+
+          {/* Parts of the wallet with their own screens */}
+          {emergency || pending > 0 || wallet.type === 'savings' || wallet.type === 'goal' ? (
+            <View style={{ gap: 10 }}>
+              {emergency ? (
+                <LinkCard
+                  icon={emergencyLocked ? 'lock' : 'unlock'}
+                  tone={emergencyLocked ? 'dark' : 'light'}
+                  title={emergencyLocked ? 'Locked by emergency rules' : 'Unlocked'}
+                  subtitle={emergency.my_emergency_role === 'recipient' ? 'See your share and how this wallet unlocks' : 'Unlock rules, recipients and requests'}
+                  onPress={() => navigation.navigate('EmergencyCenter', { walletId })}
+                />
+              ) : null}
+              {pending > 0 ? (
+                <LinkCard
+                  icon="check-circle"
+                  tone="dark"
+                  title={`${pending} payment${pending === 1 ? '' : 's'} waiting for a yes`}
+                  subtitle="Review what's waiting on this wallet"
+                  onPress={() => navigation.navigate('Approvals', { scope: 'to_me' })}
+                />
+              ) : null}
+              {wallet.type === 'savings' || wallet.type === 'goal' ? (
+                <LinkCard
+                  icon="trending-up"
+                  title="Savings plan"
+                  subtitle={
+                    detail.data?.savings
+                      ? `${detail.data.savings.label}${wallet.target_date ? ` · by ${formatYmd(wallet.target_date)}` : ''}`
+                      : role === 'owner'
+                        ? 'Milestones and auto-save for everyone'
+                        : 'Progress, milestones and savers'
+                  }
+                  onPress={() => navigation.navigate('SavingsPlan', { walletId })}
+                />
+              ) : null}
             </View>
           ) : null}
 
-          {/* Access & Members */}
-          {wallet.type !== 'main' ? (
-            <>
-              <View className="mt-7 flex-row items-center justify-between">
-                <SectionTitle>
-                  {`Access & Members${members.length > 0 ? ` · ${members.length}` : ''}`}
-                </SectionTitle>
-                <View className="flex-row items-center" style={{ gap: 8 }}>
-                  {canManage && members.length > 1 ? (
-                    <Pressable
-                      onPress={() => {
-                        selection();
-                        navigation.navigate('AssignAccess', { walletId });
-                      }}
-                      hitSlop={6}
-                      className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(31,160,122,0.16)' }}
-                    >
-                      <Ionicons name="options-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
-                      <Text className="text-[12px] font-bold text-gold-deep">Access</Text>
-                    </Pressable>
-                  ) : null}
-                  {canInvite ? (
-                    <Pressable
-                      onPress={() => {
-                        selection();
-                        navigation.navigate('InviteMember', { walletId });
-                      }}
-                      hitSlop={6}
-                      className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(31,160,122,0.16)' }}
-                    >
-                      <Ionicons name="person-add-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
-                      <Text className="text-[12px] font-bold text-gold-deep">Invite</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-
-              {members.length > 0 ? (
-                <Card className="mt-3 py-2">
-                  {members.map((m) => {
-                    const isOwner = m.role === 'owner';
-                    // Only advertise a row as tappable once the rich member list
-                    // (which carries the id needed to manage it) has loaded —
-                    // otherwise the tap silently no-ops.
-                    const tappable = canManage && !isOwner && richMembers.isSuccess;
-                    const Row = tappable ? Pressable : View;
-                    return (
-                      <Row
-                        key={m.user_id}
-                        onPress={tappable ? () => openManage(m) : undefined}
-                        className={`flex-row items-center py-3 ${tappable ? 'active:opacity-70' : ''}`}
-                      >
-                        <LinearGradient
-                          colors={gradients.avatar}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={{
-                            height: 40,
-                            width: 40,
-                            borderRadius: 20,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 12,
-                          }}
-                        >
-                          <Text className="text-xs font-bold text-white">{initials(m.name)}</Text>
-                        </LinearGradient>
-                        <View className="flex-1 pr-2">
-                          <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
-                            {m.name}
-                          </Text>
-                          <Text className="text-xs text-faded" numberOfLines={1}>
-                            {m.email}
-                          </Text>
-                        </View>
-                        <View className="items-end">
-                          <View className="rounded bg-lav-faint px-2.5 py-1">
-                            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                              {roleLabel(m.role)}
-                            </Text>
-                          </View>
-                          {m.can_approve ? (
-                            <View className="mt-1 flex-row items-center">
-                              <Ionicons name="shield-checkmark" size={11} color={colors.brand} style={{ marginRight: 3 }} />
-                              <Text className="text-[10px] font-semibold text-brand">Approver</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        {tappable ? (
-                          <Ionicons name="ellipsis-horizontal" size={18} color={colors.faded} style={{ marginLeft: 8 }} />
-                        ) : null}
-                      </Row>
-                    );
-                  })}
-                </Card>
-              ) : (
-                <Card className="mt-3">
-                  <Text className="text-sm text-muted">
-                    No members yet.{canInvite ? ' Invite someone to collaborate on this wallet.' : ''}
-                  </Text>
-                </Card>
-              )}
-            </>
-          ) : null}
-
-          {/* Recent transactions */}
-          <View className="mt-7">
-            <SectionTitle>Recent Transactions</SectionTitle>
-          </View>
-          <View className="mt-3" style={{ gap: 12 }}>
-            {txns.isLoading ? (
-              <View className="items-center py-10">
-                <ActivityIndicator color={colors.goldDeep} />
-              </View>
-            ) : txns.error ? (
-              <LoadError message={(txns.error as Error).message} onRetry={() => txns.refetch()} />
-            ) : allTxns.length === 0 ? (
-              <EmptyState
-                title="No transactions yet"
-                message="Fund this wallet to see its history here."
-                icon="swap-vertical-outline"
-              />
-            ) : (
-              <>
-                {allTxns.map((t) => (
-                  <TxnRow key={t.id} txn={t} />
-                ))}
-                {txns.hasNextPage ? (
-                  <Pressable
-                    onPress={() => void txns.fetchNextPage()}
-                    disabled={txns.isFetchingNextPage}
-                    className="items-center rounded py-3.5 active:opacity-80"
-                    style={{ backgroundColor: 'rgba(31,160,122,0.14)' }}
-                  >
-                    {txns.isFetchingNextPage ? (
-                      <ActivityIndicator color={colors.goldDeep} />
-                    ) : (
-                      <Text className="text-xs font-extrabold uppercase tracking-widest text-gold-deep">
-                        Load more
-                      </Text>
-                    )}
-                  </Pressable>
-                ) : null}
-              </>
-            )}
+          {/* Tabs */}
+          <View>
+            <Tabs tabs={tabs} value={tabs.some((t) => t.key === tab) ? tab : 'activity'} onChange={setTab} />
+            {tab === 'members' && !isMain ? membersTab : tab === 'rules' ? rulesTab : tab === 'account' ? accountTab : activity}
           </View>
         </ScrollView>
       ) : null}
 
       <MemberManageModal walletId={walletId} member={manageMember} onClose={() => setManageMember(null)} />
-    </Screen>
+    </View>
   );
 }

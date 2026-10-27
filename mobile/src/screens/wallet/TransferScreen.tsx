@@ -40,7 +40,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
 
   const [fromId, setFromId] = useState<number | undefined>(initialWalletId);
   const [kind, setKind] = useState<DestKind>('wallet');
-  const [destWalletId, setDestWalletId] = useState<number | undefined>();
+  const [destWalletId, setDestWalletId] = useState<number | undefined>(route.params?.toWalletId);
   const [identifier, setIdentifier] = useState('');
   const [bank, setBank] = useState<Bank | null>(null);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);

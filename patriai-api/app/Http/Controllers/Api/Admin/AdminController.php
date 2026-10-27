@@ -396,6 +396,19 @@ class AdminController extends ApiController
                 'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
                 'required_approvals' => (int) $wallet->required_approvals,
             ],
+            // People invited at creation (WCR-08) or later who haven't answered yet.
+            'invitations' => $wallet->invitations()->with(['invitee', 'inviter'])
+                ->where('status', 'pending')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->latest()->get()
+                ->map(fn ($i) => [
+                    'id' => $i->id,
+                    'invitee' => $i->invitee?->fullName() ?: $i->invitee_identifier,
+                    'role' => $i->role,
+                    'inviter' => $i->inviter?->fullName(),
+                    'created_at' => $i->created_at?->toIso8601String(),
+                    'expires_at' => $i->expires_at?->toIso8601String(),
+                ]),
             'recent_transactions' => $wallet->transactions()->latest()->limit(15)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
             // Emergency wallets: lock state + whether the owner allowed a national-crisis override.

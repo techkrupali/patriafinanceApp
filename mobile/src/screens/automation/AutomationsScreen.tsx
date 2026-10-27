@@ -41,6 +41,10 @@ function approvalLine(a: ApprovalRuleSummary): string {
   const names = a.approvers;
   const joined = names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   const scope = a.threshold ? `anything over ${formatNaira(a.threshold)}` : 'every payment';
+  if (a.goal_locked) return `${joined || 'You'} all say yes to any payment until the goal is reached`;
+  if (names.length > 1 && a.approval_mode === 'any') return `Any one of ${joined} approves ${scope}`;
+  if (names.length > 2 && a.approval_mode === 'majority') return `Most of ${joined} approve ${scope}`;
+  if (a.approval_mode === 'all') return `${joined || 'You'} approve${names.length === 1 ? 's' : ''} ${scope}`;
   if (names.length > 1 && a.required_approvals < names.length) {
     return `${a.required_approvals} of ${names.length} approvers (${joined}) say yes to ${scope}`;
   }

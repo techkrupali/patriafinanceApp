@@ -57,6 +57,17 @@ export interface ApiWallet {
   virtual_account_bank: string | null;
   status: "active" | "frozen" | "closed";
   created_at: string | null;
+  target_date?: string | null;
+  /** Chosen at creation: just the owner, or family adds money and sees everything. */
+  mode?: "private" | "shared" | null;
+  /** Who decides a spend: first yes, everyone, or more than half; null = fixed count. */
+  approval_mode?: "any" | "all" | "majority" | null;
+  lock_until_goal?: boolean;
+  /** Locked right now: every spend needs everyone's yes until the target is reached. */
+  goal_locked?: boolean;
+  approval_expiry_hours?: number;
+  /** Day of the month savers are reminded (1–28). */
+  reminder_day?: number | null;
   owner?: {
     id: number;
     name: string;
@@ -274,6 +285,7 @@ export interface WalletMember {
   email: string;
   role: string;
   can_approve: boolean;
+  status: string;
 }
 
 export interface WalletDetailData {
@@ -286,6 +298,15 @@ export interface WalletDetailData {
   };
   recent_transactions: ApiTransaction[];
   emergency: WalletEmergency | null; // null unless an emergency wallet
+  /** Invited but not answered yet. */
+  invitations: {
+    id: number;
+    invitee: string;
+    role: string;
+    inviter: string | null;
+    created_at: string | null;
+    expires_at: string | null;
+  }[];
 }
 
 export type LoanStatus =
