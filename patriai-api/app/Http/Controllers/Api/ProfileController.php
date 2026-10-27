@@ -21,6 +21,7 @@ class ProfileController extends ApiController
             'last_name' => ['sometimes', 'string', 'max:100'],
             'avatar_url' => ['sometimes', 'nullable', 'url', 'max:500'],
             'username' => ['sometimes', 'string', 'regex:/^[a-zA-Z0-9_]{3,30}$/'],
+            'language' => ['sometimes', 'in:en,pcm'],
         ]);
 
         $user = $request->user();

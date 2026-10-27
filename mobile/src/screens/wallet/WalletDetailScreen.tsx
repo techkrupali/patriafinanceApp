@@ -23,7 +23,7 @@ import type { RootScreenProps } from '../../navigation/types';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 /** Main-treasury hero: deep treasury navy (client video: "this deep blue"). */
-const TREASURY_HERO = ['#0A2A44', '#011D35'] as const;
+const TREASURY_HERO = ['#062B23', '#08392F'] as const;
 /** Content colour on the green action pills. */
 const ON_GOLD = '#FFFFFF';
 
@@ -42,7 +42,7 @@ function ActionButton({ icon, label, onPress }: { icon: IconName; label: string;
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded bg-[#006D2F] py-4 active:opacity-90"
+      className="flex-1 items-center justify-center rounded bg-[#0B5D4B] py-4 active:opacity-90"
     >
       <Ionicons name={icon} size={24} color={ON_GOLD} />
       <Text
@@ -60,7 +60,7 @@ function GovRow({ icon, text }: { icon: IconName; text: string }) {
   return (
     <View className="flex-row items-center">
       <Ionicons name={icon} size={18} color={colors.muted} style={{ marginRight: 14 }} />
-      <Text className="flex-1 text-sm font-medium text-[#4B637E]">{text}</Text>
+      <Text className="flex-1 text-sm font-medium text-[#3D5249]">{text}</Text>
     </View>
   );
 }
@@ -224,7 +224,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 height: 176,
                 width: 176,
                 borderRadius: 88,
-                backgroundColor: heroDark ? 'rgba(61,226,115,0.10)' : 'rgba(255,255,255,0.35)',
+                backgroundColor: heroDark ? 'rgba(95,211,165,0.10)' : 'rgba(255,255,255,0.35)',
               }}
             />
 
@@ -300,7 +300,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 >
                   <View
                     className="h-2 rounded-full"
-                    style={{ width: `${Math.max(targetPct, 2)}%`, backgroundColor: '#3DE273' }}
+                    style={{ width: `${Math.max(targetPct, 2)}%`, backgroundColor: '#5FD3A5' }}
                   />
                 </View>
                 <Text className="mt-1.5 text-[11px]" style={{ color: heroDark ? 'rgba(255,255,255,0.7)' : colors.muted }}>
@@ -510,7 +510,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                       }}
                       hitSlop={6}
                       className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
+                      style={{ backgroundColor: 'rgba(31,160,122,0.16)' }}
                     >
                       <Ionicons name="options-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
                       <Text className="text-[12px] font-bold text-gold-deep">Access</Text>
@@ -524,7 +524,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                       }}
                       hitSlop={6}
                       className="flex-row items-center rounded px-3.5 py-1.5 active:opacity-80"
-                      style={{ backgroundColor: 'rgba(15,138,68,0.16)' }}
+                      style={{ backgroundColor: 'rgba(31,160,122,0.16)' }}
                     >
                       <Ionicons name="person-add-outline" size={13} color={colors.goldDeep} style={{ marginRight: 5 }} />
                       <Text className="text-[12px] font-bold text-gold-deep">Invite</Text>
@@ -628,7 +628,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                     onPress={() => void txns.fetchNextPage()}
                     disabled={txns.isFetchingNextPage}
                     className="items-center rounded py-3.5 active:opacity-80"
-                    style={{ backgroundColor: 'rgba(15,138,68,0.14)' }}
+                    style={{ backgroundColor: 'rgba(31,160,122,0.14)' }}
                   >
                     {txns.isFetchingNextPage ? (
                       <ActivityIndicator color={colors.goldDeep} />

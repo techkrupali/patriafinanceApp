@@ -109,3 +109,43 @@ export function humanizeType(type: string): string {
   const s = type.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/** "834700.00" → "₦834,700" (whole naira, as the prototype shows lists and totals). */
+export function formatNaira(value: string | number | null | undefined): string {
+  const num = typeof value === 'number' ? value : parseFloat(value ?? '0');
+  const safe = Number.isFinite(num) ? Math.round(num) : 0;
+  return (safe < 0 ? '−₦' : '₦') + Math.abs(safe).toLocaleString('en-NG');
+}
+
+/** "834700" → "₦835k", "2155000" → "₦2,155k", "1200" → "₦1.2k", "800" → "₦800". */
+export function formatNairaK(value: string | number | null | undefined): string {
+  const num = typeof value === 'number' ? value : parseFloat(value ?? '0');
+  const safe = Number.isFinite(num) ? Math.max(0, num) : 0;
+  if (safe < 1000) return `₦${Math.round(safe)}`;
+  const k = safe / 1000;
+  return `₦${(k < 10 ? Math.round(k * 10) / 10 : Math.round(k)).toLocaleString('en-NG')}k`;
+}
+
+/** '2026-11-01' → 'Sun 1 Nov' (or 'Today' / 'Tomorrow' when given those labels). */
+export function shortDay(ymd: string | null | undefined, labels?: { today: string; tomorrow?: string }): string {
+  const d = parseYmd(ymd);
+  if (!d) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (labels && diff === 0) return labels.today;
+  if (labels?.tomorrow && diff === 1) return labels.tomorrow;
+  return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/** "invited 2 days ago" style: 'today', 'yesterday', 'N days ago', or the date after a month. */
+export function agoLabel(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return '';
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 31) return `${days} days ago`;
+  return `on ${then.getDate()} ${MONTHS[then.getMonth()]}`;
+}

@@ -174,6 +174,22 @@ abstract class ApiController extends Controller
         return '+' . $digits;
     }
 
+    /** Wallets whose spend requests this user may approve: owned, or an approving member. */
+    protected function approvableWalletIds(User $user): \Illuminate\Support\Collection
+    {
+        $owned = Wallet::where('user_id', $user->id)->pluck('id');
+
+        $member = WalletMember::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->where('role', '!=', 'viewer')
+            ->where(function ($q) {
+                $q->whereIn('role', ['owner', 'co_owner', 'admin'])->orWhere('can_approve', true);
+            })
+            ->pluck('wallet_id');
+
+        return $owned->concat($member)->unique()->values();
+    }
+
     /** Record the device a session was opened from (Devices screen, push tokens). */
     protected function recordDevice(Request $request, User $user): void
     {

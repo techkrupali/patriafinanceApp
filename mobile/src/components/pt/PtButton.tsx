@@ -21,6 +21,8 @@ interface PtButtonProps {
   size?: 'md' | 'sm';
   loading?: boolean;
   disabled?: boolean;
+  /** Leading icon (drawn in the label colour by the caller). */
+  icon?: React.ReactNode;
   style?: ViewStyle;
 }
 
@@ -32,6 +34,7 @@ export function PtButton({
   size = 'md',
   loading = false,
   disabled = false,
+  icon,
   style,
 }: PtButtonProps) {
   const { bg, fg } = fill[variant];
@@ -61,20 +64,23 @@ export function PtButton({
         style,
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {loading ? (
           <ActivityIndicator color={fg} />
         ) : (
-          <Text
-            style={{
-              fontFamily: ptFont.bold,
-              fontSize: size === 'md' ? 15 : 13,
-              letterSpacing: 0.08,
-              color: fg,
-            }}
-          >
-            {title}
-          </Text>
+          <>
+            {icon}
+            <Text
+              style={{
+                fontFamily: ptFont.bold,
+                fontSize: size === 'md' ? 15 : 13,
+                letterSpacing: 0.08,
+                color: fg,
+              }}
+            >
+              {title}
+            </Text>
+          </>
         )}
       </View>
     </Pressable>

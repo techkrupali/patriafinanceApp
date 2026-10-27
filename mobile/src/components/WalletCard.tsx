@@ -40,7 +40,7 @@ function subtitleFor(wallet: Wallet): string {
 
 /** Soft tinted icon tile per wallet type (Stitch treasury list treatment). */
 function tileVisual(wallet: Wallet): { bg: string; fg: string } {
-  if (wallet.type === 'main') return { bg: 'rgba(15,138,68,0.14)', fg: colors.goldDeep };
+  if (wallet.type === 'main') return { bg: 'rgba(31,160,122,0.14)', fg: colors.goldDeep };
   const s = walletVisual(wallet.type);
   // Light gradients (project, child) get the soft secondary-container tint.
   if (!s.onDark) return { bg: 'rgba(199,223,255,0.35)', fg: colors.muted };
@@ -113,7 +113,7 @@ export function WalletCard({ wallet, onPress, className = '' }: WalletCardProps)
           <View className="mt-1.5 h-2 overflow-hidden rounded-full bg-lav-soft">
             <View
               className="h-2 rounded-full"
-              style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: '#0F8A44' }}
+              style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: '#1FA07A' }}
             />
           </View>
         </View>

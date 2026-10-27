@@ -1,273 +1,170 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../components/Screen';
-import { Button } from '../components/Button';
-import { WalletCard } from '../components/WalletCard';
-import { DraftWalletCard } from '../components/DraftWalletCard';
-import { EmptyState } from '../components/EmptyState';
+import React, { useCallback, useMemo } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { pt, ptFont, ptRadius } from '../theme';
+import { PtTabScreen, PtQuickAction } from '../components/pt/PtTabScreen';
+import { PtButton } from '../components/pt/PtButton';
+import { PtCard, PtRow, PtSectionTitle } from '../components/pt/PtList';
+import { PtWalletRow } from '../components/pt/PtWalletRow';
 import { LoadError } from '../components/LoadError';
-import { colors, gradients, radius } from '../theme';
-import { useMe, useWalletDrafts, useWallets } from '../api/hooks';
-import { formatMoney, initials } from '../lib/format';
-import { selection } from '../lib/haptics';
-import { resumeDraft } from '../lib/drafts';
-import type { Wallet } from '../api/types';
+import { useHome, useWalletDrafts, useWallets } from '../api/hooks';
+import { useHomePrefs } from '../store/homePrefs';
+import { formatMoney, formatNaira, formatNairaK } from '../lib/format';
 import type { TabScreenProps } from '../navigation/types';
 
-type TreasuryFilter = 'active' | 'locked' | 'archived';
+const SEGMENTS = [
+  { key: 'yours', label: 'Mine', color: pt.emerald700 },
+  { key: 'shared', label: 'Shared', color: pt.emerald500 },
+  { key: 'children', label: 'Children', color: pt.gold500 },
+] as const;
 
-const FILTERS: { key: TreasuryFilter; label: string }[] = [
-  { key: 'active', label: 'Active' },
-  { key: 'locked', label: 'Locked' },
-  { key: 'archived', label: 'Archived' },
-];
-
-/** Which filter strip bucket a wallet falls into, from its real status. */
-function bucketOf(w: Wallet): TreasuryFilter {
-  const st = (w.status || 'active').toLowerCase();
-  if (st === 'active') return 'active';
-  if (st === 'archived' || st === 'closed') return 'archived';
-  return 'locked';
-}
-
-function isGoalWallet(w: Wallet): boolean {
-  const target = parseFloat(w.target_amount ?? '');
-  return (Number.isFinite(target) && target > 0) || w.type === 'goal' || w.type === 'savings';
-}
-
+/**
+ * Treasury tab (prototype TRS-01): all your money with a mine / shared /
+ * children bar, this month in and out, money actions, and the biggest wallets.
+ * Every wallet, drafts included, is one tap away under "See all".
+ */
 export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
-  const { data: wallets, isLoading, error, refetch, isRefetching } = useWallets();
-  const me = useMe();
+  const home = useHome();
+  const wallets = useWallets();
   const drafts = useWalletDrafts();
-  const [filter, setFilter] = useState<TreasuryFilter>('active');
+  const hidden = useHomePrefs((s) => s.hidden);
 
-  const stats = useMemo(() => {
-    const list = wallets ?? [];
-    let total = 0;
-    let available = 0;
-    let locked = 0;
-    let goals = 0;
-    let goalCount = 0;
-    for (const w of list) {
-      const bal = parseFloat(w.balance || '0');
-      const safe = Number.isFinite(bal) ? bal : 0;
-      total += safe;
-      if (bucketOf(w) !== 'active') {
-        locked += safe;
-      } else if (isGoalWallet(w)) {
-        goals += safe;
-        goalCount += 1;
-      } else {
-        available += safe;
-      }
-    }
-    return { total, available, locked, goals, goalCount };
-  }, [wallets]);
-
-  const visible = useMemo(
-    () => (wallets ?? []).filter((w) => bucketOf(w) === filter),
-    [wallets, filter],
+  const refetchHome = home.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchHome();
+    }, [refetchHome]),
   );
 
-  const walletCount = wallets?.length ?? 0;
-  const commitLine =
-    stats.goalCount > 0
-      ? `You’re on track with ${stats.goalCount} active commitment${stats.goalCount === 1 ? '' : 's'}`
-      : `${walletCount} wallet${walletCount === 1 ? '' : 's'} in your family treasury`;
+  const list = useMemo(() => wallets.data ?? [], [wallets.data]);
+  const biggest = useMemo(
+    () => [...list].sort((a, b) => (parseFloat(b.balance) || 0) - (parseFloat(a.balance) || 0)).slice(0, 3),
+    [list],
+  );
+  const main = list.find((w) => w.type === 'main');
+  const totals = home.data?.totals;
+  const total = parseFloat(totals?.total ?? '0') || 0;
+  const draftCount = drafts.data?.length ?? 0;
 
   return (
-    <Screen>
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
-        }
-      >
-        {/* Greeting header */}
-        <View className="flex-row items-center">
-          <LinearGradient
-            colors={gradients.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              height: 44,
-              width: 44,
-              borderRadius: 22,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 2,
-              borderColor: '#3DE273',
-            }}
-          >
-            <Text className="text-[13px] font-bold text-white">{initials(me.data?.full_name)}</Text>
-          </LinearGradient>
-          <View className="ml-3 flex-1">
-            <Text className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-              Family Treasury
+    <PtTabScreen
+      title="Treasury"
+      action={
+        <PtButton
+          title="Add"
+          variant="secondary"
+          size="sm"
+          icon={<Feather name="plus" size={16} color={pt.brand} />}
+          onPress={() => navigation.navigate('CreateWallet')}
+        />
+      }
+      refreshing={home.isRefetching || wallets.isRefetching}
+      onRefresh={() => {
+        void home.refetch();
+        void wallets.refetch();
+        void drafts.refetch();
+      }}
+    >
+      {home.isLoading || wallets.isLoading ? (
+        <ActivityIndicator color={pt.brand} style={{ marginTop: 48 }} />
+      ) : home.error || wallets.error || !totals ? (
+        <LoadError
+          message={((home.error ?? wallets.error) as Error | null)?.message}
+          onRetry={() => {
+            void home.refetch();
+            void wallets.refetch();
+          }}
+        />
+      ) : (
+        <>
+          {/* All your money */}
+          <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.lg, padding: 20, gap: 10 }}>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.8 }}>
+              ALL YOUR MONEY · {list.length} WALLET{list.length === 1 ? '' : 'S'}
             </Text>
-            <Text className="text-[22px] font-extrabold leading-tight tracking-tight text-ink" numberOfLines={1}>
-              {me.data?.first_name ? `Hello, ${me.data.first_name}` : 'Treasury'}
-            </Text>
-          </View>
-        </View>
-
-        {isLoading ? (
-          <View className="items-center py-24">
-            <ActivityIndicator size="large" color={colors.navy} />
-          </View>
-        ) : error ? (
-          <LoadError message={(error as Error).message} onRetry={() => refetch()} />
-        ) : (wallets ?? []).length === 0 ? (
-          <EmptyState
-            title="No wallets yet"
-            message="Create a shared or project wallet to get started."
-            icon="wallet-outline"
-            action={
-              <Button
-                title="New Wallet"
-                icon="add"
-                iconPosition="left"
-                onPress={() => navigation.navigate('CreateWallet')}
-              />
-            }
-          />
-        ) : (
-          <>
-            {/* Total Family Treasury — refined navy balance card */}
-            <LinearGradient
-              colors={gradients.navy}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ marginTop: 20, borderRadius: radius, padding: 24, overflow: 'hidden' }}
+            <Text
+              style={{ fontFamily: ptFont.bold, fontSize: 34, lineHeight: 40, letterSpacing: -0.68, color: pt.emerald50, fontVariant: ['tabular-nums'] }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
             >
-              {/* Decorative mint wash */}
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: -64,
-                  right: -64,
-                  height: 192,
-                  width: 192,
-                  borderRadius: 96,
-                  backgroundColor: 'rgba(61,226,115,0.10)',
-                }}
-              />
-
-              <View className="flex-row items-center">
-                <Ionicons name="wallet-outline" size={15} color="rgba(255,255,255,0.9)" style={{ marginRight: 8 }} />
-                <Text className="text-sm font-medium text-white/80">Total Family Treasury</Text>
-              </View>
-
-              <Text className="mt-4 text-[34px] font-extrabold leading-tight tracking-tight text-white">
-                {formatMoney(stats.total)}
-              </Text>
-
-              {/* Breakdown row */}
-              <View
-                className="mt-7 flex-row items-center justify-between py-4"
-                style={{
-                  borderTopWidth: 1,
-                  borderBottomWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.10)',
-                }}
-              >
-                <View>
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/60">Available</Text>
-                  <Text className="mt-1 text-sm font-bold text-white">{formatMoney(stats.available)}</Text>
-                </View>
-                <View className="items-center">
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/60">Locked</Text>
-                  <Text className="mt-1 text-sm font-bold text-white/60">{formatMoney(stats.locked)}</Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/60">Goals</Text>
-                  <Text className="mt-1 text-sm font-bold text-white">{formatMoney(stats.goals)}</Text>
-                </View>
-              </View>
-
-              <View className="mt-5 flex-row items-center">
-                <View className="mr-2 h-2 w-2 rounded-full bg-brand-glow" />
-                <Text className="text-xs font-medium italic text-white/90" numberOfLines={1}>
-                  {commitLine}
-                </Text>
-              </View>
-            </LinearGradient>
-
-            {/* Filter strip */}
-            <View className="mt-6 flex-row" style={{ gap: 10 }}>
-              {FILTERS.map((f) => {
-                const selected = filter === f.key;
-                return (
-                  <Pressable
-                    key={f.key}
-                    onPress={() => {
-                      selection();
-                      setFilter(f.key);
-                    }}
-                    className={`rounded px-6 py-2.5 active:opacity-80 ${
-                      selected ? 'bg-[#006D2F]' : 'bg-lav-soft'
-                    }`}
-                  >
-                    <Text className={`text-xs font-bold ${selected ? 'text-white' : 'text-muted'}`}>
-                      {f.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {hidden ? '₦ ••••••' : formatMoney(totals.total)}
+            </Text>
+            <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: 'rgba(255,255,255,0.14)' }}>
+              {total > 0
+                ? SEGMENTS.map((s) => {
+                    const share = (parseFloat(totals[s.key]) || 0) / total;
+                    return share > 0 ? <View key={s.key} style={{ flex: share, backgroundColor: s.color }} /> : null;
+                  })
+                : null}
             </View>
-
-            {/* Wallet list */}
-            {visible.length === 0 ? (
-              <View className="mt-5 items-center rounded bg-lav-faint p-6">
-                <Text className="text-sm font-medium text-muted">No {filter} wallets.</Text>
-              </View>
-            ) : (
-              <View className="mt-5" style={{ gap: 14 }}>
-                {visible.map((w) => (
-                  <WalletCard
-                    key={w.id}
-                    wallet={w}
-                    onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
-                    onFund={() => navigation.navigate('Fund', { walletId: w.id })}
-                    onWithdraw={() => navigation.navigate('Withdraw', { walletId: w.id })}
-                    onSend={() => navigation.navigate('Transfer', { walletId: w.id })}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* Unfinished setups — grayed out until they're completed */}
-            {filter === 'active' && (drafts.data ?? []).length > 0 ? (
-              <View className="mt-7">
-                <Text className="text-sm font-extrabold text-ink">Drafts</Text>
-                <Text className="mt-0.5 text-xs text-muted">Wallets you started setting up. Pick up where you left off.</Text>
-                <View className="mt-3" style={{ gap: 12 }}>
-                  {(drafts.data ?? []).map((d) => (
-                    <DraftWalletCard key={d.id} draft={d} onResume={() => resumeDraft(navigation, d)} />
-                  ))}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 }}>
+              {SEGMENTS.map((s) => (
+                <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: s.color }} />
+                  <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.emerald50, opacity: 0.9 }}>
+                    {s.label} {hidden ? '••' : formatNairaK(totals[s.key])}
+                  </Text>
                 </View>
-              </View>
-            ) : null}
+              ))}
+            </View>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.emerald50, opacity: 0.85 }}>
+              This month: <Text style={{ fontFamily: ptFont.bold }}>+{hidden ? '••' : formatNaira(totals.month_in)}</Text> in ·{' '}
+              <Text style={{ fontFamily: ptFont.bold }}>−{hidden ? '••' : formatNaira(totals.month_out)}</Text> out
+            </Text>
+          </View>
 
-            {/* Create New Wallet CTA */}
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('CreateWallet');
-              }}
-              className="mt-8 flex-row items-center justify-center rounded bg-[#006D2F] py-5 active:opacity-90"
-            >
-              <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text className="text-[15px] font-extrabold text-white">Create New Wallet</Text>
-            </Pressable>
-          </>
-        )}
-      </ScrollView>
-    </Screen>
+          {/* Money actions */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <PtQuickAction
+              size={52}
+              label="Move"
+              icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
+              onPress={() => navigation.navigate('Transfer')}
+            />
+            <PtQuickAction
+              size={52}
+              label="Top up"
+              icon={<Feather name="arrow-down" size={22} color={pt.brand} />}
+              onPress={() => (main ? navigation.navigate('Fund', { walletId: main.id }) : navigation.navigate('CreateWallet'))}
+            />
+            <PtQuickAction size={52} label="Send" icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Transfer')} />
+            <PtQuickAction
+              size={52}
+              label="Withdraw"
+              icon={<Feather name="arrow-up" size={22} color={pt.brand} />}
+              onPress={() => (main ? navigation.navigate('Withdraw', { walletId: main.id }) : undefined)}
+              disabled={!main}
+            />
+          </View>
+
+          {/* Biggest wallets */}
+          <PtSectionTitle title="Biggest wallets" action={`See all ${list.length}`} onAction={() => navigation.navigate('AllWallets')} />
+          <PtCard>
+            {biggest.map((w, i) => (
+              <PtWalletRow
+                key={w.id}
+                wallet={w}
+                hideAmount={hidden}
+                last={i === biggest.length - 1}
+                onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
+              />
+            ))}
+          </PtCard>
+
+          {draftCount > 0 ? (
+            <PtCard>
+              <PtRow
+                title={`${draftCount} unfinished setup${draftCount === 1 ? '' : 's'}`}
+                subtitle="Pick up where you left off"
+                chevron
+                last
+                onPress={() => navigation.navigate('AllWallets')}
+              />
+            </PtCard>
+          ) : null}
+        </>
+      )}
+    </PtTabScreen>
   );
 }

@@ -24,6 +24,7 @@ import type {
   AutomationMutatedData,
   AutomationRunData,
   AutomationsData,
+  HomeData,
   DisputeCreatedData,
   DisputesPageData,
   EmergencyDetailData,
@@ -139,6 +140,7 @@ export const keys = {
   sync: ['sync'] as const,
   // ---- Automation & Audit ----
   automations: ['automations'] as const,
+  home: ['home'] as const,
   automation: (id: number) => ['automations', id] as const,
   walletAuditLog: (id: number) => ['wallets', id, 'audit-log'] as const,
   // ---- Emergency wallets ----
@@ -343,6 +345,7 @@ export function useCreateWallet() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       // The server deletes the draft a wallet was created from.
       void qc.invalidateQueries({ queryKey: keys.walletDrafts });
       void qc.invalidateQueries({ queryKey: keys.automations });
@@ -359,6 +362,7 @@ export function useWithdraw(walletId: number) {
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
   });
@@ -372,6 +376,7 @@ export function useTransfer() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
   });
@@ -405,6 +410,7 @@ export function useUpdateProfile() {
       last_name?: string;
       username?: string;
       avatar_url?: string | null;
+      language?: 'en' | 'pcm';
     }) => api<MeData>('/profile', { method: 'PUT', body: input }),
     onSuccess: async (d) => {
       void qc.invalidateQueries({ queryKey: keys.me });
@@ -463,6 +469,7 @@ export function useUpdateWallet(walletId: number) {
       void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -555,6 +562,16 @@ export function useCancelInvitation(walletId: number) {
   });
 }
 
+/** Family tab "Resend": a fresh week and the invite message again. */
+export function useResendInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { walletId: number; invitationId: number }) =>
+      api(`/wallets/${input.walletId}/invitations/${input.invitationId}/resend`, { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.family }),
+  });
+}
+
 export function useMyInvitations() {
   return useQuery({
     queryKey: keys.myInvitations,
@@ -583,6 +600,7 @@ export function useAcceptInvitation() {
       void qc.invalidateQueries({ queryKey: keys.myInvitations });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
       void qc.invalidateQueries({ queryKey: keys.family });
@@ -635,6 +653,7 @@ export function useRespondApproval(id: number) {
       void qc.invalidateQueries({ queryKey: ['approvals'] });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
     },
@@ -650,6 +669,7 @@ export function useCancelApproval(id: number) {
       void qc.invalidateQueries({ queryKey: ['approvals'] });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -684,6 +704,7 @@ export function useMarkNotificationRead() {
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -696,6 +717,7 @@ export function useMarkAllNotificationsRead() {
       void qc.invalidateQueries({ queryKey: keys.notifications });
       void qc.invalidateQueries({ queryKey: keys.unreadCount });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -736,6 +758,7 @@ export function useApplyLoan() {
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: keys.loans });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       if (data.loan.disbursed_wallet_id != null) {
         void qc.invalidateQueries({ queryKey: keys.wallet(data.loan.disbursed_wallet_id) });
@@ -753,6 +776,7 @@ export function useRepayLoan(loanId: number) {
       void qc.invalidateQueries({ queryKey: keys.loans });
       void qc.invalidateQueries({ queryKey: keys.loan(loanId) });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.wallet(data.transaction.wallet_id) });
     },
@@ -767,6 +791,7 @@ export function useCancelLoan(loanId: number) {
       void qc.invalidateQueries({ queryKey: keys.loans });
       void qc.invalidateQueries({ queryKey: keys.loan(loanId) });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: keys.wallets });
     },
   });
@@ -799,6 +824,7 @@ function invalidateProject(qc: ReturnType<typeof useQueryClient>, projectId: num
   void qc.invalidateQueries({ queryKey: keys.project(projectId) });
   void qc.invalidateQueries({ queryKey: keys.projects });
   void qc.invalidateQueries({ queryKey: keys.dashboard });
+  void qc.invalidateQueries({ queryKey: keys.home });
 }
 
 export function useCreateProject() {
@@ -809,6 +835,7 @@ export function useCreateProject() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.projects });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
       // A dedicated escrow wallet was created.
       void qc.invalidateQueries({ queryKey: keys.wallets });
     },
@@ -946,6 +973,7 @@ export function useSubmitKyc() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.kyc });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -1033,12 +1061,32 @@ export function useAutomations() {
   });
 }
 
+/** Same request as useAutomations; the wallets whose spends need a yes. */
+export function useApprovalRules() {
+  return useQuery({
+    queryKey: keys.automations,
+    queryFn: () => api<AutomationsData>('/automations'),
+    select: (d) => d.approval_rules ?? [],
+  });
+}
+
+/** Home tab + Treasury header in one call. */
+export function useHome() {
+  return useQuery({
+    queryKey: keys.home,
+    queryFn: () => api<HomeData>('/home'),
+  });
+}
+
 export function useCreateAutomation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateAutomationPayload) =>
       api<AutomationMutatedData>('/automations', { method: 'POST', body: input }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.automations });
+      void qc.invalidateQueries({ queryKey: keys.home });
+    },
   });
 }
 
@@ -1047,7 +1095,10 @@ export function useUpdateAutomation(ruleId: number) {
   return useMutation({
     mutationFn: (input: UpdateAutomationPayload) =>
       api<AutomationMutatedData>(`/automations/${ruleId}`, { method: 'PATCH', body: input }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.automations });
+      void qc.invalidateQueries({ queryKey: keys.home });
+    },
   });
 }
 
@@ -1055,7 +1106,10 @@ export function useDeleteAutomation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ruleId: number) => api(`/automations/${ruleId}`, { method: 'DELETE' }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.automations }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.automations });
+      void qc.invalidateQueries({ queryKey: keys.home });
+    },
   });
 }
 
@@ -1069,6 +1123,7 @@ export function useRunAutomation() {
       void qc.invalidateQueries({ queryKey: keys.automations });
       void qc.invalidateQueries({ queryKey: keys.wallets });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
 }
@@ -1122,6 +1177,7 @@ export function useWalletDeletion(walletId: number) {
     void qc.invalidateQueries({ queryKey: keys.wallets });
     void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
     void qc.invalidateQueries({ queryKey: keys.dashboard });
+    void qc.invalidateQueries({ queryKey: keys.home });
     void qc.invalidateQueries({ queryKey: keys.family });
   };
   const archive = useMutation({
@@ -1271,6 +1327,7 @@ function invalidateEmergency(qc: ReturnType<typeof useQueryClient>, walletId: nu
   void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
   void qc.invalidateQueries({ queryKey: keys.wallets });
   void qc.invalidateQueries({ queryKey: keys.dashboard });
+  void qc.invalidateQueries({ queryKey: keys.home });
   void qc.invalidateQueries({ queryKey: keys.notifications });
   void qc.invalidateQueries({ queryKey: keys.unreadCount });
 }

@@ -23,15 +23,15 @@ export interface WalletVisual {
  */
 const MAP: Record<WalletType, WalletVisual> = {
   main: { gradient: gradients.navy, icon: 'shield-checkmark', label: 'MAIN', onDark: true },
-  shared: { gradient: ['#314863', '#49607C'] as const, icon: 'people', label: 'SHARED', onDark: true },
-  project: { gradient: ['#EAEEF2', '#DFE3E7'] as const, icon: 'flag', label: 'PROJECT', onDark: false },
-  savings: { gradient: ['#004D21', '#0F8A44'] as const, icon: 'wallet', label: 'SAVINGS', onDark: true },
-  goal: { gradient: ['#0F8A44', '#2BC162'] as const, icon: 'trophy', label: 'GOAL', onDark: true },
-  emergency: { gradient: ['#7F1D1D', '#BA1A1A'] as const, icon: 'medkit', label: 'EMERGENCY', onDark: true },
-  giving: { gradient: ['#005322', '#0F8A44'] as const, icon: 'heart', label: 'GIVING', onDark: true },
-  joint: { gradient: ['#25405C', '#3E5C7E'] as const, icon: 'people-circle', label: 'JOINT', onDark: true },
-  child: { gradient: ['#C7DFFF', '#B0C9E8'] as const, icon: 'happy', label: 'CHILD', onDark: false },
-  spending: { gradient: ['#0B2A44', '#173A5C'] as const, icon: 'card', label: 'SPENDING', onDark: true },
+  shared: { gradient: ['#0B5D4B', '#3D5249'] as const, icon: 'people', label: 'SHARED', onDark: true },
+  project: { gradient: ['#EBF2EE', '#D3E3DA'] as const, icon: 'flag', label: 'PROJECT', onDark: false },
+  savings: { gradient: ['#062B23', '#1FA07A'] as const, icon: 'wallet', label: 'SAVINGS', onDark: true },
+  goal: { gradient: ['#1FA07A', '#5FD3A5'] as const, icon: 'trophy', label: 'GOAL', onDark: true },
+  emergency: { gradient: ['#7F1D1D', '#B3311A'] as const, icon: 'medkit', label: 'EMERGENCY', onDark: true },
+  giving: { gradient: ['#08392F', '#1FA07A'] as const, icon: 'heart', label: 'GIVING', onDark: true },
+  joint: { gradient: ['#0B4A3C', '#3D5249'] as const, icon: 'people-circle', label: 'JOINT', onDark: true },
+  child: { gradient: ['#DFF3EA', '#B7CEC0'] as const, icon: 'happy', label: 'CHILD', onDark: false },
+  spending: { gradient: ['#08392F', '#0B5D4B'] as const, icon: 'card', label: 'SPENDING', onDark: true },
 };
 
 const FALLBACK: WalletVisual = {

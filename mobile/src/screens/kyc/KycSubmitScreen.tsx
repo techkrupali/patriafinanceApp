@@ -30,7 +30,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 /** Content colour on the green action fill. */
 const ON_GOLD = '#FFFFFF';
 /** Action green container fill (gold retired per client video). */
-const GOLD_CONTAINER = '#006D2F';
+const GOLD_CONTAINER = '#0B5D4B';
 
 const TIER_INTRO: Record<number, string> = {
   1: 'Confirm your identity with your BVN, NIN and a government-issued ID.',

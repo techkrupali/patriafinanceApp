@@ -1,8 +1,10 @@
 import type { ViewStyle } from 'react-native';
 
 /**
- * Patriai design language — "The Curated Ledger" (client design system,
- * navy+green revision per client video 2026-08-03).
+ * Patriai design language. Token names come from "The Curated Ledger"
+ * (navy+green, client video 2026-08-03); since 2026-10-27 their values are the
+ * client prototype's emerald palette (see `pt` below), so every screen shares
+ * the prototype's colour code.
  *
  * High-end editorial family finance: a bright layered surface stack, a deep
  * treasury navy for hero money cards, and a grounded green for actions and
@@ -16,44 +18,44 @@ import type { ViewStyle } from 'react-native';
  */
 export const colors = {
   // Deep treasury navy (hero money surfaces, dark chips)
-  navy: '#011D35', // on-secondary-fixed — the Treasury card base
-  navyLight: '#173A5C',
-  ink: '#171C1F', // on-surface — primary text (never pure black)
+  navy: '#08392F', // on-secondary-fixed — the Treasury card base
+  navyLight: '#0B5D4B',
+  ink: '#0E1A16', // on-surface — primary text (never pure black)
 
   // Positive/action green (tertiary) — all positive financial trends
-  brand: '#006D2F',
-  brandDeep: '#005322',
-  brandMint: '#3DE273', // tertiary-fixed-dim
-  brandGlow: '#66FF8E', // tertiary-fixed
+  brand: '#0B5D4B',
+  brandDeep: '#08392F',
+  brandMint: '#5FD3A5', // tertiary-fixed-dim
+  brandGlow: '#5FD3A5', // tertiary-fixed
 
   // Action colour — grounded green (was metallic gold; retired per client)
-  gold: '#0F8A44', // bright action green
-  goldDeep: '#006D2F', // deep action green (tints, icons, labels on soft fills)
-  goldSoft: '#DFF2E5', // soft green fill (tiles, active pills)
+  gold: '#1FA07A', // bright action green
+  goldDeep: '#0B5D4B', // deep action green (tints, icons, labels on soft fills)
+  goldSoft: '#DFF3EA', // soft green fill (tiles, active pills)
 
   // Tonal surface tints (chips, fills) — surface-variant family
-  lav: '#DFE3E7', // surface-variant
-  lavSoft: '#E4E9ED', // surface-container-high
-  lavFaint: '#EAEEF2', // surface-container
+  lav: '#D3E3DA', // surface-variant
+  lavSoft: '#E3ECE6', // surface-container-high
+  lavFaint: '#EBF2EE', // surface-container
 
   // Backgrounds — the surface stack
-  page: '#F6FAFE', // surface
-  pageTop: '#F0F4F8', // surface-container-low
+  page: '#F3F7F4', // surface
+  pageTop: '#EAF1EC', // surface-container-low
 
   // Text hierarchy
-  muted: '#49607C', // secondary — supporting text & labels
-  faded: '#8C9AA9', // quiet metadata
+  muted: '#3D5249', // secondary — supporting text & labels
+  faded: '#6F8A7E', // quiet metadata
 
   // States
-  danger: '#BA1A1A', // error
-  dangerSoft: '#FFDAD6', // error-container
-  success: '#006D2F', // tertiary green
-  successSoft: '#E2F3E9',
-  rose: '#93000A', // money-out accent (on-error-container)
-  roseSoft: '#FFE9E6',
+  danger: '#B3311A', // error
+  dangerSoft: '#FBE3DD', // error-container
+  success: '#127A55', // tertiary green
+  successSoft: '#DDF4E9',
+  rose: '#B3311A', // money-out accent (on-error-container)
+  roseSoft: '#FBE3DD',
 
   card: '#FFFFFF', // surface-container-lowest
-  border: '#E4E9ED', // faint gray outline around light surfaces + dividers
+  border: '#D3E3DA', // faint gray outline around light surfaces + dividers
   white: '#FFFFFF',
 } as const;
 
@@ -67,21 +69,21 @@ export const radius = 3;
 /** LinearGradient colour stops (tuples so expo-linear-gradient accepts them). */
 export const gradients = {
   // Hero — deep treasury navy (the money card)
-  navy: ['#011D35', '#12324F'] as const,
-  navyDeep: ['#001526', '#0B2A44'] as const,
+  navy: ['#08392F', '#0B4A3C'] as const,
+  navyDeep: ['#062B23', '#08392F'] as const,
   // Positive green actions/tiles
-  brand: ['#005322', '#0F8A44'] as const,
-  mint: ['#0F8A44', '#3DE273'] as const,
-  glow: ['#006D2F', '#66FF8E'] as const,
+  brand: ['#08392F', '#0B5D4B'] as const,
+  mint: ['#1FA07A', '#5FD3A5'] as const,
+  glow: ['#0B5D4B', '#5FD3A5'] as const,
   /** Page-top wash that melts into the background. */
-  glowSoft: ['#F0F4F8', '#F6FAFE'] as const,
-  lav: ['#EAEEF2', '#DFE3E7'] as const,
+  glowSoft: ['#EAF1EC', '#F3F7F4'] as const,
+  lav: ['#EBF2EE', '#D3E3DA'] as const,
   // Slate secondary avatars
-  avatar: ['#314863', '#49607C'] as const,
+  avatar: ['#0B5D4B', '#1FA07A'] as const,
   /** Signature action gradient — deep green → bright green at 135° (was gold). */
-  gold: ['#005322', '#0F8A44'] as const,
+  gold: ['#08392F', '#0B5D4B'] as const,
   /** Full-page backdrop — cool surface drifting into a faint green hint. */
-  aurora: ['#F0F4F8', '#F6FAFE', '#EFF7F1'] as const,
+  aurora: ['#EAF1EC', '#F3F7F4', '#F3F7F4'] as const,
 } as const;
 
 /**

@@ -4,9 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { gradients } from '../theme';
 
 /**
- * The app's signature backdrop — a soft aurora, never flat white. A cool indigo
- * base drifting to a faint green hint, with a gentle indigo glow at the top and
- * a whisper of green at the bottom-right for depth. Sits behind every Screen.
+ * The app's signature backdrop — a soft aurora, never flat white: the
+ * prototype's pale green surface with a gentle emerald glow at the top and a
+ * whisper of green at the bottom-right for depth. Sits behind every Screen.
  */
 export function AppBackground() {
   return (
@@ -17,16 +17,16 @@ export function AppBackground() {
         end={{ x: 0.9, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      {/* Top indigo aurora glow */}
+      {/* Top emerald aurora glow */}
       <LinearGradient
-        colors={['rgba(46,91,240,0.13)', 'rgba(46,91,240,0)']}
+        colors={['rgba(31,160,122,0.10)', 'rgba(31,160,122,0)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.top}
       />
       {/* Barely-there green wash, bottom-right (depth) */}
       <LinearGradient
-        colors={['rgba(15,138,68,0)', 'rgba(15,138,68,0.035)']}
+        colors={['rgba(31,160,122,0)', 'rgba(31,160,122,0.035)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.warm}

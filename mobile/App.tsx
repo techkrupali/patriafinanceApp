@@ -19,6 +19,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuth } from './src/store/auth';
 import { useLanguage } from './src/store/language';
+import { useHomePrefs } from './src/store/homePrefs';
 import { LogoMark, markOnDark, PtLogo } from './src/components/pt/PtLogo';
 import { pt } from './src/theme';
 
@@ -50,6 +51,7 @@ function Gate() {
   const status = useAuth((s) => s.status);
   const hydrate = useAuth((s) => s.hydrate);
   const hydrateLanguage = useLanguage((s) => s.hydrate);
+  const hydrateHomePrefs = useHomePrefs((s) => s.hydrate);
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -60,8 +62,9 @@ function Gate() {
 
   useEffect(() => {
     void hydrateLanguage();
+    void hydrateHomePrefs();
     void hydrate();
-  }, [hydrate, hydrateLanguage]);
+  }, [hydrate, hydrateLanguage, hydrateHomePrefs]);
 
   // A font that fails to load falls back to the system font rather than blocking.
   const fontsReady = fontsLoaded || Boolean(fontError);

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\EmergencyController;
 use App\Http\Controllers\Api\FamilyController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\FamilyMemberController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\KycController;
@@ -76,6 +77,8 @@ Route::prefix('v1')->group(function () {
         Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');
 
         Route::get('dashboard', [DashboardController::class, 'index']);
+        // Home tab + Treasury header (client prototype HOM-01 / TRS-01).
+        Route::get('home', [HomeController::class, 'index']);
 
         // AI Assistant (read-only tools; runs the LLM tool loop server-side as
         // the authenticated user). Rate-limited — each call may fan out to the LLM.
@@ -163,6 +166,7 @@ Route::prefix('v1')->group(function () {
         Route::get('wallets/{wallet}/invitations', [InvitationController::class, 'walletIndex']);
         Route::post('wallets/{wallet}/invitations', [InvitationController::class, 'store'])->middleware('throttle:30,1');
         Route::delete('wallets/{wallet}/invitations/{invitation}', [InvitationController::class, 'cancel'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/invitations/{invitation}/resend', [InvitationController::class, 'resend'])->middleware('throttle:10,1');
         Route::get('invitations', [InvitationController::class, 'myIndex']);
         Route::post('invitations/{invitation}/accept', [InvitationController::class, 'accept'])->middleware('throttle:30,1');
         Route::post('invitations/{invitation}/decline', [InvitationController::class, 'decline'])->middleware('throttle:30,1');

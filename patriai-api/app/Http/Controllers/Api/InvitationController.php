@@ -8,9 +8,12 @@ use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use App\Services\NotificationService;
 use App\Services\SavingsService;
+use App\Services\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class InvitationController extends ApiController
@@ -117,20 +120,7 @@ class InvitationController extends ApiController
             'expires_at' => now()->addDays(7),
         ]);
 
-        if ($invitee) {
-            NotificationService::make()->push(
-                $invitee,
-                'invitation_received',
-                "Invitation to join {$wallet->name}",
-                "{$request->user()->fullName()} invited you to join {$wallet->name} as {$inviteRole}.",
-                [
-                    'invitation_id' => $invitation->id,
-                    'wallet_id' => $wallet->id,
-                    'wallet_name' => $wallet->name,
-                    'role' => $inviteRole,
-                ],
-            );
-        }
+        $this->deliver($invitation, $wallet, $request->user(), $invitee);
 
         return $this->ok('Invitation sent', [
             'invitation' => $this->serializeInvitation($invitation->load(['wallet', 'inviter'])),
@@ -258,6 +248,77 @@ class InvitationController extends ApiController
         $invitation->update(['status' => 'declined', 'responded_at' => now()]);
 
         return $this->ok('Invitation declined');
+    }
+
+    // POST /wallets/{wallet}/invitations/{invitation}/resend — Family tab "Resend"
+    public function resend(Request $request, Wallet $wallet, WalletInvitation $invitation): JsonResponse
+    {
+        if (!$wallet->isAccessibleBy($request->user())) {
+            return $this->fail('Wallet not found', 404);
+        }
+        if ($invitation->wallet_id !== $wallet->id) {
+            return $this->fail('Invitation not found', 404);
+        }
+
+        $role = $wallet->roleOf($request->user());
+        if ($invitation->inviter_id !== $request->user()->id && !in_array($role, ['owner', 'co_owner'], true)) {
+            return $this->fail('You do not have permission to resend this invitation', 403);
+        }
+        if ($invitation->status !== 'pending') {
+            return $this->fail('This invitation is no longer pending', 422);
+        }
+        if ($invitation->updated_at && $invitation->updated_at->gt(now()->subMinute())) {
+            return $this->fail('It was just sent. Try again in a minute.', 429);
+        }
+
+        // A fresh week to respond, then the same message again.
+        $invitation->update(['expires_at' => now()->addDays(7)]);
+        $invitee = $invitation->invitee_user_id ? User::find($invitation->invitee_user_id) : null;
+        $this->deliver($invitation, $wallet, $request->user(), $invitee);
+
+        return $this->ok('Invitation sent again', [
+            'invitation' => $this->serializeInvitation($invitation->load(['wallet', 'inviter'])),
+        ]);
+    }
+
+    /**
+     * Tell the invitee: in the app when they already have an account, otherwise
+     * by SMS (phone number) or email, with how to join.
+     */
+    private function deliver(WalletInvitation $invitation, Wallet $wallet, User $inviter, ?User $invitee): void
+    {
+        if ($invitee) {
+            NotificationService::make()->push(
+                $invitee,
+                'invitation_received',
+                "Invitation to join {$wallet->name}",
+                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->role}.",
+                [
+                    'invitation_id' => $invitation->id,
+                    'wallet_id' => $wallet->id,
+                    'wallet_name' => $wallet->name,
+                    'role' => $invitation->role,
+                ],
+            );
+
+            return;
+        }
+
+        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai. "
+            . 'Get the Patriai app and sign up with this ' . (str_contains($invitation->invitee_identifier, '@') ? 'email' : 'number')
+            . ' to accept. The invite lasts 7 days.';
+
+        if (str_contains($invitation->invitee_identifier, '@')) {
+            try {
+                Mail::raw($message, fn ($m) => $m->to($invitation->invitee_identifier)->subject("Join {$wallet->name} on Patriai"));
+            } catch (\Throwable $e) {
+                Log::warning("Invitation email to {$invitation->invitee_identifier} failed: {$e->getMessage()}");
+            }
+
+            return;
+        }
+
+        SmsService::make()->send($invitation->invitee_identifier, $message);
     }
 
     // DELETE /wallets/{wallet}/invitations/{invitation}

@@ -88,6 +88,28 @@ class AutomationRule extends Model
         return $this->last_run_period !== $this->currentPeriod($now);
     }
 
+    /**
+     * The next day (from $from's date on) this rule will move money, or null
+     * when paused. A day whose period already ran is skipped, the same guard
+     * isDue() uses.
+     */
+    public function nextRunOn(Carbon $from): ?Carbon
+    {
+        if (!$this->enabled) {
+            return null;
+        }
+
+        $day = $from->copy()->startOfDay();
+        for ($i = 0; $i < 62; $i++) {
+            if ($this->scheduleMatches($day) && $this->last_run_period !== $this->currentPeriod($day)) {
+                return $day;
+            }
+            $day = $day->copy()->addDay();
+        }
+
+        return null;
+    }
+
     /** Does the calendar schedule (frequency + day) line up with $now? */
     private function scheduleMatches(Carbon $now): bool
     {

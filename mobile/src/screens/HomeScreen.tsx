@@ -1,738 +1,415 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../components/Screen';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { pt, ptFont, ptRadius } from '../theme';
+import { PtAvatar } from '../components/pt/PtAvatar';
+import { PtChip } from '../components/pt/PtChip';
+import { PtRing } from '../components/pt/PtRing';
+import { PtQuickAction } from '../components/pt/PtTabScreen';
 import { LoadError } from '../components/LoadError';
-import { FamilySwitcherModal } from '../components/FamilySwitcherModal';
-import { colors, gradients, outline, radius } from '../theme';
-import { useApprovals, useAutomations, useDashboard, useFamily } from '../api/hooks';
+import { QuickActionsSheet, type QuickAction } from '../components/QuickActionsSheet';
+import { useHome, useWallets } from '../api/hooks';
 import { useAuth } from '../store/auth';
-import { formatMoney, initials } from '../lib/format';
+import { useHomePrefs } from '../store/homePrefs';
+import { useHomeCopy } from '../lib/homeCopy';
+import { formatMoney, formatNaira, initials, shortDay } from '../lib/format';
+import { inviteTarget } from '../lib/invite';
 import { selection } from '../lib/haptics';
-import { approvalActionLabel } from '../lib/governance';
-import { walletVisual } from '../lib/walletVisual';
-import type { ApprovalRequest, Wallet } from '../api/types';
+import type { HomeNeedItem, HomeUpcomingItem } from '../api/types';
 import type { TabScreenProps } from '../navigation/types';
 
-/** Wallet types that count as goals in the Ledger design. */
-const GOAL_TYPES: readonly string[] = ['savings', 'goal', 'emergency', 'giving'];
+const DOT: Record<HomeUpcomingItem['tone'], string> = {
+  warning: '#8F5400',
+  danger: pt.danger,
+  neutral: pt.lineStrong,
+};
 
-// ---------------------------------------------------------------------------
-// Stitch "home_dashboard_mobile_final_layout" tokens (code.html)
-// ---------------------------------------------------------------------------
-
-/** Treasury card — deep treasury navy (client video 2026-08-03: "this deep blue"). */
-const TREASURY_GRADIENT = ['#011D35', '#12324F'] as const;
-/** Steward insight card — tertiary green → deep green (from-tertiary to-[#004d21]). */
-const STEWARD_GRADIENT = ['#006D2F', '#004D21'] as const;
-/** View Treasury button fill — white pill on the navy card (design's light-on-navy actions). */
-const GOLD_BUTTON = '#FFFFFF';
-/** Ink on the white pill — treasury navy. */
-const GOLD_INK = '#011D35';
-/** Soft green action-tile fill (gold tiles retired per client). */
-const GOLD_TILE = '#DFF2E5';
-
-const sumBalances = (ws: Wallet[]): number =>
-  ws.reduce((acc, w) => acc + (parseFloat(w.balance || '0') || 0), 0);
-
-/** ₦ compact for the treasury breakdown (design shows ₦1.2M / ₦2.5M / ₦550K). */
-function compactNaira(n: number): string {
-  const safe = Number.isFinite(n) ? Math.max(0, n) : 0;
-  if (safe >= 1_000_000) {
-    const m = safe / 1_000_000;
-    return `₦${m >= 10 ? Math.round(m) : Math.round(m * 10) / 10}M`;
-  }
-  if (safe >= 1_000) {
-    const k = safe / 1_000;
-    return `₦${k >= 10 ? Math.round(k) : Math.round(k * 10) / 10}K`;
-  }
-  return `₦${Math.round(safe)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Local pieces
-// ---------------------------------------------------------------------------
-
-/** AVAILABLE / LOCKED / GOALS column inside the treasury card. */
-function BreakdownCol({
-  label,
-  value,
-  valueColor,
-  align = 'flex-start',
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  align?: 'flex-start' | 'center' | 'flex-end';
-}) {
-  return (
-    <View style={{ alignItems: align }}>
-      <Text className="text-[9px] font-bold uppercase tracking-widest text-white/50">{label}</Text>
-      <Text
-        className="mt-1 text-sm font-bold text-white"
-        style={valueColor ? { color: valueColor } : undefined}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-/** White wallet card in the Active Wallets horizontal rail. */
-function WalletCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) {
-  const v = walletVisual(wallet.type);
-  const iconColor = v.onDark ? v.gradient[0] : colors.muted;
-  const iconBg = `${v.gradient[1]}26`; // ~15% tint of the wallet's colour family
-
+/** 40pt white circle button in the Home header. */
+function HeaderButton({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable
       onPress={() => {
         selection();
         onPress();
       }}
-      className="mr-3 w-[230px] rounded bg-white p-4 active:opacity-90"
-      style={outline.card}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: pt.raised, alignItems: 'center', justifyContent: 'center' }}
     >
-      <View className="flex-row items-start justify-between">
-        <View
-          className="h-10 w-10 items-center justify-center rounded"
-          style={{ backgroundColor: iconBg }}
-        >
-          <Ionicons name={v.icon} size={18} color={iconColor} />
-        </View>
-        <MaterialCommunityIcons name="dots-vertical" size={18} color={colors.faded} />
-      </View>
-      <Text className="mt-7 text-[9px] font-bold uppercase tracking-wider text-muted">
-        {v.label} WALLET
-      </Text>
-      <Text className="mt-1 text-xl font-extrabold text-ink" numberOfLines={1}>
-        {formatMoney(wallet.balance)}
-      </Text>
+      {children}
     </Pressable>
   );
 }
 
-/** One of the 4 gold quick-action tiles (SEND / FUND / CREATE WALLET / ADD MEMBER). */
-function ActionTile({
-  label,
-  onPress,
-  disabled,
-  children,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <View className="flex-1 items-center">
+/**
+ * Home (prototype HOM-01): greeting, the everything-balance card, quick
+ * actions, "N need you", the next 7 days, goal rings and projects. English
+ * or Pidgin from the language setting; balances can be hidden (HOM-02) and
+ * sections switched off (HOM-08).
+ */
+export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
+  const copy = useHomeCopy();
+  const insets = useSafeAreaInsets();
+  const user = useAuth((s) => s.user);
+  const home = useHome();
+  const wallets = useWallets();
+  const hidden = useHomePrefs((s) => s.hidden);
+  const toggleHidden = useHomePrefs((s) => s.toggleHidden);
+  const sections = useHomePrefs((s) => s.sections);
+  const [sheet, setSheet] = useState(false);
+
+  // Money moves on other screens; come back to fresh numbers.
+  const refetchHome = home.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchHome();
+    }, [refetchHome]),
+  );
+
+  const data = home.data;
+  const main = (wallets.data ?? []).find((w) => w.type === 'main');
+  const mask = (s: string) => (hidden ? '₦ ••••' : s);
+
+  const addMoney = () => (main ? navigation.navigate('Fund', { walletId: main.id }) : navigation.navigate('Treasury'));
+
+  const openNeeds = (items: HomeNeedItem[]) => {
+    const kinds = new Set(items.map((i) => i.kind));
+    if (kinds.has('approval')) navigation.navigate('Approvals', { scope: 'to_me' });
+    else if (kinds.has('invitation')) navigation.navigate('Invitations');
+    else if (kinds.has('milestone')) navigation.navigate('Projects');
+    else navigation.navigate('Rules');
+  };
+
+  const openUpcoming = (item: HomeUpcomingItem) => {
+    if (item.kind === 'rule') {
+      if (item.tone === 'danger') navigation.navigate('Fund', { walletId: item.wallet_id });
+      else navigation.navigate('Rules');
+    } else {
+      navigation.navigate('ApprovalDetail', { approvalId: item.id });
+    }
+  };
+
+  const onQuickAction = (action: QuickAction) => {
+    setSheet(false);
+    switch (action) {
+      case 'send':
+        return navigation.navigate('Transfer');
+      case 'add':
+        return addMoney();
+      case 'wallet':
+        return navigation.navigate('CreateWallet');
+      case 'goal':
+        return navigation.navigate('SavingsGoalSetup', { type: 'goal' });
+      case 'invite': {
+        const t = inviteTarget(wallets.data);
+        return t.screen === 'InviteMember' ? navigation.navigate(t.screen, t.params) : navigation.navigate(t.screen);
+      }
+      default:
+        return undefined;
+    }
+  };
+
+  const header = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <Pressable
         onPress={() => {
           selection();
-          onPress();
+          navigation.navigate('More');
         }}
-        disabled={disabled}
-        className={`h-[52px] w-[52px] items-center justify-center rounded ${
-          disabled ? 'opacity-40' : 'active:opacity-80'
-        }`}
-        style={{ backgroundColor: GOLD_TILE }}
+        accessibilityRole="button"
+        accessibilityLabel="Profile and settings"
       >
-        {children}
+        <PtAvatar initials={initials(user?.full_name)} uri={user?.avatar_url} />
       </Pressable>
-      <Text className="mt-2 text-center text-[9px] font-bold uppercase tracking-tight text-muted">
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-/** Tonal Smart Alert row with the design's border-l-4 accent. */
-function AlertRow({
-  accent,
-  icon,
-  text,
-}: {
-  accent: string;
-  icon: React.ReactNode;
-  text: string;
-}) {
-  return (
-    <View
-      className="flex-row items-center rounded bg-page-top p-4"
-      style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-    >
-      {icon}
-      <Text className="ml-3 flex-1 text-[13px] font-semibold text-ink" numberOfLines={1}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-/** Row inside the Pending Approvals group — taps through to ApprovalDetail. */
-function ApprovalRow({ req, onPress }: { req: ApprovalRequest; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onPress();
-      }}
-      className="flex-row items-center py-2.5 active:opacity-70"
-    >
-      <View className="h-10 w-10 items-center justify-center rounded-full bg-white">
-        <Ionicons name="person-outline" size={17} color={colors.muted} />
-      </View>
-      <View className="ml-3 flex-1">
-        <Text className="text-[13px] font-bold text-ink" numberOfLines={1}>
-          {req.initiator.name}&apos;s request
-        </Text>
-        <Text className="mt-0.5 text-[11px] text-muted" numberOfLines={1}>
-          {req.description || approvalActionLabel(req.action)}
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{copy.greeting(new Date().getHours())}</Text>
+        <Text style={{ fontFamily: ptFont.bold, fontSize: 18, color: pt.ink }} numberOfLines={1}>
+          {data?.first_name ?? user?.first_name ?? ''}
         </Text>
       </View>
-      <Text className="ml-2 text-[15px] font-bold text-ink">{formatMoney(req.amount)}</Text>
-    </Pressable>
-  );
-}
-
-/** 48%-wide Goals Progress card; fill alternates gold-deep / slate per the design. */
-function GoalCard({
-  wallet,
-  accent,
-  onPress,
-}: {
-  wallet: Wallet;
-  accent: string;
-  onPress: () => void;
-}) {
-  const v = walletVisual(wallet.type);
-  const balance = parseFloat(wallet.balance || '0') || 0;
-  const target = parseFloat(wallet.target_amount ?? '0') || 0;
-  const pct = target > 0 ? Math.round((balance / target) * 100) : null;
-
-  return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onPress();
-      }}
-      className="rounded bg-white p-4 active:opacity-90"
-      style={[{ width: '48%', marginBottom: 14 }, outline.card]}
-    >
-      <View className="flex-row items-center justify-between">
-        <Ionicons name={v.icon} size={18} color={accent} />
-        {pct !== null ? (
-          <Text className="text-xs font-bold" style={{ color: accent }}>
-            {pct}%
-          </Text>
+      <HeaderButton label="Customise home" onPress={() => navigation.navigate('CustomiseHome')}>
+        <Feather name="sliders" size={18} color={pt.ink} />
+      </HeaderButton>
+      <HeaderButton label="Notifications" onPress={() => navigation.navigate('Notifications')}>
+        <Feather name="bell" size={18} color={pt.ink} />
+        {data && data.unread_notifications > 0 ? (
+          <View style={{ position: 'absolute', top: 8, right: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: pt.gold500 }} />
         ) : null}
-      </View>
-      <Text className="mt-3.5 text-[13px] font-bold text-ink" numberOfLines={1}>
-        {wallet.name}
-      </Text>
-      <View className="mt-2 h-1.5 overflow-hidden rounded-full bg-lav-faint">
-        <View
-          className="h-1.5 rounded-full"
-          style={{
-            width: `${pct !== null ? Math.max(Math.min(pct, 100), 2) : 2}%`,
-            backgroundColor: accent,
-          }}
-        />
-      </View>
-    </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
-export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
-  const user = useAuth((s) => s.user);
-  const dashboardQ = useDashboard();
-  const familyQ = useFamily();
-  const approvalsQ = useApprovals('to_me', 'pending');
-  const automationsQ = useAutomations();
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-
-  const data = dashboardQ.data;
-  const wallets = useMemo(() => data?.wallets ?? [], [data]);
-  const pendingReqs = useMemo(() => approvalsQ.data ?? [], [approvalsQ.data]);
-
-  const mainWallet = useMemo(() => wallets.find((w) => w.type === 'main') ?? wallets[0], [wallets]);
-  const goalWallets = useMemo(() => wallets.filter((w) => GOAL_TYPES.includes(w.type)), [wallets]);
-  const frozenWallets = useMemo(() => wallets.filter((w) => w.status === 'frozen'), [wallets]);
-
-  const totalBalance = parseFloat(data?.total_balance ?? '0') || 0;
-  const inGoals = useMemo(() => sumBalances(goalWallets), [goalWallets]);
-  const locked = useMemo(() => sumBalances(frozenWallets), [frozenWallets]);
-  const available = Math.max(0, totalBalance - inGoals - locked);
-
-  const activeGoals = useMemo(
-    () => goalWallets.filter((w) => (parseFloat(w.target_amount ?? '0') || 0) > 0).length,
-    [goalWallets],
-  );
-
-  const familyName = useMemo(() => {
-    const parts = (user?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
-    return parts.length > 0 ? `${parts[parts.length - 1]} Family` : 'My Family';
-  }, [user]);
-
-  const firstName = useMemo(() => {
-    const first = (user?.full_name ?? '').trim().split(/\s+/)[0];
-    return first || 'there';
-  }, [user]);
-
-  const daypart = useMemo(() => {
-    const hour = new Date().getHours();
-    return hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-  }, []);
-
-  const inflow = parseFloat(data?.inflow_30d ?? '0') || 0;
-  const outflow = parseFloat(data?.outflow_30d ?? '0') || 0;
-
-  const unread = data?.unread_notifications ?? 0;
-  const pendingCount = data?.pending_approvals ?? pendingReqs.length;
-  const memberCount = (familyQ.data?.stats.total_members ?? familyQ.data?.members.length ?? 0) + 1;
-
-  const activeCommitments = useMemo(
-    () => (automationsQ.data ?? []).filter((r) => r.enabled).length,
-    [automationsQ.data],
-  );
-
-  // ---- Smart Alerts (only true conditions render) ----
-  const goalNearDone = useMemo(
-    () =>
-      goalWallets.some((w) => {
-        const target = parseFloat(w.target_amount ?? '0') || 0;
-        return target > 0 && (parseFloat(w.balance || '0') || 0) / target >= 0.8;
-      }),
-    [goalWallets],
-  );
-  const overspending = outflow > inflow && outflow > 0;
-  const hasAlerts = pendingCount > 0 || goalNearDone || overspending;
-
-  // ---- Steward AI insight (simple real-data heuristics) ----
-  const insight = useMemo(() => {
-    if (overspending) {
-      const base = inflow > 0 ? inflow : outflow;
-      const pct = Math.min(999, Math.round(((outflow - inflow) / base) * 100));
-      if (pct >= 5) {
-        return `“You spent ${pct}% more than you brought in this month. Let's review where it went.”`;
-      }
-    }
-    const ahead = goalWallets
-      .map((w) => {
-        const target = parseFloat(w.target_amount ?? '0') || 0;
-        const pct = target > 0 ? Math.round(((parseFloat(w.balance || '0') || 0) / target) * 100) : 0;
-        return { name: w.name, pct };
-      })
-      .filter((g) => g.pct >= 60)
-      .sort((a, b) => b.pct - a.pct)[0];
-    if (ahead) {
-      return `“The ${ahead.name} goal is ${ahead.pct}% funded and ahead of schedule.”`;
-    }
-    return `“All quiet this week — set a goal or a rule and I'll keep the family on track.”`;
-  }, [overspending, inflow, outflow, goalWallets]);
-
-  const commitmentLine =
-    activeCommitments > 0
-      ? `You're on track with ${activeCommitments} active commitment${
-          activeCommitments === 1 ? '' : 's'
-        }`
-      : "You're on track — automate savings with a rule";
-
-  const onRefresh = () => {
-    void dashboardQ.refetch();
-    void familyQ.refetch();
-    void approvalsQ.refetch();
-    void automationsQ.refetch();
-  };
-
-  // ---- 1 · Header (always visible, in-screen) ----
-  const topBar = (
-    <View className="flex-row items-center justify-between">
-      <View className="flex-1 flex-row items-center pr-3">
-        <Pressable
-          onPress={() => {
-            selection();
-            navigation.navigate('More');
-          }}
-          className="active:opacity-80"
-        >
-          <LinearGradient
-            colors={gradients.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ height: 36, width: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text className="text-xs font-bold text-white">{initials(user?.full_name)}</Text>
-          </LinearGradient>
-        </Pressable>
-        <Text
-          className="ml-3 flex-1 text-lg font-extrabold text-ink"
-          style={{ letterSpacing: -0.3 }}
-          numberOfLines={1}
-        >
-          Good {daypart}, {firstName}
-        </Text>
-      </View>
-      <View className="flex-row items-center" style={{ gap: 18 }}>
-        <Pressable
-          onPress={() => {
-            selection();
-            navigation.navigate('Assistant');
-          }}
-          hitSlop={8}
-          accessibilityLabel="Open AI assistant"
-          className="active:opacity-70"
-        >
-          <Ionicons name="sparkles-outline" size={23} color={colors.muted} />
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            selection();
-            navigation.navigate('Notifications');
-          }}
-          hitSlop={8}
-          className="active:opacity-70"
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.muted} />
-          {unread > 0 ? (
-            <View className="absolute -right-2 -top-1.5 h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1">
-              <Text className="text-[9px] font-bold text-white">{unread > 99 ? '99+' : unread}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
+      </HeaderButton>
     </View>
   );
 
-  if (dashboardQ.isLoading) {
-    return (
-      <Screen>
-        <View style={{ padding: 20 }}>{topBar}</View>
-        <View className="flex-1 items-center justify-center pb-24">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
-      </Screen>
-    );
-  }
-
-  if (dashboardQ.error || !data) {
-    return (
-      <Screen>
-        <View style={{ padding: 20 }}>{topBar}</View>
-        <View className="flex-1 justify-center pb-24">
-          <LoadError
-            message={(dashboardQ.error as Error | null)?.message}
-            onRetry={() => void dashboardQ.refetch()}
-          />
-        </View>
-      </Screen>
-    );
-  }
-
   return (
-    <Screen>
+    <View style={{ flex: 1, backgroundColor: pt.surface }}>
+      <StatusBar style="dark" />
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 28, gap: 16 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={dashboardQ.isRefetching}
-            onRefresh={onRefresh}
-            tintColor={colors.navy}
+            refreshing={home.isRefetching}
+            onRefresh={() => {
+              void home.refetch();
+              void wallets.refetch();
+            }}
+            tintColor={pt.brand}
           />
         }
       >
-        {/* 1 · Header */}
-        {topBar}
+        {header}
 
-        {/* 2 · Family selector — opens the switcher sheet */}
-        <Pressable
-          onPress={() => {
-            selection();
-            setSwitcherOpen(true);
-          }}
-          className="mt-6 flex-row items-center rounded bg-page-top p-4 active:opacity-80"
-        >
-          <View className="flex-1">
-            <Text className="text-[15px] font-extrabold text-gold-deep" style={{ letterSpacing: -0.2 }}>
-              {familyName}
-            </Text>
-            <Text className="mt-0.5 text-xs font-medium text-muted">
-              {memberCount} Member{memberCount === 1 ? '' : 's'} • {activeGoals} Active Goal
-              {activeGoals === 1 ? '' : 's'}
-            </Text>
-          </View>
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-lav">
-            <Ionicons name="chevron-down" size={18} color={colors.muted} />
-          </View>
-        </Pressable>
-
-        {/* 3 · Treasury card — deep treasury navy */}
-        <LinearGradient
-          colors={TREASURY_GRADIENT}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: radius, marginTop: 32, padding: 24, overflow: 'hidden' }}
-        >
-          {/* Decorative mint glow (design's blurred circle) */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: -48,
-              right: -48,
-              height: 192,
-              width: 192,
-              borderRadius: 96,
-              backgroundColor: colors.brandMint,
-              opacity: 0.1,
-            }}
-          />
-
-          <View className="flex-row items-start justify-between">
-            <Text
-              className="text-[10px] font-bold uppercase"
-              style={{ color: 'rgba(255, 255, 255, 0.6)', letterSpacing: 2 }}
-            >
-              Total Treasury Balance
-            </Text>
-            <Ionicons name="wallet" size={20} color="rgba(255,255,255,0.8)" />
-          </View>
-
-          <Text
-            className="mt-2 font-extrabold"
-            style={{ color: colors.white, fontSize: 34, letterSpacing: -1 }}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-          >
-            {formatMoney(data.total_balance)}
-          </Text>
-
-          <View className="mt-5 flex-row justify-between">
-            <BreakdownCol label="Available" value={compactNaira(available)} />
-            <BreakdownCol label="Locked" value={compactNaira(locked)} align="center" />
-            <BreakdownCol
-              label="Goals"
-              value={compactNaira(inGoals)}
-              valueColor={colors.brandMint}
-              align="flex-end"
-            />
-          </View>
-
-          {/* Steward commitments strip */}
-          <View
-            className="mt-5 flex-row items-center rounded px-3 py-2"
-            style={{ backgroundColor: 'rgba(255,255,255,0.10)' }}
-          >
-            <MaterialCommunityIcons name="creation" size={15} color={colors.brandMint} />
-            <Text className="ml-2 flex-1 text-[11px] font-medium text-white/90" numberOfLines={1}>
-              {commitmentLine}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={() => {
-              selection();
-              navigation.navigate('Treasury');
-            }}
-            className="mt-4 items-center rounded py-3 active:opacity-85"
-            style={{ backgroundColor: GOLD_BUTTON }}
-          >
-            <Text className="text-[15px] font-bold" style={{ color: GOLD_INK }}>
-              View Treasury
-            </Text>
-          </Pressable>
-        </LinearGradient>
-
-        {/* 4 · Active Wallets — horizontal rail */}
-        {wallets.length > 0 ? (
-          <View className="mt-8">
-            <View className="flex-row items-end justify-between">
-              <Text className="text-lg font-bold text-ink">Active Wallets</Text>
+        {home.isLoading ? (
+          <ActivityIndicator color={pt.brand} style={{ marginTop: 48 }} />
+        ) : home.error || !data ? (
+          <LoadError message={(home.error as Error | null)?.message} onRetry={() => void home.refetch()} />
+        ) : (
+          <>
+            {/* Everything the family can see */}
+            <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.lg, paddingVertical: 16, paddingHorizontal: 18, gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.85 }}>
+                  {copy.everything(data.wallet_count)}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    selection();
+                    toggleHidden();
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={hidden ? 'Show balances' : 'Hide balances'}
+                >
+                  <Feather name={hidden ? 'eye-off' : 'eye'} size={16} color={pt.emerald50} />
+                </Pressable>
+              </View>
+              <Text
+                style={{ fontFamily: ptFont.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: pt.emerald50, fontVariant: ['tabular-nums'] }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {hidden ? '₦ ••••••' : formatMoney(data.totals.total)}
+              </Text>
               <Pressable
                 onPress={() => {
                   selection();
                   navigation.navigate('Treasury');
                 }}
-                hitSlop={8}
-                className="active:opacity-70"
+                accessibilityRole="button"
               >
-                <Text className="text-xs font-bold text-gold-deep">See All</Text>
+                <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 17, color: pt.emerald50, opacity: 0.9 }}>
+                  {copy.breakdown(
+                    mask(formatNaira(data.totals.yours)),
+                    mask(formatNaira(data.totals.shared)),
+                    mask(formatNaira(data.totals.children)),
+                  )}
+                </Text>
               </Pressable>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mt-3"
-              style={{ marginHorizontal: -20 }}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-            >
-              {wallets.map((w) => (
-                <WalletCard
-                  key={w.id}
-                  wallet={w}
-                  onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
 
-        {/* 5 · Quick actions */}
-        <View className="mt-8 flex-row" style={{ gap: 8 }}>
-          <ActionTile label="Send" onPress={() => navigation.navigate('Transfer')}>
-            <Ionicons name="send" size={20} color={colors.goldDeep} />
-          </ActionTile>
-          <ActionTile
-            label="Fund"
-            disabled={!mainWallet}
-            onPress={() => mainWallet && navigation.navigate('Fund', { walletId: mainWallet.id })}
-          >
-            <MaterialCommunityIcons name="credit-card-plus" size={20} color={colors.goldDeep} />
-          </ActionTile>
-          <ActionTile label="Create Wallet" onPress={() => navigation.navigate('CreateWallet')}>
-            <Ionicons name="wallet" size={20} color={colors.goldDeep} />
-          </ActionTile>
-          <ActionTile label="Add Member" onPress={() => navigation.navigate('Family')}>
-            <Ionicons name="person-add" size={20} color={colors.goldDeep} />
-          </ActionTile>
-        </View>
-
-        {/* 6 · Smart Alerts — only conditions that are true */}
-        {hasAlerts ? (
-          <View className="mt-8">
-            <View className="flex-row items-center">
-              <MaterialCommunityIcons name="bell-ring" size={18} color={colors.muted} />
-              <Text className="ml-2 text-lg font-bold text-ink">Smart Alerts</Text>
+            {/* Quick actions */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <PtQuickAction label={copy.send} icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Transfer')} />
+              <PtQuickAction label={copy.addMoney} icon={<Feather name="arrow-down" size={22} color={pt.brand} />} onPress={addMoney} />
+              <PtQuickAction
+                label={copy.move}
+                icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
+                onPress={() => navigation.navigate('Transfer')}
+              />
+              <PtQuickAction label={copy.more} icon={<Feather name="menu" size={21} color={pt.brand} />} onPress={() => setSheet(true)} />
             </View>
-            <View className="mt-3" style={{ gap: 8 }}>
-              {pendingCount > 0 ? (
-                <AlertRow
-                  accent={colors.goldDeep}
-                  icon={
-                    <MaterialCommunityIcons
-                      name="exclamation-thick"
-                      size={18}
-                      color={colors.goldDeep}
-                    />
-                  }
-                  text="Payment request pending"
-                />
-              ) : null}
-              {goalNearDone ? (
-                <AlertRow
-                  accent={colors.brand}
-                  icon={<MaterialCommunityIcons name="flag" size={18} color={colors.brand} />}
-                  text="Goal nearing completion"
-                />
-              ) : null}
-              {overspending ? (
-                <AlertRow
-                  accent={colors.danger}
-                  icon={<Ionicons name="warning" size={18} color={colors.danger} />}
-                  text="Unusual spending detected"
-                />
-              ) : null}
-            </View>
-          </View>
-        ) : null}
 
-        {/* 7 · Pending Approvals — rows navigate to ApprovalDetail */}
-        {pendingReqs.length > 0 ? (
-          <View className="mt-8 rounded bg-lav-soft p-5">
-            <Text className="text-lg font-bold text-ink">Pending Approvals</Text>
-            <View className="mt-2">
-              {pendingReqs.slice(0, 3).map((r) => (
-                <ApprovalRow
-                  key={r.id}
-                  req={r}
-                  onPress={() => navigation.navigate('ApprovalDetail', { approvalId: r.id })}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
+            {/* N need you */}
+            {data.needs_you.count > 0 ? (
+              <Pressable
+                onPress={() => {
+                  selection();
+                  openNeeds(data.needs_you.items);
+                }}
+                accessibilityRole="button"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  backgroundColor: pt.gold100,
+                  borderRadius: ptRadius.md,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: pt.gold500, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: '#2A1B00' }}>{data.needs_you.count}</Text>
+                </View>
+                <Text style={{ flex: 1, fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.ink }} numberOfLines={2}>
+                  <Text style={{ fontFamily: ptFont.bold }}>{copy.needYou(data.needs_you.count)}</Text>{' '}
+                  {data.needs_you.items.map((i) => i.label).join(', ')}
+                </Text>
+                <Feather name="chevron-right" size={16} color={pt.inkSubtle} />
+              </Pressable>
+            ) : null}
 
-        {/* 8 · Goals Progress */}
-        <View className="mt-8">
-          <Text className="text-lg font-bold text-ink">Goals Progress</Text>
-          {goalWallets.length === 0 ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('CreateWallet');
-              }}
-              className="mt-3 items-center rounded bg-page-top p-6 active:opacity-80"
-            >
-              <View className="h-12 w-12 items-center justify-center rounded-full bg-gold-soft">
-                <Ionicons name="flag" size={20} color={colors.goldDeep} />
+            {/* Next 7 days */}
+            {sections.upcoming ? (
+              <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 4, paddingHorizontal: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingBottom: 2 }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }}>{copy.next7}</Text>
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('Rules');
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ fontFamily: ptFont.bold, fontSize: 12, color: pt.brand }}>{copy.seeAll}</Text>
+                  </Pressable>
+                </View>
+                {data.upcoming.length === 0 ? (
+                  <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 17, color: pt.inkMuted, paddingVertical: 12 }}>
+                    {copy.nothingDue}
+                  </Text>
+                ) : (
+                  data.upcoming.map((item, i) => (
+                    <Pressable
+                      key={`${item.kind}-${item.id}`}
+                      onPress={() => {
+                        selection();
+                        openUpcoming(item);
+                      }}
+                      accessibilityRole="button"
+                      style={{
+                        minHeight: 48,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        paddingVertical: 6,
+                        borderBottomWidth: i === data.upcoming.length - 1 ? 0 : 1,
+                        borderBottomColor: pt.line,
+                      }}
+                    >
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: DOT[item.tone] }} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text
+                          style={{ fontFamily: ptFont.regular, fontSize: 11, color: item.tone === 'danger' ? pt.danger : pt.inkMuted }}
+                          numberOfLines={1}
+                        >
+                          {shortDay(item.date, { today: copy.today })} · {item.subtitle}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink, fontVariant: ['tabular-nums'] }}>
+                        {mask(formatNaira(item.amount))}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
               </View>
-              <Text className="mt-3 text-[15px] font-bold text-ink">Create your first goal</Text>
-              <Text className="mt-1 text-center text-xs text-muted">
-                Save toward school fees, a trip or a rainy day.
-              </Text>
-            </Pressable>
-          ) : (
-            <View className="mt-3 flex-row flex-wrap justify-between">
-              {goalWallets.map((w, i) => (
-                <GoalCard
-                  key={w.id}
-                  wallet={w}
-                  accent={i % 2 === 0 ? colors.goldDeep : colors.muted}
-                  onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
-                />
-              ))}
-            </View>
-          )}
-        </View>
+            ) : null}
 
-        {/* 9 · Steward AI Insight — dark green card */}
-        <LinearGradient
-          colors={STEWARD_GRADIENT}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: radius, marginTop: 32, padding: 24 }}
-        >
-          <View className="flex-row items-center">
-            <View
-              className="h-10 w-10 items-center justify-center rounded"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <MaterialCommunityIcons name="robot-happy" size={20} color={colors.white} />
-            </View>
-            <Text className="ml-3 text-base font-bold text-white">Steward AI Insight</Text>
-          </View>
-          <Text className="mt-4 text-sm font-medium text-white/90" style={{ lineHeight: 21 }}>
-            {insight}
-          </Text>
-          <Pressable
-            onPress={() => {
-              selection();
-              navigation.navigate('Steward');
-            }}
-            className="mt-5 items-center rounded bg-white py-3 active:opacity-85"
-          >
-            <Text className="text-[15px] font-bold" style={{ color: colors.brand }}>
-              Ask Steward
-            </Text>
-          </Pressable>
-        </LinearGradient>
+            {/* Goal rings */}
+            {sections.goals ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginHorizontal: -20 }}
+                contentContainerStyle={{ paddingHorizontal: 20, gap: 4 }}
+              >
+                {data.goals.map((g) => (
+                  <Pressable
+                    key={g.wallet_id}
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('WalletDetail', { walletId: g.wallet_id });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${g.name}, ${g.percent}%`}
+                    style={{ width: 92, alignItems: 'center', gap: 6 }}
+                  >
+                    <PtRing percent={g.percent} />
+                    <Text
+                      style={{ fontFamily: ptFont.semibold, fontSize: 12, lineHeight: 15, color: pt.ink, textAlign: 'center' }}
+                      numberOfLines={2}
+                    >
+                      {g.name}
+                    </Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => {
+                    selection();
+                    navigation.navigate('SavingsGoalSetup', { type: 'goal' });
+                  }}
+                  accessibilityRole="button"
+                  style={{ width: 92, alignItems: 'center', gap: 6 }}
+                >
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      borderWidth: 2,
+                      borderStyle: 'dashed',
+                      borderColor: pt.lineStrong,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Feather name="plus" size={20} color={pt.inkMuted} />
+                  </View>
+                  <Text style={{ fontFamily: ptFont.semibold, fontSize: 12, lineHeight: 15, color: pt.inkMuted, textAlign: 'center' }}>
+                    {copy.newGoal}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            ) : null}
+
+            {/* Projects */}
+            {sections.projects
+              ? data.projects.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => {
+                      selection();
+                      navigation.navigate('ProjectDetail', { projectId: p.id });
+                    }}
+                    accessibilityRole="button"
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      backgroundColor: pt.raised,
+                      borderRadius: ptRadius.md,
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                    }}
+                  >
+                    <View
+                      style={{ width: 36, height: 36, borderRadius: ptRadius.sm, backgroundColor: pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <MaterialCommunityIcons name="hard-hat" size={18} color={pt.brand} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }} numberOfLines={1}>
+                        {p.title}
+                      </Text>
+                      <Text style={{ fontFamily: ptFont.regular, fontSize: 11, color: pt.inkMuted }} numberOfLines={1}>
+                        {p.status_line}
+                      </Text>
+                    </View>
+                    {p.needs_review ? <PtChip label={copy.review} tone="warning" icon="clock" /> : null}
+                  </Pressable>
+                ))
+              : null}
+          </>
+        )}
       </ScrollView>
 
-      {/* Family switcher bottom sheet */}
-      <FamilySwitcherModal
-        visible={switcherOpen}
-        onClose={() => setSwitcherOpen(false)}
-        familyName={familyName}
-        memberCount={memberCount}
-        treasuryLabel={compactNaira(totalBalance)}
-      />
-    </Screen>
+      <QuickActionsSheet visible={sheet} onClose={() => setSheet(false)} onPick={onQuickAction} />
+    </View>
   );
 }

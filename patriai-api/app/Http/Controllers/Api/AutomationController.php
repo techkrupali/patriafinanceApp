@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\AutomationRule;
+use App\Models\User;
+use App\Models\Wallet;
+use App\Models\WalletMember;
 use App\Services\AutomationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +23,49 @@ class AutomationController extends ApiController
             ->get()
             ->map(fn (AutomationRule $r) => $this->serializeRule($r));
 
-        return $this->ok('Automations fetched', ['automations' => $rules]);
+        return $this->ok('Automations fetched', [
+            'automations' => $rules,
+            // The Rules tab lists each wallet's "when does money need a yes" rule too.
+            'approval_rules' => $this->approvalRules($request->user()),
+        ]);
+    }
+
+    /** Wallets this person owns or co-owns that hold spends for approval, with who decides. */
+    private function approvalRules(User $user): array
+    {
+        $coOwned = WalletMember::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->whereIn('role', ['owner', 'co_owner'])
+            ->pluck('wallet_id');
+
+        return Wallet::with(['owner', 'members' => fn ($q) => $q->where('status', 'active')->with('user')])
+            ->where('approval_enabled', true)
+            ->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('id', $coOwned))
+            ->orderBy('name')
+            ->get()
+            ->map(function (Wallet $wallet) {
+                $approvers = collect([$wallet->owner])
+                    ->concat(
+                        $wallet->members
+                            ->filter(fn ($m) => in_array($m->role, ['owner', 'co_owner', 'admin'], true) || $m->can_approve)
+                            ->pluck('user')
+                    )
+                    ->filter()
+                    ->unique('id')
+                    ->map(fn (User $u) => $u->first_name ?: $u->fullName())
+                    ->values();
+
+                return [
+                    'wallet_id' => $wallet->id,
+                    'wallet_name' => $wallet->name,
+                    'wallet_type' => $wallet->type,
+                    'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
+                    'required_approvals' => (int) $wallet->required_approvals,
+                    'approvers' => $approvers,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     // POST /automations
@@ -155,6 +200,7 @@ class AutomationController extends ApiController
             'min_balance' => $rule->min_balance !== null ? number_format($rule->min_balance / 100, 2, '.', '') : null,
             'enabled' => (bool) $rule->enabled,
             'last_run_at' => $rule->last_run_at?->toIso8601String(),
+            'next_run_on' => $rule->nextRunOn(now())?->toDateString(),
             'next_run_hint' => $this->nextRunHint($rule),
         ];
     }

@@ -61,6 +61,7 @@ class FamilyController extends ApiController
             $people[$person->id]['memberships'][] = [
                 'wallet_id' => $wallet->id,
                 'wallet_name' => $wallet->name,
+                'wallet_type' => $wallet->type,
                 'role' => $role,
                 'can_approve' => $canApprove,
             ];

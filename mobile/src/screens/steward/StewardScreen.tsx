@@ -1,125 +1,121 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { colors, gradients, outline, radius } from '../../theme';
-import { useApprovals, useAutomations, useDashboard, useFamily } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { pt, ptFont } from '../../theme';
+import { PtRing } from '../../components/pt/PtRing';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtButton } from '../../components/pt/PtButton';
+import { SecureTransferCard } from '../../components/SecureTransferCard';
+import { TransactionListCard } from '../../components/TransactionListCard';
+import { TransactionGroupCard } from '../../components/TransactionGroupCard';
+import { SupportRequestCard } from '../../components/SupportRequestCard';
+import { ApiError } from '../../api/client';
+import {
+  useApprovals,
+  useAssistantChat,
+  useAutomations,
+  useDashboard,
+  useFamily,
+  useHome,
+  useWallets,
+} from '../../api/hooks';
+import { formatNaira, formatYmd } from '../../lib/format';
+import { localAnswer } from '../../lib/stewardLocal';
 import { selection } from '../../lib/haptics';
-import type { DashboardData, FamilyData, AutomationRule, ApprovalRequest } from '../../api/types';
+import type { AssistantAction, HomeGoal } from '../../api/types';
 import type { TabScreenProps } from '../../navigation/types';
 
 interface Msg {
-  id: number;
-  from: 'user' | 'steward';
+  id: string;
+  role: 'user' | 'assistant';
   text: string;
+  action?: AssistantAction | null;
 }
 
-interface Ctx {
-  dashboard?: DashboardData;
-  family?: FamilyData;
-  automations?: AutomationRule[];
-  pending?: ApprovalRequest[];
+let seq = 0;
+const nextId = () => `s${Date.now()}_${seq++}`;
+
+const CHIPS = ['Where did our money go this month?', 'How are our goals doing?', 'Anything waiting for me?', 'What rules are running?'];
+
+/** Months from now until a YYYY-MM-DD date (at least 1). */
+function monthsUntil(ymd: string | null): number | null {
+  if (!ymd) return null;
+  const d = new Date(`${ymd}T00:00:00`);
+  const now = new Date();
+  const months = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth());
+  return Math.max(1, months);
 }
 
-const GOAL_TYPES = ['savings', 'goal', 'emergency', 'giving'];
-
-/** Steward's grounded, data-backed answers — no guessing, only live numbers. */
-function answer(q: string, ctx: Ctx): string {
-  const t = q.toLowerCase();
-  const d = ctx.dashboard;
-
-  if (/balance|total|kitna|how much.*(have|money)/.test(t)) {
-    if (!d) return "I'm still loading your balances — try again in a second.";
-    return `Your family treasury holds ${formatMoney(d.total_balance)} across ${d.wallets.length} wallets. The largest is ${[...d.wallets].sort((a, b) => parseFloat(b.balance) - parseFloat(a.balance))[0]?.name ?? '—'}.`;
-  }
-  if (/spend|outflow|spent|expense/.test(t)) {
-    if (!d) return 'One moment — your spending data is still loading.';
-    return `In the last 30 days ${formatMoney(d.outflow_30d)} went out and ${formatMoney(d.inflow_30d)} came in. ${parseFloat(d.inflow_30d) >= parseFloat(d.outflow_30d) ? 'You saved more than you spent — strong month.' : 'Spending outpaced income this month — worth a look at Recent Activity.'}`;
-  }
-  if (/goal/.test(t)) {
-    const goals = (d?.wallets ?? []).filter((w) => GOAL_TYPES.includes(w.type) && w.target_amount);
-    if (goals.length === 0) return 'No savings goals with targets yet. Create one from Home → Goals and I’ll track it for you.';
-    return goals
-      .map((g) => {
-        const pct = Math.min(100, Math.round((parseFloat(g.balance) / parseFloat(g.target_amount!)) * 100));
-        return `${g.name}: ${formatMoney(g.balance)} of ${formatMoney(g.target_amount!)} (${pct}%)`;
-      })
-      .join('\n');
-  }
-  if (/family|member|who/.test(t)) {
-    const m = ctx.family?.members ?? [];
-    if (m.length === 0) return 'No family members yet — invite someone from the Family tab.';
-    return `Your family has ${m.length} member${m.length === 1 ? '' : 's'}: ${m.map((x) => `${x.name} (${x.role.replace('_', '-')})`).join(', ')}.`;
-  }
-  if (/pending|request|approv/.test(t)) {
-    const p = ctx.pending ?? [];
-    if (p.length === 0) return 'Nothing is waiting on your approval right now. All clear ✅';
-    return `You have ${p.length} pending request${p.length === 1 ? '' : 's'}:\n${p.map((r) => `• ${r.initiator.name}: ${formatMoney(r.amount)} — ${r.description || r.action}`).join('\n')}\nApprove them from Home or the Approvals screen.`;
-  }
-  if (/rule|automat/.test(t)) {
-    const a = ctx.automations ?? [];
-    if (a.length === 0) return 'No rules yet. Open the Rules tab to automate allowances and savings — I can move money for you on a schedule.';
-    return `You have ${a.length} active rule${a.length === 1 ? '' : 's'}:\n${a.map((r) => `• ${r.name}: ${formatMoney(r.amount)} ${r.from_wallet.name} → ${r.to_wallet.name}, ${r.next_run_hint.toLowerCase()}`).join('\n')}`;
-  }
-  if (/hello|hi|hey|help|what can/.test(t)) {
-    return "I'm Steward — your family's financial guide. Ask me about your balance, spending, goals, family members, pending requests or rules. To automate money moves, set them up in the Rules tab and I'll run them on schedule.";
-  }
-  return "I track your family's live numbers — try asking “What's our balance?”, “How are our goals?”, “Any pending requests?” or “What rules are running?”";
+function UserBubble({ text }: { text: string }) {
+  return (
+    <View
+      style={{
+        alignSelf: 'flex-end',
+        maxWidth: 280,
+        backgroundColor: pt.brand,
+        borderTopLeftRadius: 18,
+        borderTopRightRadius: 18,
+        borderBottomLeftRadius: 18,
+        borderBottomRightRadius: 4,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+      }}
+    >
+      <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.onBrand }}>{text}</Text>
+    </View>
+  );
 }
 
-/** Proactive insights, Ledger-style — computed from live data. */
-function buildInsights(ctx: Ctx): { icon: string; text: string }[] {
-  const out: { icon: string; text: string }[] = [];
-  const d = ctx.dashboard;
-  const goals = (d?.wallets ?? []).filter((w) => GOAL_TYPES.includes(w.type) && w.target_amount);
-  for (const g of goals) {
-    const pct = Math.round((parseFloat(g.balance) / parseFloat(g.target_amount!)) * 100);
-    if (pct >= 100) out.push({ icon: 'trophy', text: `“${g.name}” has reached its target — consider moving the surplus to another wallet.` });
-    else if (pct >= 60) out.push({ icon: 'trending-up', text: `“${g.name}” is ${pct}% funded and ahead of pace. Keep the auto-save running.` });
-  }
-  const p = ctx.pending ?? [];
-  if (p.length > 0) out.push({ icon: 'gesture-tap-button', text: `${p[0].initiator.name} is waiting on ${formatMoney(p[0].amount)} — review it on Home.` });
-  if (d && parseFloat(d.inflow_30d) > parseFloat(d.outflow_30d)) {
-    out.push({ icon: 'shield-check', text: 'Inflow beat outflow this month — your family savings rate is healthy.' });
-  }
-  const frozen = (d?.wallets ?? []).filter((w) => w.status === 'frozen');
-  if (frozen.length > 0) out.push({ icon: 'lock', text: `${frozen.map((w) => w.name).join(', ')} ${frozen.length === 1 ? 'is' : 'are'} frozen — spending is blocked there.` });
-  if (out.length === 0) out.push({ icon: 'creation', text: 'All quiet. Set a savings goal or a rule and I’ll keep it on track for you.' });
-  return out.slice(0, 3);
+function StewardCard({ children, tone = 'raised' }: { children: React.ReactNode; tone?: 'raised' | 'info' }) {
+  return (
+    <View
+      style={{
+        alignSelf: 'flex-start',
+        maxWidth: 320,
+        backgroundColor: tone === 'info' ? pt.infoSoft : pt.raised,
+        borderTopLeftRadius: 18,
+        borderTopRightRadius: 18,
+        borderBottomRightRadius: 18,
+        borderBottomLeftRadius: tone === 'info' ? 18 : 4,
+        padding: 14,
+        gap: 12,
+      }}
+    >
+      {children}
+    </View>
+  );
 }
 
-const CHIPS = ['Our balance?', 'Spending this month', 'Goals progress', 'Pending requests', 'Active rules'];
-
-export function StewardScreen(_props: TabScreenProps<'Steward'>) {
+/**
+ * Steward tab (prototype AIS-01). Opens with where the family stands on its
+ * nearest goal and one suggestion it can set up, then chats. Answers come from
+ * the AI assistant when the server has it configured; otherwise from Steward's
+ * own reading of the family's live numbers. Steward never moves money itself:
+ * transfers it prepares still need your PIN.
+ */
+export function StewardScreen({ navigation }: TabScreenProps<'Steward'>) {
+  const insets = useSafeAreaInsets();
+  const home = useHome();
+  const wallets = useWallets();
   const dashboard = useDashboard();
   const family = useFamily();
   const automations = useAutomations();
   const approvals = useApprovals('to_me', 'pending');
+  const chat = useAssistantChat();
 
-  const ctx: Ctx = useMemo(
-    () => ({
-      dashboard: dashboard.data,
-      family: family.data,
-      automations: automations.data,
-      pending: approvals.data,
-    }),
-    [dashboard.data, family.data, automations.data, approvals.data],
-  );
-
-  const [msgs, setMsgs] = useState<Msg[]>([
-    { id: 1, from: 'steward', text: "Good day — I'm Steward, your family's financial guide. Ask me anything about your money." },
-  ]);
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
-  const [kbHeight, setKbHeight] = useState(0);
+  const [offline, setOffline] = useState(false);
+  const [kb, setKb] = useState(0);
   const scroller = useRef<ScrollView>(null);
-  const nextId = useRef(2);
 
   useEffect(() => {
-    const s = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height ?? 0));
-    const h = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    if (Platform.OS !== 'android') return;
+    const s = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates?.height ?? 0));
+    const h = Keyboard.addListener('keyboardDidHide', () => setKb(0));
     return () => {
       s.remove();
       h.remove();
@@ -129,144 +125,230 @@ export function StewardScreen(_props: TabScreenProps<'Steward'>) {
   useEffect(() => {
     const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(t);
-  }, [msgs, kbHeight]);
+  }, [messages, chat.isPending, kb]);
 
-  const send = (text: string) => {
-    const q = text.trim();
-    if (!q) return;
+  // The goal furthest from done that is still open, else the first one.
+  const focusGoal: HomeGoal | undefined = useMemo(() => {
+    const goals = home.data?.goals ?? [];
+    return goals.filter((g) => g.percent < 100).sort((a, b) => b.percent - a.percent)[0] ?? goals[0];
+  }, [home.data]);
+
+  const main = (wallets.data ?? []).find((w) => w.type === 'main');
+
+  const suggestion = useMemo(() => {
+    if (!focusGoal) {
+      return {
+        text: 'Pick something to save for, like school fees or rent, and I will keep everyone on track.',
+        cta: 'Start a goal',
+        go: () => navigation.navigate('SavingsGoalSetup', { type: 'goal' }),
+      };
+    }
+    const hasRule = (automations.data ?? []).some((r) => r.enabled && r.to_wallet.id === focusGoal.wallet_id);
+    if (hasRule || !main) return null;
+    const left = Math.max(0, (parseFloat(focusGoal.target) || 0) - (parseFloat(focusGoal.balance) || 0));
+    const months = monthsUntil(focusGoal.target_date) ?? 6;
+    const monthly = Math.max(1000, Math.ceil(left / months / 1000) * 1000);
+    return {
+      text: `I can move ${formatNaira(monthly)} from ${main.name} to ${focusGoal.name} every month${
+        focusGoal.target_date ? `, so it's ready by ${formatYmd(focusGoal.target_date)}` : ''
+      }.`,
+      cta: 'Set it up',
+      go: () => navigation.navigate('CreateAutomation', { fromWalletId: main.id, toWalletId: focusGoal.wallet_id }),
+    };
+  }, [focusGoal, automations.data, main, navigation]);
+
+  const reply = (text: string, action: AssistantAction | null = null) =>
+    setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', text, action }]);
+
+  const ask = (raw: string) => {
+    const text = raw.trim();
+    if (!text || chat.isPending) return;
     selection();
-    const userMsg: Msg = { id: nextId.current++, from: 'user', text: q };
-    setMsgs((prev) => [...prev, userMsg]);
+    const history = messages.map((m) => ({ role: m.role, content: m.text }));
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', text }]);
     setInput('');
-    // Steward "thinks" briefly, then answers from live data.
-    setTimeout(() => {
-      setMsgs((prev) => [...prev, { id: nextId.current++, from: 'steward', text: answer(q, ctx) }]);
-    }, 350);
+
+    const answerLocally = () =>
+      reply(
+        localAnswer(text, {
+          dashboard: dashboard.data,
+          family: family.data,
+          automations: automations.data,
+          pending: approvals.data,
+        }),
+      );
+
+    if (offline) {
+      answerLocally();
+      return;
+    }
+    chat.mutate(
+      { message: text, history },
+      {
+        onSuccess: (data) => reply(data.reply, data.action),
+        onError: (e) => {
+          // No AI configured (503) or unreachable: Steward still answers from your data.
+          if (e instanceof ApiError && (e.statusCode === 503 || e.statusCode === 0)) {
+            setOffline(true);
+            answerLocally();
+          } else {
+            reply(e.message || 'Sorry, something went wrong.');
+          }
+        },
+      },
+    );
   };
 
-  const insights = useMemo(() => buildInsights(ctx), [ctx]);
-
   return (
-    <Screen>
-      {/* Steward header */}
-      <View className="flex-row items-center px-5 py-3" style={{ minHeight: 56 }}>
-        <LinearGradient
-          colors={gradients.gold}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ height: 40, width: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <MaterialCommunityIcons name="creation" size={20} color="#FFFFFF" />
-        </LinearGradient>
-        <View className="ml-3 flex-1">
-          <Text className="text-lg font-extrabold text-ink">Steward</Text>
-          <View className="flex-row items-center">
-            <View className="mr-1.5 h-2 w-2 rounded-full bg-brand" />
-            <Text className="text-[11px] font-semibold text-muted">Watching over your family's money</Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: pt.surface, paddingTop: insets.top + 12, paddingBottom: kb }}>
+      <StatusBar style="dark" />
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingBottom: 8 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: pt.infoSoft, alignItems: 'center', justifyContent: 'center' }}>
+          <MaterialCommunityIcons name="shield-account-outline" size={24} color={pt.info} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: ptFont.extrabold, fontSize: 22, lineHeight: 28, letterSpacing: -0.33, color: pt.ink }} accessibilityRole="header">
+            Steward
+          </Text>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 16, color: pt.inkMuted }}>
+            Suggests and prepares. Acts only with your OK.
+          </Text>
         </View>
       </View>
 
       <ScrollView
         ref={scroller}
-        className="flex-1"
-        contentContainerStyle={{ padding: 20, paddingTop: 4, paddingBottom: 16 }}
-        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, gap: 16 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Insights */}
-        <View style={{ gap: 10 }}>
-          {insights.map((ins) => (
-            <LinearGradient
-              key={ins.text}
-              colors={['#DFF2E5', '#CBEAD6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[{ borderRadius: radius, padding: 16 }, outline.card]}
-            >
-              <View className="flex-row items-start">
-                <MaterialCommunityIcons
-                  name={ins.icon as never}
-                  size={18}
-                  color="#0B5227"
-                  style={{ marginRight: 10, marginTop: 1 }}
-                />
-                <Text className="flex-1 text-[14px] font-bold leading-5 text-[#0B5227]">{ins.text}</Text>
+        {home.isLoading ? (
+          <ActivityIndicator color={pt.brand} style={{ marginTop: 24 }} />
+        ) : focusGoal ? (
+          <>
+            <UserBubble text={`How far are we on ${focusGoal.name}?`} />
+            <StewardCard>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>
+                You've saved <Text style={{ fontFamily: ptFont.bold }}>{formatNaira(focusGoal.balance)}</Text> of{' '}
+                {formatNaira(focusGoal.target)} for {focusGoal.name}.
+                {focusGoal.target_date ? ` It's due ${formatYmd(focusGoal.target_date)}.` : ''}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <PtRing percent={focusGoal.percent} />
+                <Text style={{ flex: 1, fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                  {formatNaira(Math.max(0, (parseFloat(focusGoal.target) || 0) - (parseFloat(focusGoal.balance) || 0)))} to go
+                </Text>
               </View>
-            </LinearGradient>
-          ))}
-        </View>
+            </StewardCard>
+          </>
+        ) : (
+          <StewardCard>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>
+              Hi{home.data?.first_name ? ` ${home.data.first_name}` : ''}. I watch your wallets, rules and approvals, and I can answer
+              questions about your family's money.
+            </Text>
+          </StewardCard>
+        )}
 
-        {/* Chat */}
-        <View className="mt-5" style={{ gap: 10 }}>
-          {msgs.map((m) =>
-            m.from === 'steward' ? (
-              <View key={m.id} className="flex-row">
-                <View className="mr-2 mt-1 h-7 w-7 items-center justify-center rounded-full bg-gold-soft">
-                  <MaterialCommunityIcons name="creation" size={14} color={colors.goldDeep} />
-                </View>
-                <View className="max-w-[82%] rounded bg-white px-4 py-3" style={outline.card}>
-                  <Text className="text-[14px] leading-5 text-ink">{m.text}</Text>
-                </View>
-              </View>
-            ) : (
-              <View key={m.id} className="flex-row justify-end">
-                <View className="max-w-[82%] rounded bg-navy px-4 py-3">
-                  <Text className="text-[14px] leading-5 text-white">{m.text}</Text>
-                </View>
-              </View>
-            ),
-          )}
-        </View>
+        {suggestion ? (
+          <StewardCard tone="info">
+            <PtChip label="Suggestion" tone="info" icon="star" />
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>{suggestion.text}</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <PtButton title={suggestion.cta} size="sm" onPress={suggestion.go} />
+              <PtButton title="More ideas" variant="ghost" size="sm" onPress={() => ask('What else can I do to save more?')} />
+            </View>
+          </StewardCard>
+        ) : null}
 
-        {/* Quick asks */}
-        <View className="mt-5 flex-row flex-wrap" style={{ gap: 8 }}>
+        {messages.map((m) =>
+          m.role === 'user' ? (
+            <UserBubble key={m.id} text={m.text} />
+          ) : (
+            <View key={m.id} style={{ gap: 8 }}>
+              <StewardCard>
+                <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>{m.text}</Text>
+              </StewardCard>
+              {m.action?.type === 'secure_transfer' ? <SecureTransferCard action={m.action} onResult={(t) => reply(t)} /> : null}
+              {m.action?.type === 'transaction_list' ? <TransactionListCard action={m.action} onShowMore={() => ask('Show more')} /> : null}
+              {m.action?.type === 'transaction_group' ? <TransactionGroupCard action={m.action} onShowMore={() => ask('Show more')} /> : null}
+              {m.action?.type === 'support_request' ? <SupportRequestCard action={m.action} /> : null}
+            </View>
+          ),
+        )}
+        {chat.isPending ? (
+          <StewardCard>
+            <ActivityIndicator color={pt.brand} />
+          </StewardCard>
+        ) : null}
+      </ScrollView>
+
+      {/* Ask */}
+      <View style={{ paddingTop: 10, paddingHorizontal: 16, paddingBottom: 12, gap: 10, backgroundColor: pt.surface }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
           {CHIPS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => send(c)}
-              className="rounded bg-lav px-4 py-2 active:opacity-80"
+              onPress={() => ask(c)}
+              accessibilityRole="button"
+              style={{
+                height: 36,
+                paddingHorizontal: 14,
+                borderRadius: 18,
+                borderWidth: 1.5,
+                borderColor: pt.line,
+                backgroundColor: pt.raised,
+                justifyContent: 'center',
+              }}
             >
-              <Text className="text-[12px] font-bold text-muted">{c}</Text>
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 13, color: pt.ink }}>{c}</Text>
             </Pressable>
           ))}
-        </View>
-      </ScrollView>
-
-      {/* Composer — lifted above the keyboard (edge-to-edge safe) */}
-      <View className="px-4 pb-3 pt-1" style={{ marginBottom: kbHeight }}>
-        <View
-          className="flex-row items-center rounded bg-white px-4"
-          style={[outline.card, { minHeight: 52 }]}
-        >
+        </ScrollView>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask Steward anything…"
-            placeholderTextColor={colors.faded}
-            selectionColor={colors.goldDeep}
-            cursorColor={colors.goldDeep}
-            className="flex-1 py-3 text-[15px]"
-            style={{ color: colors.ink, fontWeight: '600' }}
-            onSubmitEditing={() => send(input)}
+            placeholder="Ask Steward or tell it what to do"
+            placeholderTextColor={pt.inkSubtle}
+            selectionColor={pt.brand}
+            cursorColor={pt.brand}
             returnKeyType="send"
+            onSubmitEditing={() => ask(input)}
+            accessibilityLabel="Ask Steward"
+            style={{
+              flex: 1,
+              height: 48,
+              borderRadius: 24,
+              borderWidth: 1.5,
+              borderColor: pt.lineStrong,
+              backgroundColor: pt.raised,
+              paddingHorizontal: 18,
+              fontFamily: ptFont.regular,
+              fontSize: 15,
+              color: pt.ink,
+            }}
           />
           <Pressable
-            onPress={() => send(input)}
-            hitSlop={8}
-            className="active:opacity-80"
+            onPress={() => ask(input)}
+            disabled={!input.trim() || chat.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: input.trim() ? pt.brand : pt.lineStrong,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <LinearGradient
-              colors={gradients.gold}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ height: 36, width: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-            </LinearGradient>
+            <Feather name="arrow-up" size={22} color={pt.onBrand} />
           </Pressable>
         </View>
       </View>
-    </Screen>
+    </View>
   );
 }

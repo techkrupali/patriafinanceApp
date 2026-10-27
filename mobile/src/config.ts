@@ -14,4 +14,6 @@ export const STORAGE_KEYS = {
   txnPin: 'patriai.txn_pin',
   /** App language chosen on the phone-number screen: 'en' | 'pcm' (Pidgin). */
   language: 'patriai.language',
+  /** Home tab preferences: hide balances on open, which sections show. */
+  homePrefs: 'patriai.home_prefs',
 } as const;

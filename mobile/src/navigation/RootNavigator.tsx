@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
-import { colors, outline, radius } from '../theme';
+import { pt, ptFont } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
 
@@ -82,26 +82,25 @@ import { AddMilestoneScreen } from '../screens/projects/AddMilestoneScreen';
 import { KycScreen } from '../screens/kyc/KycScreen';
 import { KycSubmitScreen } from '../screens/kyc/KycSubmitScreen';
 import { StewardScreen } from '../screens/steward/StewardScreen';
+import { CustomiseHomeScreen } from '../screens/CustomiseHomeScreen';
+import { AllWalletsScreen } from '../screens/AllWalletsScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 
-type MciName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-
 /**
- * Client footer spec (video 2026-08-03) — 6 uniform flat tabs:
- * HOME · FAMILY · STEWARD · TREASURY · RULES · MORE ("Controls which can be
- * Rules — you decide" → Rules). Active tab gets a soft green pill behind the
- * icon; no raised centre button.
+ * Client footer (prototype tab bar): six tabs — Home · Family · Steward ·
+ * Treasury · Rules · More. White bar with 24pt top corners and a soft shadow;
+ * the active tab gets a brand-soft pill behind its icon and a bold brand label.
  */
-const TAB_ICONS: Record<keyof MainTabParamList, { on: MciName; off: MciName }> = {
-  Home: { on: 'home', off: 'home-outline' },
-  Family: { on: 'account-group', off: 'account-group-outline' },
-  Steward: { on: 'shield-account', off: 'shield-account-outline' },
-  Treasury: { on: 'bank', off: 'bank-outline' },
-  Rules: { on: 'tune-vertical', off: 'tune-vertical' },
-  More: { on: 'menu', off: 'menu' },
+const TAB_ICONS: Record<keyof MainTabParamList, (color: string) => React.ReactNode> = {
+  Home: (c) => <Feather name="home" size={22} color={c} />,
+  Family: (c) => <Feather name="users" size={22} color={c} />,
+  Steward: (c) => <MaterialCommunityIcons name="shield-account-outline" size={23} color={c} />,
+  Treasury: (c) => <MaterialCommunityIcons name="bank-outline" size={23} color={c} />,
+  Rules: (c) => <Feather name="sliders" size={21} color={c} />,
+  More: (c) => <Feather name="menu" size={22} color={c} />,
 };
 
 // Existing screen re-hosted as a tab (its inner navigation calls still work
@@ -144,59 +143,58 @@ function MainTabs({ navigation }: NativeStackScreenProps<RootStackParamList, 'Ta
             {props.children}
           </GHPressable>
         ),
-        tabBarActiveTintColor: colors.goldDeep,
-        tabBarInactiveTintColor: colors.muted,
-        // One shared label spec so every tab's text sits on the same baseline.
-        tabBarLabelStyle: {
-          fontSize: 9,
-          fontWeight: '800',
-          marginTop: 5,
-          letterSpacing: 0.6,
-          textTransform: 'uppercase',
-        },
-        tabBarItemStyle: { paddingTop: 12 },
+        // The Steward composer sits where the bar was while typing.
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: pt.brand,
+        tabBarInactiveTintColor: pt.inkMuted,
+        tabBarLabel: ({ focused, color }) => (
+          <Text style={{ fontFamily: focused ? ptFont.bold : ptFont.semibold, fontSize: 11, lineHeight: 14, color, marginTop: 3 }}>
+            {route.name}
+          </Text>
+        ),
+        tabBarItemStyle: { paddingTop: 8 },
         tabBarStyle: {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 74 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          paddingTop: 4,
+          height: 64 + Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 12),
           paddingHorizontal: 4,
         },
         tabBarBackground: () => (
           <View
             style={{
               flex: 1,
-              backgroundColor: colors.white,
-              borderTopLeftRadius: radius,
-              borderTopRightRadius: radius,
-              ...outline.tab,
+              backgroundColor: pt.raised,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              shadowColor: pt.emerald900,
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.08,
+              shadowRadius: 20,
+              elevation: 12,
             }}
           />
         ),
-        tabBarIcon: ({ focused, color }) => {
-          const icons = TAB_ICONS[route.name];
-          return (
-            <View
-              style={{
-                width: 46,
-                height: 28,
-                borderRadius: radius,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: focused ? colors.goldSoft : 'transparent',
-              }}
-            >
-              <MaterialCommunityIcons name={focused ? icons.on : icons.off} size={22} color={color} />
-            </View>
-          );
-        },
+        tabBarIcon: ({ focused, color }) => (
+          <View
+            style={{
+              width: 52,
+              height: 32,
+              borderRadius: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: focused ? pt.brandSoft : 'transparent',
+            }}
+          >
+            {TAB_ICONS[route.name](color)}
+          </View>
+        ),
       })}
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Family" component={FamilyTab} />
-      <Tabs.Screen name="Steward" component={StewardScreen} options={{ tabBarLabel: 'Steward' }} />
+      <Tabs.Screen name="Steward" component={StewardScreen} />
       <Tabs.Screen name="Treasury" component={WalletsScreen} />
       <Tabs.Screen name="Rules" component={RulesTab} />
       <Tabs.Screen name="More" component={ProfileScreen} />
@@ -234,6 +232,8 @@ export function RootNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="Tabs" component={MainTabs} />
+      <RootStack.Screen name="CustomiseHome" component={CustomiseHomeScreen} />
+      <RootStack.Screen name="AllWallets" component={AllWalletsScreen} />
       <RootStack.Screen name="Activity" component={ActivityScreen} />
       <RootStack.Screen name="Assistant" component={AssistantScreen} />
       <RootStack.Screen name="WalletDetail" component={WalletDetailScreen} />

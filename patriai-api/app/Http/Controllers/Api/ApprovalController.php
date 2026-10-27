@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\ApprovalRequest;
-use App\Models\User;
-use App\Models\Wallet;
 use App\Services\ApprovalService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -13,21 +11,6 @@ use Illuminate\Http\Request;
 class ApprovalController extends ApiController
 {
     /** Wallet ids on which this user may act as an approver. */
-    private function approvableWalletIds(User $user): \Illuminate\Support\Collection
-    {
-        $owned = Wallet::where('user_id', $user->id)->pluck('id');
-
-        $member = \App\Models\WalletMember::where('user_id', $user->id)
-            ->where('status', 'active')
-            ->where('role', '!=', 'viewer')
-            ->where(function ($q) {
-                $q->whereIn('role', ['owner', 'co_owner', 'admin'])->orWhere('can_approve', true);
-            })
-            ->pluck('wallet_id');
-
-        return $owned->concat($member)->unique()->values();
-    }
-
     // GET /approvals?status=&scope=to_me|mine
     public function index(Request $request): JsonResponse
     {

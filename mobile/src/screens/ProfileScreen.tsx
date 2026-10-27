@@ -1,422 +1,176 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, Switch, Text, View } from 'react-native';
-import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from 'react';
+import { Alert, Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Screen } from '../components/Screen';
-import { Card } from '../components/Card';
-import { Button } from '../components/Button';
-import { PinPad } from '../components/PinPad';
-import { colors, gradients } from '../theme';
-import { useDashboard, useLogoutApi } from '../api/hooks';
-import { useAuth, useTxnPinLength } from '../store/auth';
+import { pt, ptFont, ptRadius } from '../theme';
+import { PtTabScreen } from '../components/pt/PtTabScreen';
+import { PtCard, PtRow, PtSectionTitle } from '../components/pt/PtList';
+import { PtAvatar } from '../components/pt/PtAvatar';
+import { PtChip } from '../components/pt/PtChip';
+import { PtButton } from '../components/pt/PtButton';
+import { LanguageSheet } from '../components/LanguageSheet';
+import { useDevices, useHome, useLogoutApi, useUpdateProfile } from '../api/hooks';
+import { useAuth } from '../store/auth';
+import { useLanguage } from '../store/language';
 import { initials } from '../lib/format';
-import { tierName } from '../lib/kyc';
-import {
-  clearTxnPin,
-  getBiometricSupport,
-  runBiometricPrompt,
-  saveTxnPin,
-  type BiometricSupport,
-} from '../lib/biometrics';
-import { notifySuccess } from '../lib/haptics';
+import { formatE164 } from '../lib/phone';
+import { selection } from '../lib/haptics';
 import type { TabScreenProps } from '../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-function Row({
-  icon,
-  tint = 'bg-lav-faint',
-  iconColor = colors.navy,
-  title,
-  subtitle,
-  onPress,
-  right,
-}: {
-  icon: IconName;
-  tint?: string;
-  iconColor?: string;
-  title: string;
-  subtitle?: string;
-  onPress?: () => void;
-  right?: React.ReactNode;
-}) {
+/** 2×2 tile: icon in a mint circle, bold label; "Soon" when not built yet. */
+function Tile({ label, icon, onPress }: { label: string; icon: React.ReactNode; onPress?: () => void }) {
+  const soon = !onPress;
   return (
-    <Pressable onPress={onPress} disabled={!onPress} className="flex-row items-center py-3.5 active:opacity-70">
-      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded ${tint}`}>
-        <Ionicons name={icon} size={19} color={iconColor} />
+    <Pressable
+      onPress={() => {
+        if (!onPress) return;
+        selection();
+        onPress();
+      }}
+      disabled={soon}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: soon }}
+      style={{ flex: 1, minHeight: 92, backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 14, gap: 10 }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+          {icon}
+        </View>
+        {soon ? <PtChip label="Soon" /> : null}
       </View>
-      <View className="flex-1">
-        <Text className="text-[15px] font-semibold text-ink">{title}</Text>
-        {subtitle ? <Text className="mt-0.5 text-xs text-muted">{subtitle}</Text> : null}
-      </View>
-      {right ?? (onPress ? <Ionicons name="chevron-forward" size={18} color={colors.faded} /> : null)}
+      <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: soon ? pt.inkMuted : pt.ink }}>{label}</Text>
     </Pressable>
   );
 }
 
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.border }} />;
-}
-
+/**
+ * More tab (prototype ME-01): who you are and your level, records, settings,
+ * then every family-money tool that lives outside the other tabs, and Log out.
+ */
 export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
-  const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
-  const pinLength = useTxnPinLength();
-  const biometricEnabled = useAuth((s) => s.biometricEnabled);
-  const setBiometricEnabled = useAuth((s) => s.setBiometricEnabled);
   const logoutLocal = useAuth((s) => s.logout);
+  const lang = useLanguage((s) => s.lang);
+  const setLang = useLanguage((s) => s.setLang);
+  const home = useHome();
+  const devices = useDevices();
   const logoutApi = useLogoutApi();
+  const updateProfile = useUpdateProfile();
   const qc = useQueryClient();
-  const { data: dashboard } = useDashboard();
+  const [langOpen, setLangOpen] = useState(false);
 
-  const kyc = dashboard?.kyc;
-  const kycTier = kyc?.tier ?? user?.kyc_tier ?? 0;
-  const kycSubtitle =
-    kyc?.status === 'pending'
-      ? 'Verification under review'
-      : kyc?.can_upgrade
-        ? `Tier ${kycTier} · Verify to raise your limits`
-        : `Tier ${kycTier} · ${tierName(kycTier)}`;
-
-  const [support, setSupport] = useState<BiometricSupport | null>(null);
-  const [pinModal, setPinModal] = useState(false);
-  const [capturePin, setCapturePin] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    void getBiometricSupport().then(setSupport);
-  }, []);
-
-  const bioLabel = support?.label ?? 'Biometric unlock';
-
-  const onToggleBiometric = async (next: boolean) => {
-    if (busy) return;
-    if (!next) {
-      await setBiometricEnabled(false);
-      await clearTxnPin();
-      return;
-    }
-    if (!support?.available) {
-      Alert.alert(
-        'Not available',
-        'Set up Face ID or a fingerprint in your device settings first, then try again.',
-      );
-      return;
-    }
-    setBusy(true);
-    try {
-      const ok = await runBiometricPrompt(`Confirm to enable ${bioLabel}`);
-      if (ok) {
-        setCapturePin('');
-        setPinModal(true);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onCaptureChange = async (next: string) => {
-    setCapturePin(next);
-    if (next.length === pinLength) {
-      await saveTxnPin(next);
-      await setBiometricEnabled(true);
-      notifySuccess();
-      setPinModal(false);
-    }
-  };
+  const tier = user?.kyc_tier ?? 0;
+  const unread = home.data?.unread_notifications ?? 0;
+  const deviceCount = devices.data?.length ?? 0;
+  const contact = [user?.username ? `@${user.username}` : null, user?.phone ? formatE164(user.phone) : null].filter(Boolean).join(' · ');
 
   const confirmLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
+    Alert.alert('Log out', 'You will need your phone number and PIN to log back in.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Log Out',
+        text: 'Log out',
         style: 'destructive',
-        onPress: () => {
+        onPress: () =>
           logoutApi.mutate(undefined, {
             onSettled: async () => {
               await logoutLocal();
               qc.clear();
             },
-          });
-        },
+          }),
       },
     ]);
   };
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-        <Text className="text-3xl font-extrabold tracking-tight text-ink">More</Text>
-
-        {/* Identity card */}
-        <Card className="mt-5 items-center py-7">
-          {user?.avatar_url ? (
-            <Image source={{ uri: user.avatar_url }} style={{ height: 72, width: 72, borderRadius: 36 }} />
-          ) : (
-            <LinearGradient
-              colors={gradients.avatar}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ height: 72, width: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text className="text-2xl font-bold text-white">{initials(user?.full_name)}</Text>
-            </LinearGradient>
-          )}
-          <Text className="mt-3 text-lg font-extrabold text-ink">{user?.full_name}</Text>
-          {user?.username ? (
-            <Text className="mt-0.5 text-sm font-semibold text-gold-deep">@{user.username}</Text>
-          ) : null}
-          <Text className="mt-1 text-sm text-muted">{user?.email}</Text>
-          <Text className="mt-0.5 text-sm text-muted">{user?.phone}</Text>
-
-          <View className="mt-4 flex-row items-center rounded bg-success-soft px-3.5 py-1.5">
-            <Ionicons name="ribbon-outline" size={13} color={colors.brand} style={{ marginRight: 5 }} />
-            <Text className="text-[11px] font-bold uppercase tracking-widest text-brand">
-              KYC Tier {kycTier}
-            </Text>
-          </View>
-        </Card>
-
-        {/* Identity */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Identity</Text>
-        <Card className="mt-2 py-1">
-          <Row
-            icon="create-outline"
-            tint="bg-lav-faint"
-            iconColor={colors.navy}
-            title="Edit profile"
-            subtitle="Update your name"
-            onPress={() => navigation.navigate('EditProfile')}
-          />
-          <Row
-            icon="shield-checkmark-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Identity verification"
-            subtitle={kycSubtitle}
-            onPress={() => navigation.navigate('Kyc')}
-            right={
-              kyc?.can_upgrade ? (
-                <View className="flex-row items-center">
-                  <View className="mr-2 rounded bg-success-soft px-2.5 py-1">
-                    <Text className="text-[11px] font-bold text-brand">Verify</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-                </View>
-              ) : undefined
-            }
-          />
-        </Card>
-
-        {/* Security */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Security</Text>
-        <Card className="mt-2 py-1">
-          {/* Phone sign-ups log in with their PIN and have no password to change. */}
-          {user?.has_password !== false ? (
-            <>
-              <Row
-                icon="key-outline"
-                title="Change password"
-                subtitle="Update your sign-in password"
-                onPress={() => navigation.navigate('ChangePassword')}
-              />
-              <Divider />
-            </>
-          ) : null}
-          <Row
-            icon="keypad-outline"
-            title="Change transaction PIN"
-            subtitle={`${pinLength}-digit PIN used to authorize money`}
-            onPress={() => navigation.navigate('ChangePin')}
-          />
-          <Divider />
-          <Row
-            icon={support?.icon ?? 'finger-print'}
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title={bioLabel}
-            subtitle={biometricEnabled ? 'Enabled for unlock & payments' : 'Use biometrics to authorize'}
-            right={
-              <Switch
-                value={biometricEnabled}
-                onValueChange={(v) => void onToggleBiometric(v)}
-                trackColor={{ false: colors.border, true: colors.brand }}
-                thumbColor={colors.white}
-              />
-            }
-          />
-          <Divider />
-          <Row
-            icon="phone-portrait-outline"
-            title="Devices"
-            subtitle="Where you're signed in"
-            onPress={() => navigation.navigate('Devices')}
-          />
-        </Card>
-
-        {/* Finance */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Finance</Text>
-        <Card className="mt-2 py-1">
-          <Row
-            icon="cash-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Loans"
-            subtitle="Borrow & manage Patria Lending"
-            onPress={() => navigation.navigate('Loans')}
-          />
-          <Divider />
-          <Row
-            icon="briefcase-outline"
-            title="Projects"
-            subtitle="Escrow-backed milestone projects"
-            onPress={() => navigation.navigate('Projects')}
-          />
-          <Divider />
-          <Row
-            icon="storefront-outline"
-            title="Vendor directory"
-            subtitle="Find trusted vendors for your projects"
-            onPress={() => navigation.navigate('VendorDirectory')}
-          />
-          <Divider />
-          <Row
-            icon="flag-outline"
-            title="Savings goals"
-            subtitle="Set targets & auto-save toward them"
-            onPress={() => navigation.navigate('Goals')}
-          />
-          <Divider />
-          <Row
-            icon="flash-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Rules"
-            subtitle="Automated actions & scheduled money moves"
-            onPress={() => navigation.navigate('Automations')}
-          />
-          <Divider />
-          <Row
-            icon="gift-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Refer & earn"
-            subtitle="Invite friends, earn rewards"
-            onPress={() => navigation.navigate('Referral')}
-          />
-        </Card>
-
-        {/* Family */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Family</Text>
-        <Card className="mt-2 py-1">
-          <Row
-            icon="people-outline"
-            tint="bg-lav-soft"
-            iconColor={colors.navy}
-            title="Family Hub"
-            subtitle="Everyone across your shared wallets"
-            onPress={() => navigation.navigate('FamilyHub')}
-          />
-          <Divider />
-          <Row
-            icon="heart-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Spousal Sync"
-            subtitle="Share your finances with a partner"
-            onPress={() => navigation.navigate('SpousalSync')}
-          />
-        </Card>
-
-        {/* Collaboration */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Collaboration</Text>
-        <Card className="mt-2 py-1">
-          <Row
-            icon="shield-checkmark-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Approvals"
-            subtitle="Spends waiting on approval"
-            onPress={() => navigation.navigate('Approvals')}
-          />
-          <Divider />
-          <Row
-            icon="mail-open-outline"
-            title="Invitations"
-            subtitle="Wallets you've been invited to"
-            onPress={() => navigation.navigate('Invitations')}
-          />
-          <Divider />
-          <Row
-            icon="notifications-outline"
-            title="Notifications"
-            subtitle="Approvals, invites & transfers"
-            onPress={() => navigation.navigate('Notifications')}
-          />
-        </Card>
-
-        {/* Support & security */}
-        <Text className="mt-7 text-[13px] font-bold text-muted">Support &amp; Security</Text>
-        <Card className="mt-2 py-1">
-          <Row
-            icon="shield-outline"
-            tint="bg-success-soft"
-            iconColor={colors.brand}
-            title="Security Center"
-            subtitle="Your account safety at a glance"
-            onPress={() => navigation.navigate('SecurityCenter')}
-          />
-          <Divider />
-          <Row
-            icon="alert-circle-outline"
-            title="Dispute Center"
-            subtitle="Report a problem with a payment"
-            onPress={() => navigation.navigate('Disputes')}
-          />
-          <Divider />
-          <Row
-            icon="help-circle-outline"
-            title="Help & FAQ"
-            subtitle="Answers to common questions"
-            onPress={() => navigation.navigate('HelpFaq')}
-          />
-        </Card>
-
-        <View className="mt-8">
-          <Button title="Log Out" variant="danger" icon="log-out-outline" iconPosition="left" onPress={confirmLogout} loading={logoutApi.isPending} />
+    <PtTabScreen title="More">
+      {/* Profile */}
+      <Pressable
+        onPress={() => {
+          selection();
+          navigation.navigate('EditProfile');
+        }}
+        accessibilityRole="button"
+        style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}
+      >
+        <PtAvatar initials={initials(user?.full_name)} uri={user?.avatar_url} size={52} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 17, lineHeight: 22, color: pt.ink }} numberOfLines={1}>
+            {user?.full_name}
+          </Text>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }} numberOfLines={1}>
+            {contact}
+          </Text>
         </View>
-        <Text className="mt-4 text-center text-xs text-faded">Patriai · v1.0.0</Text>
-      </ScrollView>
+        <PtChip label={`Tier ${tier}`} tone="success" icon="check" />
+      </Pressable>
 
-      {/* Transaction PIN capture (for biometric authorize) */}
-      <Modal visible={pinModal} transparent animationType="slide" onRequestClose={() => setPinModal(false)}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-        <View className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
-            <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
-            <View className="mb-4 flex-row items-start justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-xl font-extrabold text-ink">Confirm your PIN</Text>
-                <Text className="mt-1 text-sm text-muted">
-                  Enter your transaction PIN once so {bioLabel} can authorize payments securely.
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setPinModal(false)}
-                hitSlop={8}
-                className="h-9 w-9 items-center justify-center rounded-full bg-lav-faint active:opacity-70"
-              >
-                <Ionicons name="close" size={18} color={colors.muted} />
-              </Pressable>
-            </View>
-            <PinPad value={capturePin} onChange={(v) => void onCaptureChange(v)} length={pinLength} />
-          </View>
+      {/* Records */}
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Tile label="Insights" icon={<Feather name="trending-up" size={18} color={pt.brand} />} />
+          <Tile
+            label="Transactions"
+            icon={<MaterialCommunityIcons name="swap-vertical" size={19} color={pt.brand} />}
+            onPress={() => navigation.navigate('Activity')}
+          />
         </View>
-        </GestureHandlerRootView>
-      </Modal>
-    </Screen>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Tile label="Statements" icon={<Feather name="file-text" size={18} color={pt.brand} />} />
+          <Tile label="Chats" icon={<Feather name="message-square" size={18} color={pt.brand} />} />
+        </View>
+      </View>
+
+      {/* Settings */}
+      <PtCard>
+        <PtRow title="Account level" right={`Tier ${tier}`} chevron minHeight={46} onPress={() => navigation.navigate('Kyc')} />
+        <PtRow title="Security" right="PIN, Face ID" chevron minHeight={46} onPress={() => navigation.navigate('SecurityCenter')} />
+        <PtRow
+          title="Notifications"
+          right={unread > 0 ? `${unread} unread` : 'All read'}
+          chevron
+          minHeight={46}
+          onPress={() => navigation.navigate('Notifications')}
+        />
+        <PtRow
+          title="Devices you're logged in on"
+          right={deviceCount ? String(deviceCount) : ''}
+          chevron
+          minHeight={46}
+          onPress={() => navigation.navigate('Devices')}
+        />
+        <PtRow title="Refer and earn" right="Invite families" chevron minHeight={46} onPress={() => navigation.navigate('Referral')} />
+        <PtRow title="Language" right={lang === 'pcm' ? 'Pidgin' : 'English'} chevron minHeight={46} onPress={() => setLangOpen(true)} />
+        <PtRow title="Help, disputes and legal" chevron minHeight={46} last onPress={() => navigation.navigate('HelpFaq')} />
+      </PtCard>
+
+      {/* Everything else for family money */}
+      <View style={{ gap: 8 }}>
+        <PtSectionTitle title="Family money" />
+        <PtCard>
+          <PtRow title="Approvals" subtitle="Payments waiting for a yes" chevron onPress={() => navigation.navigate('Approvals')} />
+          <PtRow title="Invitations" subtitle="Wallets you've been invited to" chevron onPress={() => navigation.navigate('Invitations')} />
+          <PtRow title="Goals" subtitle="Targets and auto-save" chevron onPress={() => navigation.navigate('Goals')} />
+          <PtRow title="Projects" subtitle="Pay builders by milestone" chevron onPress={() => navigation.navigate('Projects')} />
+          <PtRow title="Vendors" subtitle="Find verified vendors" chevron onPress={() => navigation.navigate('VendorDirectory')} />
+          <PtRow title="Loans" subtitle="Borrow and repay" chevron onPress={() => navigation.navigate('Loans')} />
+          <PtRow title="Spousal sync" subtitle="Share finances with a partner" chevron onPress={() => navigation.navigate('SpousalSync')} />
+          <PtRow title="Disputes" subtitle="A problem with a payment" chevron last onPress={() => navigation.navigate('Disputes')} />
+        </PtCard>
+      </View>
+
+      <PtButton title="Log out" variant="ghost" onPress={confirmLogout} loading={logoutApi.isPending} />
+
+      <LanguageSheet
+        visible={langOpen}
+        value={lang}
+        onClose={() => setLangOpen(false)}
+        onPick={(l) => {
+          setLangOpen(false);
+          void setLang(l);
+          updateProfile.mutate({ language: l });
+        }}
+      />
+    </PtTabScreen>
   );
 }

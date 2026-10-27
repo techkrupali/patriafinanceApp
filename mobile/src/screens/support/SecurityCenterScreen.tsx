@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
+import { BiometricSwitch } from '../../components/BiometricSwitch';
 import { Card } from '../../components/Card';
 import { colors, gradients, radius } from '../../theme';
 import { useDashboard } from '../../api/hooks';
@@ -162,14 +163,8 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
                 tint="bg-success-soft"
                 iconColor={colors.brand}
                 title="Biometric unlock"
-                subtitle={biometricEnabled ? 'On' : 'Off'}
-                right={
-                  biometricEnabled ? (
-                    <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
-                  ) : (
-                    <Ionicons name="ellipse-outline" size={22} color={colors.faded} />
-                  )
-                }
+                subtitle={biometricEnabled ? 'On · unlock and payments' : 'Off'}
+                right={<BiometricSwitch />}
               />
               <Divider />
               <Row
@@ -195,13 +190,18 @@ export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCe
                 subtitle="Review where you're signed in"
                 onPress={() => navigation.navigate('Devices')}
               />
-              <Divider />
-              <Row
-                icon="key-outline"
-                title="Password"
-                subtitle="Change your sign-in password"
-                onPress={() => navigation.navigate('ChangePassword')}
-              />
+              {/* Phone sign-ups log in with their PIN and have no password. */}
+              {user?.has_password !== false ? (
+                <>
+                  <Divider />
+                  <Row
+                    icon="key-outline"
+                    title="Password"
+                    subtitle="Change your sign-in password"
+                    onPress={() => navigation.navigate('ChangePassword')}
+                  />
+                </>
+              ) : null}
             </Card>
 
             {/* Stay safe tips */}

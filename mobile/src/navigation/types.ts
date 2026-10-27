@@ -88,6 +88,10 @@ export interface EmergencyRulesDraft {
 
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  /** HOM-08: which Home sections show, hide balances on open. */
+  CustomiseHome: undefined;
+  /** TRS-02: every wallet, grouped, with drafts. */
+  AllWallets: undefined;
   /** Full transaction feed (was a tab; now reached from Home → View all). */
   Activity: undefined;
   /** AI Assistant chat (hosts the in-chat secure transfer PIN flow). */

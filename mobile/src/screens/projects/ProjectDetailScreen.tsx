@@ -77,7 +77,7 @@ function ProjAction({
         selection();
         onPress();
       }}
-      className="flex-1 items-center justify-center rounded bg-[#006D2F] py-4 active:opacity-90"
+      className="flex-1 items-center justify-center rounded bg-[#0B5D4B] py-4 active:opacity-90"
     >
       <Ionicons name={icon} size={22} color={colors.white} />
       <Text numberOfLines={1} className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">

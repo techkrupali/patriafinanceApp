@@ -1,119 +1,50 @@
 import React from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { PtTabScreen } from '../../components/pt/PtTabScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtCard, PtRow, PtSectionTitle } from '../../components/pt/PtList';
+import { PtAvatar, AVATAR_CYCLE } from '../../components/pt/PtAvatar';
+import { PtChip } from '../../components/pt/PtChip';
+import { LogoMark } from '../../components/pt/PtLogo';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, outline, radius } from '../../theme';
-import { useFamily, useWallets, useCancelInvitation } from '../../api/hooks';
-import { initials } from '../../lib/format';
+import { useCancelInvitation, useFamily, useResendInvitation, useWallets } from '../../api/hooks';
+import { useAuth } from '../../store/auth';
+import { agoLabel, initials } from '../../lib/format';
+import { formatE164 } from '../../lib/phone';
 import { roleLabel } from '../../lib/governance';
-import { selection } from '../../lib/haptics';
-import type { FamilyMember, FamilyInvitation } from '../../api/types';
+import { inviteTarget } from '../../lib/invite';
+import { notifySuccess, selection } from '../../lib/haptics';
+import type { FamilyInvitation, FamilyMember } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+const LEAD_ROLES = ['owner', 'co_owner', 'admin'];
 
-function StatTile({ value, label }: { value: number; label: string }) {
-  return (
-    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
-      <Text className="text-[26px] font-extrabold leading-tight text-ink">{value}</Text>
-      <Text className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">{label}</Text>
-    </View>
-  );
+/** "4 wallets · approves" or the one wallet's name. */
+function memberSubtitle(m: FamilyMember): string {
+  const approves = m.memberships.some((ms) => ms.can_approve) ? ' · approves' : '';
+  if (m.memberships.length === 1) return `${m.memberships[0].wallet_name}${approves}`;
+  return `${m.memberships.length} wallets${approves}`;
 }
 
-function MemberRow({ member, onPress }: { member: FamilyMember; onPress?: () => void }) {
-  const approver = member.memberships.some((ms) => ms.can_approve);
-  return (
-    <Pressable onPress={onPress} disabled={!onPress} className="flex-row items-center py-3 active:opacity-70">
-      <LinearGradient
-        colors={gradients.avatar}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          height: 44,
-          width: 44,
-          borderRadius: 22,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: 12,
-        }}
-      >
-        <Text className="text-sm font-bold text-white">{member.avatar || initials(member.name)}</Text>
-      </LinearGradient>
-      <View className="flex-1 pr-2">
-        <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
-          {member.name}
-        </Text>
-        <Text className="text-xs text-faded" numberOfLines={1}>
-          {member.email}
-        </Text>
-      </View>
-      <View className="items-end">
-        <View className="rounded bg-lav-faint px-2.5 py-1">
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-            {roleLabel(member.role)}
-          </Text>
-        </View>
-        <Text className="mt-1 text-[11px] text-faded">
-          In {member.memberships.length} wallet{member.memberships.length === 1 ? '' : 's'}
-        </Text>
-        {approver ? (
-          <View className="mt-0.5 flex-row items-center">
-            <Ionicons name="shield-checkmark" size={11} color={colors.brand} style={{ marginRight: 3 }} />
-            <Text className="text-[10px] font-semibold text-brand">Approver</Text>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
-  );
+const showIdentifier = (id: string) => (id.startsWith('+') ? formatE164(id) : id);
+
+/** Someone who is only in child wallets, and not as a parent, is a child. */
+function memberRole(m: FamilyMember): string {
+  const onlyChild = m.memberships.length > 0 && m.memberships.every((ms) => ms.wallet_type === 'child');
+  return onlyChild && !LEAD_ROLES.includes(m.role) ? 'Child' : roleLabel(m.role);
 }
 
-function InviteRow({
-  icon,
-  tile,
-  iconColor,
-  title,
-  subtitle,
-  right,
-}: {
-  icon: IconName;
-  tile: string;
-  iconColor: string;
-  title: string;
-  subtitle: string;
-  right: React.ReactNode;
-}) {
-  return (
-    <View className="flex-row items-center py-3">
-      <View className={`mr-3 h-11 w-11 items-center justify-center rounded ${tile}`}>
-        <Ionicons name={icon} size={20} color={iconColor} />
-      </View>
-      <View className="flex-1 pr-2">
-        <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
-          {title}
-        </Text>
-        <Text className="text-xs text-faded" numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-      {right}
-    </View>
-  );
-}
-
-/** A sent, still-pending invite with a Cancel action (reuses useCancelInvitation). */
-function SentInviteRow({ inv, subtitle }: { inv: FamilyInvitation; subtitle: string }) {
+/** A sent invite: dashed avatar, who and where, Resend, and × to cancel it. */
+function SentInviteRow({ inv, last }: { inv: FamilyInvitation; last: boolean }) {
+  const resend = useResendInvitation();
   const cancel = useCancelInvitation(inv.wallet_id);
-  const onCancel = () => {
+
+  const confirmCancel = () => {
     selection();
-    Alert.alert('Cancel invitation', `Cancel the invite to ${inv.invited_identifier}?`, [
+    Alert.alert('Cancel this invite?', `${showIdentifier(inv.invited_identifier)} won't be able to join ${inv.wallet_name ?? 'the wallet'}.`, [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel invite',
@@ -122,282 +53,216 @@ function SentInviteRow({ inv, subtitle }: { inv: FamilyInvitation; subtitle: str
       },
     ]);
   };
-  return (
-    <InviteRow
-      icon="paper-plane-outline"
-      tile="bg-lav-faint"
-      iconColor={colors.muted}
-      title={`Invited ${inv.invited_identifier}`}
-      subtitle={subtitle}
-      right={
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
-            <Ionicons name="time-outline" size={12} color={colors.muted} style={{ marginRight: 4 }} />
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">Pending</Text>
-          </View>
-          <Pressable
-            onPress={onCancel}
-            hitSlop={8}
-            disabled={cancel.isPending}
-            className="h-8 w-8 items-center justify-center rounded-full bg-danger-soft active:opacity-80"
-          >
-            {cancel.isPending ? (
-              <ActivityIndicator size="small" color={colors.danger} />
-            ) : (
-              <Ionicons name="close" size={16} color={colors.danger} />
-            )}
-          </Pressable>
-        </View>
-      }
-    />
-  );
-}
 
-/**
- * "Create your first family" hero — shown only when there are no members and
- * no invitations (design: create_first_family). Icon tile + headline + copy +
- * gold CTA into the invite flow (or wallet creation when nothing is shareable).
- */
-function CreateFirstFamily({ onPress, hasWallet }: { onPress: () => void; hasWallet: boolean }) {
   return (
-    <View>
-      <View className="items-center px-2 pt-8">
-        <View className="items-center justify-center">
-          <View
-            className="absolute rounded-full"
-            style={{ height: 108, width: 108, borderWidth: 2, borderColor: 'rgba(15,138,68,0.30)' }}
-          />
-          <View className="h-20 w-20 items-center justify-center rounded bg-white" style={outline.card}>
-            <Ionicons name="people" size={36} color={colors.goldDeep} />
-          </View>
-        </View>
-        <Text className="mt-7 text-center text-[27px] font-extrabold leading-9 tracking-tight text-ink">
-          Set Up Your Family
-        </Text>
-        <Text className="mt-3 text-center text-[15px] leading-6 text-muted">
-          Define the core of your financial ecosystem — the circle that holds your shared wallets,
-          projects and members.
-        </Text>
-      </View>
-
-      {/* Primary Owner — selected role card (gold border, green check) */}
+    <View
+      style={{
+        minHeight: 64,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 10,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: pt.line,
+      }}
+    >
       <View
-        className="mt-8 rounded bg-white p-5"
-        style={[outline.card, { borderWidth: 2, borderColor: '#006D2F' }]}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          borderWidth: 2,
+          borderStyle: 'dashed',
+          borderColor: pt.lineStrong,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
-        <View className="flex-row items-center">
-          <Ionicons name="star" size={18} color={colors.gold} style={{ marginRight: 8 }} />
-          <Text className="flex-1 text-[16px] font-bold text-ink">Primary Owner</Text>
-          <View className="h-6 w-6 items-center justify-center rounded-full bg-brand">
-            <Ionicons name="checkmark" size={14} color={colors.white} />
-          </View>
-        </View>
-        <Text className="mt-2 text-[13px] leading-5 text-muted">
-          As the creator, you have full control over the family treasury, governance rules and
-          member permissions.
+        <Feather name="user-plus" size={16} color={pt.inkMuted} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, lineHeight: 22, color: pt.ink }} numberOfLines={1}>
+          {showIdentifier(inv.invited_identifier)}
+        </Text>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 16, color: pt.inkMuted }} numberOfLines={2}>
+          {roleLabel(inv.role)} · {inv.wallet_name ?? 'A wallet'} · invited {agoLabel(inv.created_at)}
         </Text>
       </View>
-
-      {/* Building trust note */}
-      <View className="mt-4 flex-row items-start rounded bg-page-top p-5">
-        <View className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-gold-soft/60">
-          <Ionicons name="people-circle-outline" size={24} color={colors.goldDeep} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-[14px] font-bold text-ink">Building Trust</Text>
-          <Text className="mt-1 text-[12px] leading-5 text-muted">
-            Your family acts as a shared vault — every wallet you add is protected by bank-grade
-            encryption and shared visibility.
-          </Text>
-        </View>
-      </View>
-
-      <Button title="Create Your Family Circle" icon="arrow-forward" onPress={onPress} className="mt-8" />
-      <Text className="mt-3 text-center text-[11px] leading-4 text-faded">
-        {hasWallet
-          ? 'Invite your first member into a shared wallet.'
-          : 'Start by creating a wallet your family can share.'}
-      </Text>
+      <PtButton
+        title="Resend"
+        variant="ghost"
+        size="sm"
+        loading={resend.isPending}
+        style={{ paddingHorizontal: 8 }}
+        onPress={() =>
+          resend.mutate(
+            { walletId: inv.wallet_id, invitationId: inv.id },
+            {
+              onSuccess: () => {
+                notifySuccess();
+                Alert.alert('Invite sent again', `${showIdentifier(inv.invited_identifier)} has another 7 days to join.`);
+              },
+              onError: (e) => Alert.alert('Could not resend', e.message),
+            },
+          )
+        }
+      />
+      <Pressable
+        onPress={confirmCancel}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel invite"
+        style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginLeft: -6 }}
+      >
+        <Feather name="x" size={18} color={pt.inkSubtle} />
+      </Pressable>
     </View>
   );
 }
 
+/**
+ * Family tab (prototype FAM-01): the family circle, everyone in it with their
+ * role, invitations waiting for you, and invites you've sent (Resend). Also
+ * opened from other screens as "FamilyHub", with a back button.
+ */
 export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHub'>) {
-  // Hosted both as the Family tab (route 'Family') and a stack screen ('FamilyHub').
   const isTab = route?.name !== 'FamilyHub';
+  const me = useAuth((s) => s.user);
   const family = useFamily();
   const wallets = useWallets();
 
   const data = family.data;
   const members = data?.members ?? [];
-  const stats = data?.stats;
   const received = data?.pending_invitations.received ?? [];
   const sent = data?.pending_invitations.sent ?? [];
-  const hasPending = received.length > 0 || sent.length > 0;
-  const isEmpty = members.length === 0 && !hasPending;
+  const surname = (me?.last_name || me?.full_name?.split(' ').slice(-1)[0] || 'My').trim();
 
-  /** First wallet people can be invited into (anything but the system main wallet). */
-  const invitable = (wallets.data ?? []).find((w) => w.type !== 'main');
-
-  const inviteSubtitle = (inv: FamilyInvitation) =>
-    `${inv.wallet_name ?? 'A wallet'} · ${roleLabel(inv.role)}`;
-
-  /** Start the invite flow — into the first shareable wallet, or make one first. */
   const startInvite = () => {
-    selection();
-    if (invitable) navigation.navigate('InviteMember', { walletId: invitable.id });
-    else navigation.navigate('CreateWallet');
+    const t = inviteTarget(wallets.data);
+    if (t.screen === 'InviteMember') navigation.navigate(t.screen, t.params);
+    else navigation.navigate(t.screen);
   };
 
   return (
-    <Screen withBottomInset>
-      <Header
-        title="Family Hub"
-        showBack={!isTab}
-        right={
-          <Pressable
-            onPress={startInvite}
-            hitSlop={8}
-            className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
-            style={outline.card}
-          >
-            <Ionicons name="person-add" size={20} color={colors.navy} />
-          </Pressable>
-        }
-      />
-
+    <PtTabScreen
+      title="Family"
+      gap={18}
+      onBack={isTab ? undefined : () => navigation.goBack()}
+      action={<PtButton title="Invite" variant="secondary" size="sm" onPress={startInvite} />}
+      refreshing={family.isRefetching}
+      onRefresh={() => {
+        void family.refetch();
+        void wallets.refetch();
+      }}
+    >
       {family.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
+        <ActivityIndicator color={pt.brand} style={{ marginTop: 48 }} />
       ) : family.error ? (
-        <LoadError message={(family.error as Error).message} onRetry={family.refetch} />
+        <LoadError message={(family.error as Error).message} onRetry={() => void family.refetch()} />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={family.isRefetching} onRefresh={family.refetch} tintColor={colors.navy} />
-          }
-        >
-          {isEmpty ? (
-            <CreateFirstFamily hasWallet={Boolean(invitable)} onPress={startInvite} />
-          ) : (
-            <>
-          {/* Hero */}
-          <LinearGradient
-            colors={gradients.navy}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: radius, padding: 24 }}
+        <>
+          {/* The circle */}
+          <View
+            style={{
+              backgroundColor: pt.raised,
+              borderRadius: ptRadius.md,
+              paddingVertical: 18,
+              paddingHorizontal: 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 16,
+            }}
           >
-            <View className="flex-row items-center">
-              <View className="mr-2.5 h-8 w-8 items-center justify-center rounded bg-white/15">
-                <Ionicons name="people" size={16} color={colors.white} />
-              </View>
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                Your Family
+            <LogoMark size={64} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontFamily: ptFont.bold, fontSize: 17, lineHeight: 24, color: pt.ink }} numberOfLines={1}>
+                {surname} family circle
+              </Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                {members.length + 1} member{members.length === 0 ? '' : 's'} · {data?.stats.shared_wallets ?? 0} shared wallet
+                {(data?.stats.shared_wallets ?? 0) === 1 ? '' : 's'}
+              </Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                Owner: you ·{' '}
+                <Text
+                  onPress={() => {
+                    selection();
+                    navigation.navigate('Activity');
+                  }}
+                  style={{ fontFamily: ptFont.bold, color: pt.brand }}
+                >
+                  Activity
+                </Text>
               </Text>
             </View>
-            <Text className="mt-4 text-[34px] font-extrabold leading-tight tracking-tight text-white">
-              {stats?.total_members ?? 0} member{(stats?.total_members ?? 0) === 1 ? '' : 's'}
-            </Text>
-            <Text className="mt-1 text-[13px] text-white/60">
-              across {stats?.shared_wallets ?? 0} shared wallet{(stats?.shared_wallets ?? 0) === 1 ? '' : 's'}
-            </Text>
-          </LinearGradient>
-
-          {/* Stats strip */}
-          <View className="mt-4 flex-row" style={{ gap: 10 }}>
-            <StatTile value={stats?.total_members ?? 0} label="Members" />
-            <StatTile value={stats?.shared_wallets ?? 0} label="Shared" />
-            {stats && stats.child_wallets > 0 ? (
-              <StatTile value={stats.child_wallets} label="Children" />
-            ) : (
-              <StatTile value={stats?.pending_invites ?? 0} label="Pending" />
-            )}
           </View>
 
-          {/* Always-available invite action */}
-          <Button title="Invite member" icon="person-add" onPress={startInvite} className="mt-4" />
-
-          {/* Members */}
-          <Text className="mt-7 text-[13px] font-bold text-muted">Members</Text>
-          {members.length > 0 ? (
-            <Card className="mt-3 py-1">
-              {members.map((m, i) => (
-                <View key={m.id}>
-                  <MemberRow
-                    member={m}
-                    onPress={() => {
-                      selection();
-                      navigation.navigate('FamilyMember', { memberId: m.id });
-                    }}
-                  />
-                  {i < members.length - 1 ? (
-                    <View style={{ height: 1, backgroundColor: colors.border }} />
-                  ) : null}
-                </View>
-              ))}
-            </Card>
-          ) : (
-            <Card className="mt-3">
-              <EmptyState
-                icon="people-outline"
-                title="No family members yet"
-                message="Invite people to your shared wallets and they'll appear here."
+          {/* Members, you first */}
+          <View style={{ gap: 8 }}>
+            <PtSectionTitle title="Members" />
+            <PtCard>
+              <PtRow
+                minHeight={64}
+                last={members.length === 0}
+                left={<PtAvatar initials={initials(me?.full_name)} uri={me?.avatar_url} />}
+                title={`${me?.full_name ?? 'You'} (you)`}
+                subtitle={`${wallets.data?.length ?? 0} wallet${(wallets.data?.length ?? 0) === 1 ? '' : 's'}`}
+                right={<PtChip label="Owner" tone="brand" />}
               />
-            </Card>
-          )}
-
-          {/* Pending invitations */}
-          {hasPending ? (
-            <>
-              <Text className="mt-7 text-[13px] font-bold text-muted">
-                Pending Invitations
+              {members.map((m, i) => (
+                <PtRow
+                  key={m.id}
+                  minHeight={64}
+                  last={i === members.length - 1}
+                  left={<PtAvatar initials={m.avatar || initials(m.name)} tone={AVATAR_CYCLE[i % AVATAR_CYCLE.length]} />}
+                  title={m.name}
+                  subtitle={memberSubtitle(m)}
+                  right={<PtChip label={memberRole(m)} tone={LEAD_ROLES.includes(m.role) ? 'brand' : 'neutral'} />}
+                  onPress={() => navigation.navigate('FamilyMember', { memberId: m.id })}
+                />
+              ))}
+            </PtCard>
+            {members.length === 0 ? (
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                It's just you so far. Invite a spouse, children, relatives or a vendor into a wallet and they'll show here.
               </Text>
-              <Card className="mt-3 py-1">
+            ) : null}
+          </View>
+
+          {/* Invitations waiting for you */}
+          {received.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <PtSectionTitle title="Invitations for you" />
+              <PtCard>
                 {received.map((inv, i) => (
-                  <View key={`r-${inv.id}`}>
-                    <InviteRow
-                      icon="mail-open-outline"
-                      tile="bg-lav-soft"
-                      iconColor={colors.navy}
-                      title={`${inv.inviter?.name ?? 'Someone'} invited you`}
-                      subtitle={inviteSubtitle(inv)}
-                      right={
-                        <Pressable
-                          onPress={() => {
-                            selection();
-                            navigation.navigate('Invitations');
-                          }}
-                          hitSlop={6}
-                          className="flex-row items-center rounded bg-lav px-3.5 py-1.5 active:opacity-80"
-                        >
-                          <Text className="text-[12px] font-bold text-navy">Review</Text>
-                        </Pressable>
-                      }
-                    />
-                    {i < received.length - 1 || sent.length > 0 ? (
-                      <View style={{ height: 1, backgroundColor: colors.border }} />
-                    ) : null}
-                  </View>
+                  <PtRow
+                    key={inv.id}
+                    minHeight={64}
+                    last={i === received.length - 1}
+                    left={<PtAvatar initials={initials(inv.inviter?.name)} tone="mint" />}
+                    title={`${inv.inviter?.name ?? 'Someone'} invited you`}
+                    subtitle={`${roleLabel(inv.role)} · ${inv.wallet_name ?? 'A wallet'}`}
+                    right={<PtChip label="Review" tone="warning" />}
+                    onPress={() => navigation.navigate('Invitations')}
+                  />
                 ))}
-                {sent.map((inv, i) => (
-                  <View key={`s-${inv.id}`}>
-                    <SentInviteRow inv={inv} subtitle={inviteSubtitle(inv)} />
-                    {i < sent.length - 1 ? (
-                      <View style={{ height: 1, backgroundColor: colors.border }} />
-                    ) : null}
-                  </View>
-                ))}
-              </Card>
-            </>
+              </PtCard>
+            </View>
           ) : null}
-            </>
-          )}
-        </ScrollView>
+
+          {/* Invites you've sent */}
+          {sent.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <PtSectionTitle title={sent.length === 1 ? 'Pending invite' : 'Pending invites'} />
+              <PtCard>
+                {sent.map((inv, i) => (
+                  <SentInviteRow key={inv.id} inv={inv} last={i === sent.length - 1} />
+                ))}
+              </PtCard>
+            </View>
+          ) : null}
+        </>
       )}
-    </Screen>
+    </PtTabScreen>
   );
 }

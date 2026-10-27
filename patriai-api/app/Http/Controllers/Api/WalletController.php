@@ -27,11 +27,16 @@ class WalletController extends ApiController
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $own = $user->wallets()->latest()->get()->map(fn ($w) => $this->serializeWallet($w) + ['my_role' => 'owner']);
+        // is_shared: someone besides you is in it (Treasury groups Mine / Shared / Children).
+        $own = $user->wallets()
+            ->withCount(['members as others_count' => fn ($q) => $q->where('status', 'active')->where('user_id', '!=', $user->id)])
+            ->latest()
+            ->get()
+            ->map(fn ($w) => $this->serializeWallet($w) + ['my_role' => 'owner', 'is_shared' => $w->others_count > 0]);
         $member = $user->memberWallets()
             ->where('wallets.user_id', '!=', $user->id)
             ->get()
-            ->map(fn ($w) => $this->serializeWallet($w, withOwner: true) + ['my_role' => $w->pivot->role]);
+            ->map(fn ($w) => $this->serializeWallet($w, withOwner: true) + ['my_role' => $w->pivot->role, 'is_shared' => true]);
 
         return $this->ok('Wallets fetched', ['wallets' => $own->concat($member)->values()]);
     }

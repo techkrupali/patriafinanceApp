@@ -66,6 +66,8 @@ export interface Wallet {
   created_at: string | null;
   owner?: WalletOwner;
   my_role?: string;
+  /** Someone besides you is in this wallet (GET /wallets only). */
+  is_shared?: boolean;
   // ---- Governance (Milestone 3) ----
   description?: string | null;
   /** Naira decimal string, or null when the wallet has no target. */
@@ -279,6 +281,66 @@ export interface PinForgotData {
   /** Masked email the reset code went to. */
   sent_to: string;
   debug_otp?: string;
+}
+
+// ---- GET /home: the Home tab and the Treasury header (client prototype HOM-01 / TRS-01) ----
+
+export interface HomeTotals {
+  /** Naira decimal strings. */
+  total: string;
+  yours: string;
+  shared: string;
+  children: string;
+  month_in: string;
+  month_out: string;
+}
+
+export interface HomeNeedItem {
+  kind: 'approval' | 'invitation' | 'milestone' | 'low_funds';
+  id: number;
+  /** Short lower-case label for the "3 need you:" line. */
+  label: string;
+}
+
+export interface HomeUpcomingItem {
+  kind: 'approval' | 'request' | 'rule';
+  id: number;
+  wallet_id: number;
+  title: string;
+  /** YYYY-MM-DD */
+  date: string | null;
+  subtitle: string;
+  /** Naira decimal string. */
+  amount: string;
+  tone: 'warning' | 'danger' | 'neutral';
+}
+
+export interface HomeGoal {
+  wallet_id: number;
+  name: string;
+  type: WalletType;
+  percent: number;
+  balance: string;
+  target: string;
+  target_date: string | null;
+}
+
+export interface HomeProject {
+  id: number;
+  title: string;
+  status_line: string;
+  needs_review: boolean;
+}
+
+export interface HomeData {
+  first_name: string;
+  wallet_count: number;
+  totals: HomeTotals;
+  needs_you: { count: number; items: HomeNeedItem[] };
+  upcoming: HomeUpcomingItem[];
+  goals: HomeGoal[];
+  projects: HomeProject[];
+  unread_notifications: number;
 }
 
 export interface DashboardData {
@@ -1308,6 +1370,7 @@ export interface SubmitKycPayload {
 export interface FamilyMembership {
   wallet_id: number;
   wallet_name: string;
+  wallet_type?: WalletType;
   role: string;
   can_approve: boolean;
 }
@@ -1477,11 +1540,26 @@ export interface AutomationRule {
   min_balance: string | null;
   enabled: boolean;
   last_run_at: string | null;
+  /** YYYY-MM-DD of the next run, or null when paused. */
+  next_run_on: string | null;
   next_run_hint: string;
+}
+
+/** A wallet's "when does money need a yes" rule, for the Rules tab. */
+export interface ApprovalRuleSummary {
+  wallet_id: number;
+  wallet_name: string;
+  wallet_type: WalletType;
+  /** Naira decimal string; null = every payment needs a yes. */
+  threshold: string | null;
+  required_approvals: number;
+  /** First names of the people who can approve. */
+  approvers: string[];
 }
 
 export interface AutomationsData {
   automations: AutomationRule[];
+  approval_rules: ApprovalRuleSummary[];
 }
 
 export interface AutomationMutatedData {
