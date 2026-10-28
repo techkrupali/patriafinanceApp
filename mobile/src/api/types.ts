@@ -94,6 +94,12 @@ export interface Wallet {
   /** SAV-01 colour. */
   colour?: WalletColour | null;
   /** SAV-05: locked until a date or the target; `locked` while it holds. */
+  /** Goal wallets (GLW). */
+  /** Savings and project wallets: what's free to move (not held for approvals or milestones). */
+  available?: string | null;
+  goal?: GoalSummary | null;
+  joint?: JointSummary | null;
+  child?: ChildSummary | null;
   lock?: {
     mode: 'date' | 'target';
     until: string | null;
@@ -205,6 +211,8 @@ export interface WalletInvitation {
   pledge?: { amount: string; label: string } | null;
   /** Savings wallets: the plan the invitee is joining. */
   savings?: SavingsSummary | null;
+  /** INV-O1: the joint wallet rules the partner accepts. */
+  joint?: JointSummary | null;
 }
 
 export type ApprovalAction = 'withdrawal' | 'transfer_wallet' | 'transfer_user' | 'transfer_bank';
@@ -754,6 +762,8 @@ export interface CreateWalletPayload {
     keyholder?: boolean;
     /** SPD-05 spenders: categories by name (absent = all) and a daily limit (naira). */
     spend?: { categories?: string[] | null; daily_limit?: string | null };
+    /** GLW-03: `pledge` each period, or a one-off gift. */
+    pledge_kind?: 'period' | 'gift';
   }[];
   colour?: WalletColour;
   lock?: { mode: 'none' | 'date' | 'target'; until?: string; early_break?: boolean; approval?: boolean; charity_id?: number | null };
@@ -761,6 +771,10 @@ export interface CreateWalletPayload {
   budget?: BudgetPayload;
   /** Giving wallets (GIV-01…06). */
   giving?: GivingPayload;
+  /** Goal wallets (GLW-01…05). */
+  goal?: GoalPayload;
+  joint?: JointPayload;
+  child?: ChildPayload;
   /** "When does money need a yes?" — threshold null means any amount. */
   approval?: { threshold: string | null; mode: ApprovalMode; lock_until_goal?: boolean; expiry_hours?: number };
   reminder_day?: number;
@@ -1304,10 +1318,22 @@ export interface RepayLoanPayload {
 
 export type ProjectStatus = 'active' | 'completed' | 'cancelled';
 
-export type MilestoneStatus = 'funded' | 'submitted' | 'approved' | 'released' | 'rejected';
+export type MilestoneStatus = 'planned' | 'funded' | 'submitted' | 'approved' | 'released' | 'rejected';
 
 /** The current user's relationship to a project. */
-export type ProjectRole = 'owner' | 'vendor';
+/** A funder who joined the project wallet (PRW-05) is a co-owner or contributor. */
+export type ProjectRole = 'owner' | 'vendor' | 'co_owner' | 'contributor';
+export type ProjectKind = 'building' | 'renovation' | 'event' | 'community';
+
+/** PRW-06: what the builder sends, who says yes, and what's held back. */
+export interface ProjectRelease {
+  photos: boolean;
+  video: boolean;
+  receipts: boolean;
+  approvers: 'all' | 'owner';
+  retention_percent: number;
+  retention_months: number;
+}
 
 export interface Project {
   id: number;
@@ -1330,6 +1356,18 @@ export interface Project {
   my_role: ProjectRole | null;
   milestones_total: number;
   milestones_released: number;
+  /** PRW-01…06, for projects set up in the guided flow. */
+  setup?: {
+    kind: ProjectKind | null;
+    location: string | null;
+    starts_on: string | null;
+    finishes_on: string | null;
+    buffer_percent: number;
+    release: ProjectRelease | null;
+    vendor_invite: string | null;
+  } | null;
+  /** Naira: retention held back until after handover. */
+  held_back?: string;
   created_at: string | null;
 }
 
@@ -1350,6 +1388,12 @@ export interface Milestone {
   submitted_at: string | null;
   released_at: string | null;
   released_transaction_reference: string | null;
+  /** PRW-03 "Nov to Dec 2026": when the work starts (due_date is when it ends). */
+  starts_on?: string | null;
+  /** Naira held back from this payment until after handover. */
+  retention?: string;
+  retention_due_at?: string | null;
+  retention_released_at?: string | null;
   created_at: string | null;
 }
 
@@ -1418,6 +1462,20 @@ export interface CreateProjectPayload {
   description?: string;
   /** Naira decimal string */
   budget?: string;
+  /** PRW-01…06 (naira amounts). */
+  kind?: ProjectKind;
+  location?: string;
+  starts_on?: string;
+  finishes_on?: string;
+  buffer_percent?: number;
+  milestones?: { title: string; description?: string; amount: string; starts_on?: string; ends_on?: string }[];
+  vendor?: { vendor_profile_id?: number; identifier?: string } | null;
+  my_monthly?: string;
+  source_wallet_id?: number;
+  funders?: { user_id?: number; identifier?: string; role: 'co_owner' | 'contributor'; amount: string }[];
+  move_in_wallet_id?: number;
+  release?: ProjectRelease;
+  draft_id?: number;
 }
 
 export interface AssignVendorPayload {
@@ -1559,6 +1617,8 @@ export interface FamilyMember {
   /** Highest role held across shared wallets. */
   role: string;
   status: string;
+  /** BVN checked (JNT-01 "Co-owner · verified"). */
+  verified?: boolean;
   memberships: FamilyMembership[];
 }
 
@@ -1900,6 +1960,8 @@ export interface VendorDetail extends VendorListing {
   /** Contact identifiers — used to assign this vendor to a project. */
   email: string;
   phone: string | null;
+  /** PRW-04 "14 projects · 52 milestones paid · 0 open disputes". */
+  stats?: { projects: number; milestones_paid: number; open_disputes: number };
 }
 
 export interface VendorsPageData {
@@ -1959,6 +2021,93 @@ export interface FamilyMemberDetailData {
 // ============================================================================
 // Spending, Giving, saved accounts (client sheet "Wallets · Savings, Spending, Giving")
 // ============================================================================
+
+export type GoalKind = 'school_fees' | 'rent' | 'car' | 'baby' | 'travel' | 'wedding' | 'other';
+
+export interface GoalPayload {
+  kind: GoalKind;
+  for?: string;
+  /** GLW-02 "What it covers": naira amounts. */
+  lines?: { name: string; amount: string }[];
+  /** GLW-04 contribution link on. */
+  link?: boolean;
+  reminders?: { before_save?: boolean; nudge?: boolean };
+  /** GLW-05 "Pay the school directly". */
+  payout?: { organisation_id?: number; saved_account_id?: number; run_on: string } | null;
+}
+
+/** On a goal wallet (GET /wallets). */
+export interface GoalSummary {
+  kind: GoalKind;
+  for: string | null;
+  lines: { name: string; amount: string }[];
+  link: string | null;
+  reminders: { before_save: boolean; nudge: boolean } | null;
+  payout: { to: string | null; run_on: string; paid_at: string | null } | null;
+}
+
+export type JointMode = 'equal' | 'income' | 'fixed';
+export type JointSplit = 'contributed' | 'equal' | 'decide';
+
+/** JNT-01…05 (POST /wallets type joint). Amounts are naira. */
+export interface JointPayload {
+  contribution: { mode: JointMode; day: number; mine: string; partner: string };
+  /** "If one of you is short": remind both and try again in 2 days, or wait for next month. */
+  short?: 'retry' | 'skip';
+  limits: { per_payment: string; per_day: string };
+  expiry_hours?: number;
+  always?: { new_account?: boolean; personal?: boolean; rules?: boolean };
+  notify?: { weekly?: boolean; statement?: boolean; big_payment?: boolean; big_amount?: string };
+  leave?: { split?: JointSplit; notice_days?: number };
+}
+
+/** On a joint wallet, and on its invitation. */
+export interface JointSummary {
+  state: 'waiting' | 'open' | 'leaving' | 'closed';
+  partner: { id: number; name: string } | null;
+  invitation: { id: number; expires_at: string | null } | null;
+  contribution: { mode: JointMode; day: number; mine: string; partner: string };
+  short: 'retry' | 'skip';
+  limits: { per_payment: string; per_day: string };
+  expiry_hours: number;
+  always: { new_account: boolean; personal: boolean; rules: boolean };
+  notify: { weekly: boolean; statement: boolean; big_payment: boolean; big_amount: string };
+  leave: { split: JointSplit; notice_days: number };
+  leaving: { by: number; at: string; ends_on: string } | null;
+  closing: { by: number; at: string } | null;
+  proposal: { by: number; summary: string } | null;
+}
+
+export type ChildAgeBand = 'under_6' | '6_9' | '10_12' | '13_15' | '16_17';
+export type AllowanceFrequency = 'weekly' | 'biweekly' | 'monthly';
+
+/** CHW-01…07 (POST /wallets type child). Amounts are naira. */
+export interface ChildPayload {
+  first_name: string;
+  last_name?: string;
+  age_band: ChildAgeBand;
+  allowance?: { amount: string; frequency: AllowanceFrequency; starts_on: string; from_wallet_id?: number; category_id?: number | null; pause_holidays: boolean; notify: boolean };
+  controls?: { daily_limit: string; shops: boolean; friends: boolean; online: boolean; cash: boolean };
+  requests?: { auto_limit: string; auto_per_week: number; expiry_hours: number; reason_required: boolean; approvers: 'any' | 'all' };
+  goal?: { name: string; amount: string; save_percent: number; match_percent: number; match_wallet_id?: number } | null;
+  phone?: { mode: 'own' | 'managed'; code?: string };
+  coparent?: { approve: boolean; change: boolean; see: boolean } | null;
+  gifts?: boolean;
+}
+
+/** On a child wallet. */
+export interface ChildSummary {
+  first_name: string;
+  last_name: string | null;
+  age_band: ChildAgeBand;
+  allowance: { amount: string; frequency: AllowanceFrequency; starts_on: string; pause_holidays: boolean; notify: boolean };
+  controls: { daily_limit: string; shops: boolean; friends: boolean; online: boolean; cash: boolean };
+  requests: { auto_limit: string; auto_per_week: number; reason_required: boolean; approvers: 'any' | 'all' };
+  goal: { wallet_id: number; name: string; target: string; saved: string; save_percent: number; match_percent: number } | null;
+  phone: { mode: 'own' | 'managed'; linked: boolean; code: string | null; expires_at: string | null };
+  coparent: { approve: boolean; change: boolean; see: boolean } | null;
+  gifts: boolean;
+}
 
 export type BudgetPeriod = 'weekly' | 'monthly' | 'one_off';
 export type BudgetFunding = 'topup' | 'split' | 'manual';

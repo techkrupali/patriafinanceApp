@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
  *    and alerts go out (BudgetService)
  *  - locked savings broken early: the early-break fee (SAV-05 "5% of the amount
  *    is kept as a fee"), half to the charity the saver picked (BRK-01/04)
+ *  - joint wallets: over what one partner may spend alone, to a new account or
+ *    out to a personal wallet, the other says yes; afterwards both hear (JointService)
  * Amounts are kobo.
  */
 class SpendRules
@@ -36,13 +38,18 @@ class SpendRules
     }
 
     /**
-     * Before: may throw (category not allowed, or over a "stop" limit).
+     * Before: may throw (category not allowed, or over a "stop" limit). $to is
+     * where it goes, for the joint checks: {kind: bank, account_number} |
+     * {kind: wallet, wallet_id} | {kind: user, user_id}.
      *
      * @return array{category_id: ?int, over: ?string, fee: int, net: int}
      */
-    public function plan(Wallet $from, User $user, int $amount, ?int $categoryId, bool $approved = false): array
+    public function plan(Wallet $from, User $user, int $amount, ?int $categoryId, bool $approved = false, ?array $to = null): array
     {
         $budget = $this->budgets->check($from, $user, $amount, $categoryId, $approved);
+        if (!$approved && $budget['over'] === null) {
+            $budget['over'] = JointService::make()->check($from, $user, $amount, $to);
+        }
         $fee = $this->earlyBreakFee($from, $amount);
 
         return $budget + ['fee' => $fee, 'net' => $amount - $fee];
@@ -56,6 +63,7 @@ class SpendRules
         }
         try {
             $this->budgets->recorded($from, $reference, $plan['category_id'] ?? null);
+            JointService::make()->paid($from, $user, (int) ($plan['net'] ?? 0), $reference);
         } catch (\Throwable $e) {
             report($e); // never undo a payment that already left
         }

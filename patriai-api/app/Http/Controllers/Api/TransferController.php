@@ -175,7 +175,13 @@ class TransferController extends ApiController
         // The wallet's own rules: a spending budget (may stop it, or need an owner's
         // yes when it goes over a limit) and the early-break fee on locked savings.
         $rules = SpendRules::make();
-        $plan = $rules->plan($from, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null);
+        $plan = $rules->plan($from, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null, to: match ($dest['kind']) {
+            'wallet' => ['kind' => 'wallet', 'wallet_id' => (int) $dest['wallet_id']],
+            'user' => ['kind' => 'user', 'user_id' => (str_contains($dest['identifier'], '@')
+                ? User::where('email', strtolower($dest['identifier']))->value('id')
+                : User::where('phone', $dest['identifier'])->value('id'))],
+            default => ['kind' => 'bank', 'account_number' => $dest['account_number'] ?? null],
+        });
         $extra = array_filter(['budget_category_id' => $plan['category_id'], 'over_limit' => $plan['over']]);
 
         // Only route to approval when at least one eligible approver exists; otherwise

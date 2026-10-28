@@ -38,6 +38,9 @@ import { RequestSpendScreen } from '../screens/wallet/RequestSpendScreen';
 import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
 import { WalletSetupScreen } from '../screens/wallet/WalletSetupScreen';
 import { GoalWalletSetupScreen } from '../screens/wallet/GoalWalletSetupScreen';
+import { JointWalletSetupScreen } from '../screens/wallet/JointWalletSetupScreen';
+import { ChildWalletSetupScreen } from '../screens/wallet/ChildWalletSetupScreen';
+import { ProjectWalletSetupScreen } from '../screens/wallet/ProjectWalletSetupScreen';
 import { WalletCreatedScreen } from '../screens/wallet/WalletCreatedScreen';
 import { SetupDoneScreen } from '../screens/wallet/SetupDoneScreen';
 import { SavingsWalletSetupScreen } from '../screens/wallet/SavingsWalletSetupScreen';
@@ -250,6 +253,9 @@ export function RootNavigator() {
       <RootStack.Screen name="CreateWallet" component={CreateWalletScreen} />
       <RootStack.Screen name="WalletSetup" component={WalletSetupScreen} />
       <RootStack.Screen name="GoalWalletSetup" component={GoalWalletSetupScreen} />
+      <RootStack.Screen name="JointWalletSetup" component={JointWalletSetupScreen} />
+      <RootStack.Screen name="ChildWalletSetup" component={ChildWalletSetupScreen} />
+      <RootStack.Screen name="ProjectWalletSetup" component={ProjectWalletSetupScreen} />
       <RootStack.Screen name="WalletCreated" component={WalletCreatedScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="SetupDone" component={SetupDoneScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="SavingsWalletSetup" component={SavingsWalletSetupScreen} />

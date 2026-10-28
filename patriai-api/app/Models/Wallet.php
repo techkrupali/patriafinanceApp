@@ -469,6 +469,11 @@ class Wallet extends Model
             return $lock['until'] !== null && now()->lt(\Illuminate\Support\Carbon::parse($lock['until'])->startOfDay());
         }
 
+        // GLW-05 "Or until 5 Jan 2027, whichever comes first".
+        if ($lock['until'] !== null && !now()->lt(\Illuminate\Support\Carbon::parse($lock['until'])->startOfDay())) {
+            return false;
+        }
+
         return $this->target_amount !== null && $this->target_amount > 0 && $this->balance < $this->target_amount;
     }
 

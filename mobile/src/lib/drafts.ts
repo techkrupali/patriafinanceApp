@@ -211,8 +211,14 @@ export function resumeDraft(navigator: { navigate: (...args: never[]) => void },
     case 'giving':
       navigation.navigate('GivingWalletSetup', { draftId: draft.id });
       return;
+    case 'joint':
+      navigation.navigate('JointWalletSetup', { draftId: draft.id });
+      return;
+    case 'child':
+      navigation.navigate('ChildWalletSetup', { draftId: draft.id });
+      return;
     case 'project':
-      navigation.navigate('CreateProject', { draftId: draft.id });
+      navigation.navigate('ProjectWalletSetup', { draftId: draft.id });
       return;
     default:
       navigation.navigate('WalletSetup', { type: draft.type, draftId: draft.id });

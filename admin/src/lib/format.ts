@@ -88,6 +88,7 @@ const LABELS: Record<string, string> = {
   paid: "Paid",
   // Project + milestone statuses
   completed: "Completed",
+  planned: "Planned",
   funded: "Funded",
   submitted: "Submitted",
   released: "Released",

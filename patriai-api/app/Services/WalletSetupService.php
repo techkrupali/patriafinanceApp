@@ -40,7 +40,7 @@ class WalletSetupService
      * initial_deposit?, source_wallet_id?, monthly_amount?, monthly_day?,
      * emergency?, milestones?, contributors?, savings_plan?, mode?, members?,
      * approval? {threshold, mode, lock_until_goal, expiry_hours}, reminder_day?,
-     * budget? (spending), giving? (giving), draft_id?
+     * budget? (spending), giving? (giving), goal?, joint?, child?, draft_id?
      */
     public function create(User $user, array $data): Wallet
     {
@@ -50,7 +50,9 @@ class WalletSetupService
         // SPD-04: topped up from Main, or the owner's share of a split.
         $budgetFunded = $data['type'] === 'spending' && in_array($data['budget']['funding'] ?? 'manual', ['topup', 'split'], true)
             && ($data['budget']['period'] ?? 'monthly') !== 'one_off';
-        $source = ($deposit > 0 || $monthly > 0 || $planAutoSave || $budgetFunded)
+        // JNT-02: the owner's share comes from their own wallet each month.
+        $jointShare = $data['type'] === 'joint' && (int) ($data['joint']['contribution']['mine'] ?? 0) > 0;
+        $source = ($deposit > 0 || $monthly > 0 || $planAutoSave || $budgetFunded || $jointShare)
             ? $this->resolveSource($user, $data['source_wallet_id'] ?? null, $deposit)
             : null;
 
@@ -67,7 +69,8 @@ class WalletSetupService
                 'colour' => $data['colour'] ?? null,
                 'lock' => ($data['lock']['mode'] ?? 'none') !== 'none' ? [
                     'mode' => $data['lock']['mode'],
-                    'until' => $data['lock']['mode'] === 'date' ? $data['lock']['until'] : null,
+                    // A target lock may also open on a date, whichever comes first (GLW-05).
+                    'until' => $data['lock']['until'] ?? null,
                     'early_break' => $earlyBreak = (bool) ($data['lock']['early_break'] ?? true),
                     'approval' => (bool) ($data['lock']['approval'] ?? true),
                     // SAV-05 "5% of the amount is kept as a fee", half to the charity picked.
@@ -109,6 +112,18 @@ class WalletSetupService
 
             if ($data['type'] === 'giving' && !empty($data['giving'])) {
                 $this->giving->configure($wallet, $user, $data['giving']);
+            }
+
+            if ($data['type'] === 'goal' && !empty($data['goal'])) {
+                GoalService::make()->configure($wallet, $user, $data['goal']);
+            }
+
+            if ($data['type'] === 'joint' && !empty($data['joint'])) {
+                JointService::make()->configure($wallet, $user, $data['joint'], $source);
+            }
+
+            if ($data['type'] === 'child' && !empty($data['child'])) {
+                ChildService::make()->configure($wallet, $user, $data['child']);
             }
 
             if ($deposit > 0) {
@@ -205,6 +220,7 @@ class WalletSetupService
                     $m['permissions'] ?? null,
                     $m['pledge'] ?? null,
                     (bool) ($m['keyholder'] ?? false),
+                    $m['pledge_kind'] ?? null,
                 );
             } catch (ValidationException $e) {
                 throw ValidationException::withMessages(["members.{$i}" => collect($e->errors())->flatten()->first()]);

@@ -100,6 +100,37 @@ class ApprovalService
     }
 
     /**
+     * CHW-04 "Small requests can go through without you lifting a finger":
+     * recorded like any request, approved at once and paid; the approvers are
+     * told after.
+     */
+    public function autoApprove(Wallet $wallet, User $initiator, string $action, int $amountKobo, int $feeKobo, ?string $description, array $payload): ApprovalRequest
+    {
+        $request = ApprovalRequest::create([
+            'wallet_id' => $wallet->id,
+            'initiator_id' => $initiator->id,
+            'action' => $action,
+            'amount' => $amountKobo,
+            'fee' => $feeKobo,
+            'description' => $description,
+            'payload' => $payload + ['auto_approved' => true],
+            'required_approvals' => 1,
+            'approvals_count' => 0,
+            'status' => 'approved',
+            'expires_at' => now()->addHours($wallet->approvalExpiryHours()),
+        ]);
+        $this->execute($request);
+
+        foreach ($wallet->eligibleApprovers($initiator->id) as $approverId) {
+            if ($approver = User::find($approverId)) {
+                $this->notifications->push($approver, 'approval_auto', "Approved automatically: ₦{$this->naira($amountKobo)}", "{$initiator->first_name} asked for ₦{$this->naira($amountKobo)}" . ($description ? " for {$description}" : '') . " from {$wallet->name}.", ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id]);
+            }
+        }
+
+        return $request->refresh();
+    }
+
+    /**
      * Record one approver's decision. Executes the spend once the required
      * approval count is reached.
      */

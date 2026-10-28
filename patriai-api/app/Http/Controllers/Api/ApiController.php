@@ -242,6 +242,8 @@ abstract class ApiController extends Controller
             'description' => $wallet->description,
             'currency' => $wallet->currency,
             'balance' => $wallet->balanceNaira(),
+            // PRW-05 "Move in House Project savings — ₦1,200,000 now": what's free to move.
+            'available' => in_array($wallet->type, ['savings', 'project'], true) ? number_format(max(0, $wallet->availableToSpend()) / 100, 2, '.', '') : null,
             'target_amount' => $wallet->target_amount !== null ? number_format($wallet->target_amount / 100, 2, '.', '') : null,
             'target_date' => $wallet->target_date?->toDateString(),
             'approval_enabled' => (bool) $wallet->approval_enabled,
@@ -267,6 +269,10 @@ abstract class ApiController extends Controller
             'reminder_day' => $wallet->reminderDay(),
             'colour' => $wallet->meta['colour'] ?? null,
             // SAV-05: until a date or the target; `locked` while it holds.
+            // GLW: kind, what it covers, the contribution link, paying someone directly.
+            'goal' => $wallet->type === 'goal' ? \App\Services\GoalService::make()->summary($wallet) : null,
+            'joint' => \App\Services\JointService::make()->summary($wallet),
+            'child' => \App\Services\ChildService::make()->summary($wallet),
             'lock' => ($lock = $wallet->savingsLock()) ? $lock + [
                 'locked' => $wallet->isGoalLocked(),
                 'charity' => $lock['charity_id'] ? \App\Models\Organisation::find($lock['charity_id'])?->only(['id', 'name', 'area', 'state']) : null,
@@ -375,6 +381,10 @@ abstract class ApiController extends Controller
             // Savings wallets: the plan the invitee is joining.
             'savings' => $invitation->relationLoaded('wallet') && $invitation->wallet
                 ? \App\Services\SavingsService::make()->invitationSummary($invitation->wallet)
+                : null,
+            // INV-O1: the joint wallet rules the partner accepts.
+            'joint' => $invitation->relationLoaded('wallet') && $invitation->wallet
+                ? \App\Services\JointService::make()->summary($invitation->wallet)
                 : null,
             'status' => $invitation->status,
             'expires_at' => $invitation->expires_at?->toIso8601String(),
@@ -486,6 +496,17 @@ abstract class ApiController extends Controller
             'my_role' => $viewer !== null ? $project->roleOf($viewer) : null,
             'milestones_total' => (int) $project->milestones()->count(),
             'milestones_released' => (int) $project->milestones()->where('status', 'released')->count(),
+            // PRW-01…06: what, where, when, the buffer and the release rules.
+            'setup' => $project->meta ? [
+                'kind' => $project->meta['kind'] ?? null,
+                'location' => $project->meta['location'] ?? null,
+                'starts_on' => $project->meta['starts_on'] ?? null,
+                'finishes_on' => $project->meta['finishes_on'] ?? null,
+                'buffer_percent' => (int) ($project->meta['buffer_percent'] ?? 0),
+                'release' => $project->meta['release'] ?? null,
+                'vendor_invite' => $project->meta['vendor_invite'] ?? null,
+            ] : null,
+            'held_back' => number_format($project->heldBack() / 100, 2, '.', ''),
             'created_at' => $project->created_at?->toIso8601String(),
         ];
     }
@@ -504,6 +525,10 @@ abstract class ApiController extends Controller
             'submitted_at' => $milestone->submitted_at?->toIso8601String(),
             'released_at' => $milestone->released_at?->toIso8601String(),
             'released_transaction_reference' => $milestone->released_transaction_reference,
+            'starts_on' => $milestone->meta['starts_on'] ?? null,
+            'retention' => number_format($milestone->retention / 100, 2, '.', ''),
+            'retention_due_at' => $milestone->retention_due_at?->toIso8601String(),
+            'retention_released_at' => $milestone->retention_released_at?->toIso8601String(),
             'evidence' => $milestone->evidence->map(fn ($e) => [
                 'id' => $e->id,
                 'kind' => $e->kind,

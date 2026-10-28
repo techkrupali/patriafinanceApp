@@ -15,6 +15,8 @@ import { PtCard, PtRow } from '../../components/pt/PtList';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
 import { GivingSection } from '../../components/giving/GivingSection';
+import { JointSection } from '../../components/joint/JointSection';
+import { GoalCancelButton } from '../../components/goal/GoalCancelButton';
 import {
   useBudget,
   useAutomations,
@@ -559,6 +561,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {wallet.type === 'giving' ? <GivingSection walletId={walletId} isOwner={role === 'owner'} /> : null}
+          {wallet.type === 'joint' && wallet.joint ? <JointSection wallet={wallet} myId={me?.id} /> : null}
+          {wallet.type === 'goal' && wallet.goal && role === 'owner' && wallet.status === 'active' ? <GoalCancelButton walletId={walletId} name={wallet.name} /> : null}
 
           {/* Tabs */}
           <View>

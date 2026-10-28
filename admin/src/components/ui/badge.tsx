@@ -55,6 +55,7 @@ const STATUS_TONES: Record<string, Tone> = {
   flagged: "red",
   funded: "blue",
   submitted: "amber",
+  planned: "gray",
 };
 
 /** Badge that picks its tone from a known status string. */

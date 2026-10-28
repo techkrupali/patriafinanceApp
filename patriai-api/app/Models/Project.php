@@ -56,12 +56,22 @@ class Project extends Model
         return $this->hasMany(Milestone::class);
     }
 
-    /** Sum of milestone amounts still reserved (funded/submitted/approved) — allocated, not yet released. */
+    /**
+     * Sum of milestone amounts still reserved (funded/submitted/approved) — allocated,
+     * not yet released — plus retention held back after release (PRW-06).
+     */
     public function reservedAmount(): int
     {
         return (int) $this->milestones()
             ->whereIn('status', self::RESERVED_MILESTONE_STATUSES)
-            ->sum('amount');
+            ->sum('amount')
+            + $this->heldBack();
+    }
+
+    /** PRW-06 "10% until 3 months after handover": retention not yet paid to the builder. */
+    public function heldBack(): int
+    {
+        return (int) $this->milestones()->where('status', 'released')->whereNull('retention_released_at')->sum('retention');
     }
 
     /** Sum of milestone amounts that have been released to the vendor. */
@@ -78,7 +88,7 @@ class Project extends Model
         return $this->wallet->balance - $this->reservedAmount();
     }
 
-    /** 'owner', 'vendor', or null for this user. */
+    /** 'owner', 'vendor', a funder's role on the project wallet (PRW-05), or null. */
     public function roleOf(User $user): ?string
     {
         if ($this->owner_id === $user->id) {
@@ -88,12 +98,13 @@ class Project extends Model
             return 'vendor';
         }
 
-        return null;
+        return $this->wallet?->members()->where('user_id', $user->id)->where('status', 'active')->value('role');
     }
 
-    /** Can the given user VIEW this project (owner or assigned vendor)? */
+    /** Can the given user VIEW this project (owner, assigned vendor, or a funder who joined)? */
     public function isAccessibleBy(User $user): bool
     {
-        return $this->owner_id === $user->id || $this->vendor_id === $user->id;
+        return $this->owner_id === $user->id || $this->vendor_id === $user->id
+            || ($this->wallet && $this->wallet->members()->where('user_id', $user->id)->where('status', 'active')->exists());
     }
 }

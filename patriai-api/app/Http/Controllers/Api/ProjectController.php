@@ -6,6 +6,7 @@ use App\Models\Milestone;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ProjectService;
+use App\Services\ProjectSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -29,7 +30,9 @@ class ProjectController extends ApiController
         $user = $request->user();
 
         $projects = Project::with(['wallet', 'owner', 'vendor'])
-            ->where(fn ($q) => $q->where('owner_id', $user->id)->orWhere('vendor_id', $user->id))
+            ->where(fn ($q) => $q->where('owner_id', $user->id)->orWhere('vendor_id', $user->id)
+                // PRW-05 funders who joined the project wallet.
+                ->orWhereHas('wallet.members', fn ($m) => $m->where('user_id', $user->id)->where('status', 'active')))
             ->latest()
             ->get();
 
@@ -38,9 +41,14 @@ class ProjectController extends ApiController
         ]);
     }
 
-    // POST /projects  { title, description?, budget? (naira) }
+    // POST /projects  { title, description?, budget? (naira) } — or the PRW-01…06 setup:
+    // kind, location, starts_on, finishes_on, buffer_percent, milestones, vendor,
+    // my_monthly + source_wallet_id, funders, move_in_wallet_id, release, draft_id
     public function store(Request $request): JsonResponse
     {
+        if ($request->has('kind')) {
+            return $this->setup($request);
+        }
         $data = $request->validate([
             'title' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:500'],
@@ -53,6 +61,73 @@ class ProjectController extends ApiController
             $data['description'] ?? null,
             isset($data['budget']) ? $this->toKobo($data['budget']) : 0,
         );
+
+        return $this->ok('Project created', [
+            'project' => $this->serializeProject($project, $request->user()),
+            'wallet' => $this->serializeWallet($project->wallet),
+        ], 201);
+    }
+
+    /** PRW-01…06: the whole project set up in one go. */
+    private function setup(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'kind' => ['required', 'in:' . implode(',', ProjectSetupService::KINDS)],
+            'location' => ['nullable', 'string', 'max:120'],
+            'starts_on' => ['nullable', 'date'],
+            'finishes_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
+            'budget' => ['required', 'numeric', 'min:1'],
+            'buffer_percent' => ['sometimes', 'integer', 'in:0,5,10'],
+            'milestones' => ['required', 'array', 'min:1', 'max:20'],
+            'milestones.*.title' => ['required', 'string', 'max:100'],
+            'milestones.*.description' => ['nullable', 'string', 'max:200'],
+            'milestones.*.amount' => ['required', 'numeric', 'min:1'],
+            'milestones.*.starts_on' => ['nullable', 'date'],
+            'milestones.*.ends_on' => ['nullable', 'date'],
+            'vendor' => ['nullable', 'array'],
+            'vendor.vendor_profile_id' => ['nullable', 'integer'],
+            'vendor.identifier' => ['nullable', 'string', 'max:150'],
+            'my_monthly' => ['nullable', 'numeric', 'min:0'],
+            'source_wallet_id' => ['nullable', 'integer'],
+            'funders' => ['sometimes', 'array', 'max:10'],
+            'funders.*.user_id' => ['nullable', 'integer', 'required_without:funders.*.identifier'],
+            'funders.*.identifier' => ['nullable', 'string', 'max:150'],
+            'funders.*.role' => ['required', 'in:co_owner,contributor'],
+            'funders.*.amount' => ['required', 'numeric', 'min:1'],
+            'move_in_wallet_id' => ['nullable', 'integer'],
+            'release' => ['nullable', 'array'],
+            'release.photos' => ['sometimes', 'boolean'],
+            'release.video' => ['sometimes', 'boolean'],
+            'release.receipts' => ['sometimes', 'boolean'],
+            'release.approvers' => ['sometimes', 'in:all,owner'],
+            'release.retention_percent' => ['sometimes', 'integer', 'in:0,5,10'],
+            'release.retention_months' => ['sometimes', 'integer', 'in:1,3,6,12'],
+            'draft_id' => ['nullable', 'integer'],
+        ]);
+        // Lists in the order sent; naira over the wire, kobo from here on.
+        foreach (['milestones', 'funders'] as $list) {
+            if (isset($data[$list])) {
+                ksort($data[$list]);
+            }
+        }
+        $data['budget'] = $this->toKobo((string) $data['budget']);
+        $data['my_monthly'] = isset($data['my_monthly']) ? $this->toKobo((string) $data['my_monthly']) : 0;
+        foreach ($data['milestones'] as $i => $m) {
+            $data['milestones'][$i]['amount'] = $this->toKobo((string) $m['amount']);
+        }
+        foreach ($data['funders'] ?? [] as $i => $f) {
+            $data['funders'][$i]['amount'] = $this->toKobo((string) $f['amount']);
+            if (!empty($f['identifier']) && !str_contains($f['identifier'], '@')) {
+                $data['funders'][$i]['identifier'] = $this->normalizePhone($f['identifier']);
+            }
+        }
+        if (!empty($data['vendor']['identifier']) && !str_contains($data['vendor']['identifier'], '@')) {
+            $data['vendor']['identifier'] = $this->normalizePhone($data['vendor']['identifier']);
+        }
+
+        $project = ProjectSetupService::make()->setup($request->user(), $data);
+        $project->load(['wallet', 'owner', 'vendor']);
 
         return $this->ok('Project created', [
             'project' => $this->serializeProject($project, $request->user()),

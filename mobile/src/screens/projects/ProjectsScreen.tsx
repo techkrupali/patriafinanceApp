@@ -14,11 +14,12 @@ import { formatMoney } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import { statusIconColor } from '../../lib/governance';
 import { projectRoleLabel, projectStatusVisual } from '../../lib/projects';
-import type { Project } from '../../api/types';
+import type { Project, ProjectRole } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-function RoleBadge({ role }: { role: 'owner' | 'vendor' }) {
-  const owner = role === 'owner';
+function RoleBadge({ role }: { role: ProjectRole }) {
+  // Funders who joined (co-owners, contributors) wear the owner's badge.
+  const owner = role !== 'vendor';
   return (
     <View className={`flex-row items-center rounded px-2.5 py-1 ${owner ? 'bg-navy' : 'bg-lav'}`}>
       <Ionicons
@@ -153,7 +154,7 @@ export function ProjectsScreen({ navigation }: RootScreenProps<'Projects'>) {
                 title="New project"
                 icon="add"
                 iconPosition="left"
-                onPress={() => navigation.navigate('CreateProject')}
+                onPress={() => navigation.navigate('ProjectWalletSetup')}
               />
             </View>
 

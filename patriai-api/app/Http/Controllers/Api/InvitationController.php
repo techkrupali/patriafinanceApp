@@ -7,6 +7,7 @@ use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use App\Services\InvitationService;
+use App\Services\JointService;
 use App\Services\NotificationService;
 use App\Services\SavingsService;
 use Illuminate\Http\JsonResponse;
@@ -157,10 +158,20 @@ class InvitationController extends ApiController
             'frequency' => ['nullable', 'in:' . implode(',', \App\Models\SavingsPlan::FREQUENCIES)],
             'day_of_week' => ['nullable', 'integer', 'between:1,7'],
             'day_of_month' => ['nullable', 'integer', 'between:1,28'],
+            'pin' => ['nullable', 'string'],
         ]);
 
+        // INV-O2 "Enter your PIN to accept the joint wallet rules".
+        $joint = $invitation->wallet->type === 'joint' && JointService::make()->settings($invitation->wallet);
+        if ($joint) {
+            if (empty($data['pin'])) {
+                return $this->fail('Confirm with your PIN to accept the joint wallet rules.', 422);
+            }
+            app(\App\Services\PinService::class)->verify($request->user(), $data['pin']);
+        }
+
         // All or nothing: a rejected auto-save (e.g. not your wallet) undoes the join.
-        $member = DB::transaction(function () use ($request, $invitation, $data) {
+        $member = DB::transaction(function () use ($request, $invitation, $data, $joint) {
             $member = WalletMember::updateOrCreate(
                 ['wallet_id' => $invitation->wallet_id, 'user_id' => $request->user()->id],
                 [
@@ -182,7 +193,10 @@ class InvitationController extends ApiController
                 ]);
             }
 
-            if (!empty($data['source_wallet_id']) && $invitation->pledge_amount && !in_array($invitation->wallet->type, SavingsService::TYPES, true)) {
+            if ($joint) {
+                // Both shares start, and the wallet gets its account number.
+                JointService::make()->accept($invitation->wallet, $request->user(), $invitation, isset($data['source_wallet_id']) ? (int) $data['source_wallet_id'] : null);
+            } elseif (!empty($data['source_wallet_id']) && $invitation->pledge_amount && !in_array($invitation->wallet->type, SavingsService::TYPES, true)) {
                 // EMG-02 "Each person saves automatically on the 25th"; SPD-04 "Each
                 // person pays their share" on the budget's own day.
                 $source = \App\Models\Wallet::where('id', (int) $data['source_wallet_id'])->where('user_id', $request->user()->id)->first();
@@ -199,9 +213,10 @@ class InvitationController extends ApiController
                     'day_of_week' => $weekly ? $day : null,
                     'day_of_month' => $weekly ? null : $day,
                 ]);
-            } elseif (!empty($data['source_wallet_id'])) {
+            } elseif (!empty($data['source_wallet_id']) && $invitation->pledge_kind !== 'gift') {
+                // GLW-03: their own amount ("Emeka · ₦120,000"), unless they choose another.
                 $overrides = array_filter([
-                    'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : null,
+                    'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : $invitation->pledge_amount,
                     'frequency' => $data['frequency'] ?? null,
                     'day_of_week' => $data['day_of_week'] ?? null,
                     'day_of_month' => $data['day_of_month'] ?? null,

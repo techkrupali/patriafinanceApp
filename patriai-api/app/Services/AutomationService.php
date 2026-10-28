@@ -71,7 +71,11 @@ class AutomationService
             'amount' => (int) $data['amount'],
             'frequency' => $data['frequency'],
             'day_of_week' => $data['day_of_week'] ?? null,
+            'interval_weeks' => $data['interval_weeks'] ?? 1,
             'day_of_month' => $data['day_of_month'] ?? null,
+            'at_hour' => $data['at_hour'] ?? null,
+            'starts_on' => $data['starts_on'] ?? null,
+            'budget_category_id' => $data['budget_category_id'] ?? null,
             'min_balance' => $data['min_balance'] ?? null,
             'enabled' => $data['enabled'] ?? true,
         ]);
@@ -386,6 +390,10 @@ class AutomationService
             if ($from->user_id !== $owner->id || ($to->user_id !== $owner->id && !$savingsOk)) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallets not both owned by the rule owner', 'period' => $period];
             }
+            // CHW-02 "Pause during school holidays — restarts when term begins".
+            if ($locked->trigger === 'schedule' && ChildService::make()->paused($locked, $from, $to, $now)) {
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'School holidays', 'period' => $period];
+            }
             // A locked emergency wallet can still be FUNDED by a rule, never drained by one.
             if ($from->isEmergencyLocked()) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Source emergency wallet is locked', 'period' => $period];
@@ -416,6 +424,14 @@ class AutomationService
 
             // The ONLY money-mover — row-locked and overdraft-guarded internally.
             $result = $this->wallets->transferBetweenWallets($from, $to, $amount, $owner, 'Automation: ' . $locked->name);
+            // Paid out of a spending budget (CHW-02 "Household · School runs and lunch").
+            if ($locked->budget_category_id) {
+                BudgetService::make()->recorded($from, $result['reference'], $locked->budget_category_id);
+            }
+            // "Tell Kamsi when it lands".
+            if ($to->type === 'child' && $from->type !== 'child') {
+                ChildService::make()->landed($to, $amount);
+            }
 
             // Stamp under the same rule lock so a racing runner sees it as done.
             $locked->update([
@@ -499,6 +515,22 @@ class AutomationService
     private function shareMissed(AutomationRule $rule, Wallet $from, Wallet $to, User $payer, int $amount, string $period, Carbon $now): array
     {
         $result = ['rule_id' => $rule->id, 'status' => 'missed', 'period' => $period];
+
+        // JNT-02 "If one of you is short: remind both, try again in 2 days" (or wait for next month).
+        if ($joint = JointService::make()->settings($to)) {
+            $retry = $joint['short'] === 'retry' && $rule->retry_at === null;
+            $retryAt = $now->copy()->addDays(2);
+            $rule->update(['last_run_period' => $rule->retry_at ? $rule->last_run_period : $period, 'retry_count' => $retry ? 1 : 0, 'retry_at' => $retry ? $retryAt : null]);
+            $then = $retry ? "We'll try again on {$retryAt->format('j M')}." : 'It goes again next month.';
+            $ids = $to->members()->where('status', 'active')->whereIn('role', ['owner', 'co_owner'])->pluck('user_id')->push($to->user_id)->unique();
+            foreach (User::whereIn('id', $ids)->get() as $partner) {
+                $title = $partner->id === $payer->id ? "Your share into {$to->name} didn't go" : "{$payer->first_name}'s share into {$to->name} didn't go";
+                $this->notifications->push($partner, 'share_missed', $title, "{$from->name} is short of ₦{$this->naira($amount)}. {$then}", ['wallet_id' => $to->id]);
+            }
+
+            return ($retry ? ['retry_at' => $retryAt->toIso8601String()] : []) + $result;
+        }
+
         if ($rule->retry_at === null) {
             $retryAt = $now->copy()->addDays(2);
             $rule->update(['last_run_period' => $period, 'retry_count' => 1, 'retry_at' => $retryAt]);

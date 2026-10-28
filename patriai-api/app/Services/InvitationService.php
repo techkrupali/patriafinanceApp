@@ -55,6 +55,7 @@ class InvitationService
         ?array $permissions = null,
         ?int $pledge = null,
         bool $keyholder = false,
+        ?string $pledgeKind = null,
     ): WalletInvitation {
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
@@ -95,6 +96,8 @@ class InvitationService
             'can_approve' => $canApprove,
             'permissions' => !empty($permissions) ? SavingsService::normalisePermissions($permissions) : null,
             'pledge_amount' => $pledge ?: null,
+            // GLW-03: a share each period, or a one-off gift.
+            'pledge_kind' => $pledge ? (in_array($pledgeKind, ['period', 'gift'], true) ? $pledgeKind : 'period') : null,
             // Emergency funds: becomes a keyholder on joining (EMG-03, invited by phone).
             'keyholder' => $keyholder && $wallet->type === 'emergency',
             'status' => 'pending',
@@ -107,6 +110,19 @@ class InvitationService
      * Tell the invitee: in the app when they already have an account, otherwise
      * by SMS (phone number) or email, with how to join.
      */
+    /** " They asked you to put in ₦120,000 a month." / " They asked for a ₦150,000 gift." */
+    private function pledgeLine(WalletInvitation $invitation): string
+    {
+        if (!$invitation->pledge_amount) {
+            return '';
+        }
+        $amount = '₦' . number_format($invitation->pledge_amount / 100);
+
+        return $invitation->pledge_kind === 'gift'
+            ? " They asked for a {$amount} gift."
+            : " They asked you to put in {$amount} each time.";
+    }
+
     public function deliver(WalletInvitation $invitation, Wallet $wallet, User $inviter, ?User $invitee): void
     {
         if ($invitee) {
@@ -114,7 +130,7 @@ class InvitationService
                 $invitee,
                 'invitation_received',
                 "Invitation to join {$wallet->name}",
-                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->role}.",
+                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->role}." . $this->pledgeLine($invitation),
                 [
                     'invitation_id' => $invitation->id,
                     'wallet_id' => $wallet->id,
@@ -126,7 +142,7 @@ class InvitationService
             return;
         }
 
-        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai. "
+        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai." . $this->pledgeLine($invitation) . ' '
             . 'Get the Patriai app and sign up with this ' . (str_contains($invitation->invitee_identifier, '@') ? 'email' : 'number')
             . ' to accept. The invite lasts 7 days.';
 

@@ -25,6 +25,7 @@ export function projectStatusVisual(status: ProjectStatus | string): StatusVisua
 // ---- Milestone status ----
 
 const MILESTONE_STATUS_VISUALS: Record<MilestoneStatus, StatusVisual> = {
+  planned: { label: 'Planned', bg: 'bg-lav-faint', text: 'text-muted', icon: 'calendar-outline' },
   funded: { label: 'Funded', bg: 'bg-lav-faint', text: 'text-muted', icon: 'lock-closed-outline' },
   submitted: { label: 'Submitted', bg: 'bg-lav-soft', text: 'text-navy', icon: 'cloud-upload-outline' },
   approved: { label: 'Awaiting approvers', bg: 'bg-lav-soft', text: 'text-navy', icon: 'hourglass-outline' },
@@ -42,14 +43,16 @@ export function milestoneStatusVisual(status: MilestoneStatus | string): StatusV
 export function projectRoleLabel(role: ProjectRole | null | undefined): string {
   if (role === 'owner') return 'Owner';
   if (role === 'vendor') return 'Vendor';
+  if (role === 'co_owner') return 'Co-owner';
+  if (role === 'contributor') return 'Contributor';
   return '';
 }
 
 // ---- Milestone action predicates (mirror the backend guards) ----
 
-/** Vendor can submit/re-submit work while a milestone is funded or rejected. */
+/** Vendor can submit/re-submit work while a milestone is planned (once its money is in), funded or rejected. */
 export function canSubmitMilestone(status: MilestoneStatus | string): boolean {
-  return status === 'funded' || status === 'rejected';
+  return status === 'planned' || status === 'funded' || status === 'rejected';
 }
 
 /** Owner can approve or reject only while the vendor's work is submitted. */
@@ -59,5 +62,5 @@ export function canReviewMilestone(status: MilestoneStatus | string): boolean {
 
 /** Owner can remove a milestone only before any work is submitted. */
 export function canRemoveMilestone(status: MilestoneStatus | string): boolean {
-  return status === 'funded' || status === 'rejected';
+  return status === 'planned' || status === 'funded' || status === 'rejected';
 }

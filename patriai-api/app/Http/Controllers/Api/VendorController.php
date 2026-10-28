@@ -59,7 +59,7 @@ class VendorController extends ApiController
         $vendorProfile->load('user');
 
         return $this->ok('Vendor fetched', [
-            'vendor' => $this->serializeVendorProfile($vendorProfile) + [
+            'vendor' => $this->serializeVendorProfile($vendorProfile) + ['stats' => $this->vendorStats($vendorProfile)] + [
                 // Exposed so a family can assign this vendor to a project by identifier
                 // (POST /projects/{project}/vendor { identifier }).
                 'email' => $vendorProfile->user?->email,
@@ -125,6 +125,23 @@ class VendorController extends ApiController
                 ->where('status', 'completed')
                 ->count(),
             'member_since' => $profile->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * PRW-04 "14 projects · 52 milestones paid · 0 open disputes". A dispute counts
+     * against the vendor when it was raised about one of their projects (its
+     * reference is the project's id) and isn't resolved.
+     */
+    protected function vendorStats(VendorProfile $profile): array
+    {
+        $projectIds = Project::where('vendor_id', $profile->user_id)->pluck('id');
+
+        return [
+            'projects' => $projectIds->count(),
+            'milestones_paid' => (int) \App\Models\Milestone::whereIn('project_id', $projectIds)->where('status', 'released')->count(),
+            'open_disputes' => (int) \App\Models\Dispute::whereIn('category', ['project', 'vendor'])->whereNotIn('status', ['resolved', 'closed'])
+                ->whereIn('reference', $projectIds->map(fn ($id) => (string) $id))->count(),
         ];
     }
 

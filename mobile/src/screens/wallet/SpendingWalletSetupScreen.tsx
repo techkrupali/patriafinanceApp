@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
@@ -8,6 +8,7 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtText } from '../../components/pt/PtText';
 import { PtAmountBox } from '../../components/pt/PtAmountBox';
+import { PtHeroAmount } from '../../components/pt/PtHeroAmount';
 import { PtAvatar, AVATAR_CYCLE } from '../../components/pt/PtAvatar';
 import { PtCheckbox } from '../../components/pt/PtCheck';
 import { PtChip } from '../../components/pt/PtChip';
@@ -456,21 +457,14 @@ function SpendingSetup({ navigation, draft }: RootScreenProps<'SpendingWalletSet
         footer={footer('Continue')}
       >
         <View style={{ alignItems: 'center', gap: 6, paddingVertical: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: ptFont.extrabold, fontSize: 44, color: pt.ink }}>₦</Text>
-            <TextInput
-              value={groupAmountInput(form.amount)}
-              onChangeText={(t) => {
-                set({ amount: sanitizeAmountInput(t), categories: [] });
-                setError(null);
-              }}
-              placeholder="0"
-              placeholderTextColor={pt.inkSubtle}
-              keyboardType="decimal-pad"
-              accessibilityLabel="Budget amount"
-              style={{ minWidth: 60, fontFamily: ptFont.extrabold, fontSize: 44, letterSpacing: -1, color: pt.ink, paddingVertical: 0, textAlign: 'center' }}
-            />
-          </View>
+          <PtHeroAmount
+            value={form.amount}
+            onChange={(v) => {
+              set({ amount: v, categories: [] });
+              setError(null);
+            }}
+            label="Budget amount"
+          />
           {spentBefore > 0 && form.kind === 'household' ? (
             <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted, textAlign: 'center' }}>
               Last 3 months you spent about {formatNaira(Math.round(spentBefore / 1000) * 1000)} a month

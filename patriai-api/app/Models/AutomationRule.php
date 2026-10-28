@@ -22,6 +22,7 @@ class AutomationRule extends Model
         'name',
         'from_wallet_id',
         'to_wallet_id',
+        'budget_category_id',
         'savings_contribution',
         'trigger',
         'amount',
@@ -31,7 +32,10 @@ class AutomationRule extends Model
         'pending_amount',
         'frequency',
         'day_of_week',
+        'interval_weeks',
         'day_of_month',
+        'at_hour',
+        'starts_on',
         'min_balance',
         'enabled',
         'last_run_period',
@@ -46,7 +50,10 @@ class AutomationRule extends Model
             'amount' => 'integer',
             'fill_to' => 'boolean',
             'day_of_week' => 'integer',
+            'interval_weeks' => 'integer',
             'day_of_month' => 'integer',
+            'at_hour' => 'integer',
+            'starts_on' => 'date',
             'min_balance' => 'integer',
             'enabled' => 'boolean',
             'savings_contribution' => 'boolean',
@@ -112,6 +119,10 @@ class AutomationRule extends Model
         if (!$this->scheduleMatches($now)) {
             return false;
         }
+        // CHW-02 "Every Monday at 7:00 am" (Lagos time).
+        if ($this->at_hour !== null && $now->copy()->setTimezone('Africa/Lagos')->hour < $this->at_hour) {
+            return false;
+        }
 
         return $this->last_run_period !== $this->currentPeriod($now);
     }
@@ -146,12 +157,29 @@ class AutomationRule extends Model
     /** Does the calendar schedule (frequency + day) line up with $now? */
     private function scheduleMatches(Carbon $now): bool
     {
+        // Nothing before the first run (CHW-02 "First payment: Monday, 26 Oct").
+        if ($this->starts_on !== null && $now->copy()->startOfDay()->lt($this->starts_on)) {
+            return false;
+        }
+
         return match ($this->frequency) {
-            // ISO weekday: 1 = Monday ... 7 = Sunday.
-            'weekly' => (int) $this->day_of_week === $now->isoWeekday(),
+            // ISO weekday: 1 = Monday ... 7 = Sunday; every N weeks from the first run.
+            'weekly' => (int) $this->day_of_week === $now->isoWeekday() && $this->onWeek($now),
             'monthly' => (int) $this->day_of_month === $now->day,
             // daily fires every day.
             default => true,
         };
+    }
+
+    /** "Every 2 weeks": only the weeks counted from the first run. */
+    private function onWeek(Carbon $now): bool
+    {
+        $every = max(1, (int) $this->interval_weeks);
+        if ($every === 1 || $this->starts_on === null) {
+            return true;
+        }
+        $weeks = intdiv((int) $this->starts_on->copy()->startOfWeek()->diffInDays($now->copy()->startOfWeek()), 7);
+
+        return $weeks % $every === 0;
     }
 }

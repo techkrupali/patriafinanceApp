@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
+use App\Services\ChildService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -150,11 +151,23 @@ class SpendRequestController extends ApiController
                 ];
         }
 
+        // CHW-03/04: a child's wallet may allow the request at all (friends), need a
+        // reason, or let a small one through on its own.
+        $payload += array_filter(['budget_category_id' => $plan['category_id']]);
+        if (ChildService::make()->screenRequest($wallet, $user, $amountKobo, $data['description'] ?? null, $dest)) {
+            $req = ApprovalService::make()->autoApprove($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload);
+
+            return $this->ok($req->status === 'executed' ? 'Approved automatically' : 'Request could not be completed', [
+                'pending_approval' => false,
+                'approval' => $this->serializeApprovalRequest($req->load(['wallet', 'initiator']), $user),
+            ]);
+        }
+
         // Record the pending approval + notify approvers. NO money moves here — the
         // existing execute-on-approval path performs the vetted transfer later. If
         // there are too few eligible approvers, create() throws ValidationException
         // and Laravel returns 422 (same as TransferController).
-        $req = ApprovalService::make()->create($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload + array_filter(['budget_category_id' => $plan['category_id']]));
+        $req = ApprovalService::make()->create($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload);
 
         return $this->ok('Spend request submitted for approval', [
             'pending_approval' => true,

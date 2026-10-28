@@ -70,6 +70,43 @@ export interface ApiWallet {
   reminder_day?: number | null;
   /** SAV-05: locked until a date or the target; `locked` while it holds. */
   lock?: { mode: "date" | "target"; until: string | null; early_break: boolean; approval: boolean; locked: boolean } | null;
+  /** GLW-01…05. */
+  goal?: {
+    kind: string;
+    for: string | null;
+    lines: { name: string; amount: string }[];
+    link: string | null;
+    reminders: { before_save: boolean; nudge: boolean } | null;
+    payout: { to: string | null; run_on: string; paid_at: string | null } | null;
+  } | null;
+  /** JNT-01…05. */
+  joint?: {
+    state: "waiting" | "open" | "leaving" | "closed";
+    partner: { id: number; name: string } | null;
+    contribution: { mode: "equal" | "income" | "fixed"; day: number; mine: string; partner: string };
+    short: "retry" | "skip";
+    limits: { per_payment: string; per_day: string };
+    expiry_hours: number;
+    always: { new_account: boolean; personal: boolean; rules: boolean };
+    notify: { weekly: boolean; statement: boolean; big_payment: boolean; big_amount: string };
+    leave: { split: "contributed" | "equal" | "decide"; notice_days: number };
+    leaving: { by: number; at: string; ends_on: string } | null;
+    closing: { by: number; at: string } | null;
+    proposal: { by: number; summary: string } | null;
+  } | null;
+  /** CHW-01…07. */
+  child?: {
+    first_name: string;
+    last_name: string | null;
+    age_band: string;
+    allowance: { amount: string; frequency: "weekly" | "biweekly" | "monthly"; starts_on: string; pause_holidays: boolean; notify: boolean };
+    controls: { daily_limit: string; shops: boolean; friends: boolean; online: boolean; cash: boolean };
+    requests: { auto_limit: string; auto_per_week: number; reason_required: boolean; approvers: "any" | "all" };
+    goal: { wallet_id: number; name: string; target: string; saved: string; save_percent: number; match_percent: number } | null;
+    phone: { mode: "own" | "managed"; linked: boolean; code: string | null; expires_at: string | null };
+    coparent: { approve: boolean; change: boolean; see: boolean } | null;
+    gifts: boolean;
+  } | null;
   owner?: {
     id: number;
     name: string;
@@ -480,6 +517,7 @@ export interface RunDueResult {
 export type ProjectStatus = "active" | "completed" | "cancelled";
 
 export type MilestoneStatus =
+  | "planned"
   | "funded"
   | "submitted"
   | "approved"
@@ -516,6 +554,12 @@ export interface ProjectMilestone {
   submitted_at: string | null;
   released_at: string | null;
   released_transaction_reference: string | null;
+  /** PRW-03 when the work starts (due_date is when it ends). */
+  starts_on?: string | null;
+  /** PRW-06 held back from the payment until after handover. */
+  retention?: string;
+  retention_due_at?: string | null;
+  retention_released_at?: string | null;
   created_at: string | null;
 }
 
@@ -534,6 +578,17 @@ export interface ProjectDetail {
   owner: { id: number; name: string } | null;
   milestones_total: number;
   milestones_released: number;
+  /** PRW-01…06: what, where, when, buffer and release rules. */
+  setup?: {
+    kind: "building" | "renovation" | "event" | "community" | null;
+    location: string | null;
+    starts_on: string | null;
+    finishes_on: string | null;
+    buffer_percent: number;
+    release: { photos: boolean; video: boolean; receipts: boolean; approvers: "all" | "owner"; retention_percent: number; retention_months: number } | null;
+    vendor_invite: string | null;
+  } | null;
+  held_back?: string;
   created_at: string | null;
 }
 

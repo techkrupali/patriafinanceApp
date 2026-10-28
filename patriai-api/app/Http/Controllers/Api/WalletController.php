@@ -10,7 +10,10 @@ use App\Models\Wallet;
 use App\Services\ApprovalService;
 use App\Services\EmergencyService;
 use App\Services\BudgetService;
+use App\Services\ChildService;
 use App\Services\GivingService;
+use App\Services\GoalService;
+use App\Services\JointService;
 use App\Services\KycService;
 use App\Services\SavingsService;
 use App\Services\WalletService;
@@ -141,6 +144,7 @@ class WalletController extends ApiController
             'members.*.permissions.withdraw' => ['sometimes', 'boolean'],
             // EMG-02: what an emergency contributor puts in each month.
             'members.*.pledge' => ['nullable', 'numeric', 'min:0'],
+            'members.*.pledge_kind' => ['nullable', 'in:period,gift'],
             // EMG-03: someone invited by phone becomes a keyholder once they join.
             'members.*.keyholder' => ['sometimes', 'boolean'],
             // SPD-05: a spender's categories (by name; absent = all) and daily limit.
@@ -175,6 +179,84 @@ class WalletController extends ApiController
             'budget.categories' => ['nullable', 'array', 'max:' . BudgetService::MAX_CATEGORIES],
             'budget.categories.*.name' => ['required', 'string', 'max:60'],
             'budget.categories.*.limit' => ['required', 'numeric', 'min:1'],
+            // GLW-01…05: goal.
+            'goal' => ['nullable', 'array'],
+            'goal.kind' => ['nullable', 'in:' . implode(',', GoalService::KINDS)],
+            'goal.for' => ['nullable', 'string', 'max:120'],
+            'goal.lines' => ['nullable', 'array', 'max:12'],
+            'goal.lines.*.name' => ['required', 'string', 'max:60'],
+            'goal.lines.*.amount' => ['required', 'numeric', 'min:1'],
+            'goal.link' => ['sometimes', 'boolean'],
+            'goal.reminders' => ['nullable', 'array'],
+            'goal.reminders.before_save' => ['sometimes', 'boolean'],
+            'goal.reminders.nudge' => ['sometimes', 'boolean'],
+            'goal.payout' => ['nullable', 'array'],
+            'goal.payout.saved_account_id' => ['nullable', 'integer'],
+            'goal.payout.organisation_id' => ['nullable', 'integer'],
+            'goal.payout.run_on' => ['required_with:goal.payout', 'date'],
+            // CHW-01…07: a child's wallet.
+            'child' => ['nullable', 'array'],
+            'child.first_name' => ['required_with:child', 'string', 'max:60'],
+            'child.last_name' => ['nullable', 'string', 'max:60'],
+            'child.age_band' => ['required_with:child', 'in:' . implode(',', ChildService::AGE_BANDS)],
+            'child.allowance' => ['nullable', 'array'],
+            'child.allowance.amount' => ['nullable', 'numeric', 'min:0'],
+            'child.allowance.frequency' => ['sometimes', 'in:' . implode(',', ChildService::FREQUENCIES)],
+            'child.allowance.starts_on' => ['nullable', 'date'],
+            'child.allowance.from_wallet_id' => ['nullable', 'integer'],
+            'child.allowance.category_id' => ['nullable', 'integer'],
+            'child.allowance.pause_holidays' => ['sometimes', 'boolean'],
+            'child.allowance.notify' => ['sometimes', 'boolean'],
+            'child.controls' => ['nullable', 'array'],
+            'child.controls.daily_limit' => ['nullable', 'numeric', 'min:0'],
+            'child.controls.shops' => ['sometimes', 'boolean'],
+            'child.controls.friends' => ['sometimes', 'boolean'],
+            'child.controls.online' => ['sometimes', 'boolean'],
+            'child.controls.cash' => ['sometimes', 'boolean'],
+            'child.requests' => ['nullable', 'array'],
+            'child.requests.auto_limit' => ['nullable', 'numeric', 'min:0'],
+            'child.requests.auto_per_week' => ['sometimes', 'integer', 'between:1,7'],
+            'child.requests.expiry_hours' => ['sometimes', 'integer', 'in:' . implode(',', Wallet::APPROVAL_EXPIRY_HOURS)],
+            'child.requests.reason_required' => ['sometimes', 'boolean'],
+            'child.requests.approvers' => ['sometimes', 'in:any,all'],
+            'child.goal' => ['nullable', 'array'],
+            'child.goal.name' => ['required_with:child.goal', 'string', 'max:60'],
+            'child.goal.amount' => ['required_with:child.goal', 'numeric', 'min:1'],
+            'child.goal.save_percent' => ['sometimes', 'integer', 'between:0,100'],
+            'child.goal.match_percent' => ['sometimes', 'integer', 'in:0,25,50,100'],
+            'child.goal.match_wallet_id' => ['nullable', 'integer'],
+            'child.phone' => ['nullable', 'array'],
+            'child.phone.mode' => ['sometimes', 'in:own,managed'],
+            'child.phone.code' => ['nullable', 'string', 'max:12'],
+            'child.coparent' => ['nullable', 'array'],
+            'child.coparent.approve' => ['sometimes', 'boolean'],
+            'child.coparent.change' => ['sometimes', 'boolean'],
+            'child.coparent.see' => ['sometimes', 'boolean'],
+            'child.gifts' => ['sometimes', 'boolean'],
+            // JNT-01…05: a joint wallet.
+            'joint' => ['nullable', 'array'],
+            'joint.contribution' => ['required_with:joint', 'array'],
+            'joint.contribution.mode' => ['required_with:joint', 'in:' . implode(',', JointService::MODES)],
+            'joint.contribution.day' => ['required_with:joint', 'integer', 'between:1,28'],
+            'joint.contribution.mine' => ['nullable', 'numeric', 'min:0'],
+            'joint.contribution.partner' => ['nullable', 'numeric', 'min:0'],
+            'joint.short' => ['sometimes', 'in:' . implode(',', JointService::SHORT)],
+            'joint.limits' => ['required_with:joint', 'array'],
+            'joint.limits.per_payment' => ['required_with:joint', 'numeric', 'min:1'],
+            'joint.limits.per_day' => ['required_with:joint', 'numeric', 'min:1'],
+            'joint.expiry_hours' => ['sometimes', 'integer', 'in:' . implode(',', Wallet::APPROVAL_EXPIRY_HOURS)],
+            'joint.always' => ['nullable', 'array'],
+            'joint.always.new_account' => ['sometimes', 'boolean'],
+            'joint.always.personal' => ['sometimes', 'boolean'],
+            'joint.always.rules' => ['sometimes', 'boolean'],
+            'joint.notify' => ['nullable', 'array'],
+            'joint.notify.weekly' => ['sometimes', 'boolean'],
+            'joint.notify.statement' => ['sometimes', 'boolean'],
+            'joint.notify.big_payment' => ['sometimes', 'boolean'],
+            'joint.notify.big_amount' => ['nullable', 'numeric', 'min:1'],
+            'joint.leave' => ['nullable', 'array'],
+            'joint.leave.split' => ['sometimes', 'in:' . implode(',', JointService::SPLITS)],
+            'joint.leave.notice_days' => ['sometimes', 'integer', 'in:' . implode(',', JointService::NOTICE_DAYS)],
             // GIV-01…06: giving.
             'giving' => ['nullable', 'array'],
             'giving.kind' => ['nullable', 'in:' . implode(',', GivingService::KINDS)],
@@ -225,7 +307,7 @@ class WalletController extends ApiController
 
         // Validated lists come back in rule order, so an item whose first field is
         // a later rule can come first; put every list back in the order sent.
-        foreach (['members', 'budget.categories', 'giving.recipients', 'giving.set_aside', 'giving.schedules', 'giving.pledge.parts'] as $path) {
+        foreach (['members', 'goal.lines', 'budget.categories', 'giving.recipients', 'giving.set_aside', 'giving.schedules', 'giving.pledge.parts'] as $path) {
             if (is_array($list = data_get($data, $path))) {
                 ksort($list);
                 data_set($data, $path, $list);
@@ -249,6 +331,20 @@ class WalletController extends ApiController
         }
         if (!empty($data['giving']) && $data['type'] !== 'giving') {
             return $this->fail('Giving dates and recipients are for giving wallets', 422);
+        }
+        if (!empty($data['goal']) && $data['type'] !== 'goal') {
+            return $this->fail('Goal details are for goal wallets', 422);
+        }
+        if (!empty($data['joint']) && $data['type'] !== 'joint') {
+            return $this->fail('Joint rules are for joint wallets', 422);
+        }
+        if (!empty($data['child']) && $data['type'] !== 'child') {
+            return $this->fail("A child's details are for child wallets", 422);
+        }
+        // "A joint wallet is shared equally between two people."
+        if ($data['type'] === 'joint' && !empty($data['joint'])
+            && (count($data['members'] ?? []) !== 1 || ($data['members'][array_key_first($data['members'])]['role'] ?? null) !== 'co_owner')) {
+            return $this->fail('Choose the one person you run this joint wallet with.', 422);
         }
         if (($data['mode'] ?? null) === 'private' && !empty($data['members'])) {
             return $this->fail("A private wallet is just you. Choose Shared to invite people.", 422);
@@ -295,6 +391,23 @@ class WalletController extends ApiController
             $data['members'][$i]['pledge'] = $kobo($m['pledge'] ?? null);
             if (isset($m['spend']['daily_limit'])) {
                 $data['members'][$i]['spend']['daily_limit'] = $kobo($m['spend']['daily_limit']);
+            }
+        }
+        foreach ($data['goal']['lines'] ?? [] as $i => $line) {
+            $data['goal']['lines'][$i]['amount'] = $kobo($line['amount']);
+        }
+        if (!empty($data['child'])) {
+            foreach (['allowance.amount', 'controls.daily_limit', 'requests.auto_limit', 'goal.amount'] as $path) {
+                if (data_get($data['child'], $path) !== null) {
+                    data_set($data['child'], $path, $kobo(data_get($data['child'], $path)) ?? 0);
+                }
+            }
+        }
+        if (!empty($data['joint'])) {
+            foreach (['contribution.mine', 'contribution.partner', 'limits.per_payment', 'limits.per_day', 'notify.big_amount'] as $path) {
+                if (data_get($data['joint'], $path) !== null) {
+                    data_set($data['joint'], $path, $kobo(data_get($data['joint'], $path)) ?? 0);
+                }
             }
         }
         if (!empty($data['budget'])) {
@@ -416,6 +529,9 @@ class WalletController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
 
+        if (JointService::make()->isWaiting($wallet)) {
+            return $this->fail('The account number is ready once your partner accepts.', 422);
+        }
         if (!$wallet->virtual_account) {
             WalletService::make()->ensureVirtualAccount($wallet);
             $wallet->refresh();
@@ -569,7 +685,7 @@ class WalletController extends ApiController
 
         // The wallet's own rules: spending budget limits and the early-break fee.
         $rules = \App\Services\SpendRules::make();
-        $plan = $rules->plan($wallet, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null);
+        $plan = $rules->plan($wallet, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null, to: ['kind' => 'bank', 'account_number' => $data['account_number']]);
 
         // Only route to approval when at least one eligible approver exists; otherwise
         // the initiator is the sole controller, so the spend executes directly.
@@ -661,6 +777,10 @@ class WalletController extends ApiController
         }
         if ($touchesGovernance && $role !== 'owner') {
             return $this->fail('Only the owner can change approval governance settings', 403);
+        }
+        // JNT-03 "Changing these rules" needs both partners: they change together.
+        if ($touchesGovernance && JointService::make()->settings($wallet)) {
+            return $this->fail('Joint rules change together. Suggest the change and your partner confirms it.', 422);
         }
 
         // Main wallets cannot use spend-approval governance.

@@ -154,14 +154,17 @@ export function PtSegmented<T extends string | number>({
             accessibilityState={{ selected: on }}
             style={{
               flex: 1,
-              height: 40,
+              minHeight: 40,
+              paddingHorizontal: 6,
+              paddingVertical: 4,
               borderRadius: ptRadius.sm - 3,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: on ? pt.raised : 'transparent',
             }}
           >
-            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: 15, color: on ? pt.brand : pt.inkMuted }}>{o.label}</Text>
+            {/* A long label ("Share of income") wraps centred, as in JNT-02. */}
+            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: 15, lineHeight: 19, textAlign: 'center', color: on ? pt.brand : pt.inkMuted }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -205,11 +208,20 @@ const NOTE_TONES = {
 };
 
 /** Tinted note under a step ("Saving automatically is how most families reach their goal…"). */
-export function PtNote({ tone = 'info', children }: { tone?: keyof typeof NOTE_TONES; children: React.ReactNode }) {
+export function PtNote({
+  tone = 'info',
+  icon,
+  children,
+}: {
+  tone?: keyof typeof NOTE_TONES;
+  /** Instead of the tone's own ("lock" on JNT-04's blue note). */
+  icon?: React.ComponentProps<typeof Feather>['name'];
+  children: React.ReactNode;
+}) {
   const t = NOTE_TONES[tone];
   return (
     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: t.bg, borderRadius: ptRadius.md, padding: 14 }}>
-      <Feather name={t.name} size={16} color={t.icon} style={{ marginTop: 2 }} />
+      <Feather name={icon ?? t.name} size={16} color={t.icon} style={{ marginTop: 2 }} />
       <Text style={{ flex: 1, fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: t.fg }}>{children}</Text>
     </View>
   );

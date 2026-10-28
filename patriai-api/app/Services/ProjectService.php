@@ -192,8 +192,12 @@ class ProjectService
         if ($project->status !== 'active') {
             throw ValidationException::withMessages(['project' => 'Project is not active.']);
         }
-        if (!in_array($milestone->status, ['funded', 'rejected'], true)) {
+        if (!in_array($milestone->status, ['planned', 'funded', 'rejected'], true)) {
             throw ValidationException::withMessages(['milestone' => 'This milestone cannot be submitted in its current state']);
+        }
+        // PRW-03: planned before the money was in; it's reserved now, if it's there.
+        if ($milestone->status === 'planned' && $milestone->amount > $project->availableToAllocate()) {
+            throw ValidationException::withMessages(['milestone' => "The money for \"{$milestone->title}\" isn't in the project wallet yet. Only ₦" . $this->naira(max(0, $project->availableToAllocate())) . ' is free.']);
         }
 
         $milestone->update([
@@ -306,12 +310,15 @@ class ProjectService
                 throw ValidationException::withMessages(['milestone' => 'This milestone has already been processed']);
             }
 
+            // PRW-06 "Held back: 10% until 3 months after handover" stays in escrow.
+            $retention = intdiv($fresh->amount * (int) ($project->meta['release']['retention_percent'] ?? 0), 100);
+
             // Overdraft-guarded, row-locked escrow payout. Throws (and rolls back
             // this transaction) if the escrow was drained below the amount.
             $result = $this->wallets->transferBetweenWallets(
                 $projectWallet,
                 $vendorWallet,
-                $fresh->amount,
+                $fresh->amount - $retention,
                 $actor,
                 "Milestone payout: {$fresh->title}",
             );
@@ -320,21 +327,25 @@ class ProjectService
                 'status' => 'released',
                 'released_at' => now(),
                 'released_transaction_reference' => $result['reference'],
+                'retention' => $retention,
             ]);
 
             // Auto-complete the project once every milestone is released — only from
-            // 'active', never overwriting a terminal status like 'cancelled'.
+            // 'active', never overwriting a terminal status like 'cancelled'. That's
+            // handover: what was held back is paid some months on.
             if ($project->status === 'active'
                 && $project->milestones()->count() > 0
                 && !$project->milestones()->where('status', '!=', 'released')->exists()) {
                 $project->update(['status' => 'completed']);
+                $project->milestones()->where('retention', '>', 0)->whereNull('retention_released_at')
+                    ->update(['retention_due_at' => now()->addMonthsNoOverflow((int) ($project->meta['release']['retention_months'] ?? 3))]);
             }
 
             $this->notifications->push(
                 $vendor,
                 'milestone_released',
                 'Milestone payment released',
-                '₦' . $this->naira($fresh->amount) . " was released to your wallet for \"{$fresh->title}\".",
+                '₦' . $this->naira($fresh->amount - $retention) . " was released to your wallet for \"{$fresh->title}\"." . ($retention ? ' ₦' . $this->naira($retention) . ' is held back until after handover.' : ''),
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
@@ -398,8 +409,8 @@ class ProjectService
         if (!$project || $project->owner_id !== $owner->id) {
             throw ValidationException::withMessages(['milestone' => 'Only the project owner can remove this milestone']);
         }
-        if (!in_array($milestone->status, ['funded', 'rejected'], true)) {
-            throw ValidationException::withMessages(['milestone' => 'Only a funded or rejected milestone can be removed']);
+        if (!in_array($milestone->status, ['planned', 'funded', 'rejected'], true)) {
+            throw ValidationException::withMessages(['milestone' => 'Only a planned, funded or rejected milestone can be removed']);
         }
 
         $milestone->delete();

@@ -9,8 +9,10 @@ import { EmptyState } from '../../components/EmptyState';
 import { LoadError } from '../../components/LoadError';
 import { ErrorText } from '../../components/ErrorText';
 import { JoinSavingsSheet } from '../../components/JoinSavingsSheet';
+import { JointTermsSheet } from '../../components/joint/JointTermsSheet';
+import { PinSheet } from '../../components/PinSheet';
 import { colors, outline, radius } from '../../theme';
-import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, type AcceptInvitationOptions } from '../../api/hooks';
+import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, useWallets, type AcceptInvitationOptions } from '../../api/hooks';
 import { walletVisual } from '../../lib/walletVisual';
 import { roleLabel } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
@@ -26,6 +28,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
   // Savings invites: choose the wallet your savings come from before joining.
   const [joining, setJoining] = useState<WalletInvitation | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
+  // Joint wallets: read the rules, then accept them with your PIN (INV-O1/O2).
+  const [jointInvite, setJointInvite] = useState<WalletInvitation | null>(null);
+  const [pinFor, setPinFor] = useState<WalletInvitation | null>(null);
+  const wallets = useWallets();
+  const main = (wallets.data ?? []).find((w) => w.type === 'main' && w.my_role === 'owner');
 
   const invitations = query.data ?? [];
 
@@ -37,6 +44,7 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
       onSuccess: (data) => {
         setActingId(null);
         setJoining(null);
+        setPinFor(null);
         navigation.navigate('WalletDetail', { walletId: data.wallet.id });
       },
       onError: (e) => {
@@ -49,6 +57,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
 
   const onAccept = (inv: WalletInvitation) => {
     selection();
+    if (inv.joint) {
+      setJoinError(null);
+      setJointInvite(inv);
+      return;
+    }
     if (inv.savings || inv.pledge) {
       setJoinError(null);
       setJoining(inv);
@@ -175,6 +188,24 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
         error={joinError}
         onConfirm={(options) => joining && acceptWith(joining, options)}
         onClose={() => setJoining(null)}
+      />
+
+      <JointTermsSheet
+        invitation={jointInvite}
+        onAccept={() => {
+          setPinFor(jointInvite);
+          setJointInvite(null);
+        }}
+        onClose={() => setJointInvite(null)}
+      />
+      <PinSheet
+        visible={pinFor !== null}
+        title="Enter your PIN"
+        subtitle={pinFor ? `To accept the joint wallet rules with ${pinFor.inviter?.name?.split(/\s+/)[0] ?? 'your partner'}` : undefined}
+        loading={pinFor !== null && actingId === pinFor.id}
+        error={joinError}
+        onSubmit={(pin) => pinFor && acceptWith(pinFor, { pin, source_wallet_id: main?.id })}
+        onClose={() => setPinFor(null)}
       />
     </Screen>
   );

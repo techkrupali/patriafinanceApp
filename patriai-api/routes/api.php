@@ -14,9 +14,12 @@ use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\EmergencyController;
 use App\Http\Controllers\Api\FamilyController;
 use App\Http\Controllers\Api\GivingController;
+use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\FamilyMemberController;
+use App\Http\Controllers\Api\ChildController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\JointController;
 use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MilestoneController;
@@ -149,6 +152,19 @@ Route::prefix('v1')->group(function () {
         Route::patch('wallets/{wallet}/savings/contribution', [SavingsController::class, 'updateContribution'])->middleware('throttle:30,1');
         Route::post('wallets/{wallet}/savings/milestones', [SavingsController::class, 'addMilestone'])->middleware('throttle:30,1');
         Route::delete('wallets/{wallet}/savings/milestones/{milestone}', [SavingsController::class, 'removeMilestone'])->middleware('throttle:30,1');
+
+        // Goal wallets — cancelling gives everyone back what they put in.
+        Route::post('wallets/{wallet}/goal/cancel', [GoalController::class, 'cancel'])->middleware('throttle:10,1');
+
+        // Child wallets — a code to link the child's own phone.
+        Route::post('children/link-code', [ChildController::class, 'reserve'])->middleware('throttle:20,1');
+        Route::post('wallets/{wallet}/child/link-code', [ChildController::class, 'renew'])->middleware('throttle:20,1');
+
+        // Joint wallets — rule changes both agree, notice to leave, closing with both PINs.
+        Route::post('wallets/{wallet}/joint/changes', [JointController::class, 'propose'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/joint/changes/answer', [JointController::class, 'answer'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/joint/leave', [JointController::class, 'leave'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/joint/close', [JointController::class, 'close'])->middleware('throttle:10,1');
 
         // Spending wallets — WAL-09 budget, categories and spender limits.
         Route::get('wallets/{wallet}/budget', [BudgetController::class, 'show']);

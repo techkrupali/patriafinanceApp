@@ -133,6 +133,30 @@ export default function ProjectDetailPage({
                     <Field name="Description">{project!.description}</Field>
                   </div>
                 ) : null}
+                {project!.setup ? (
+                  <>
+                    <Field name="Kind">{project!.setup.kind ? project!.setup.kind[0].toUpperCase() + project!.setup.kind.slice(1) : "—"}</Field>
+                    <Field name="Timeline">
+                      {project!.setup.starts_on ? formatDate(project!.setup.starts_on) : "—"} to {project!.setup.finishes_on ? formatDate(project!.setup.finishes_on) : "—"}
+                    </Field>
+                    <Field name="Buffer">{project!.setup.buffer_percent ? `${project!.setup.buffer_percent}%` : "None"}</Field>
+                    {project!.setup.release ? (
+                      <>
+                        <Field name="Builder sends">
+                          {[project!.setup.release.photos ? "Photos" : null, project!.setup.release.video ? "Video" : null, project!.setup.release.receipts ? "Receipts" : null].filter(Boolean).join(", ") || "Proof only"}
+                        </Field>
+                        <Field name="Who says yes">{project!.setup.release.approvers === "all" ? "Every co-owner" : "The owner"}</Field>
+                        <Field name="Held back">
+                          {project!.setup.release.retention_percent
+                            ? `${project!.setup.release.retention_percent}% for ${project!.setup.release.retention_months} months after handover`
+                            : "Nothing"}
+                          <span className="block text-xs font-normal text-muted">{naira(project!.held_back ?? "0")} held now</span>
+                        </Field>
+                      </>
+                    ) : null}
+                    {project!.setup.vendor_invite ? <Field name="Builder invited by SMS">{project!.setup.vendor_invite}</Field> : null}
+                  </>
+                ) : null}
                 <div className="col-span-2 sm:col-span-3">
                   <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
                     Milestone progress

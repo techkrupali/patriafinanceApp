@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -403,6 +404,160 @@ export default function WalletDetailPage({
                     .join(" · ")}
                 </p>
               ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Goal — goal wallets (GLW-01…05) */}
+      {!isPending && data!.wallet.goal ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Goal</CardTitle>
+              {data!.wallet.goal.link ? <Badge tone="green">Contribution link on</Badge> : null}
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Kind">{(data!.wallet.goal.kind[0].toUpperCase() + data!.wallet.goal.kind.slice(1)).replace(/_/g, " ")}</Field>
+                <Field name="For">{data!.wallet.goal.for ?? "—"}</Field>
+                <Field name="Reminders">
+                  {data!.wallet.goal.reminders
+                    ? [data!.wallet.goal.reminders.before_save ? "2 days before each save" : null, data!.wallet.goal.reminders.nudge ? "Nudge if behind" : null].filter(Boolean).join(" · ") || "Off"
+                    : "Off"}
+                </Field>
+                <Field name="Pays directly">
+                  {data!.wallet.goal.payout ? (
+                    <>
+                      {data!.wallet.goal.payout.to ?? "—"}
+                      <span className="block text-xs font-normal text-muted">
+                        {data!.wallet.goal.payout.paid_at ? `Paid ${formatDate(data!.wallet.goal.payout.paid_at)}` : `On ${formatDate(data!.wallet.goal.payout.run_on)}`}
+                      </span>
+                    </>
+                  ) : (
+                    "No"
+                  )}
+                </Field>
+                {data!.wallet.goal.lines.length ? (
+                  <div className="col-span-2 sm:col-span-4">
+                    <Field name="What it covers">{data!.wallet.goal.lines.map((l) => `${l.name} ${naira(l.amount)}`).join(" · ")}</Field>
+                  </div>
+                ) : null}
+                {data!.wallet.goal.link ? (
+                  <div className="col-span-2 sm:col-span-4">
+                    <Field name="Link">
+                      <a href={data!.wallet.goal.link} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                        {data!.wallet.goal.link}
+                      </a>
+                    </Field>
+                  </div>
+                ) : null}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Joint — joint wallets (JNT-01…05) */}
+      {!isPending && data!.wallet.joint ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Joint</CardTitle>
+              <Badge tone={data!.wallet.joint.state === "open" ? "green" : data!.wallet.joint.state === "waiting" ? "amber" : "gray"}>
+                {data!.wallet.joint.state === "waiting" ? "Waiting for partner" : data!.wallet.joint.state === "leaving" ? "Notice given" : data!.wallet.joint.state === "open" ? "Open" : "Closed"}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Partner">{data!.wallet.joint.partner?.name ?? "Not accepted yet"}</Field>
+                <Field name="Contributions">
+                  {naira(data!.wallet.joint.contribution.mine)} + {naira(data!.wallet.joint.contribution.partner)}
+                  <span className="block text-xs font-normal text-muted">
+                    {data!.wallet.joint.contribution.mode} · day {data!.wallet.joint.contribution.day} · if short: {data!.wallet.joint.short === "retry" ? "retry in 2 days" : "wait"}
+                  </span>
+                </Field>
+                <Field name="Spend alone">
+                  {naira(data!.wallet.joint.limits.per_payment)} a payment
+                  <span className="block text-xs font-normal text-muted">{naira(data!.wallet.joint.limits.per_day)} a day · expires {data!.wallet.joint.expiry_hours}h</span>
+                </Field>
+                <Field name="Always both">
+                  {[data!.wallet.joint.always.new_account ? "New accounts" : null, data!.wallet.joint.always.personal ? "Personal wallets" : null, data!.wallet.joint.always.rules ? "Rule changes" : null].filter(Boolean).join(", ") || "—"}
+                </Field>
+                <Field name="Notifications">
+                  {[data!.wallet.joint.notify.weekly ? "Weekly summary" : null, data!.wallet.joint.notify.statement ? "Monthly statement" : null, data!.wallet.joint.notify.big_payment ? `Over ${naira(data!.wallet.joint.notify.big_amount)}` : null].filter(Boolean).join(" · ") || "Every payment only"}
+                </Field>
+                <Field name="If one leaves">
+                  {data!.wallet.joint.leave.split === "contributed" ? "Split by what each put in" : data!.wallet.joint.leave.split === "equal" ? "Split equally" : "Decide together"}
+                  <span className="block text-xs font-normal text-muted">{data!.wallet.joint.leave.notice_days} days&apos; notice</span>
+                </Field>
+                {data!.wallet.joint.proposal ? <Field name="Change waiting">{data!.wallet.joint.proposal.summary}</Field> : null}
+                {data!.wallet.joint.leaving ? <Field name="Leaving">Ends {formatDate(data!.wallet.joint.leaving.ends_on)}</Field> : null}
+                {data!.wallet.joint.closing ? <Field name="Closing">Waiting for the second PIN</Field> : null}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Child — child wallets (CHW-01…07) */}
+      {!isPending && data!.wallet.child ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Child</CardTitle>
+              <Badge tone={data!.wallet.child.phone.linked ? "green" : "gray"}>
+                {data!.wallet.child.phone.mode === "managed" ? "Managed by parent" : data!.wallet.child.phone.linked ? "Phone linked" : "Phone not linked"}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Child">
+                  {data!.wallet.child.first_name} {data!.wallet.child.last_name ?? ""}
+                  <span className="block text-xs font-normal text-muted">Age {data!.wallet.child.age_band.replace("_", " to ").replace("under to ", "under ")}</span>
+                </Field>
+                <Field name="Pocket money">
+                  {naira(data!.wallet.child.allowance.amount)} {data!.wallet.child.allowance.frequency === "biweekly" ? "every 2 weeks" : data!.wallet.child.allowance.frequency}
+                  <span className="block text-xs font-normal text-muted">
+                    From {formatDate(data!.wallet.child.allowance.starts_on)}
+                    {data!.wallet.child.allowance.pause_holidays ? " · paused in school holidays" : ""}
+                  </span>
+                </Field>
+                <Field name="Spending">
+                  {naira(data!.wallet.child.controls.daily_limit)} a day
+                  <span className="block text-xs font-normal text-muted">
+                    {[data!.wallet.child.controls.shops ? "shops" : null, data!.wallet.child.controls.friends ? "friends" : null, data!.wallet.child.controls.online ? "online" : null, data!.wallet.child.controls.cash ? "cash" : null].filter(Boolean).join(", ") || "Nothing on"}
+                  </span>
+                </Field>
+                <Field name="Requests">
+                  {Number(data!.wallet.child.requests.auto_limit) > 0 ? `Auto up to ${naira(data!.wallet.child.requests.auto_limit)}` : "All to parents"}
+                  <span className="block text-xs font-normal text-muted">
+                    {data!.wallet.child.requests.auto_per_week} a week · {data!.wallet.child.requests.approvers === "all" ? "both parents" : "either parent"}
+                    {data!.wallet.child.requests.reason_required ? " · reason needed" : ""}
+                  </span>
+                </Field>
+                <Field name="Goal">
+                  {data!.wallet.child.goal ? (
+                    <>
+                      <Link href={`/wallets/${data!.wallet.child.goal.wallet_id}`} className="text-brand hover:underline">
+                        {data!.wallet.child.goal.name}
+                      </Link>
+                      <span className="block text-xs font-normal text-muted">
+                        {naira(data!.wallet.child.goal.saved)} of {naira(data!.wallet.child.goal.target)} · saves {data!.wallet.child.goal.save_percent}%, match {data!.wallet.child.goal.match_percent}%
+                      </span>
+                    </>
+                  ) : (
+                    "None"
+                  )}
+                </Field>
+                <Field name="Co-parent">
+                  {data!.wallet.child.coparent
+                    ? [data!.wallet.child.coparent.approve ? "Approves" : null, data!.wallet.child.coparent.change ? "Changes limits" : null, data!.wallet.child.coparent.see ? "Sees payments" : null].filter(Boolean).join(", ")
+                    : "None"}
+                </Field>
+                <Field name="Gifts from relatives">{data!.wallet.child.gifts ? "Allowed" : "Off"}</Field>
+                {data!.wallet.child.phone.code ? <Field name="Link code">{data!.wallet.child.phone.code}</Field> : null}
+              </dl>
             </CardContent>
           </Card>
         </div>

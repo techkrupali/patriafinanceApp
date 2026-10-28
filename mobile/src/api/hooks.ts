@@ -44,6 +44,7 @@ import type {
   EmergencyWithdrawData,
   SavingsDetailData,
   SavingsFrequency,
+  Wallet,
   WalletDraft,
   WalletDraftData,
   WalletDraftsData,
@@ -595,6 +596,8 @@ export function useMyInvitations() {
 
 /** Savings wallets: start your own auto-save as you join (all optional). */
 export interface AcceptInvitationOptions {
+  /** INV-O2: a joint wallet's rules are accepted with the PIN. */
+  pin?: string;
   source_wallet_id?: number;
   amount?: string;
   frequency?: SavingsFrequency;
@@ -1589,6 +1592,63 @@ export function useGiving(walletId: number, enabled = true) {
     queryFn: () => api<GivingDetailData>(`/wallets/${walletId}/giving`),
     select: (d) => d.giving,
     enabled,
+  });
+}
+
+/** CHW-06 a code to link the child's phone: held during setup, or a new one for a wallet. */
+export function useChildLinkCode() {
+  const qc = useQueryClient();
+  return {
+    reserve: useMutation({
+      mutationFn: (firstName: string) => api<{ code: string; expires_at: string }>('/children/link-code', { method: 'POST', body: { first_name: firstName } }),
+    }),
+    renew: useMutation({
+      mutationFn: (walletId: number) => api<{ code: string; expires_at: string }>(`/wallets/${walletId}/child/link-code`, { method: 'POST' }),
+      onSuccess: (_d, walletId) => void qc.invalidateQueries({ queryKey: keys.wallet(walletId) }),
+    }),
+  };
+}
+
+/** JNT-03/05 after setup: rule changes both agree, notice to leave, closing with both PINs. */
+export function useJointActions(walletId: number) {
+  const qc = useQueryClient();
+  const onSuccess = () => {
+    void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.wallets });
+    void qc.invalidateQueries({ queryKey: keys.home });
+  };
+  return {
+    propose: useMutation({
+      mutationFn: (input: { pin: string; changes: { per_payment?: string; per_day?: string; big_amount?: string; split?: string; notice_days?: number } }) =>
+        api<{ applied: boolean; wallet: Wallet }>(`/wallets/${walletId}/joint/changes`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+    answer: useMutation({
+      mutationFn: (input: { pin: string; agree: boolean }) => api<{ wallet: Wallet }>(`/wallets/${walletId}/joint/changes/answer`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+    leave: useMutation({
+      mutationFn: (input: { pin: string }) => api<{ wallet: Wallet }>(`/wallets/${walletId}/joint/leave`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+    close: useMutation({
+      mutationFn: (input: { pin: string; shares?: { user_id: number; amount: string }[] }) =>
+        api<{ closed: boolean; wallet: Wallet }>(`/wallets/${walletId}/joint/close`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+  };
+}
+
+/** GLW-05 "If the goal is cancelled, everyone gets back what they put in". */
+export function useCancelGoal(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { pin: string }) => api<{ wallet: Wallet }>(`/wallets/${walletId}/goal/cancel`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+      void qc.invalidateQueries({ queryKey: keys.wallets });
+      void qc.invalidateQueries({ queryKey: keys.home });
+    },
   });
 }
 

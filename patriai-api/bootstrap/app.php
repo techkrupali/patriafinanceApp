@@ -51,6 +51,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('giving:remind')->weeklyOn(6, '17:00')->timezone('Africa/Lagos');
         $schedule->command('giving:statements')->yearlyOn(1, 2, '08:00')->timezone('Africa/Lagos');
 
+        // Goals that pay the school directly (from 7:00 am), and save reminders two days ahead.
+        $schedule->command('goals:pay')->hourly()->between('07:00', '20:00')->timezone('Africa/Lagos');
+        $schedule->command('goals:remind')->dailyAt('09:00')->timezone('Africa/Lagos');
+
+        // Joint wallets: notice periods, the Sunday-evening summary and the statement on the 1st.
+        $schedule->command('joint:run')->dailyAt('18:00')->timezone('Africa/Lagos');
+
+        // Projects: retention held back after handover goes to the builder when it's due.
+        $schedule->command('projects:release-retention')->dailyAt('09:00')->timezone('Africa/Lagos');
+
         // Monthly "time to save" reminders on each wallet's chosen day (WCR-11).
         $schedule->command('wallets:remind-savers')->dailyAt('09:00');
     })->create();

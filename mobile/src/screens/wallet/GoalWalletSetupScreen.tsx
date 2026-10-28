@@ -1,97 +1,142 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtText } from '../../components/pt/PtText';
+import { PtAmountBox } from '../../components/pt/PtAmountBox';
+import { PtAvatar, AVATAR_CYCLE } from '../../components/pt/PtAvatar';
+import { PtChip } from '../../components/pt/PtChip';
 import { PtDateSheet } from '../../components/pt/PtDateSheet';
-import { PtAvatar, AVATAR_CYCLE, type PtAvatarTone } from '../../components/pt/PtAvatar';
-import { PtCheckbox, PtRadio } from '../../components/pt/PtCheck';
 import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
-import { PtSwitch } from '../../components/pt/PtTabScreen';
-import { PtAddRow, PtNewPersonForm, PtRoleButton } from '../../components/pt/PtPeople';
-import { PtDivider, PtPanel } from '../../components/pt/PtForm';
-import { useCreateWallet, useFamily } from '../../api/hooks';
+import { PtSheet } from '../../components/pt/PtSheet';
+import { PtAddRow, PtNewPersonForm } from '../../components/pt/PtPeople';
+import { PtChoiceCard, PtDivider, PtGroupLabel, PtPanel, PtReviewRow, PtSegmented, PtSwitchRow } from '../../components/pt/PtForm';
+import { CharityPickerSheet } from '../../components/savings/CharityPickerSheet';
+import { PayeePickerSheet, type Payee } from '../../components/giving/PayeePickerSheet';
+import { useCreateWallet, useFamily, useWallets } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
-import { formatNaira, formatYmd, groupAmountInput, initials, parseYmd, sanitizeAmountInput, ymdMonthsFromNow } from '../../lib/format';
+import { formatMoney, formatNaira, formatYmd, groupAmountInput, initials, parseYmd, sanitizeAmountInput, toYmd, ymdMonthsFromNow } from '../../lib/format';
 import { formatE164 } from '../../lib/phone';
-import {
-  EXPIRY_HOURS,
-  NEW_MEMBER_ROLES,
-  THRESHOLDS,
-  approvalSummary,
-  joinNames,
-  monthlyPlan,
-  ordinal,
-  roleName,
-  targetLabel,
-  type NewMemberRole,
-} from '../../lib/goalPlan';
+import { joinNames, ordinal } from '../../lib/goalPlan';
 import { confirmLeaveSetup, useDraft, useDraftAutosave } from '../../lib/drafts';
 import { useSetupFlow } from '../../lib/useSetupFlow';
 import { notifySuccess, selection } from '../../lib/haptics';
-import type { ApprovalMode, FamilyMember, WalletDraft } from '../../api/types';
+import type { GoalKind, OrganisationKind, WalletDraft } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type Step = 'name' | 'members' | 'approvals' | 'review';
+type Step = 'type' | 'target' | 'plan' | 'people' | 'lock' | 'review';
+const STEPS: Step[] = ['type', 'target', 'plan', 'people', 'lock', 'review'];
 
-/** Someone invited by phone number who isn't in the family circle yet. */
-interface NewPerson {
+type Frequency = 'weekly' | 'monthly' | 'one_off';
+type Role = 'co_owner' | 'contributor' | 'viewer';
+
+const DAYS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** GLW-01 goal types: their usual name, what the due date is, and who gets paid directly. */
+const KINDS: { value: GoalKind; title: string; icon: React.ComponentProps<typeof Feather>['name']; name: string; forHint: string; dueHint: string; payTo: string; payKind?: OrganisationKind }[] = [
+  { value: 'school_fees', title: 'School fees', icon: 'book-open', name: `School fees ${new Date().getFullYear() + 1}`, forHint: 'Tolu and Kamsi, second term', dueHint: 'When school resumes', payTo: 'Pay the school directly', payKind: 'school' },
+  { value: 'rent', title: 'Rent', icon: 'home', name: 'House rent', forHint: 'Flat in Lekki', dueHint: 'Your rent renewal date', payTo: 'Pay the landlord directly' },
+  { value: 'car', title: 'A car', icon: 'truck', name: 'A new car', forHint: 'Deposit for a Corolla', dueHint: 'When you want to buy', payTo: 'Pay the seller directly' },
+  { value: 'baby', title: 'A new baby', icon: 'smile', name: 'Our new baby', forHint: 'Hospital, baby things and the naming', dueHint: 'Your due date', payTo: 'Pay the hospital directly' },
+  { value: 'travel', title: 'Travel', icon: 'navigation', name: 'Our trip', forHint: 'Christmas in Enugu', dueHint: 'When you travel', payTo: 'Pay the travel agent directly' },
+  { value: 'wedding', title: 'Wedding', icon: 'heart', name: 'Our wedding', forHint: 'Venue, aso ebi, food', dueHint: 'The big day', payTo: 'Pay the venue directly' },
+];
+
+/** Someone saving toward the goal: a family member (account) or a phone number. */
+interface Person {
   key: string;
-  phone: string;
+  userId?: number;
+  phone?: string;
   name: string;
-  role: NewMemberRole;
+  full?: string;
+  role: Role;
+  amount: string;
+  /** A one-off gift instead of a share each period. */
+  gift: boolean;
 }
 
-/** Everything the flow holds — saved as the draft's data. */
 interface GoalForm {
-  mode: 'private' | 'shared';
+  kind: GoalKind;
+  forWhom: string;
   target: string;
-  targetDate: string | null;
-  /** Family members ticked, by user id. */
-  picked: number[];
-  /** Role chosen per family member (ticked or not). */
-  roles: Record<number, NewMemberRole>;
-  newPeople: NewPerson[];
-  threshold: number | null;
-  approvalMode: ApprovalMode;
-  lockUntilGoal: boolean;
-  expiryHours: number;
-  remind: boolean;
+  dueDate: string | null;
+  lines: { key: string; name: string; amount: string }[];
+  frequency: Frequency;
+  myAmount: string;
+  monthDay: number;
+  weekDay: number;
+  people: Person[];
+  remindBefore: boolean;
+  nudge: boolean;
+  link: boolean;
+  lock: 'target' | 'none';
+  payDirect: boolean;
+  payee: Payee | null;
+  earlyApproval: boolean;
+  charity: { id: number; name: string } | null;
 }
 
 const EMPTY: GoalForm = {
-  mode: 'shared',
+  kind: 'school_fees',
+  forWhom: '',
   target: '',
-  targetDate: null,
-  picked: [],
-  roles: {},
-  newPeople: [],
-  threshold: 50000,
-  approvalMode: 'all',
-  lockUntilGoal: true,
-  expiryHours: 48,
-  remind: true,
+  dueDate: null,
+  lines: [],
+  frequency: 'monthly',
+  myAmount: '',
+  monthDay: 26,
+  weekDay: 1,
+  people: [],
+  remindBefore: true,
+  nudge: true,
+  link: true,
+  lock: 'target',
+  payDirect: false,
+  payee: null,
+  earlyApproval: true,
+  charity: null,
 };
-
-const REMIND_DAY = 25;
-const LEAD_ROLES = ['owner', 'co_owner', 'admin'];
-
-/** A child (only in child wallets) watches; partners co-own; everyone else contributes. */
-function defaultRole(m: FamilyMember): NewMemberRole {
-  if (m.memberships.length > 0 && m.memberships.every((ms) => ms.wallet_type === 'child')) return 'viewer';
-  return LEAD_ROLES.includes(m.role) ? 'co_owner' : 'contributor';
-}
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
+/** "6 Jan" from a YYYY-MM-DD, `days` earlier. */
+function dayBefore(ymd: string, days: number): string {
+  const d = parseYmd(ymd) ?? new Date();
+  d.setDate(d.getDate() - days);
+  return toYmd(d);
+}
+
+const short = (ymd: string | null) => (ymd ? formatYmd(ymd).replace(/ \d{4}$/, '') : '');
+
+/** WCR-06 "3 lines: fees, fees, books": "Tolu · JSS3 fees" → fees, "Books and uniforms" → books. */
+const lineWord = (name: string) => (name.includes('·') ? name.split('·').pop()!.trim().split(/\s+/).pop()! : name.trim().split(/\s+/)[0]).toLowerCase();
+
+/** The save dates from today up to the due date (monthly on the day, or weekly on the weekday). */
+function saveDates(f: GoalForm): Date[] {
+  const due = parseYmd(f.dueDate);
+  if (!due || f.frequency === 'one_off') return [];
+  const out: Date[] = [];
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 800 && d.getTime() <= due.getTime() && out.length < 120; i++) {
+    const iso = d.getDay() === 0 ? 7 : d.getDay();
+    if (f.frequency === 'monthly' ? d.getDate() === f.monthDay : iso === f.weekDay) out.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
 /**
- * Goal wallet creation from the client prototype: WCR-02 name and who it's for
- * → WCR-08 who's in it → WCR-09 when money needs a yes → WCR-11 check and
- * create → WCR-12. Private goals skip the people steps. Auto-saved as a draft.
+ * Goal wallet from the client prototype: GLW-01 what the goal is → GLW-02 how
+ * much, by when, what it covers → GLW-03 each person's amount (or a one-off
+ * gift) → GLW-04 roles, reminders and the contribution link → GLW-05 lock, pay
+ * the school directly, early withdrawal, if it's cancelled → WCR-06 → WCR-07.
+ * Auto-saved as a draft.
  */
 export function GoalWalletSetupScreen(props: RootScreenProps<'GoalWalletSetup'>) {
   const { draft, loading } = useDraft(props.route.params?.draftId);
@@ -102,137 +147,190 @@ export function GoalWalletSetupScreen(props: RootScreenProps<'GoalWalletSetup'>)
       </View>
     );
   }
-  return <GoalWalletForm {...props} draft={draft} />;
+  return <GoalSetup {...props} draft={draft} />;
 }
 
-function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'> & { draft: WalletDraft | null }) {
+function GoalSetup({ navigation, route, draft }: RootScreenProps<'GoalWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
   const family = useFamily();
+  const wallets = useWallets();
   const create = useCreateWallet();
 
-  const saved = (draft?.data ?? {}) as Partial<GoalForm>;
-  const [name, setName] = useState(draft?.name ?? '');
-  const [form, setForm] = useState<GoalForm>({ ...EMPTY, ...saved });
+  const [name, setName] = useState(draft?.name ?? KINDS[0].name);
+  const [form, setForm] = useState<GoalForm>(() => ({ ...EMPTY, ...((draft?.data ?? {}) as Partial<GoalForm>) }));
   const set = (patch: Partial<GoalForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const steps: Step[] = form.mode === 'shared' ? ['name', 'members', 'approvals', 'review'] : ['name', 'review'];
-  // Step 1 is choosing the type (WCR-01), so this flow is steps 2–5.
-  const flow = useSetupFlow(navigation, steps, (draft?.step ?? 2) - 2);
-  const stepIndex = flow.index;
+  const flow = useSetupFlow(navigation, STEPS, (draft?.step ?? 1) - 1);
   const step = flow.step;
 
   const [error, setError] = useState<string | null>(null);
-  const [dateOpen, setDateOpen] = useState(false);
-  const [roleFor, setRoleFor] = useState<number | string | null>(null);
-  const [expiryOpen, setExpiryOpen] = useState(false);
+  const [sheet, setSheet] = useState<null | 'due' | 'add' | 'payee' | 'charity' | 'link' | 'day' | { role: string }>(null);
   const [adding, setAdding] = useState(false);
+  const [line, setLine] = useState<{ key?: string; name: string; amount: string } | null>(null);
 
   const autosave = useDraftAutosave({
     initialDraftId: draft?.id,
     type: 'goal',
     name,
-    step: stepIndex + 2,
-    totalSteps: steps.length + 1,
+    step: flow.index + 1,
+    totalSteps: STEPS.length,
     data: form as unknown as Record<string, unknown>,
-    enabled: Boolean(name.trim() || form.target),
+    enabled: Boolean(form.target || flow.index > 0),
   });
 
-  const leave = flow.leave;
+  // GIV-07 came back with a new account to pay directly.
+  const added = route.params?.addedAccountId;
+  useEffect(() => {
+    if (!added) return;
+    setForm((f) => ({ ...f, payDirect: true, payee: { savedAccountId: added, name: 'New account' } }));
+    navigation.setParams({ addedAccountId: undefined });
+  }, [added, navigation]);
+
   const back = () => {
     setError(null);
     flow.back(() =>
       confirmLeaveSetup(
         Boolean(autosave.draftId),
-        () => leave(() => navigation.goBack()),
-        () => void autosave.discard().then(() => leave(() => navigation.goBack())),
+        () => flow.leave(() => navigation.goBack()),
+        () => void autosave.discard().then(() => flow.leave(() => navigation.goBack())),
       ),
     );
   };
 
-  // ---- people
-  // Vendors are paid through projects; they aren't offered as family here.
+  const kind = KINDS.find((k) => k.value === form.kind) ?? KINDS[0];
   const members = (family.data?.members ?? []).filter((m) => m.role !== 'vendor');
-  const roleOf = (m: FamilyMember) => form.roles[m.id] ?? defaultRole(m);
-  const pickedFamily = members.filter((m) => form.picked.includes(m.id));
-  const people = [
-    ...pickedFamily.map((m) => ({ name: firstName(m.name), role: roleOf(m) })),
-    // Someone new is called what you typed ("Uncle Obi"); family go by first name.
-    ...form.newPeople.map((p) => ({ name: p.name.trim() || formatE164(p.phone), role: p.role })),
-  ];
-  const shared = form.mode === 'shared';
-  const myFirst = me?.first_name || firstName(me?.full_name ?? 'You');
-  const approvers = shared ? [myFirst, ...people.filter((p) => p.role === 'co_owner').map((p) => p.name)] : [myFirst];
-  const savers = 1 + (shared ? people.filter((p) => p.role !== 'viewer').length : 0);
+  const main = (wallets.data ?? []).find((w) => w.type === 'main' && w.my_role === 'owner');
+  const myName = firstName(me?.full_name ?? 'You');
   const target = Number(form.target) || 0;
-  const plan = monthlyPlan(target, form.targetDate, savers);
+  const dates = saveDates(form);
+  const periodic = form.people.filter((p) => !p.gift);
+  const gifts = form.people.filter((p) => p.gift);
+  const perSave = (Number(form.myAmount) || 0) + periodic.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const giftTotal = gifts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const oneOff = form.frequency === 'one_off';
+  const total = oneOff ? (Number(form.myAmount) || 0) + form.people.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : perSave * dates.length + giftTotal;
+  const lastSave = dates[dates.length - 1];
+  const onTrack = target > 0 && total >= target;
+  const due = parseYmd(form.dueDate);
+  const weeks = due ? Math.max(1, Math.round((due.getTime() - Date.now()) / (7 * 86_400_000))) : null;
+  const dayLabel = form.frequency === 'monthly' ? ordinal(form.monthDay) : DAYS[form.weekDay];
+  const lockUntil = form.dueDate ? dayBefore(form.dueDate, 3) : null;
+  const payOn = form.dueDate ? dayBefore(form.dueDate, 2) : null;
+  const coOwners = form.people.filter((p) => p.role === 'co_owner');
+  const linesTotal = form.lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
 
-  // A rule that no longer fits the people (e.g. the co-owner was unticked) falls back.
-  const modes: { value: ApprovalMode; label: string }[] =
-    approvers.length <= 1
-      ? [{ value: 'any', label: 'Only you' }]
-      : [
-          { value: 'any', label: 'Any one co-owner' },
-          { value: 'all', label: approvers.length === 2 ? `Both ${joinNames(approvers)}` : `All of ${joinNames(approvers)}` },
-          ...(approvers.length >= 3
-            ? [{ value: 'majority' as const, label: `Most of you, ${Math.floor(approvers.length / 2) + 1} of ${approvers.length}` }]
-            : []),
-        ];
-  const approvalMode = modes.some((m) => m.value === form.approvalMode) ? form.approvalMode : modes[modes.length - 1].value;
+  const addFamily = (id: number) => {
+    const m = members.find((x) => x.id === id);
+    if (!m || form.people.some((p) => p.userId === id)) return;
+    const role: Role = ['owner', 'co_owner', 'admin'].includes(m.role) ? 'co_owner' : 'contributor';
+    set({ people: [...form.people, { key: `u${id}`, userId: id, name: firstName(m.name), full: m.name, role, amount: form.myAmount, gift: role !== 'co_owner' }] });
+  };
 
   const validate = (s: Step): string | null => {
-    if (s === 'name') {
-      if (!name.trim()) return 'Give your goal a name.';
+    if (s === 'type' && !name.trim()) return 'Give the goal a name.';
+    if (s === 'target') {
       if (!(target > 0)) return 'Enter how much you need.';
-      const d = parseYmd(form.targetDate);
-      if (d && d.getTime() <= Date.now()) return 'Pick a date after today.';
+      if (!due || due.getTime() <= Date.now()) return 'Pick a due date after today.';
+      if (linesTotal > target) return `The lines add up to ${formatNaira(linesTotal)}, more than the target.`;
     }
+    if (s === 'plan') {
+      if (!(Number(form.myAmount) > 0) && form.people.length === 0) return 'Enter how much you put in.';
+      if (form.people.some((p) => !(Number(p.amount) > 0))) return 'Enter an amount for each person.';
+      if (!main && (Number(form.myAmount) > 0)) return 'You need a Main wallet to save from.';
+      if (oneOff && main && Number(form.myAmount) > parseFloat(main.balance)) return `${main.name} only has ${formatMoney(main.balance)}.`;
+    }
+    if (s === 'lock' && form.payDirect && !form.payee) return `Choose who to pay directly, or turn it off.`;
     return null;
   };
 
   const next = () => {
     const problem = validate(step);
-    if (problem) {
-      setError(problem);
-      return;
-    }
-    setError(null);
+    setError(problem);
+    if (problem) return;
     flow.next();
   };
 
   const submit = () => {
+    for (const s of ['type', 'target', 'plan', 'lock'] as Step[]) {
+      const problem = validate(s);
+      if (problem) {
+        setError(problem);
+        flow.goTo(s);
+        return;
+      }
+    }
     setError(null);
-    // No draft saves while creating: the server deletes the draft with the wallet.
     autosave.stop();
+    const mine = Number(form.myAmount) > 0;
     create.mutate(
       {
         type: 'goal',
         name: name.trim(),
-        mode: form.mode,
+        purpose: form.kind,
+        description: form.forWhom.trim() || undefined,
+        mode: form.people.length ? 'shared' : 'private',
         target_amount: form.target,
-        target_date: form.targetDate ?? undefined,
-        members: shared
-          ? [
-              ...pickedFamily.map((m) => ({ user_id: m.id, role: roleOf(m) })),
-              ...form.newPeople.map((p) => ({ identifier: p.phone, role: p.role })),
-            ]
-          : undefined,
-        approval: shared
-          ? {
-              threshold: form.threshold !== null ? String(form.threshold) : null,
-              mode: approvalMode,
-              lock_until_goal: form.lockUntilGoal,
-              expiry_hours: form.expiryHours,
-            }
-          : undefined,
-        reminder_day: form.remind ? REMIND_DAY : undefined,
+        target_date: form.dueDate ?? undefined,
+        source_wallet_id: mine && main ? main.id : undefined,
+        initial_deposit: oneOff && mine ? form.myAmount : undefined,
+        savings_plan: {
+          schedule: !oneOff && mine,
+          amount: !oneOff && mine ? form.myAmount : undefined,
+          frequency: form.frequency === 'weekly' ? 'weekly' : 'monthly',
+          day_of_week: form.frequency === 'weekly' ? form.weekDay : undefined,
+          day_of_month: form.frequency === 'monthly' ? form.monthDay : undefined,
+          auto_save: !oneOff && mine,
+          allow_contributor_edit: true,
+          missed_policy: 'retry',
+        },
+        members: form.people.map((p) => ({
+          ...(p.userId ? { user_id: p.userId } : { identifier: p.phone }),
+          role: p.role,
+          pledge: p.amount,
+          pledge_kind: oneOff || p.gift ? ('gift' as const) : ('period' as const),
+        })),
+        lock: { mode: form.lock === 'target' ? 'target' : 'none', until: form.lock === 'target' ? lockUntil ?? undefined : undefined, early_break: true, approval: form.earlyApproval, charity_id: form.charity?.id ?? null },
+        goal: {
+          kind: form.kind,
+          for: form.forWhom.trim() || undefined,
+          lines: form.lines.map((l) => ({ name: l.name, amount: l.amount })),
+          link: form.link,
+          reminders: { before_save: form.remindBefore, nudge: form.nudge },
+          payout:
+            form.payDirect && form.payee && payOn
+              ? { ...('organisationId' in form.payee ? { organisation_id: form.payee.organisationId } : { saved_account_id: form.payee.savedAccountId }), run_on: payOn }
+              : null,
+        },
         draft_id: autosave.draftId ?? undefined,
       },
       {
-        onSuccess: (data) => {
+        onSuccess: (res) => {
           notifySuccess();
-          leave(() => {
+          const first = dates[0];
+          const invited = form.people.map((p) => p.name);
+          const link = res.wallet.goal?.link ?? null;
+          flow.leave(() => {
             navigation.popToTop();
-            navigation.navigate('WalletCreated', { walletId: data.wallet.id, invited: shared ? people.map((p) => p.name) : [] });
+            navigation.navigate('SetupDone', {
+              walletId: res.wallet.id,
+              title: `${name.trim()} is ready`,
+              subtitle: [
+                oneOff ? (mine ? `${formatNaira(form.myAmount)} moved from ${main?.name ?? 'Main'}.` : null) : mine && first ? `Your first ${formatNaira(form.myAmount)} moves on ${first.getDate()} ${MONTHS[first.getMonth()]}.` : null,
+                invited.length ? `${joinNames(invited)} ${invited.length === 1 ? 'has' : 'have'} been invited.` : null,
+              ]
+                .filter(Boolean)
+                .join(' '),
+              caption: `of ${formatNaira(target)}${form.dueDate ? ` · due ${short(form.dueDate)}` : ''}`,
+              events: [
+                ...form.people.map((p) => ({
+                  label: p.name,
+                  title: p.gift || oneOff ? `Asked for their ${formatNaira(p.amount)} gift` : `Asked to confirm ${formatNaira(p.amount)} a ${form.frequency === 'weekly' ? 'week' : 'month'}`,
+                  sub: p.gift || oneOff ? 'They can pay from anywhere, by bank transfer or the link' : 'Sent just now',
+                })),
+                ...(link ? [{ label: 'Contribution link', title: 'Ready to share', sub: 'WhatsApp, SMS or copy' }] : []),
+              ],
+              share: link ? { label: 'Share the contribution link', message: `Help us reach ${name.trim()}: add money here ${link}` } : undefined,
+              openLabel: 'Open goal',
+            });
           });
         },
         onError: (e) => {
@@ -243,478 +341,442 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
     );
   };
 
-  const errorText = error ? (
-    <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>
-      {error}
-    </PtText>
-  ) : null;
-
-  const progress = { step: stepIndex + 2, total: steps.length + 1 };
-
-  // ------------------------------------------------------------ WCR-02
-  if (step === 'name') {
-    const modeCard = (value: 'private' | 'shared', title: string, body: string) => {
-      const on = form.mode === value;
-      return (
-        <Pressable
-          onPress={() => {
-            selection();
-            set({ mode: value });
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: on }}
-          style={{
-            flexDirection: 'row',
-            gap: 14,
-            padding: 16,
-            borderRadius: ptRadius.md,
-            borderWidth: 2,
-            borderColor: on ? pt.brand : 'transparent',
-            backgroundColor: on ? pt.brandSoft : pt.raised,
-          }}
-        >
-          <View style={{ paddingTop: 2 }}>
-            <PtRadio checked={on} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: on ? pt.brand : pt.ink }}>{title}</Text>
-            <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 19, color: pt.inkMuted }}>{body}</Text>
-          </View>
-        </Pressable>
-      );
-    };
-
-    return (
-      <PtStepScreen
-        onBack={back}
-        progress={progress}
-        title="Name your goal and who it's for"
-        gap={20}
-        footer={
-          <>
-            {errorText}
-            <PtButton title="Continue" onPress={next} />
-          </>
-        }
-      >
-        <View style={{ gap: 12 }}>
-          {modeCard('private', 'Private', "Just you. Funded from your main wallet. Others can't see it.")}
-          {modeCard('shared', 'Shared', 'Gets its own account number. Family can add money and everyone sees every naira.')}
+  const header = { title: 'Goal wallet', step: flow.index + 1, total: STEPS.length };
+  const footer = (title: string, onPress = next, loading = false) => (
+    <>
+      {error ? (
+        <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>
+          {error}
+        </PtText>
+      ) : null}
+      <PtButton title={title} onPress={onPress} loading={loading} />
+    </>
+  );
+  const personRow = (p: Person, i: number, right: React.ReactNode, sub: string, onPress?: () => void) => (
+    <React.Fragment key={p.key}>
+      <PtDivider />
+      <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={p.name} style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
+        <PtAvatar initials={p.phone && !p.name ? '+' : initials(p.full ?? p.name)} tone={p.phone ? 'gold' : AVATAR_CYCLE[i % AVATAR_CYCLE.length]} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }} numberOfLines={1}>
+            {p.name || formatE164(p.phone ?? '')}
+          </Text>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={2}>
+            {sub}
+          </Text>
         </View>
-        <PtField
-          label="Wallet name"
-          value={name}
-          onChangeText={(t) => {
-            setName(t);
-            setError(null);
-          }}
-          placeholder="School fees 2027"
-          maxLength={100}
-        />
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <PtField
-              label="Target"
-              prefix="₦"
-              value={groupAmountInput(form.target)}
-              onChangeText={(t) => {
-                set({ target: sanitizeAmountInput(t) });
-                setError(null);
-              }}
-              placeholder="0"
-              keyboardType="decimal-pad"
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <PtField
-              label="Needed by"
-              value={form.targetDate ? formatYmd(form.targetDate) : ''}
-              placeholder="Pick a date"
-              onPressBox={() => setDateOpen(true)}
-            />
-          </View>
+        {right}
+      </Pressable>
+    </React.Fragment>
+  );
+
+  // ------------------------------------------------------------ GLW-01
+  if (step === 'type') {
+    return (
+      <PtStepScreen onBack={back} flow={header} title="What is the goal?" gap={16} footer={footer('Continue')}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {KINDS.map((k) => {
+            const on = form.kind === k.value;
+            return (
+              <Pressable
+                key={k.value}
+                onPress={() => {
+                  selection();
+                  if (KINDS.some((x) => x.name === name.trim()) || !name.trim()) setName(k.name);
+                  set({ kind: k.value });
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={k.title}
+                style={{
+                  width: '48%',
+                  flexGrow: 1,
+                  minHeight: 112,
+                  borderRadius: ptRadius.md,
+                  borderWidth: 2,
+                  borderColor: on ? pt.brand : 'transparent',
+                  backgroundColor: on ? pt.brandSoft : pt.raised,
+                  padding: 14,
+                  gap: 14,
+                }}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: on ? pt.brand : pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name={k.icon} size={17} color={on ? '#FFFFFF' : pt.brand} />
+                </View>
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: on ? pt.brand : pt.ink }}>{k.title}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <PtField label="Goal name" value={name} onChangeText={setName} placeholder={kind.name} maxLength={100} />
+        <PtField label="For (optional)" value={form.forWhom} onChangeText={(t) => set({ forWhom: t })} placeholder={kind.forHint} maxLength={120} />
+      </PtStepScreen>
+    );
+  }
+
+  // ------------------------------------------------------------ GLW-02
+  if (step === 'target') {
+    return (
+      <PtStepScreen onBack={back} flow={header} title="How much, and by when?" gap={14} footer={footer('Continue')}>
+        <PtField label="Target" prefix="₦" value={groupAmountInput(form.target)} onChangeText={(t) => set({ target: sanitizeAmountInput(t) })} placeholder="850,000" keyboardType="decimal-pad" />
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.ink }}>Due date</Text>
+          <Pressable
+            onPress={() => setSheet('due')}
+            accessibilityRole="button"
+            accessibilityLabel="Due date"
+            style={{ height: 56, borderRadius: ptRadius.md, borderWidth: 1.5, borderColor: pt.lineStrong, backgroundColor: pt.raised, paddingHorizontal: 16, justifyContent: 'center' }}
+          >
+            <Text style={{ fontFamily: ptFont.medium, fontSize: 16, color: form.dueDate ? pt.ink : pt.inkSubtle }}>{form.dueDate ? formatYmd(form.dueDate) : 'Pick a date'}</Text>
+          </Pressable>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{form.forWhom.trim() ? `${kind.dueHint} · ${form.forWhom.trim()}` : kind.dueHint}</Text>
+        </View>
+        <View style={{ gap: 10 }}>
+          <PtGroupLabel>What it covers (optional)</PtGroupLabel>
+          {form.lines.length ? (
+            <PtPanel>
+              {form.lines.map((l, i) => (
+                <PtReviewRow
+                  key={l.key}
+                  label={l.name}
+                  value={formatNaira(l.amount)}
+                  onEdit={() => setLine({ key: l.key, name: l.name, amount: l.amount })}
+                  last={i === form.lines.length - 1}
+                />
+              ))}
+            </PtPanel>
+          ) : null}
+          {line ? (
+            <PtPanel>
+              <View style={{ gap: 12, paddingVertical: 14 }}>
+                <PtField label="What" value={line.name} onChangeText={(t) => setLine({ ...line, name: t })} placeholder="Books and uniforms" maxLength={60} autoFocus />
+                <PtField label="Amount" prefix="₦" value={groupAmountInput(line.amount)} onChangeText={(t) => setLine({ ...line, amount: sanitizeAmountInput(t) })} placeholder="100,000" keyboardType="decimal-pad" />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <PtButton
+                    title={line.key ? 'Remove' : 'Cancel'}
+                    variant="secondary"
+                    size="sm"
+                    style={{ flex: 1 }}
+                    onPress={() => {
+                      if (line.key) set({ lines: form.lines.filter((x) => x.key !== line.key) });
+                      setLine(null);
+                    }}
+                  />
+                  <PtButton
+                    title={line.key ? 'Save' : 'Add'}
+                    size="sm"
+                    style={{ flex: 1 }}
+                    onPress={() => {
+                      if (!line.name.trim() || !(Number(line.amount) > 0)) return;
+                      const row = { key: line.key ?? `l${Date.now()}`, name: line.name.trim(), amount: line.amount };
+                      set({ lines: line.key ? form.lines.map((x) => (x.key === line.key ? row : x)) : [...form.lines, row] });
+                      setLine(null);
+                    }}
+                  />
+                </View>
+              </View>
+            </PtPanel>
+          ) : (
+            <PtAddRow label="Add a line" onPress={() => setLine({ name: '', amount: '' })} />
+          )}
         </View>
         <PtDateSheet
-          visible={dateOpen}
-          title="Needed by"
-          value={form.targetDate ?? ymdMonthsFromNow(3)}
+          visible={sheet === 'due'}
+          title="Due date"
+          value={form.dueDate ?? ymdMonthsFromNow(3)}
           minYear={new Date().getFullYear()}
           maxYear={new Date().getFullYear() + 10}
           doneLabel="Done"
           onDone={(ymd) => {
-            setDateOpen(false);
-            setError(null);
-            set({ targetDate: ymd });
+            set({ dueDate: ymd });
+            setSheet(null);
           }}
-          onClose={() => setDateOpen(false)}
+          onClose={() => setSheet(null)}
         />
       </PtStepScreen>
     );
   }
 
-  // ------------------------------------------------------------ WCR-08
-  if (step === 'members') {
-    const count = 1 + people.length;
-    const roleTarget = typeof roleFor === 'number' ? members.find((m) => m.id === roleFor) : null;
+  // ------------------------------------------------------------ GLW-03
+  if (step === 'plan') {
+    const notAdded = members.filter((m) => !form.people.some((p) => p.userId === m.id));
+    const when = oneOff ? 'once' : `${dayLabel}`;
     return (
       <PtStepScreen
         onBack={back}
-        progress={progress}
-        title="Who's in this wallet?"
-        subtitle="Pick from your family circle and choose what each person can do."
-        gap={20}
-        footer={
-          <>
-            {errorText}
-            <PtButton title={count === 1 ? 'Continue with just you' : `Continue with ${count} people`} onPress={next} />
-          </>
-        }
+        flow={header}
+        title="How will you get there?"
+        subtitle={weeks ? `${formatNaira(target)} in ${weeks} week${weeks === 1 ? '' : 's'}.` : undefined}
+        gap={14}
+        footer={footer('Continue')}
       >
+        <PtSegmented
+          options={[
+            { value: 'weekly', label: 'Weekly' },
+            { value: 'monthly', label: 'Monthly' },
+            { value: 'one_off', label: 'One-off' },
+          ]}
+          value={form.frequency}
+          onChange={(v) => set({ frequency: v as Frequency })}
+        />
         <PtPanel>
           <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
             <PtAvatar initials={initials(me?.full_name)} uri={me?.avatar_url} tone="brand" />
-            <View>
-              <Text style={{ fontFamily: ptFont.semibold, fontSize: 16, color: pt.ink }}>You</Text>
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>Owner</Text>
-            </View>
+            <Pressable onPress={() => !oneOff && setSheet('day')} accessibilityRole="button" accessibilityLabel="When you save" style={{ flex: 1 }}>
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }}>{myName}</Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{oneOff ? 'Now, from Main' : `Auto-debit from Main · ${when}`}</Text>
+            </Pressable>
+            <PtAmountBox value={form.myAmount} onChange={(v) => set({ myAmount: v })} label="Your amount" />
           </View>
-
-          {family.isLoading ? <ActivityIndicator color={pt.brand} style={{ marginVertical: 16 }} /> : null}
-
-          {members.map((m, i) => {
-            const on = form.picked.includes(m.id);
-            return (
-              <React.Fragment key={m.id}>
-                <PtDivider />
-                <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
-                  <Pressable
-                    onPress={() => {
-                      selection();
-                      set({ picked: on ? form.picked.filter((id) => id !== m.id) : [...form.picked, m.id] });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={`Add ${m.name}`}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-                  >
-                    <PtCheckbox checked={on} />
-                    <PtAvatar initials={m.avatar || initials(m.name)} tone={AVATAR_CYCLE[i % AVATAR_CYCLE.length] as PtAvatarTone} />
-                    <Text style={{ flex: 1, fontFamily: ptFont.medium, fontSize: 15, color: pt.ink }} numberOfLines={1}>
-                      {m.name}
-                    </Text>
-                  </Pressable>
-                  <PtRoleButton label={roleName(roleOf(m))} accessibilityLabel={`Role for ${m.name}`} onPress={() => setRoleFor(m.id)} />
-                </View>
-              </React.Fragment>
-            );
-          })}
-
-          {form.newPeople.map((p) => (
-            <React.Fragment key={p.key}>
-              <PtDivider />
-              <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
-                <Pressable
-                  onPress={() => {
-                    selection();
-                    set({ newPeople: form.newPeople.filter((x) => x.key !== p.key) });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${p.name || p.phone}`}
-                >
-                  <PtCheckbox checked />
-                </Pressable>
-                <PtAvatar initials={p.name ? initials(p.name) : '+'} tone="dashed" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: ptFont.medium, fontSize: 16, color: pt.ink }} numberOfLines={1}>
-                    {p.name || formatE164(p.phone)}
-                  </Text>
-                  <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>
-                    {p.name ? `${formatE164(p.phone)} · ` : ''}gets an invite by SMS
-                  </Text>
-                </View>
-                <PtRoleButton label={roleName(p.role)} accessibilityLabel={`Role for ${p.name || p.phone}`} onPress={() => setRoleFor(p.key)} />
-              </View>
-            </React.Fragment>
-          ))}
-
-          <PtDivider />
+          {form.people.map((p, i) =>
+            personRow(
+              p,
+              i,
+              <PtAmountBox value={p.amount} onChange={(v) => set({ people: form.people.map((x) => (x.key === p.key ? { ...x, amount: v } : x)) })} label={`Amount for ${p.name}`} />,
+              oneOff || p.gift ? 'One-off gift · tap to make it regular' : `Auto-debit from their Main · ${when}`,
+              oneOff ? undefined : () => set({ people: form.people.map((x) => (x.key === p.key ? { ...x, gift: !x.gift } : x)) }),
+            ),
+          )}
           {adding ? (
-            <PtNewPersonForm
-              roles={NEW_MEMBER_ROLES}
-              defaultRole="contributor"
-              taken={[...form.newPeople.map((p) => p.phone), me?.phone ?? '']}
-              onCancel={() => setAdding(false)}
-              onAdd={(p) => {
-                set({ newPeople: [...form.newPeople, { key: p.phone, phone: p.phone, name: p.name, role: p.role ?? 'contributor' }] });
-                setAdding(false);
-              }}
-            />
-          ) : (
-            <PtAddRow
-              label="Invite someone new"
-              onPress={() => {
-                setError(null);
-                setAdding(true);
-              }}
-            />
+            <>
+              <PtDivider />
+              <PtNewPersonForm
+                withAmount
+                nameRequired
+                taken={[...form.people.map((p) => p.phone ?? ''), me?.phone ?? '']}
+                onCancel={() => setAdding(false)}
+                onAdd={(np) => {
+                  set({ people: [...form.people, { key: np.phone, phone: np.phone, name: np.name, role: 'contributor', amount: np.amount ?? '', gift: true }] });
+                  setAdding(false);
+                }}
+              />
+            </>
+          ) : null}
+        </PtPanel>
+        {!adding ? <PtAddRow label="Add someone" onPress={() => setSheet('add')} /> : null}
+
+        {target > 0 ? (
+          <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ flex: 1, fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>
+                {formatNaira(total)} by {oneOff ? 'today' : lastSave ? `${lastSave.getDate()} ${MONTHS[lastSave.getMonth()]}` : short(form.dueDate)}
+              </Text>
+              <PtChip label={onTrack ? 'On track' : 'Short'} tone={onTrack ? 'success' : 'warning'} icon={onTrack ? 'check' : 'alert-circle'} />
+            </View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: pt.line, overflow: 'hidden' }}>
+              <View style={{ width: `${Math.min(100, (total / Math.max(1, target)) * 100)}%`, height: 6, backgroundColor: pt.emerald700 }} />
+            </View>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>
+              {oneOff
+                ? 'Everyone puts in once.'
+                : `${dates.length} ${form.frequency === 'weekly' ? 'weekly' : 'monthly'} save${dates.length === 1 ? '' : 's'} from ${periodic.length ? (periodic.length === 1 ? 'both of you' : 'all of you') : 'you'}${gifts.length ? `, plus ${joinNames(gifts.map((g) => `${g.name}'s`))} gift${gifts.length === 1 ? '' : 's'}` : ''}`}
+              {!onTrack && target > total ? ` · ${formatNaira(target - total)} short` : ''}
+            </Text>
+          </View>
+        ) : null}
+
+        <PtOptionSheet
+          visible={sheet === 'add'}
+          title="Add someone"
+          options={[...notAdded.map((m) => ({ value: m.id, label: m.name, hint: m.email })), { value: -1, label: 'Someone new', hint: 'Invite them by phone number' }]}
+          value={null}
+          onPick={(id) => {
+            setSheet(null);
+            if (id === -1) setAdding(true);
+            else addFamily(id);
+          }}
+          onClose={() => setSheet(null)}
+        />
+        <PtOptionSheet
+          visible={sheet === 'day'}
+          title="Save on"
+          options={
+            form.frequency === 'monthly'
+              ? Array.from({ length: 28 }, (_, i) => ({ value: i + 1, label: `The ${ordinal(i + 1)}`, hint: i + 1 === 26 ? 'The day after salary' : undefined }))
+              : DAYS.slice(1).map((d, i) => ({ value: i + 1, label: d }))
+          }
+          value={form.frequency === 'monthly' ? form.monthDay : form.weekDay}
+          onPick={(d) => {
+            set(form.frequency === 'monthly' ? { monthDay: d } : { weekDay: d });
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      </PtStepScreen>
+    );
+  }
+
+  // ------------------------------------------------------------ GLW-04
+  if (step === 'people') {
+    const roleKey = sheet && typeof sheet === 'object' ? sheet.role : null;
+    const editing = form.people.find((p) => p.key === roleKey);
+    const roleLine = (r: Role) => (r === 'co_owner' ? 'Co-owner · can approve' : r === 'contributor' ? 'Contributor · adds money, sees progress' : 'Viewer · sees progress');
+    return (
+      <PtStepScreen onBack={back} flow={header} title="Contributors and reminders" gap={14} footer={footer('Continue')}>
+        <PtPanel>
+          <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
+            <PtAvatar initials={initials(me?.full_name)} uri={me?.avatar_url} tone="brand" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }}>{myName} (you)</Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>Owner · can approve</Text>
+            </View>
+            <PtChip label="Owner" icon="circle" />
+          </View>
+          {form.people.map((p, i) =>
+            personRow(p, i, <Text style={{ fontFamily: ptFont.bold, fontSize: 14, color: pt.brand }}>Edit</Text>, roleLine(p.role), () => setSheet({ role: p.key })),
           )}
         </PtPanel>
-
-        <View style={{ backgroundColor: pt.sunken, borderRadius: ptRadius.md, padding: 16 }}>
-          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>
-            <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>Co-owner</Text> can send, approve and change rules.{' '}
-            <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>Contributor</Text> can add money and see activity, but can't take money out.
-          </Text>
-        </View>
-
-        <PtOptionSheet
-          visible={roleFor !== null}
-          title={`Role for ${roleTarget?.name ?? form.newPeople.find((p) => p.key === roleFor)?.name ?? 'this person'}`}
-          options={NEW_MEMBER_ROLES.map((r) => ({ value: r.value, label: r.label, hint: r.hint }))}
-          value={
-            roleTarget ? roleOf(roleTarget) : form.newPeople.find((p) => p.key === roleFor)?.role ?? null
-          }
-          onPick={(role) => {
-            if (typeof roleFor === 'number') set({ roles: { ...form.roles, [roleFor]: role } });
-            else set({ newPeople: form.newPeople.map((p) => (p.key === roleFor ? { ...p, role } : p)) });
-            setRoleFor(null);
+        <PtAddRow
+          label="Add a contributor"
+          onPress={() => {
+            flow.goTo('plan');
+            setSheet('add');
           }}
-          onClose={() => setRoleFor(null)}
         />
+        <View style={{ gap: 10 }}>
+          <PtGroupLabel>Reminders</PtGroupLabel>
+          <PtPanel>
+            <PtSwitchRow title="2 days before each save" subtitle="Push and SMS" value={form.remindBefore} onChange={(v) => set({ remindBefore: v })} />
+            <PtDivider />
+            <PtSwitchRow title="Nudge if we fall behind" subtitle="Tells the person who missed, kindly" value={form.nudge} onChange={(v) => set({ nudge: v })} />
+          </PtPanel>
+        </View>
+        <PtPanel>
+          <PtReviewRow
+            label="Contribution link"
+            value={form.link ? 'On — made when you create the goal' : 'Off'}
+            sub={form.link ? 'Anyone with the link can add money, like an uncle abroad' : null}
+            onEdit={() => setSheet('link')}
+            last
+          />
+        </PtPanel>
+        <PtOptionSheet
+          visible={Boolean(editing)}
+          title={editing?.name ?? ''}
+          options={[
+            { value: 'co_owner', label: 'Co-owner', hint: 'Adds money and can approve' },
+            { value: 'contributor', label: 'Contributor', hint: 'Adds money, sees progress' },
+            { value: 'viewer', label: 'Viewer', hint: 'Sees progress only' },
+            { value: 'remove', label: `Remove ${editing?.name ?? ''}` },
+          ]}
+          value={editing?.role ?? null}
+          onPick={(v) => {
+            if (v === 'remove') set({ people: form.people.filter((p) => p.key !== roleKey) });
+            else set({ people: form.people.map((p) => (p.key === roleKey ? { ...p, role: v as Role } : p)) });
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
+        />
+        <PtSheet visible={sheet === 'link'} title="Contribution link" subtitle="A page anyone can pay into, without the app" onClose={() => setSheet(null)} footer={<PtButton title="Done" onPress={() => setSheet(null)} />}>
+          <PtPanel>
+            <PtSwitchRow title="Share a link" subtitle="Shows the goal, how close it is, and the account to pay into" value={form.link} onChange={(v) => set({ link: v })} />
+          </PtPanel>
+        </PtSheet>
       </PtStepScreen>
     );
   }
 
-  // ------------------------------------------------------------ WCR-09
-  if (step === 'approvals') {
+  // ------------------------------------------------------------ GLW-05
+  if (step === 'lock') {
+    const giftNames = gifts.map((g) => g.name);
     return (
-      <PtStepScreen
-        onBack={back}
-        progress={progress}
-        title="When does money need a yes?"
-        subtitle="Approvals protect everyone's contributions."
-        gap={20}
-        footer={
-          <>
-            {errorText}
-            <PtButton title="Continue" onPress={next} />
-          </>
-        }
-      >
-        <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 14 }}>
-          <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.ink }}>Payments from this wallet over</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {THRESHOLDS.map((t) => {
-              const on = t.value === form.threshold;
-              return (
-                <Pressable
-                  key={t.label}
-                  onPress={() => {
-                    selection();
-                    set({ threshold: t.value });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={t.value ? `Over ${t.label}` : 'Any amount'}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    borderRadius: ptRadius.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: on ? 2 : 1.5,
-                    borderColor: on ? pt.brand : pt.lineStrong,
-                    backgroundColor: on ? pt.brandSoft : pt.raised,
-                  }}
-                >
-                  <Text style={{ fontFamily: on ? ptFont.bold : ptFont.semibold, fontSize: 14, color: on ? pt.brand : pt.ink }}>{t.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <PtDivider />
-          <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.ink }}>Who needs to approve</Text>
-          <View>
-            {modes.map((m) => {
-              const on = m.value === approvalMode;
-              return (
-                <Pressable
-                  key={m.value}
-                  onPress={() => {
-                    selection();
-                    set({ approvalMode: m.value });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 14 }}
-                >
-                  <PtRadio checked={on} />
-                  <Text style={{ flex: 1, fontFamily: on ? ptFont.semibold : ptFont.regular, fontSize: 16, color: pt.ink }}>{m.label}</Text>
-                </Pressable>
-              );
-            })}
-            {approvers.length <= 1 ? (
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted, marginBottom: 6 }}>
-                Make someone a co-owner to share the decision.
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: 16 }}>
-          <View style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>Lock until goal is reached</Text>
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>Early withdrawal needs everyone's yes</Text>
-            </View>
-            <PtSwitch value={form.lockUntilGoal} onChange={(v) => set({ lockUntilGoal: v })} label="Lock until goal is reached" />
-          </View>
-          <PtDivider />
-          <Pressable
-            onPress={() => {
-              selection();
-              setExpiryOpen(true);
+      <PtStepScreen onBack={back} flow={header} title="Protect the goal" gap={14} footer={footer('Review')}>
+        <PtChoiceCard
+          title="Lock until the goal is reached"
+          subtitle={lockUntil ? `Or until ${formatYmd(lockUntil)}, whichever comes first.` : 'Or until the due date, whichever comes first.'}
+          selected={form.lock === 'target'}
+          onPress={() => set({ lock: 'target' })}
+        />
+        <PtChoiceCard title="No lock" subtitle="Owners can withdraw any time." selected={form.lock === 'none'} onPress={() => set({ lock: 'none' })} />
+        <PtPanel>
+          <PtSwitchRow
+            title={kind.payTo}
+            subtitle={form.payee ? `Sends ${formatNaira(target)} to ${form.payee.name} on ${short(payOn)}` : 'Choose who, and it goes on the day'}
+            value={form.payDirect}
+            onChange={(v) => {
+              set({ payDirect: v });
+              if (v && !form.payee) setSheet('payee');
             }}
-            accessibilityRole="button"
-            style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>Requests expire after</Text>
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>If no one answers</Text>
-            </View>
-            <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>{form.expiryHours} hours</Text>
-          </Pressable>
-        </View>
-
-        <PtOptionSheet
-          visible={expiryOpen}
-          title="Requests expire after"
-          options={EXPIRY_HOURS.map((h) => ({ value: h, label: `${h} hours` }))}
-          value={form.expiryHours}
-          onPick={(h) => {
-            set({ expiryHours: h });
-            setExpiryOpen(false);
+          />
+          {form.payDirect && form.payee ? (
+            <>
+              <PtDivider />
+              <PtReviewRow label="Paid to" value={form.payee.name} onEdit={() => setSheet('payee')} />
+            </>
+          ) : null}
+          {form.lock === 'target' ? (
+            <>
+              <PtDivider />
+              <PtReviewRow
+                label="Withdraw early"
+                value={`${coOwners.length && form.earlyApproval ? 'Both approve · ' : ''}5% fee, half to charity`}
+                sub={form.charity ? form.charity.name : 'Pick the charity'}
+                onEdit={() => setSheet('charity')}
+              />
+            </>
+          ) : null}
+          <PtDivider />
+          <PtReviewRow
+            label="If the goal is cancelled"
+            value="Everyone gets back what they put in"
+            sub={giftNames.length ? `${joinNames(giftNames)}'s gift goes back to them` : null}
+            last
+          />
+        </PtPanel>
+        <PayeePickerSheet
+          visible={sheet === 'payee'}
+          title={kind.payTo}
+          kind={kind.payKind}
+          onPick={(p) => {
+            set({ payee: p, payDirect: true });
+            setSheet(null);
           }}
-          onClose={() => setExpiryOpen(false)}
+          onAddNew={() => {
+            setSheet(null);
+            navigation.navigate('AddRecipient', { context: name.trim(), returnTo: 'GoalWalletSetup' });
+          }}
+          onClose={() => {
+            setSheet(null);
+            if (!form.payee) set({ payDirect: false });
+          }}
+        />
+        <CharityPickerSheet
+          visible={sheet === 'charity'}
+          value={form.charity?.id ?? null}
+          onPick={(o) => {
+            set({ charity: { id: o.id, name: o.name } });
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
         />
       </PtStepScreen>
     );
   }
 
-  // ------------------------------------------------------------ WCR-11
-  const goTo = (s: Step) => {
-    setError(null);
-    flow.goTo(s);
-  };
-  const reviewRow = (label: string, value: React.ReactNode, onEdit: () => void, last = false) => (
-    <>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 16 }}>
-        <Text style={{ width: 92, fontFamily: ptFont.regular, fontSize: 14, lineHeight: 22, color: pt.inkMuted }}>{label}</Text>
-        <View style={{ flex: 1 }}>
-          {typeof value === 'string' ? (
-            <Text style={{ fontFamily: ptFont.medium, fontSize: 16, lineHeight: 22, color: pt.ink }}>{value}</Text>
-          ) : (
-            value
-          )}
-        </View>
-        <Pressable
-          onPress={() => {
-            selection();
-            onEdit();
-          }}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${label.toLowerCase()}`}
-        >
-          <Text style={{ fontFamily: ptFont.bold, fontSize: 15, lineHeight: 22, color: pt.brand }}>Edit</Text>
-        </Pressable>
-      </View>
-      {last ? null : <PtDivider />}
-    </>
-  );
-
-  const everyone = ['You', ...people.map((p) => p.name)];
-  const avatars = [
-    { key: 'me', initials: initials(me?.full_name), tone: 'brand' as PtAvatarTone },
-    ...people.slice(0, 2).map((p, i) => ({ key: `${p.name}-${i}`, initials: initials(p.name), tone: AVATAR_CYCLE[i % AVATAR_CYCLE.length] as PtAvatarTone })),
-  ];
-
+  // ------------------------------------------------------------ WCR-06
+  const planLine = oneOff
+    ? `${formatNaira(total)} once`
+    : `${formatNaira(form.myAmount || 0)}${periodic.length && periodic.every((p) => p.amount === form.myAmount) ? ' each' : ''} a ${form.frequency === 'weekly' ? 'week' : 'month'}${giftTotal ? ` + ${formatNaira(giftTotal)} gift` : ''}`;
   return (
-    <PtStepScreen
-      onBack={back}
-      progress={progress}
-      title="Check and create"
-      gap={20}
-      footer={
-        <>
-          {errorText}
-          <PtButton title="Create wallet" onPress={submit} loading={create.isPending} />
-        </>
-      }
-    >
+    <PtStepScreen onBack={back} flow={header} title="Review the goal" subtitle="Check everything. You can edit before you create." gap={16} footer={footer('Create goal', submit, create.isPending)}>
       <PtPanel>
-        {reviewRow('Type', `Goal · ${shared ? 'Shared' : 'Private'}`, () => leave(() => navigation.goBack()))}
-        {reviewRow('Name', name.trim(), () => goTo('name'))}
-        {reviewRow('Target', targetLabel(target, form.targetDate), () => goTo('name'), !shared)}
-        {shared
-          ? reviewRow(
-              'Approvals',
-              approvalSummary({ mode: approvalMode, threshold: form.threshold, approvers, lockUntilGoal: form.lockUntilGoal }),
-              () => goTo('approvals'),
-            )
-          : null}
-        {shared
-          ? reviewRow(
-              'Members',
-              <View style={{ gap: 6 }}>
-                <View style={{ flexDirection: 'row' }}>
-                  {avatars.map((a, i) => (
-                    <View key={a.key} style={{ marginLeft: i === 0 ? 0 : -10, borderRadius: 20, borderWidth: 2, borderColor: pt.raised }}>
-                      <PtAvatar initials={a.initials} tone={a.tone} size={36} />
-                    </View>
-                  ))}
-                </View>
-                <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 19, color: pt.inkMuted }}>{joinNames(everyone, true)}</Text>
-              </View>,
-              () => goTo('members'),
-              true,
-            )
-          : null}
+        <PtReviewRow label="Goal" value={name.trim()} sub={form.forWhom.trim() || kind.title} onEdit={() => flow.goTo('type')} />
+        <PtReviewRow
+          label="Target"
+          value={`${formatNaira(target)}${form.dueDate ? ` by ${formatYmd(form.dueDate)}` : ''}`}
+          sub={form.lines.length ? `${form.lines.length} line${form.lines.length === 1 ? '' : 's'}: ${form.lines.map((l) => lineWord(l.name)).join(', ')}` : null}
+          onEdit={() => flow.goTo('target')}
+        />
+        <PtReviewRow label="Plan" value={planLine} sub={`${onTrack ? 'On track' : 'Short'} for ${formatNaira(total)}`} onEdit={() => flow.goTo('plan')} />
+        <PtReviewRow label="People" value={[myName, ...form.people.map((p) => p.name)].join(', ')} sub={form.link ? 'Contribution link on' : null} onEdit={() => flow.goTo('people')} />
+        <PtReviewRow
+          label="Lock"
+          value={form.lock === 'target' ? `Until goal or ${short(lockUntil)}` : 'No lock'}
+          sub={form.payDirect && form.payee ? `Pays ${form.payee.name} on ${short(payOn)}` : null}
+          onEdit={() => flow.goTo('lock')}
+          last
+        />
       </PtPanel>
-
-      <View style={{ backgroundColor: pt.infoSoft, borderRadius: ptRadius.md, padding: 16, gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <MaterialCommunityIcons name="star-four-points-outline" size={16} color={pt.info} />
-          <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.info }}>Steward</Text>
-        </View>
-        <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>
-          {plan ? (
-            <>
-              To reach {formatNaira(target)} by {formatYmd(form.targetDate).replace(/ \d{4}$/, '')}, save about{' '}
-              <Text style={{ fontFamily: ptFont.bold }}>{formatNaira(plan.monthly)} a month</Text>
-              {savers > 1 ? `, which is ${formatNaira(plan.each)} each` : ''}.{' '}
-              {savers > 1 ? 'Want a monthly reminder for everyone?' : 'Want a monthly reminder?'}
-            </>
-          ) : (
-            `Add a date to see how much to save each month. Want a monthly reminder${savers > 1 ? ' for everyone' : ''}?`
-          )}
-        </Text>
-        <Pressable
-          onPress={() => {
-            selection();
-            set({ remind: !form.remind });
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: form.remind }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36 }}
-        >
-          <PtCheckbox checked={form.remind} />
-          <Text style={{ fontFamily: ptFont.medium, fontSize: 15, color: pt.ink }}>
-            Remind {savers > 1 ? 'members' : 'me'} on the {ordinal(REMIND_DAY)}
-          </Text>
-        </Pressable>
-      </View>
     </PtStepScreen>
   );
 }
-

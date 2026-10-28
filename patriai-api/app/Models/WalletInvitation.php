@@ -16,6 +16,7 @@ class WalletInvitation extends Model
         'can_approve',
         'permissions',
         'pledge_amount',
+        'pledge_kind',
         'keyholder',
         'status',
         'token',

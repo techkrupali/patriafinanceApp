@@ -80,7 +80,14 @@ export type RootStackParamList = {
   /** Guided creation starts by picking the kind of wallet. */
   CreateWallet: undefined;
   /** WCR-02 → WCR-11: a goal wallet, private or shared, with people and approvals. */
-  GoalWalletSetup: { draftId?: number } | undefined;
+  /** GLW-01…05 + WCR-06/07; `addedAccountId` comes back from GIV-07. */
+  GoalWalletSetup: { draftId?: number; addedAccountId?: number } | undefined;
+  /** JNT-01…05 + WCR-06: a joint wallet with a partner. */
+  JointWalletSetup: { draftId?: number } | undefined;
+  /** CHW-01…07 + WCR-06: a child's wallet. */
+  ChildWalletSetup: { draftId?: number } | undefined;
+  /** PRW-01…06 + WCR-06: a project paid by milestone. */
+  ProjectWalletSetup: { name?: string; draftId?: number } | undefined;
   /** WCR-12: the new wallet's account details; `invited` are first names. */
   WalletCreated: { walletId: number; invited: string[] };
   /** WCR-07 (savings, emergency): progress, then what happened — invites, rules. */
@@ -98,6 +105,12 @@ export type RootStackParamList = {
     payments?: { title: string; sub: string; amount: string }[];
     /** A note under the list ("The first offering comes from Main this week…"). */
     note?: string;
+    /** GLW: a link to share ("Contribution link — ready to share"). */
+    share?: { label: string; message: string };
+    /** JNT "Waiting for Emeka": both avatars instead of the balance, Back to Treasury first, and a reminder. */
+    waiting?: { initials: [string, string]; remind: { label: string; invitationId: number } | null };
+    /** CHW "Kamsi's wallet is ready": the child's initials instead of the balance; Edit on the phone row gives a new code. */
+    child?: { initials: string; phoneMode: 'own' | 'managed' };
   };
   /** SAV-01…06 + WCR-06: a savings wallet. */
   SavingsWalletSetup: { draftId?: number } | undefined;
@@ -108,7 +121,7 @@ export type RootStackParamList = {
   /** GIV-01…06 + WCR-06: a giving wallet; `addedAccountId` comes back from GIV-07. */
   GivingWalletSetup: { draftId?: number; addedAccountId?: number } | undefined;
   /** GIV-07 "Add a recipient, save for later". */
-  AddRecipient: { context?: string; returnTo: 'GivingWalletSetup' };
+  AddRecipient: { context?: string; returnTo: 'GivingWalletSetup' | 'GoalWalletSetup' };
   /** WAL-09 "Spending limits" of a spending wallet. */
   SpendingLimits: { walletId: number };
   /** Type-specific setup for every type without its own journey. */
