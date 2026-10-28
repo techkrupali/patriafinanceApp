@@ -49,7 +49,7 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
 
   const onAccept = (inv: WalletInvitation) => {
     selection();
-    if (inv.savings) {
+    if (inv.savings || inv.pledge) {
       setJoinError(null);
       setJoining(inv);
       return;

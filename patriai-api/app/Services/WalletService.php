@@ -187,7 +187,7 @@ class WalletService
             throw ValidationException::withMessages(['to' => 'Source and destination wallets are the same']);
         }
 
-        return DB::transaction(function () use ($from, $to, $amountKobo, $initiator, $description) {
+        $result = DB::transaction(function () use ($from, $to, $amountKobo, $initiator, $description) {
             // Lock in ascending id order to avoid deadlocks.
             $ids = [$from->id, $to->id];
             sort($ids);
@@ -247,6 +247,20 @@ class WalletService
 
             return ['reference' => $out->reference, 'balance_after' => $src->balance];
         });
+
+        $this->recordRoundUp($from, $amountKobo, $to, $description);
+
+        return $result;
+    }
+
+    /** Spending from Main feeds round-up savings; never undoes the move it follows. */
+    private function recordRoundUp(Wallet $from, int $amountKobo, ?Wallet $to, ?string $description): void
+    {
+        try {
+            RoundUpService::make()->record($from, $amountKobo, $to, $description);
+        } catch (\Throwable $e) {
+            Log::warning("Round-up for wallet {$from->id} not recorded: {$e->getMessage()}");
+        }
     }
 
     /** Withdraw to an external bank account via the banking rails. */
@@ -278,6 +292,7 @@ class WalletService
         try {
             $this->banking->payout($txn->reference, $amountNaira, $accountNumber, $bankCode, $description ?: 'Patriai withdrawal');
             $txn->update(['status' => 'successful', 'banking_reference' => $txn->reference]);
+            $this->recordRoundUp($wallet, $amountKobo, null, $description);
         } catch (ConnectionException $e) {
             // Timeout / network failure: the payout outcome is UNKNOWN. Do NOT refund
             // blindly (the bank may have executed it) — leave funds reserved as 'pending'

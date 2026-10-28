@@ -26,12 +26,17 @@ interface JoinSavingsSheetProps {
  * Accepting an invite to a savings goal: see the plan you're joining and pick
  * the wallet your savings come from (client: savings rules debit "all
  * contributors"). Amount/schedule are editable only if the owner allows it.
+ * An emergency fund invite (EMG-02) carries the monthly amount asked of you,
+ * saved on the 25th; you can change it.
  */
 export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClose }: JoinSavingsSheetProps) {
   const insets = useSafeAreaInsets();
   const wallets = useWallets();
   const sources = (wallets.data ?? []).filter((w) => w.my_role === 'owner' && w.status === 'active' && !w.emergency_locked);
   const plan = invitation?.savings ?? null;
+  const pledge = plan ? null : invitation?.pledge ?? null;
+  // A salary share or round-ups only plan has no amount of your own to set.
+  const ownAmount = Boolean(plan?.allow_contributor_edit && plan.schedule !== false);
 
   const [autoSave, setAutoSave] = useState(true);
   const [sourceId, setSourceId] = useState<number | null>(null);
@@ -44,6 +49,12 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
 
   // Fresh form, prefilled with the plan, each time the sheet opens.
   useEffect(() => {
+    if (pledge) {
+      setAutoSave(true);
+      setSourceId(null);
+      setAmount(String(parseFloat(pledge.amount)));
+      return;
+    }
     if (!plan) return;
     setAutoSave(plan.auto_save);
     setSourceId(null);
@@ -58,9 +69,13 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
       onConfirm({});
       return;
     }
+    if (pledge) {
+      onConfirm({ source_wallet_id: source ?? undefined, amount });
+      return;
+    }
     onConfirm({
       source_wallet_id: source ?? undefined,
-      ...(plan?.allow_contributor_edit
+      ...(ownAmount
         ? {
             amount,
             frequency: schedule.frequency,
@@ -79,7 +94,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
             <View className="mb-2 mt-3 h-1.5 w-12 self-center rounded-full bg-lav" />
             <View className="flex-row items-center px-6 pb-2">
               <Text className="flex-1 text-lg font-extrabold text-ink" numberOfLines={1}>
-                Join {invitation?.wallet?.name ?? 'Savings'}
+                Join {invitation?.wallet?.name ?? (pledge ? 'the fund' : 'Savings')}
               </Text>
               <Pressable onPress={onClose} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-full bg-lav-faint active:opacity-70">
                 <Ionicons name="close" size={18} color={colors.muted} />
@@ -97,6 +112,11 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
                     </Text>
                   ) : null}
                 </View>
+              ) : pledge ? (
+                <View className="rounded bg-success-soft p-4">
+                  <Text className="text-[15px] font-bold text-brand-deep">You were asked to put in {pledge.label}</Text>
+                  <Text className="mt-1 text-[13px] text-brand-deep">You can see the balance and every release. You can't take money out on your own.</Text>
+                </View>
               ) : null}
 
               <View className="mt-5 flex-row items-center">
@@ -110,7 +130,17 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
               {autoSave ? (
                 <>
                   <FundingSourceSelect label="Save From" wallets={sources} value={source} onChange={setSourceId} className="mt-5" />
-                  {plan?.allow_contributor_edit ? (
+                  {pledge ? (
+                    <Input
+                      label="Each Month, on the 25th"
+                      prefix="₦"
+                      value={groupAmountInput(amount)}
+                      onChangeText={(t) => setAmount(sanitizeAmountInput(t))}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      containerClassName="mt-5"
+                    />
+                  ) : ownAmount ? (
                     <>
                       <Input
                         label="My Amount"
@@ -130,7 +160,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
                       />
                     </>
                   ) : (
-                    <Text className="mt-3 text-[12px] text-muted">The owner sets the amount and schedule for everyone.</Text>
+                    <Text className="mt-3 text-[12px] text-muted">The owner sets how everyone saves: {plan?.label}.</Text>
                   )}
                 </>
               ) : (

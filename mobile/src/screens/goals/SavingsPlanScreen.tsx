@@ -114,6 +114,9 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
   }
 
   const me = s.me;
+  // A plan that saves only from salary or round-ups has no amount or schedule of its own to change.
+  const fixedPlan = s.plan?.schedule !== false;
+  const ownTerms = me.can_edit_own_terms && fixedPlan;
   // Until the saver edits it, the form shows the plan's terms.
   const mineView = mineTouched || editingMine ? mine : termsForm(s.plan);
   const editMine = (patch: Partial<TermsForm>) => {
@@ -140,11 +143,11 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
       setError('Choose the wallet your savings come from.');
       return;
     }
-    if (me.can_edit_own_terms && !(Number(mineView.amount) > 0)) {
+    if (ownTerms && !(Number(mineView.amount) > 0)) {
       setError('Enter how much you save each time.');
       return;
     }
-    const terms = me.can_edit_own_terms ? termsPayload(mineView) : {};
+    const terms = ownTerms ? termsPayload(mineView) : {};
     const opts = {
       onSuccess: () => {
         done();
@@ -158,13 +161,14 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
   };
 
   const savePlan = () => {
-    if (!(Number(plan.amount) > 0)) {
+    const withTerms = !s.plan || fixedPlan;
+    if (withTerms && !(Number(plan.amount) > 0)) {
       setError('Enter how much each person saves.');
       return;
     }
     actions.updatePlan.mutate(
       {
-        ...termsPayload(plan),
+        ...(withTerms ? termsPayload(plan) : {}),
         target_amount: plan.target || null,
         target_date: plan.targetDate,
         ...(s.plan ? {} : { auto_save: true, allow_contributor_edit: false }),
@@ -265,11 +269,15 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
               <View className="rounded bg-white p-4" style={outline.card}>
                 {!me.auto_save ? (
                   <Text className="mb-4 text-[13px] leading-5 text-muted">
-                    Save automatically: {me.can_edit_own_terms ? 'choose your amount and schedule' : s.plan.label}.
+                    Save automatically: {ownTerms ? 'choose your amount and schedule' : s.plan.label}.
                   </Text>
                 ) : null}
-                <FundingSourceSelect label="Save From" wallets={mySources} value={sourceId} onChange={setMySource} />
-                {me.can_edit_own_terms ? (
+                {fixedPlan ? (
+                  <FundingSourceSelect label="Save From" wallets={mySources} value={sourceId} onChange={setMySource} />
+                ) : (
+                  <Text className="text-[13px] leading-5 text-muted">Salary shares and round-ups come from your Main wallet, where they happen.</Text>
+                )}
+                {ownTerms ? (
                   <>
                     <Input
                       label="Amount"
@@ -284,7 +292,9 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
                     <FrequencyPicker frequency={mineView.frequency} dayOfWeek={mineView.dayOfWeek} dayOfMonth={mineView.dayOfMonth} onChange={editMine} />
                   </>
                 ) : (
-                  <Text className="mt-3 text-[12px] text-muted">The owner sets the amount and schedule: {s.plan.label}.</Text>
+                  <Text className="mt-3 text-[12px] text-muted">
+                    {fixedPlan ? `The owner sets the amount and schedule: ${s.plan.label}.` : `Everyone saves ${s.plan.label}, from their own Main.`}
+                  </Text>
                 )}
                 <Button
                   title={me.auto_save ? 'Save Changes' : 'Start Auto-Saving'}
@@ -321,11 +331,13 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
                     thumbColor={colors.white}
                   />
                 </View>
-                <Pressable onPress={startEditMine} className="mt-3 self-start">
-                  <Text className="text-[13px] font-bold text-brand">
-                    {me.can_edit_own_terms ? 'Change Amount, Schedule or Wallet' : 'Change Wallet'}
-                  </Text>
-                </Pressable>
+                {fixedPlan ? (
+                  <Pressable onPress={startEditMine} className="mt-3 self-start">
+                    <Text className="text-[13px] font-bold text-brand">
+                      {ownTerms ? 'Change Amount, Schedule or Wallet' : 'Change Wallet'}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : null}
           </Section>
@@ -429,16 +441,22 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
           <Section title={s.plan ? 'Plan for Everyone' : 'Set Up a Savings Plan'}>
             {editingPlan || !s.plan ? (
               <View className="rounded bg-white p-4" style={outline.card}>
-                <Input
-                  label="Each Person Saves"
-                  prefix="₦"
-                  value={groupAmountInput(plan.amount)}
-                  onChangeText={(t) => setPlan((p) => ({ ...p, amount: sanitizeAmountInput(t) }))}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                />
-                <Text className="mb-2 mt-4 text-[13px] font-semibold text-muted">How Often</Text>
-                <FrequencyPicker frequency={plan.frequency} dayOfWeek={plan.dayOfWeek} dayOfMonth={plan.dayOfMonth} onChange={(v) => setPlan((p) => ({ ...p, ...v }))} />
+                {!s.plan || fixedPlan ? (
+                  <>
+                    <Input
+                      label="Each Person Saves"
+                      prefix="₦"
+                      value={groupAmountInput(plan.amount)}
+                      onChangeText={(t) => setPlan((p) => ({ ...p, amount: sanitizeAmountInput(t) }))}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                    />
+                    <Text className="mb-2 mt-4 text-[13px] font-semibold text-muted">How Often</Text>
+                    <FrequencyPicker frequency={plan.frequency} dayOfWeek={plan.dayOfWeek} dayOfMonth={plan.dayOfMonth} onChange={(v) => setPlan((p) => ({ ...p, ...v }))} />
+                  </>
+                ) : (
+                  <Text className="text-[13px] leading-5 text-muted">Everyone saves {s.plan.label}.</Text>
+                )}
                 <Input
                   label="Target Amount"
                   prefix="₦"
@@ -469,6 +487,7 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
                     thumbColor={colors.white}
                   />
                 </View>
+                {fixedPlan ? (
                 <View className="mt-3 flex-row items-center border-t border-border pt-3">
                   <View className="flex-1 pr-2">
                     <Text className="text-[14px] font-semibold text-ink">Let Contributors Adjust</Text>
@@ -481,8 +500,9 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
                     thumbColor={colors.white}
                   />
                 </View>
+                ) : null}
                 <Pressable onPress={startEditPlan} className="mt-4 self-start">
-                  <Text className="text-[13px] font-bold text-brand">Change Amount, Schedule or Target</Text>
+                  <Text className="text-[13px] font-bold text-brand">{fixedPlan ? 'Change Amount, Schedule or Target' : 'Change Target'}</Text>
                 </Pressable>
               </View>
             )}

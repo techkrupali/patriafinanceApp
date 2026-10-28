@@ -9,8 +9,19 @@ class SavingsPlan extends Model
 {
     public const FREQUENCIES = ['daily', 'weekly', 'monthly'];
 
+    /** SAV-06: try again in 3 days, save what's there (keeping ₦5,000), or skip. */
+    public const MISSED_POLICIES = ['retry', 'partial', 'skip'];
+
+    /** Round-up steps offered (kobo): ₦100, ₦500, ₦1,000. */
+    public const ROUNDUP_STEPS = [10_000, 50_000, 100_000];
+
     protected $fillable = [
         'wallet_id',
+        'schedule',
+        'salary_percent',
+        'roundup_to',
+        'missed_policy',
+        'notify_others_on_miss',
         'amount',
         'frequency',
         'day_of_week',
@@ -27,6 +38,10 @@ class SavingsPlan extends Model
             'day_of_month' => 'integer',
             'auto_save' => 'boolean',
             'allow_contributor_edit' => 'boolean',
+            'schedule' => 'boolean',
+            'salary_percent' => 'integer',
+            'roundup_to' => 'integer',
+            'notify_others_on_miss' => 'boolean',
         ];
     }
 

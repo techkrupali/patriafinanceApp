@@ -174,7 +174,19 @@ class InvitationController extends ApiController
 
             $invitation->update(['status' => 'accepted', 'responded_at' => now()]);
 
-            if (!empty($data['source_wallet_id'])) {
+            if (!empty($data['source_wallet_id']) && $invitation->pledge_amount && !in_array($invitation->wallet->type, SavingsService::TYPES, true)) {
+                // EMG-02: "Each person saves automatically on the 25th".
+                $source = \App\Models\Wallet::where('id', (int) $data['source_wallet_id'])->where('user_id', $request->user()->id)->first();
+                if (!$source) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
+                }
+                \App\Services\AutomationService::make()->createContributionRule($request->user(), $source, $invitation->wallet->refresh(), [
+                    'name' => "Monthly into {$invitation->wallet->name}",
+                    'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : $invitation->pledge_amount,
+                    'frequency' => 'monthly',
+                    'day_of_month' => 25,
+                ]);
+            } elseif (!empty($data['source_wallet_id'])) {
                 $overrides = array_filter([
                     'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : null,
                     'frequency' => $data['frequency'] ?? null,

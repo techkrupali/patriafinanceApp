@@ -52,6 +52,7 @@ const STATUS_TONES: Record<string, Tone> = {
   // Project + milestone statuses
   completed: "green",
   released: "green",
+  flagged: "red",
   funded: "blue",
   submitted: "amber",
 };

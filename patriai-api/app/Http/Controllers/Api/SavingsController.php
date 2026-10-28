@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\SavingsMilestone;
 use App\Models\SavingsPlan;
 use App\Models\Wallet;
+use App\Services\SavingsInsights;
 use App\Services\SavingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,29 @@ class SavingsController extends ApiController
         ];
     }
 
+    // GET /savings/insights — SAV-03: the usual salary and round-up estimates from Main
+    public function insights(Request $request): JsonResponse
+    {
+        $i = SavingsInsights::make()->forUser($request->user());
+        $naira = fn (int $kobo) => number_format($kobo / 100, 2, '.', '');
+
+        return $this->ok('Savings insights fetched', [
+            'main_wallet' => $i['main'] ? [
+                'id' => $i['main']->id,
+                'name' => $i['main']->name,
+                'balance' => $i['main']->balanceNaira(),
+                'account_number' => $i['main']->virtual_account,
+            ] : null,
+            'months' => $i['months'],
+            'salary' => $i['salary'] ? [
+                'amount' => $naira($i['salary']['amount']),
+                'day' => $i['salary']['day'],
+                'from' => $i['salary']['from'],
+            ] : null,
+            'roundups' => collect($i['roundups'])->mapWithKeys(fn ($kobo, $step) => [(string) intdiv($step, 100) => $naira($kobo)]),
+        ]);
+    }
+
     // GET /wallets/{wallet}/savings
     public function show(Request $request, Wallet $wallet): JsonResponse
     {
@@ -61,6 +85,9 @@ class SavingsController extends ApiController
         $data = $request->validate($this->termRules() + [
             'auto_save' => ['sometimes', 'boolean'],
             'allow_contributor_edit' => ['sometimes', 'boolean'],
+            'salary_percent' => ['sometimes', 'integer', 'between:1,50'],
+            'missed_policy' => ['sometimes', 'in:' . implode(',', SavingsPlan::MISSED_POLICIES)],
+            'notify_others_on_miss' => ['sometimes', 'boolean'],
             'target_amount' => ['sometimes', 'nullable', 'numeric', 'min:1'],
             'target_date' => ['sometimes', 'nullable', 'date', 'after:today'],
         ]);

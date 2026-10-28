@@ -91,7 +91,13 @@ export interface Wallet {
   approval_expiry_hours?: number;
   /** Day of the month savers get a reminder (1–28), or null. */
   reminder_day?: number | null;
+  /** SAV-01 colour. */
+  colour?: WalletColour | null;
+  /** SAV-05: locked until a date or the target; `locked` while it holds. */
+  lock?: { mode: 'date' | 'target'; until: string | null; early_break: boolean; approval: boolean; locked: boolean } | null;
 }
+
+export type WalletColour = 'emerald' | 'mint' | 'gold' | 'deep' | 'clay' | 'violet';
 
 /** "Any one approver", "everyone", or "more than half". */
 export type ApprovalMode = 'any' | 'all' | 'majority';
@@ -114,6 +120,15 @@ export interface Transaction {
   created_at: string | null;
   /** Who moved the money (wallet activity only). */
   by?: { id: number; first_name: string } | null;
+}
+
+/** GET /savings/insights — SAV-03 estimates from the last 3 months of Main. */
+export interface SavingsInsights {
+  main_wallet: { id: number; name: string; balance: string; account_number: string | null } | null;
+  months: number;
+  salary: { amount: string; day: number; from: string | null } | null;
+  /** Monthly round-up estimate by step: "100" | "500" | "1000" → naira string. */
+  roundups: Record<string, string>;
 }
 
 /** Per-member granular access matrix ("Assign Wallet Access & Roles"). */
@@ -173,6 +188,8 @@ export interface WalletInvitation {
   expires_at?: string | null;
   /** Access chosen for this person at invite time (null = role defaults). */
   permissions?: InvitePermissions | null;
+  /** Emergency contributors: what they were asked to put in each month. */
+  pledge?: { amount: string; label: string } | null;
   /** Savings wallets: the plan the invitee is joining. */
   savings?: SavingsSummary | null;
 }
@@ -708,7 +725,17 @@ export interface CreateWalletPayload {
   // ---- Guided creation (WCR-02 → WCR-11) ----
   mode?: 'private' | 'shared';
   /** People to invite: an account by id, or a phone number / email for someone new. */
-  members?: { user_id?: number; identifier?: string; role: 'co_owner' | 'contributor' | 'viewer' }[];
+  members?: {
+    user_id?: number;
+    identifier?: string;
+    role: 'co_owner' | 'contributor' | 'viewer';
+    can_approve?: boolean;
+    permissions?: InvitePermissions;
+    /** Emergency contributors: naira a month, on the 25th. */
+    pledge?: string;
+  }[];
+  colour?: WalletColour;
+  lock?: { mode: 'none' | 'date' | 'target'; until?: string; early_break?: boolean; approval?: boolean };
   /** "When does money need a yes?" — threshold null means any amount. */
   approval?: { threshold: string | null; mode: ApprovalMode; lock_until_goal?: boolean; expiry_hours?: number };
   reminder_day?: number;
@@ -731,14 +758,25 @@ export interface InvitePermissions {
 }
 
 export interface SavingsPlanPayload {
+  /** SAV-02: a fixed amount on a schedule (amount + frequency). */
+  schedule?: boolean;
   /** Naira decimal string — what EACH saver puts in per period. */
-  amount: string;
-  frequency: SavingsFrequency;
+  amount?: string;
+  frequency?: SavingsFrequency;
   day_of_week?: number;
   day_of_month?: number;
+  /** A share of every salary that lands in Main (1–50). */
+  salary_percent?: number;
+  /** Round spending from Main up to ₦100 / ₦500 / ₦1,000. */
+  roundup_to?: '100' | '500' | '1000';
   auto_save: boolean;
   allow_contributor_edit: boolean;
+  /** SAV-06 if a save can't happen. */
+  missed_policy?: SavingsMissedPolicy;
+  notify_others_on_miss?: boolean;
 }
+
+export type SavingsMissedPolicy = 'retry' | 'partial' | 'skip';
 
 /** A plan or a saver's auto-save, as the API describes it. */
 export interface SavingsTerms {
@@ -753,6 +791,10 @@ export interface SavingsTerms {
 export interface SavingsSummary extends SavingsTerms {
   auto_save: boolean;
   allow_contributor_edit: boolean;
+  /** False when the plan saves only from salary or round-ups. */
+  schedule?: boolean;
+  salary_percent?: number | null;
+  roundup_to?: string | null;
   target_amount: string | null;
   target_date: string | null;
 }
@@ -778,7 +820,17 @@ export interface SavingsDetail {
   target_date: string | null;
   progress: number | null;
   days_left: number | null;
-  plan: (SavingsTerms & { auto_save: boolean; allow_contributor_edit: boolean }) | null;
+  plan:
+    | (SavingsTerms & {
+        auto_save: boolean;
+        allow_contributor_edit: boolean;
+        schedule?: boolean;
+        salary_percent?: number | null;
+        roundup_to?: string | null;
+        missed_policy?: SavingsMissedPolicy;
+        notify_others_on_miss?: boolean;
+      })
+    | null;
   projection: {
     per_month: string;
     projected_date: string | null;
@@ -854,6 +906,16 @@ export interface EmergencyRulesPayload {
   override_high_balance: boolean;
   beneficiary_note?: string;
   beneficiaries: EmergencyRecipientPayload[];
+  // ---- EMG-01/03/04 ----
+  purposes?: EmergencyPurpose[];
+  /** Keyholders besides you (Patriai users). */
+  keyholders?: number[];
+  /** "2 of 3": yeses a release needs, you included. */
+  required_keyholders?: number;
+  request_expiry_hours?: number;
+  /** Naira; null/absent = no fast release. */
+  fast_release_limit?: string | null;
+  fast_release_every_days?: number;
 }
 
 export interface EmergencyPerson {
@@ -869,6 +931,9 @@ export interface EmergencySummary {
   unlocked_at: string | null;
   unlocked_via: EmergencyUnlockVia | null;
   my_emergency_role: 'owner' | 'approver' | 'recipient' | null;
+  /** Keyholders, you included, and how many must agree ("2 of 3"). */
+  keyholders?: number;
+  required?: number;
 }
 
 export interface EmergencyRecipient {
@@ -886,11 +951,18 @@ export interface EmergencyRecipient {
 export interface EmergencyRequest {
   id: number;
   wallet_id: number;
-  method: 'dual_approval' | 'document';
-  document_type: EmergencyDocumentType | null;
+  method: 'dual_approval' | 'document' | 'fast_release';
+  document_type: EmergencyDocumentType | 'proof' | null;
   has_document: boolean;
   note: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired' | 'released' | 'flagged';
+  /** Fast release: naira moved. */
+  amount?: string | null;
+  /** Keyholders' yeses so far and needed. */
+  approvals?: number;
+  required_approvals?: number | null;
+  expires_at?: string | null;
+  can_flag?: boolean;
   requested_by: EmergencyPerson | null;
   approved_by: EmergencyPerson | null;
   review_note: string | null;
@@ -903,6 +975,7 @@ export interface EmergencyRequest {
 
 export interface EmergencyDetail {
   purpose: EmergencyPurpose;
+  purposes?: EmergencyPurpose[];
   locked: boolean;
   unlocked_at: string | null;
   unlocked_via: EmergencyUnlockVia | null;
@@ -918,6 +991,10 @@ export interface EmergencyDetail {
     override_national_crisis: boolean;
     override_high_balance: boolean;
     override_balance_threshold: string;
+    keyholders?: EmergencyPerson[];
+    required_keyholders?: number;
+    request_expiry_hours?: number | null;
+    fast_release?: { limit: string; every_days: number; last_at: string | null; next_at: string | null } | null;
   };
   beneficiaries: EmergencyRecipient[];
   /** Owner always; recipients only once the wallet is unlocked. */
@@ -933,6 +1010,8 @@ export interface EmergencyDetail {
     can_lock: boolean;
     can_request_dual: boolean;
     can_submit_document: boolean;
+    is_keyholder?: boolean;
+    can_fast_release?: boolean;
     beneficiary: {
       withdrawal_limit: string | null;
       withdrawn: string;
@@ -1556,6 +1635,14 @@ export interface AutomationRule {
   to_wallet: { id: number; name: string };
   /** Naira decimal string. */
   amount: string;
+  /** schedule (calendar) | salary (percent of each salary) | roundup (swept daily). */
+  trigger?: 'schedule' | 'salary' | 'roundup';
+  percent?: number | null;
+  roundup_to?: string | null;
+  /** Round-ups built up and not yet moved. */
+  pending_amount?: string;
+  /** A missed save trying again. */
+  retry_at?: string | null;
   frequency: AutomationFrequency;
   /** 1 (Mon) – 7 (Sun), for weekly rules. */
   day_of_week: number | null;

@@ -1,22 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtText } from '../../components/pt/PtText';
 import { PtDateSheet } from '../../components/pt/PtDateSheet';
-import { PtPhoneField } from '../../components/pt/PtPhoneField';
 import { PtAvatar, AVATAR_CYCLE, type PtAvatarTone } from '../../components/pt/PtAvatar';
 import { PtCheckbox, PtRadio } from '../../components/pt/PtCheck';
 import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
 import { PtSwitch } from '../../components/pt/PtTabScreen';
+import { PtAddRow, PtNewPersonForm, PtRoleButton } from '../../components/pt/PtPeople';
+import { PtDivider, PtPanel } from '../../components/pt/PtForm';
 import { useCreateWallet, useFamily } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
 import { formatNaira, formatYmd, groupAmountInput, initials, parseYmd, sanitizeAmountInput, ymdMonthsFromNow } from '../../lib/format';
-import { DEFAULT_COUNTRY, formatE164, isValidE164, toE164, type Country } from '../../lib/phone';
+import { formatE164 } from '../../lib/phone';
 import {
   EXPIRY_HOURS,
   NEW_MEMBER_ROLES,
@@ -30,6 +31,7 @@ import {
   type NewMemberRole,
 } from '../../lib/goalPlan';
 import { confirmLeaveSetup, useDraft, useDraftAutosave } from '../../lib/drafts';
+import { useSetupFlow } from '../../lib/useSetupFlow';
 import { notifySuccess, selection } from '../../lib/haptics';
 import type { ApprovalMode, FamilyMember, WalletDraft } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -86,45 +88,6 @@ function defaultRole(m: FamilyMember): NewMemberRole {
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
-/** Outlined "Co-owner ▾" pill that opens the role sheet. */
-function RoleButton({ role, onPress, label }: { role: NewMemberRole; onPress: () => void; label: string }) {
-  return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`Role for ${label}: ${roleName(role)}`}
-      style={{
-        height: 40,
-        paddingHorizontal: 10,
-        borderRadius: ptRadius.sm,
-        borderWidth: 1.5,
-        borderColor: pt.lineStrong,
-        backgroundColor: pt.raised,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-      }}
-    >
-      <Text style={{ fontFamily: ptFont.medium, fontSize: 14, color: pt.ink }}>{roleName(role)}</Text>
-      <Feather name="chevron-down" size={16} color={pt.ink} />
-    </Pressable>
-  );
-}
-
-/** Raised card with hairlines between its children. */
-function Card({ children, padded = true }: { children: React.ReactNode; padded?: boolean }) {
-  return (
-    <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: padded ? 16 : 0, paddingVertical: padded ? 4 : 0 }}>
-      {children}
-    </View>
-  );
-}
-
-const Divider = () => <View style={{ height: 1, backgroundColor: pt.line }} />;
-
 /**
  * Goal wallet creation from the client prototype: WCR-02 name and who it's for
  * → WCR-08 who's in it → WCR-09 when money needs a yes → WCR-11 check and
@@ -153,60 +116,36 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
   const set = (patch: Partial<GoalForm>) => setForm((f) => ({ ...f, ...patch }));
 
   const steps: Step[] = form.mode === 'shared' ? ['name', 'members', 'approvals', 'review'] : ['name', 'review'];
-  const [stepIndex, setStepIndex] = useState(() => Math.min(Math.max((draft?.step ?? 2) - 2, 0), steps.length - 1));
-  const step = steps[Math.min(stepIndex, steps.length - 1)];
+  // Step 1 is choosing the type (WCR-01), so this flow is steps 2–5.
+  const flow = useSetupFlow(navigation, steps, (draft?.step ?? 2) - 2);
+  const stepIndex = flow.index;
+  const step = flow.step;
 
   const [error, setError] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
   const [roleFor, setRoleFor] = useState<number | string | null>(null);
   const [expiryOpen, setExpiryOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [newPhone, setNewPhone] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<NewMemberRole>('contributor');
 
   const autosave = useDraftAutosave({
     initialDraftId: draft?.id,
     type: 'goal',
     name,
-    // Step 1 is choosing the type (WCR-01), so this flow saves steps 2–5.
     step: stepIndex + 2,
     totalSteps: steps.length + 1,
     data: form as unknown as Record<string, unknown>,
     enabled: Boolean(name.trim() || form.target),
   });
 
-  // Hardware back / swipe walks back through the steps before leaving.
-  const leaving = useRef(false);
-  const stepRef = useRef(stepIndex);
-  stepRef.current = stepIndex;
-  useEffect(
-    () =>
-      navigation.addListener('beforeRemove', (e) => {
-        if (leaving.current || stepRef.current === 0) return;
-        e.preventDefault();
-        setError(null);
-        setStepIndex(stepRef.current - 1);
-      }),
-    [navigation],
-  );
-
-  const leave = (go: () => void) => {
-    leaving.current = true;
-    go();
-  };
-
+  const leave = flow.leave;
   const back = () => {
     setError(null);
-    if (stepIndex > 0) {
-      setStepIndex(stepIndex - 1);
-      return;
-    }
-    confirmLeaveSetup(
-      Boolean(autosave.draftId),
-      () => leave(() => navigation.goBack()),
-      () => void autosave.discard().then(() => leave(() => navigation.goBack())),
+    flow.back(() =>
+      confirmLeaveSetup(
+        Boolean(autosave.draftId),
+        () => leave(() => navigation.goBack()),
+        () => void autosave.discard().then(() => leave(() => navigation.goBack())),
+      ),
     );
   };
 
@@ -217,7 +156,8 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
   const pickedFamily = members.filter((m) => form.picked.includes(m.id));
   const people = [
     ...pickedFamily.map((m) => ({ name: firstName(m.name), role: roleOf(m) })),
-    ...form.newPeople.map((p) => ({ name: p.name.trim() ? firstName(p.name) : formatE164(p.phone), role: p.role })),
+    // Someone new is called what you typed ("Uncle Obi"); family go by first name.
+    ...form.newPeople.map((p) => ({ name: p.name.trim() || formatE164(p.phone), role: p.role })),
   ];
   const shared = form.mode === 'shared';
   const myFirst = me?.first_name || firstName(me?.full_name ?? 'You');
@@ -256,25 +196,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
       return;
     }
     setError(null);
-    setStepIndex(stepIndex + 1);
-  };
-
-  const addNewPerson = () => {
-    const phone = toE164(country.dial, newPhone);
-    if (!isValidE164(phone)) {
-      setError('Enter a valid phone number.');
-      return;
-    }
-    if (form.newPeople.some((p) => p.phone === phone) || phone === me?.phone) {
-      setError("They're already on the list.");
-      return;
-    }
-    setError(null);
-    set({ newPeople: [...form.newPeople, { key: phone, phone, name: newName.trim(), role: newRole }] });
-    setNewPhone('');
-    setNewName('');
-    setNewRole('contributor');
-    setAdding(false);
+    flow.next();
   };
 
   const submit = () => {
@@ -448,7 +370,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
           </>
         }
       >
-        <Card>
+        <PtPanel>
           <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
             <PtAvatar initials={initials(me?.full_name)} uri={me?.avatar_url} tone="brand" />
             <View>
@@ -463,7 +385,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
             const on = form.picked.includes(m.id);
             return (
               <React.Fragment key={m.id}>
-                <Divider />
+                <PtDivider />
                 <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
                   <Pressable
                     onPress={() => {
@@ -481,7 +403,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
                       {m.name}
                     </Text>
                   </Pressable>
-                  <RoleButton role={roleOf(m)} label={m.name} onPress={() => setRoleFor(m.id)} />
+                  <PtRoleButton label={roleName(roleOf(m))} accessibilityLabel={`Role for ${m.name}`} onPress={() => setRoleFor(m.id)} />
                 </View>
               </React.Fragment>
             );
@@ -489,7 +411,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
 
           {form.newPeople.map((p) => (
             <React.Fragment key={p.key}>
-              <Divider />
+              <PtDivider />
               <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
                 <Pressable
                   onPress={() => {
@@ -510,77 +432,33 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
                     {p.name ? `${formatE164(p.phone)} · ` : ''}gets an invite by SMS
                   </Text>
                 </View>
-                <RoleButton role={p.role} label={p.name || p.phone} onPress={() => setRoleFor(p.key)} />
+                <PtRoleButton label={roleName(p.role)} accessibilityLabel={`Role for ${p.name || p.phone}`} onPress={() => setRoleFor(p.key)} />
               </View>
             </React.Fragment>
           ))}
 
-          <Divider />
+          <PtDivider />
           {adding ? (
-            <View style={{ paddingVertical: 14, gap: 14 }}>
-              <PtPhoneField label="Their phone number" country={country} onChangeCountry={setCountry} value={newPhone} onChange={setNewPhone} autoFocus />
-              <PtField label="Their name (optional)" value={newName} onChangeText={setNewName} placeholder="Chidi" maxLength={60} />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {NEW_MEMBER_ROLES.map((r) => {
-                  const on = r.value === newRole;
-                  return (
-                    <Pressable
-                      key={r.value}
-                      onPress={() => {
-                        selection();
-                        setNewRole(r.value);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      style={{
-                        flex: 1,
-                        height: 40,
-                        borderRadius: ptRadius.sm,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: on ? 2 : 1.5,
-                        borderColor: on ? pt.brand : pt.lineStrong,
-                        backgroundColor: on ? pt.brandSoft : pt.raised,
-                      }}
-                    >
-                      <Text style={{ fontFamily: on ? ptFont.bold : ptFont.medium, fontSize: 14, color: on ? pt.brand : pt.ink }}>{r.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <PtButton title="Cancel" variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => setAdding(false)} />
-                <PtButton title="Add" size="sm" style={{ flex: 1 }} onPress={addNewPerson} />
-              </View>
-            </View>
+            <PtNewPersonForm
+              roles={NEW_MEMBER_ROLES}
+              defaultRole="contributor"
+              taken={[...form.newPeople.map((p) => p.phone), me?.phone ?? '']}
+              onCancel={() => setAdding(false)}
+              onAdd={(p) => {
+                set({ newPeople: [...form.newPeople, { key: p.phone, phone: p.phone, name: p.name, role: p.role ?? 'contributor' }] });
+                setAdding(false);
+              }}
+            />
           ) : (
-            <Pressable
+            <PtAddRow
+              label="Invite someone new"
               onPress={() => {
-                selection();
                 setError(null);
                 setAdding(true);
               }}
-              accessibilityRole="button"
-              style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            >
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderStyle: 'dashed',
-                  borderColor: pt.brand,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Feather name="plus" size={18} color={pt.brand} />
-              </View>
-              <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.brand }}>Invite someone new</Text>
-            </Pressable>
+            />
           )}
-        </Card>
+        </PtPanel>
 
         <View style={{ backgroundColor: pt.sunken, borderRadius: ptRadius.md, padding: 16 }}>
           <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>
@@ -654,7 +532,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
               );
             })}
           </View>
-          <Divider />
+          <PtDivider />
           <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.ink }}>Who needs to approve</Text>
           <View>
             {modes.map((m) => {
@@ -691,7 +569,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
             </View>
             <PtSwitch value={form.lockUntilGoal} onChange={(v) => set({ lockUntilGoal: v })} label="Lock until goal is reached" />
           </View>
-          <Divider />
+          <PtDivider />
           <Pressable
             onPress={() => {
               selection();
@@ -726,7 +604,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
   // ------------------------------------------------------------ WCR-11
   const goTo = (s: Step) => {
     setError(null);
-    setStepIndex(steps.indexOf(s));
+    flow.goTo(s);
   };
   const reviewRow = (label: string, value: React.ReactNode, onEdit: () => void, last = false) => (
     <>
@@ -751,7 +629,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
           <Text style={{ fontFamily: ptFont.bold, fontSize: 15, lineHeight: 22, color: pt.brand }}>Edit</Text>
         </Pressable>
       </View>
-      {last ? null : <Divider />}
+      {last ? null : <PtDivider />}
     </>
   );
 
@@ -774,7 +652,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
         </>
       }
     >
-      <Card>
+      <PtPanel>
         {reviewRow('Type', `Goal · ${shared ? 'Shared' : 'Private'}`, () => leave(() => navigation.goBack()))}
         {reviewRow('Name', name.trim(), () => goTo('name'))}
         {reviewRow('Target', targetLabel(target, form.targetDate), () => goTo('name'), !shared)}
@@ -802,7 +680,7 @@ function GoalWalletForm({ navigation, draft }: RootScreenProps<'GoalWalletSetup'
               true,
             )
           : null}
-      </Card>
+      </PtPanel>
 
       <View style={{ backgroundColor: pt.infoSoft, borderRadius: ptRadius.md, padding: 16, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

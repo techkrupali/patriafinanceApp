@@ -25,6 +25,7 @@ import {
 import { useAuth } from '../../store/auth';
 import { agoLabel, formatNaira, formatYmd, humanizeType, initials } from '../../lib/format';
 import { approvalSummary, joinNames, ordinal } from '../../lib/goalPlan';
+import { walletColour } from '../../lib/walletColours';
 import { formatE164 } from '../../lib/phone';
 import { canInviteMembers, canManageWallet, roleLabel } from '../../lib/governance';
 import { notifySuccess, selection } from '../../lib/haptics';
@@ -296,18 +297,22 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
     </View>
   );
 
+  const lock = wallet?.lock;
+  const lockLine = lock?.locked
+    ? `Locked until ${lock.mode === 'date' && lock.until ? formatYmd(lock.until) : `${formatNaira(wallet?.target_amount)} is reached`}. ${
+        !lock.early_break ? 'Nothing comes out before then.' : lock.approval ? "Taking money out early needs everyone's yes." : 'Early breaks are allowed.'
+      }`
+    : null;
   const approvalLine = !approval?.enabled
-    ? wallet?.goal_locked
-      ? `Locked until ${formatNaira(wallet.target_amount)} is reached. Taking money out early needs everyone's yes.`
-      : 'Approvals are off. Owners and co-owners can pay out directly.'
+    ? lockLine ?? 'Approvals are off. Owners and co-owners can pay out directly.'
     : wallet?.approval_mode
       ? approvalSummary({
           mode: wallet.approval_mode,
           threshold: approval.threshold ? parseFloat(approval.threshold) : null,
           approvers,
-          lockUntilGoal: wallet.goal_locked ?? false,
-        })
-      : `${approval.threshold ? `Payments over ${formatNaira(approval.threshold)}` : 'Every payment'} need${approval.threshold ? '' : 's'} ${approval.required_approvals} yes${approval.required_approvals === 1 ? '' : 'es'} from ${joinNames(approvers) || 'an approver'}.`;
+          lockUntilGoal: Boolean(wallet.goal_locked && lock?.mode !== 'date'),
+        }) + (lock?.locked && lock.mode === 'date' && lockLine ? ` ${lockLine}` : '')
+      : `${approval.threshold ? `Payments over ${formatNaira(approval.threshold)}` : 'Every payment'} need${approval.threshold ? '' : 's'} ${approval.required_approvals} yes${approval.required_approvals === 1 ? '' : 'es'} from ${joinNames(approvers) || 'an approver'}.${lockLine ? ` ${lockLine}` : ''}`;
 
   const rulesTab = (
     <View style={{ gap: 12, paddingTop: 8 }}>
@@ -352,7 +357,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               left={<Feather name="repeat" size={20} color={r.enabled ? pt.brand : pt.inkSubtle} />}
               title={r.name}
               subtitle={`${r.from_wallet.name} → ${r.to_wallet.name} · ${r.enabled ? r.next_run_hint : 'Paused'}`}
-              right={<Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{formatNaira(r.amount)}</Text>}
+              right={
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>
+                  {r.trigger === 'salary' ? `${r.percent}%` : r.trigger === 'roundup' ? `↑${formatNaira(r.roundup_to)}` : formatNaira(r.amount)}
+                </Text>
+              }
             />
           ))}
         </PtCard>
@@ -444,7 +453,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
         >
           {/* Hero */}
           <View style={{ alignItems: 'center', gap: 10 }}>
-            {hasTarget ? <PtRing percent={pct} size={150} stroke={14} caption="funded" /> : null}
+            {hasTarget ? <PtRing percent={pct} size={150} stroke={14} caption="funded" color={walletColour(wallet.colour) ?? pt.gold500} /> : null}
             <Text style={{ fontFamily: ptFont.extrabold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, color: pt.ink, marginTop: hasTarget ? 6 : 12 }}>
               {formatNaira(wallet.balance)}
             </Text>
@@ -461,6 +470,9 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   ? `${formatNaira(Math.max(balance - held, 0))} available · ${formatNaira(held)} held for approvals`
                   : `${humanizeType(wallet.type)} wallet`}
             </Text>
+            {wallet.description ? (
+              <Text style={{ fontFamily: ptFont.medium, fontSize: 13, lineHeight: 18, color: pt.ink, textAlign: 'center' }}>{wallet.description}</Text>
+            ) : null}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
               {members.length > 1 ? (
                 <View style={{ flexDirection: 'row' }}>
@@ -473,7 +485,13 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               ) : null}
               {shared ? <PtChip label="Shared" tone="brand" icon="circle" /> : null}
               {approval?.enabled ? <PtChip label="Approvals on" tone="neutral" icon="lock" /> : null}
-              {wallet.goal_locked ? <PtChip label="Locked until reached" tone="warning" icon="lock" /> : null}
+              {wallet.goal_locked ? (
+                <PtChip
+                  label={wallet.lock?.mode === 'date' && wallet.lock.until ? `Locked to ${formatYmd(wallet.lock.until).replace(/ \d{4}$/, '')}` : 'Locked until reached'}
+                  tone="warning"
+                  icon="lock"
+                />
+              ) : null}
               {wallet.status === 'frozen' ? <PtChip label="Frozen" tone="danger" icon="pause" /> : null}
             </View>
           </View>

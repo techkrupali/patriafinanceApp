@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Wallet;
+use App\Services\AutomationService;
 use App\Services\NotificationService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
@@ -81,6 +82,9 @@ class WebhookController extends ApiController
                     'amount' => $txn->amount,
                 ],
             );
+
+            // Salary landed in Main: "save 15% from every salary" rules take their share.
+            AutomationService::make()->runIncome($wallet, $txn);
         }
 
         return $this->ok('Wallet credited');

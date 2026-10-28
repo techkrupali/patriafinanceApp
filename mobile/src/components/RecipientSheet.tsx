@@ -10,7 +10,7 @@ import { Button } from './Button';
 import { ErrorText } from './ErrorText';
 import { colors } from '../theme';
 import { groupAmountInput, sanitizeAmountInput } from '../lib/format';
-import { beneficiaryRank } from '../lib/emergency';
+import { beneficiaryRank } from '../lib/emergencyRules';
 import { selection } from '../lib/haptics';
 import type { EmergencyAccessType, EmergencyRecipientRole, UserSearchResult } from '../api/types';
 

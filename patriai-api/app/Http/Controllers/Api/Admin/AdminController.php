@@ -411,9 +411,22 @@ class AdminController extends ApiController
                 ]),
             'recent_transactions' => $wallet->transactions()->latest()->limit(15)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
+            // Savings and goal wallets: how everyone saves (salary share, round-ups, schedule) and missed saves.
+            'savings_plan' => \App\Services\SavingsService::make()->invitationSummary($wallet),
             // Emergency wallets: lock state + whether the owner allowed a national-crisis override.
             'emergency' => $wallet->type === 'emergency' && $wallet->emergencySetting ? [
                 'purpose' => $wallet->emergencySetting->purpose,
+                'purposes' => $wallet->emergencySetting->purposes ?? [$wallet->emergencySetting->purpose],
+                // EMG-03 keyholders (owner first) and how many must agree; EMG-04 fast release.
+                'keyholders' => \App\Models\User::whereIn('id', $wallet->emergencySetting->dual_approval ? $wallet->emergencySetting->keyholders($wallet->user_id) : [$wallet->user_id])
+                    ->get()->map(fn ($u) => $u->fullName())->values(),
+                'required_keyholders' => $wallet->emergencySetting->dual_approval ? $wallet->emergencySetting->requiredYeses($wallet->user_id) : 1,
+                'request_expiry_hours' => $wallet->emergencySetting->request_expiry_hours,
+                'fast_release_limit' => $wallet->emergencySetting->fast_release_limit !== null ? number_format($wallet->emergencySetting->fast_release_limit / 100, 2, '.', '') : null,
+                'fast_release_every_days' => $wallet->emergencySetting->fast_release_every_days,
+                'manual_unlock' => $wallet->emergencySetting->manual_unlock,
+                'unlock_on_document' => $wallet->emergencySetting->unlock_on_document,
+                'beneficiaries' => $wallet->emergencyBeneficiaries()->with('user')->get()->map(fn ($b) => $b->user?->fullName())->filter()->values(),
                 'locked' => $wallet->emergencySetting->isLocked(),
                 'unlocked_at' => $wallet->emergencySetting->unlocked_at?->toIso8601String(),
                 'unlocked_via' => $wallet->emergencySetting->unlocked_via,

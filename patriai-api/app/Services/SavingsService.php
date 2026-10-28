@@ -84,15 +84,27 @@ class SavingsService
         if (!empty($data['savings_plan'])) {
             $plan = $data['savings_plan'];
             $terms = $this->normaliseTerms($plan);
-            if ($terms['amount'] <= 0) {
+            // SAV-02: a fixed amount on a schedule, a share of salary, round-ups — or by hand.
+            $schedule = (bool) ($plan['schedule'] ?? true);
+            $salary = !empty($plan['salary_percent']) ? (int) $plan['salary_percent'] : null;
+            $roundup = !empty($plan['roundup_to']) ? (int) $plan['roundup_to'] : null;
+            $autoSave = (bool) ($plan['auto_save'] ?? true);
+            if ($schedule && $terms['amount'] <= 0) {
                 throw ValidationException::withMessages(['savings_plan.amount' => 'Enter how much each person saves.']);
             }
-            $autoSave = (bool) ($plan['auto_save'] ?? true);
+            if ($autoSave && !$schedule && !$salary && !$roundup) {
+                throw ValidationException::withMessages(['savings_plan' => 'Choose how money comes in.']);
+            }
 
-            SavingsPlan::create($terms + [
+            $row = SavingsPlan::create($terms + [
                 'wallet_id' => $wallet->id,
+                'schedule' => $schedule,
+                'salary_percent' => $salary,
+                'roundup_to' => $roundup,
                 'auto_save' => $autoSave,
                 'allow_contributor_edit' => (bool) ($plan['allow_contributor_edit'] ?? false),
+                'missed_policy' => $plan['missed_policy'] ?? 'skip',
+                'notify_others_on_miss' => (bool) ($plan['notify_others_on_miss'] ?? false),
             ]);
             $wallet->unsetRelation('savingsPlan');
 
@@ -100,7 +112,7 @@ class SavingsService
                 if (!$source) {
                     throw ValidationException::withMessages(['source_wallet_id' => 'Choose the wallet your savings come from.']);
                 }
-                $this->automations->createContributionRule($owner, $source, $wallet, $terms);
+                $this->createSaverRules($owner, $source, $wallet, $row);
             }
         }
 
@@ -129,7 +141,7 @@ class SavingsService
     public function notifyInvited(Wallet $wallet, User $owner, array $exceptInvitationIds = []): void
     {
         $plan = $wallet->savingsPlan;
-        $pace = $plan ? ' — ₦' . $this->naira($plan->amount) . ' ' . $this->frequencyLabel($plan) : '';
+        $pace = $plan ? ' — ' . $this->methodsLabel($plan->salary_percent, $plan->roundup_to, $plan->schedule ? $plan : null) : '';
 
         $wallet->invitations()->where('status', 'pending')->whereNotIn('id', $exceptInvitationIds)->with('invitee')->get()->each(function (WalletInvitation $inv) use ($wallet, $owner, $pace) {
             if (!$inv->invitee) {
@@ -222,25 +234,26 @@ class SavingsService
         }
     }
 
-    private function contributionRule(Wallet $wallet, User $user): ?AutomationRule
+    /** A saver's rules into this wallet: scheduled, salary share and round-ups. */
+    private function contributionRulesOf(Wallet $wallet, User $user): Collection
     {
         return AutomationRule::where('user_id', $user->id)
             ->where('to_wallet_id', $wallet->id)
             ->where('savings_contribution', true)
-            ->first();
+            ->get();
     }
 
     /**
      * Start a saver's own auto-save into the wallet (on joining, or later). The
      * plan's amount and schedule apply unless the owner lets contributors pick.
      */
-    public function startContribution(Wallet $wallet, User $user, int $sourceWalletId, array $overrides = []): AutomationRule
+    public function startContribution(Wallet $wallet, User $user, int $sourceWalletId, array $overrides = []): Collection
     {
         $plan = $wallet->savingsPlan;
         if (!$plan) {
             throw ValidationException::withMessages(['wallet' => 'This wallet has no savings plan yet.']);
         }
-        if ($this->contributionRule($wallet, $user)) {
+        if ($this->contributionRulesOf($wallet, $user)->isNotEmpty()) {
             throw ValidationException::withMessages(['wallet' => "You're already auto-saving into {$wallet->name} — edit it instead."]);
         }
         $source = Wallet::where('id', $sourceWalletId)->where('user_id', $user->id)->first();
@@ -248,32 +261,65 @@ class SavingsService
             throw ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
         }
 
-        $mayChoose = $plan->allow_contributor_edit || $wallet->user_id === $user->id;
-        $terms = $this->normaliseTerms($mayChoose ? $overrides : [], $plan);
+        return $this->createSaverRules($user, $source, $wallet, $plan, $overrides);
+    }
 
-        return $this->automations->createContributionRule($user, $source, $wallet, $terms + ['enabled' => $plan->auto_save]);
+    /**
+     * One rule per way the plan saves: the scheduled amount from $from, a share of
+     * each salary and round-ups on spending — both from the saver's Main, where
+     * salary lands and spending happens. The saver's own amount and schedule apply
+     * only when the owner lets contributors choose.
+     */
+    public function createSaverRules(User $user, Wallet $from, Wallet $savings, SavingsPlan $plan, array $overrides = []): Collection
+    {
+        $rules = collect();
+        $mayChoose = $plan->allow_contributor_edit || $savings->user_id === $user->id;
+        $main = $from->type === 'main' ? $from : $user->mainWallet();
+
+        if ($plan->schedule && $plan->amount > 0) {
+            $terms = $this->normaliseTerms($mayChoose ? $overrides : [], $plan);
+            $rules->push($this->automations->createContributionRule($user, $from, $savings, $terms + ['enabled' => $plan->auto_save]));
+        }
+        if ($plan->salary_percent && $main) {
+            $rules->push($this->automations->createSalaryRule($user, $main, $savings, $plan->salary_percent, $plan->auto_save));
+        }
+        if ($plan->roundup_to && $main) {
+            $rules->push($this->automations->createRoundUpRule($user, $main, $savings, $plan->roundup_to, $plan->auto_save));
+        }
+
+        return $rules;
     }
 
     /** A saver changes their own auto-save: source and pause always; amount/schedule if allowed. */
     public function updateMyContribution(Wallet $wallet, User $user, array $data): AutomationRule
     {
-        $rule = $this->contributionRule($wallet, $user);
-        if (!$rule) {
+        $rules = $this->contributionRulesOf($wallet, $user);
+        if ($rules->isEmpty()) {
             throw ValidationException::withMessages(['wallet' => "You aren't auto-saving into {$wallet->name} yet."]);
         }
-        $update = [];
-        if (array_key_exists('source_wallet_id', $data)) {
-            $update['from_wallet_id'] = $data['source_wallet_id'];
-        }
-        if (array_key_exists('enabled', $data)) {
-            $update['enabled'] = (bool) $data['enabled'];
-        }
-        if (array_intersect(array_keys($data), ['amount', 'frequency', 'day_of_week', 'day_of_month'])) {
-            $update += $this->normaliseTerms($data + $rule->only(['amount', 'frequency', 'day_of_week', 'day_of_month']));
+        if (array_intersect(array_keys($data), ['amount', 'frequency', 'day_of_week', 'day_of_month']) && !$rules->firstWhere('trigger', 'schedule')) {
+            throw ValidationException::withMessages(['amount' => 'This plan saves from salary or round-ups, not a set amount.']);
         }
 
-        // AutomationService enforces "own wallet only" and the owner's edit setting.
-        return $this->automations->updateRule($rule, $user, $update);
+        foreach ($rules as $rule) {
+            $update = [];
+            // Salary and round-ups always come from Main; the source applies to the scheduled save.
+            if (array_key_exists('source_wallet_id', $data) && $rule->trigger === 'schedule') {
+                $update['from_wallet_id'] = $data['source_wallet_id'];
+            }
+            if (array_key_exists('enabled', $data)) {
+                $update['enabled'] = (bool) $data['enabled'];
+            }
+            if ($rule->trigger === 'schedule' && array_intersect(array_keys($data), ['amount', 'frequency', 'day_of_week', 'day_of_month'])) {
+                $update += $this->normaliseTerms($data + $rule->only(['amount', 'frequency', 'day_of_week', 'day_of_month']));
+            }
+            // AutomationService enforces "own wallet only" and the owner's edit setting.
+            if ($update) {
+                $this->automations->updateRule($rule, $user, $update);
+            }
+        }
+
+        return ($rules->firstWhere('trigger', 'schedule') ?? $rules->first())->refresh();
     }
 
     /**
@@ -310,15 +356,18 @@ class SavingsService
                 ? $this->normaliseTerms($data, $plan)
                 : $old;
 
-            $plan->update($new + array_intersect_key($data, array_flip(['auto_save', 'allow_contributor_edit'])));
+            $plan->update($new + array_intersect_key($data, array_flip(['auto_save', 'allow_contributor_edit', 'missed_policy', 'notify_others_on_miss', 'salary_percent'])));
 
             foreach ($this->contributionRules($wallet) as $rule) {
                 $change = [];
-                if ($rule->amount === $old['amount']) {
+                if ($rule->trigger === 'schedule' && $rule->amount === $old['amount']) {
                     $change['amount'] = $new['amount'];
                 }
-                if ($rule->frequency === $old['frequency'] && $rule->day_of_week == $old['day_of_week'] && $rule->day_of_month == $old['day_of_month']) {
+                if ($rule->trigger === 'schedule' && $rule->frequency === $old['frequency'] && $rule->day_of_week == $old['day_of_week'] && $rule->day_of_month == $old['day_of_month']) {
                     $change += array_intersect_key($new, array_flip(['frequency', 'day_of_week', 'day_of_month']));
+                }
+                if ($rule->trigger === 'salary' && !empty($data['salary_percent'])) {
+                    $change += ['percent' => (int) $data['salary_percent'], 'name' => "Save {$data['salary_percent']}% from every salary"];
                 }
                 if (array_key_exists('auto_save', $data)) {
                     $change['enabled'] = (bool) $data['auto_save'];
@@ -361,6 +410,61 @@ class SavingsService
         ];
     }
 
+    /** "15% of each salary + round-ups to ₦100 + ₦20,000 every Friday", or "When you add money". */
+    private function methodsLabel(?int $salaryPercent, ?int $roundupTo, SavingsPlan|AutomationRule|null $scheduled): string
+    {
+        $parts = array_filter([
+            $salaryPercent ? "{$salaryPercent}% of each salary" : null,
+            $roundupTo ? 'round-ups to ₦' . number_format($roundupTo / 100) : null,
+            $scheduled && $scheduled->amount > 0 ? '₦' . $this->naira($scheduled->amount) . ' ' . $this->frequencyLabel($scheduled) : null,
+        ]);
+
+        return $parts ? implode(' + ', $parts) : 'When you add money';
+    }
+
+    /** The plan everyone saves by (SAV-02/03/06). */
+    private function planTerms(SavingsPlan $plan): array
+    {
+        return array_merge($this->terms($plan), [
+            'label' => $this->methodsLabel($plan->salary_percent, $plan->roundup_to, $plan->schedule ? $plan : null),
+            'schedule' => (bool) $plan->schedule,
+            'salary_percent' => $plan->salary_percent,
+            'roundup_to' => $plan->roundup_to ? $this->naira($plan->roundup_to) : null,
+            'missed_policy' => $plan->missed_policy,
+            'notify_others_on_miss' => (bool) $plan->notify_others_on_miss,
+            'auto_save' => $plan->auto_save,
+            'allow_contributor_edit' => $plan->allow_contributor_edit,
+        ]);
+    }
+
+    /** One saver's auto-save across their rules; the source wallet only for themselves. */
+    private function saverTerms(Collection $rules, bool $withSource): ?array
+    {
+        if ($rules->isEmpty()) {
+            return null;
+        }
+        $scheduled = $rules->firstWhere('trigger', 'schedule');
+        $salary = $rules->firstWhere('trigger', 'salary');
+        $roundup = $rules->firstWhere('trigger', 'roundup');
+        $source = ($scheduled ?? $rules->first())->fromWallet;
+
+        return array_merge($scheduled ? $this->terms($scheduled) : ['amount' => '0.00', 'frequency' => null, 'day_of_week' => null, 'day_of_month' => null], [
+            'label' => $this->methodsLabel($salary?->percent, $roundup?->roundup_to, $scheduled),
+            'enabled' => $rules->contains(fn ($r) => $r->enabled),
+            'source_wallet' => $withSource && $source ? ['id' => $source->id, 'name' => $source->name] : null,
+        ]);
+    }
+
+    /** What a rule adds in a typical month (kobo): the schedule, or estimates for salary and round-ups. */
+    private function monthlyEstimate(AutomationRule $rule): float
+    {
+        return match ($rule->trigger) {
+            'salary' => (float) (SavingsInsights::make()->salaryShare($rule->user, (int) $rule->percent) ?? 0),
+            'roundup' => (float) (SavingsInsights::make()->forUser($rule->user)['roundups'][(int) $rule->roundup_to] ?? 0),
+            default => $rule->amount * (self::PER_MONTH[$rule->frequency] ?? 1),
+        };
+    }
+
     private function person(User $user): array
     {
         return ['id' => $user->id, 'name' => $user->fullName(), 'username' => $user->username, 'avatar_url' => $user->avatar_url];
@@ -373,7 +477,8 @@ class SavingsService
         $balance = (int) $wallet->balance;
         $target = $wallet->target_amount;
         $isOwner = $wallet->user_id === $viewer->id;
-        $rules = $this->contributionRules($wallet)->keyBy('user_id');
+        $all = $this->contributionRules($wallet);
+        $rules = $all->groupBy('user_id');
 
         $saved = Transaction::where('wallet_id', $wallet->id)
             ->where('direction', 'credit')
@@ -384,18 +489,11 @@ class SavingsService
             ->pluck('total', 'user_id');
 
         $saverRow = function (User $user, string $status) use ($rules, $saved, $viewer) {
-            $rule = $rules->get($user->id);
-
             return [
                 'user' => $this->person($user),
                 'status' => $status, // owner | member | invited
-                'auto_save' => $rule ? $this->terms($rule) + [
-                    'enabled' => (bool) $rule->enabled,
-                    // Which wallet pays is only the saver's business.
-                    'source_wallet' => $user->id === $viewer->id && $rule->fromWallet
-                        ? ['id' => $rule->fromWallet->id, 'name' => $rule->fromWallet->name]
-                        : null,
-                ] : null,
+                // Which wallet pays is only the saver's business.
+                'auto_save' => $this->saverTerms($rules->get($user->id, collect()), $user->id === $viewer->id),
                 'total_saved' => $this->naira((int) ($saved[$user->id] ?? 0)),
             ];
         };
@@ -414,7 +512,7 @@ class SavingsService
         }
 
         // Pace: what the enabled auto-saves add per month, and where that lands.
-        $perMonth = $rules->filter->enabled->sum(fn (AutomationRule $r) => $r->amount * (self::PER_MONTH[$r->frequency] ?? 1));
+        $perMonth = $all->filter->enabled->sum(fn (AutomationRule $r) => $this->monthlyEstimate($r));
         $remaining = $target ? max(0, $target - $balance) : null;
         $projected = null;
         if ($remaining && $perMonth > 0) {
@@ -424,11 +522,11 @@ class SavingsService
         $suggested = null;
         if ($plan && $remaining && $targetDate && $targetDate->isFuture()) {
             $periods = max(1, (int) floor(now()->diffInDays($targetDate) / (30.44 / (self::PER_MONTH[$plan->frequency] ?? 1))));
-            $saversCount = max(1, $rules->filter->enabled->count());
+            $saversCount = max(1, $all->filter->enabled->unique('user_id')->count());
             $suggested = (int) ceil($remaining / $periods / $saversCount);
         }
 
-        $myRule = $rules->get($viewer->id);
+        $myRules = $rules->get($viewer->id, collect());
         $isSaver = $isOwner || $wallet->canFund($viewer);
 
         return [
@@ -438,10 +536,7 @@ class SavingsService
             'target_date' => $wallet->target_date?->toDateString(),
             'progress' => $target ? min(100, round($balance / $target * 100, 1)) : null,
             'days_left' => $targetDate && $targetDate->isFuture() ? (int) now()->diffInDays($targetDate) : ($targetDate ? 0 : null),
-            'plan' => $plan ? $this->terms($plan) + [
-                'auto_save' => $plan->auto_save,
-                'allow_contributor_edit' => $plan->allow_contributor_edit,
-            ] : null,
+            'plan' => $plan ? $this->planTerms($plan) : null,
             'projection' => [
                 'per_month' => $this->naira((int) round($perMonth)),
                 'projected_date' => $projected?->toDateString(),
@@ -464,11 +559,8 @@ class SavingsService
                 'is_saver' => $isSaver,
                 'can_edit_plan' => $isOwner,
                 'can_edit_own_terms' => $isOwner || (bool) $plan?->allow_contributor_edit,
-                'auto_save' => $myRule ? $this->terms($myRule) + [
-                    'enabled' => (bool) $myRule->enabled,
-                    'source_wallet' => $myRule->fromWallet ? ['id' => $myRule->fromWallet->id, 'name' => $myRule->fromWallet->name] : null,
-                ] : null,
-                'can_start_auto_save' => $plan !== null && $isSaver && !$myRule,
+                'auto_save' => $this->saverTerms($myRules, true),
+                'can_start_auto_save' => $plan !== null && $isSaver && $myRules->isEmpty(),
             ],
         ];
     }
@@ -481,9 +573,7 @@ class SavingsService
             return null;
         }
 
-        return $this->terms($plan) + [
-            'auto_save' => $plan->auto_save,
-            'allow_contributor_edit' => $plan->allow_contributor_edit,
+        return $this->planTerms($plan) + [
             'target_amount' => $wallet->target_amount !== null ? $this->naira($wallet->target_amount) : null,
             'target_date' => $wallet->target_date?->toDateString(),
         ];

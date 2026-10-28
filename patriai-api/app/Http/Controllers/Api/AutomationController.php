@@ -196,6 +196,12 @@ class AutomationController extends ApiController
             'from_wallet' => $rule->fromWallet ? ['id' => $rule->fromWallet->id, 'name' => $rule->fromWallet->name] : null,
             'to_wallet' => $rule->toWallet ? ['id' => $rule->toWallet->id, 'name' => $rule->toWallet->name] : null,
             'amount' => number_format($rule->amount / 100, 2, '.', ''),
+            // schedule | salary (percent of each salary) | roundup (to roundup_to, swept daily)
+            'trigger' => $rule->trigger,
+            'percent' => $rule->percent,
+            'roundup_to' => $rule->roundup_to !== null ? number_format($rule->roundup_to / 100, 2, '.', '') : null,
+            'pending_amount' => number_format($rule->pending_amount / 100, 2, '.', ''),
+            'retry_at' => $rule->retry_at?->toIso8601String(),
             'frequency' => $rule->frequency,
             'day_of_week' => $rule->day_of_week,
             'day_of_month' => $rule->day_of_month,
@@ -212,6 +218,15 @@ class AutomationController extends ApiController
     {
         if (!$rule->enabled) {
             return 'Paused';
+        }
+        if ($rule->trigger === 'salary') {
+            return 'When salary lands';
+        }
+        if ($rule->trigger === 'roundup') {
+            return 'Every day, from spending';
+        }
+        if ($rule->retry_at) {
+            return 'Trying again ' . $rule->retry_at->format('j M');
         }
 
         return match ($rule->frequency) {

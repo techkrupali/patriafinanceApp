@@ -141,6 +141,7 @@ export default function EmergencyRequestDetailPage({
   const wallet = request?.wallet;
   const rules = data?.rules;
   const isDocument = request?.method === "document";
+  const isFast = request?.method === "fast_release";
   // Only document requests are Patriai's call; dual approvals are decided in-app.
   const canReview = isDocument && request?.status === "pending";
 
@@ -210,8 +211,20 @@ export default function EmergencyRequestDetailPage({
                   <Field name="Decided">{formatDateTime(request!.decided_at)}</Field>
                   {isDocument ? (
                     <Field name="Reviewed by">{request!.reviewed_by ?? "—"}</Field>
+                  ) : isFast ? (
+                    <>
+                      <Field name="Amount released">{naira(request!.amount ?? "0")}</Field>
+                      <Field name={request!.status === "flagged" ? "Flagged by" : "Review window ends"}>
+                        {request!.status === "flagged" ? request!.approved_by?.name ?? "—" : formatDateTime(request!.expires_at ?? null)}
+                      </Field>
+                    </>
                   ) : (
-                    <Field name="Approved by">{request!.approved_by?.name ?? "—"}</Field>
+                    <>
+                      <Field name="Keyholders' yeses">
+                        {request!.approvals ?? 0} of {request!.required_approvals ?? 2}
+                      </Field>
+                      <Field name="Expires">{formatDateTime(request!.expires_at ?? null)}</Field>
+                    </>
                   )}
                   <div className="col-span-2 sm:col-span-3">
                     <Field name="Requester note">
@@ -230,8 +243,9 @@ export default function EmergencyRequestDetailPage({
                 </dl>
                 {!isDocument ? (
                   <p className="mt-5 rounded-lg bg-lavender/30 px-3 py-2 text-xs text-muted">
-                    Dual-approval requests are decided in the app by the wallet&apos;s
-                    designated approver. Shown here for reference only.
+                    {isFast
+                      ? "A keyholder released this at once with a photo of the bill. The other keyholders check it within 48 hours and can flag it."
+                      : "Release requests are decided in the app by the fund's keyholders. Shown here for reference only."}
                   </p>
                 ) : null}
               </>
@@ -289,7 +303,7 @@ export default function EmergencyRequestDetailPage({
       </div>
 
       {/* Uploaded document */}
-      {!isPending && isDocument ? (
+      {!isPending && (isDocument || (isFast && request!.has_document)) ? (
         <div className="mt-4">
           <Card>
             <CardHeader>
@@ -323,11 +337,21 @@ export default function EmergencyRequestDetailPage({
               </div>
             ) : rules ? (
               <dl className="grid grid-cols-1 gap-y-5">
-                <Field name="Dual approval">
+                <Field name="Keyholders">
                   <Toggle on={rules.dual_approval} />
-                  {rules.approver ? (
+                  {rules.dual_approval ? (
                     <span className="block text-xs font-normal text-muted">
-                      Approver: {rules.approver.name}
+                      {rules.required_keyholders ?? 2} of {(rules.keyholders?.length ?? 1) + 1} to release · owner
+                      {rules.keyholders?.length ? `, ${rules.keyholders.map((k) => k.name).join(", ")}` : rules.approver ? `, ${rules.approver.name}` : ""}
+                      {rules.request_expiry_hours ? ` · requests expire after ${rules.request_expiry_hours}h` : ""}
+                    </span>
+                  ) : null}
+                </Field>
+                <Field name="Fast release">
+                  <Toggle on={Boolean(rules.fast_release)} />
+                  {rules.fast_release ? (
+                    <span className="block text-xs font-normal text-muted">
+                      Up to {naira(rules.fast_release.limit)} with proof, once every {rules.fast_release.every_days} days
                     </span>
                   ) : null}
                 </Field>

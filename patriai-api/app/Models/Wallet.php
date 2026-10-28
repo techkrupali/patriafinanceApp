@@ -24,6 +24,9 @@ class Wallet extends Model
     /** How long an approval request waits for answers. */
     public const APPROVAL_EXPIRY_HOURS = [24, 48, 72];
 
+    /** SAV-01 wallet colours: emerald, mint, gold, deep, clay, violet. */
+    public const COLOURS = ['emerald', 'mint', 'gold', 'deep', 'clay', 'violet'];
+
     protected $fillable = [
         'user_id',
         'type',
@@ -199,6 +202,10 @@ class Wallet extends Model
         if ($this->isEmergencyLocked()) {
             return false;
         }
+        // Locked savings with no early break: it opens on its date or at its target.
+        if ($this->isHardLocked()) {
+            return false;
+        }
         if (!$this->withinAccessWindow()) {
             return false;
         }
@@ -216,13 +223,13 @@ class Wallet extends Model
             return false;
         }
 
-        // The dual-approval approver (e.g. a spouse) may withdraw from an unlocked
-        // emergency wallet on the owner's behalf (client video 2026-10-17).
+        // A keyholder (the dual-approval approver, e.g. a spouse) may withdraw from
+        // an unlocked emergency wallet on the owner's behalf (client video 2026-10-17).
         if ($member->role === 'emergency_approver') {
             $setting = $this->emergencySetting;
 
             return $this->type === 'emergency' && $setting && !$setting->isLocked()
-                && $setting->dual_approval && $setting->approver_user_id === $user->id;
+                && $setting->dual_approval && in_array($user->id, $setting->keyholders($this->user_id), true);
         }
 
         // owner/co_owner spend unconditionally.
@@ -298,6 +305,9 @@ class Wallet extends Model
      */
     public function canRequest(User $user): bool
     {
+        if ($this->isHardLocked()) {
+            return false;
+        }
         if ($this->user_id === $user->id) {
             return true;
         }
@@ -362,15 +372,49 @@ class Wallet extends Model
     }
 
     /**
-     * "Lock until goal is reached": until the balance reaches the target, every
-     * spend needs every approver's yes, whatever its size.
+     * The savings lock (SAV-05, WCR-09): until a date or until the target is
+     * reached. early_break: money may still leave before then; approval: and only
+     * with every approver's yes. "Lock until goal is reached" from goal creation
+     * is a target lock with early break by approval.
+     *
+     * @return array{mode: string, until: ?string, early_break: bool, approval: bool}|null
      */
+    public function savingsLock(): ?array
+    {
+        $lock = $this->meta['lock'] ?? null;
+        if (is_array($lock) && in_array($lock['mode'] ?? null, ['date', 'target'], true)) {
+            return [
+                'mode' => $lock['mode'],
+                'until' => $lock['until'] ?? null,
+                'early_break' => (bool) ($lock['early_break'] ?? true),
+                'approval' => (bool) ($lock['approval'] ?? true),
+            ];
+        }
+        if (($this->meta['lock_until_goal'] ?? false) === true) {
+            return ['mode' => 'target', 'until' => null, 'early_break' => true, 'approval' => true];
+        }
+
+        return null;
+    }
+
+    /** Locked right now: before the lock date, or below the target. */
     public function isGoalLocked(): bool
     {
-        return ($this->meta['lock_until_goal'] ?? false) === true
-            && $this->target_amount !== null
-            && $this->target_amount > 0
-            && $this->balance < $this->target_amount;
+        $lock = $this->savingsLock();
+        if (!$lock) {
+            return false;
+        }
+        if ($lock['mode'] === 'date') {
+            return $lock['until'] !== null && now()->lt(\Illuminate\Support\Carbon::parse($lock['until'])->startOfDay());
+        }
+
+        return $this->target_amount !== null && $this->target_amount > 0 && $this->balance < $this->target_amount;
+    }
+
+    /** Locked with no early break: nothing leaves until it opens. */
+    public function isHardLocked(): bool
+    {
+        return $this->isGoalLocked() && !$this->savingsLock()['early_break'];
     }
 
     public function approvalExpiryHours(): int
@@ -394,7 +438,7 @@ class Wallet extends Model
      */
     public function requiredApprovalsFor(User $initiator): int
     {
-        $mode = $this->isGoalLocked() ? 'all' : $this->approvalMode();
+        $mode = $this->isGoalLocked() && $this->savingsLock()['approval'] ? 'all' : $this->approvalMode();
         if ($mode === null) {
             return max(1, (int) $this->required_approvals);
         }
@@ -412,7 +456,7 @@ class Wallet extends Model
     /** Does a spend of this amount require approval on this wallet? */
     public function approvalRequiredFor(int $amountKobo): bool
     {
-        if ($this->isGoalLocked()) {
+        if ($this->isGoalLocked() && $this->savingsLock()['approval']) {
             return true;
         }
         if (!$this->approval_enabled) {

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, qs } from "@/lib/api";
-import { emergencyMethodLabel, formatDate } from "@/lib/format";
+import { emergencyMethodLabel, formatDate, naira } from "@/lib/format";
 import type { EmergencyRequestsData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
@@ -33,7 +33,7 @@ export default function EmergencyPage() {
     <>
       <PageHeader
         title="Emergency"
-        subtitle="Unlock requests on emergency wallets — verify uploaded death certificates and legal notices"
+        subtitle="Releases on emergency funds — verify death certificates and legal notices, and check fast releases made with proof"
       />
 
       <Card>
@@ -51,6 +51,9 @@ export default function EmergencyPage() {
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
             <option value="cancelled">Cancelled</option>
+            <option value="expired">Expired</option>
+            <option value="released">Released (fast)</option>
+            <option value="flagged">Flagged</option>
           </Select>
           <Select
             value={method}
@@ -62,7 +65,8 @@ export default function EmergencyPage() {
           >
             <option value="">All methods</option>
             <option value="document">Document</option>
-            <option value="dual_approval">Dual approval</option>
+            <option value="dual_approval">Keyholders&apos; release</option>
+            <option value="fast_release">Fast release</option>
           </Select>
         </div>
 
@@ -98,7 +102,16 @@ export default function EmergencyPage() {
                       <p className="font-medium">{r.wallet?.name ?? "—"}</p>
                       <p className="text-xs text-muted">{r.wallet?.owner?.name ?? ""}</p>
                     </TD>
-                    <TD>{emergencyMethodLabel(r.method, r.document_type)}</TD>
+                    <TD>
+                      <p>{emergencyMethodLabel(r.method, r.document_type)}</p>
+                      {r.method === "fast_release" && r.amount ? (
+                        <p className="text-xs text-muted">{naira(r.amount)} with proof</p>
+                      ) : r.method === "dual_approval" && r.required_approvals ? (
+                        <p className="text-xs text-muted">
+                          {r.approvals ?? 0} of {r.required_approvals} said yes
+                        </p>
+                      ) : null}
+                    </TD>
                     <TD>
                       <p className="font-medium">{r.requested_by?.name ?? "—"}</p>
                       {r.requested_by?.username ? (

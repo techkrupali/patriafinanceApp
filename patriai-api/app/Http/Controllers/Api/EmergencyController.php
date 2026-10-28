@@ -94,6 +94,15 @@ class EmergencyController extends ApiController
             'override_national_crisis' => ['sometimes', 'boolean'],
             'override_high_balance' => ['sometimes', 'boolean'],
             'beneficiary_note' => ['nullable', 'string', 'max:1000'],
+            // EMG-01/03/04: what it's for, keyholders, expiry and fast release.
+            'purposes' => ['sometimes', 'array', 'max:4'],
+            'purposes.*' => ['in:' . implode(',', EmergencySetting::PURPOSES)],
+            'keyholders' => ['sometimes', 'array', 'max:6'],
+            'keyholders.*' => ['integer'],
+            'required_keyholders' => ['nullable', 'integer', 'between:1,7'],
+            'request_expiry_hours' => ['nullable', 'in:' . implode(',', EmergencySetting::EXPIRY_HOURS)],
+            'fast_release_limit' => ['nullable', 'numeric', 'min:0'],
+            'fast_release_every_days' => ['nullable', 'in:' . implode(',', EmergencySetting::FAST_RELEASE_DAYS)],
             'beneficiaries' => ['sometimes', 'array', 'max:3'],
             'beneficiaries.*.user_id' => ['required', 'integer'],
             'beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
@@ -104,6 +113,10 @@ class EmergencyController extends ApiController
         foreach ($data['beneficiaries'] ?? [] as $i => $b) {
             $limit = $b['withdrawal_limit'] ?? null;
             $data['beneficiaries'][$i]['withdrawal_limit'] = ($limit === null || (float) $limit <= 0) ? null : $this->toKobo((string) $limit);
+        }
+        if (array_key_exists('fast_release_limit', $data)) {
+            $limit = $data['fast_release_limit'];
+            $data['fast_release_limit'] = ($limit === null || (float) $limit <= 0) ? null : $this->toKobo((string) $limit);
         }
         $pin = $data['pin'];
         unset($data['pin']);
@@ -135,7 +148,7 @@ class EmergencyController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
         $data = $request->validate([
-            'method' => ['required', 'in:' . implode(',', EmergencyUnlockRequest::METHODS)],
+            'method' => ['required', 'in:dual_approval,document'],
             'document_type' => ['required_if:method,document', 'nullable', 'in:' . implode(',', EmergencyUnlockRequest::DOCUMENT_TYPES)],
             'file' => ['required_if:method,document', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'], // 10 MB
             'note' => ['nullable', 'string', 'max:500'],
@@ -185,6 +198,29 @@ class EmergencyController extends ApiController
         EmergencyService::make()->cancelRequest($emergencyUnlockRequest, $request->user());
 
         return $this->detail($request, $emergencyUnlockRequest->wallet, 'Unlock request cancelled');
+    }
+
+    // POST /wallets/{wallet}/emergency/fast-release  multipart { amount, pin, proof, note? } — keyholder (EMG-04)
+    public function fastRelease(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'pin' => ['required', self::TXN_PIN],
+            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'], // photo of the bill or doctor's note
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $service = EmergencyService::make();
+        $released = $service->fastRelease($wallet, $request->user(), $this->toKobo((string) $data['amount']), $data['pin'], $request->file('proof'), $data['note'] ?? null);
+        $wallet->unsetRelation('emergencySetting');
+
+        return $this->ok('Money sent to your main wallet', [
+            'emergency' => $service->detail($wallet->refresh(), $request->user()),
+            'reference' => $released->reference,
+        ], 201);
     }
 
     // POST /wallets/{wallet}/emergency/withdraw  { amount, pin } — recipient → own main wallet

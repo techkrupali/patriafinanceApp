@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmergencyUnlockRequest extends Model
 {
-    public const METHODS = ['dual_approval', 'document'];
+    /** dual_approval: keyholders agree (EMG-03) · document: death certificate · fast_release: EMG-04 */
+    public const METHODS = ['dual_approval', 'document', 'fast_release'];
 
     public const DOCUMENT_TYPES = ['death_certificate', 'legal_notice'];
 
@@ -18,8 +19,13 @@ class EmergencyUnlockRequest extends Model
         'document_type',
         'document_path',
         'note',
+        'amount',
+        'reference',
         'status',
         'approved_by',
+        'approvals',
+        'required_approvals',
+        'expires_at',
         'reviewed_by',
         'review_note',
         'decided_at',
@@ -31,6 +37,10 @@ class EmergencyUnlockRequest extends Model
     {
         return [
             'decided_at' => 'datetime',
+            'expires_at' => 'datetime',
+            'approvals' => 'array',
+            'required_approvals' => 'integer',
+            'amount' => 'integer',
         ];
     }
 

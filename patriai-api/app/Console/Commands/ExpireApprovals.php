@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ApprovalRequest;
+use App\Models\EmergencyUnlockRequest;
 use Illuminate\Console\Command;
 
 /**
@@ -22,6 +23,12 @@ class ExpireApprovals extends Command
         $count = ApprovalRequest::where('status', 'pending')
             ->where('expires_at', '<', now())
             ->update(['status' => 'expired']);
+
+        // Emergency release requests that waited past the owner's "expire after".
+        $count += EmergencyUnlockRequest::where('status', 'pending')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<', now())
+            ->update(['status' => 'expired', 'decided_at' => now()]);
 
         $this->info("Expired {$count} approval request(s).");
 

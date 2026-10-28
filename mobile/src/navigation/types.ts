@@ -2,8 +2,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
-import type { CreatableWalletType, EmergencyPurpose, OtpChannel, PhoneAccount, UserSearchResult } from '../api/types';
-import type { RecipientDraft } from '../components/RecipientSheet';
+import type { CreatableWalletType, OtpChannel, PhoneAccount, UserSearchResult } from '../api/types';
 
 /** ONB-05 answers carried to the PIN step, where the account is created. */
 export interface SignupDetails {
@@ -62,30 +61,6 @@ export type MainTabParamList = {
   More: undefined;
 };
 
-/** Emergency wallet Step 1 answers carried into Step 2 (naira as typed). */
-export interface EmergencyStepOne {
-  name: string;
-  purpose: EmergencyPurpose;
-  /** Raw naira digits; '' = no initial deposit. */
-  initialDeposit: string;
-  sourceWalletId: number | null;
-  /** Raw naira digits; '' = monthly auto-funding off. */
-  monthlyAmount: string;
-}
-
-/** Emergency wallet Step 2 answers kept in a draft (never the emergency PIN). */
-export interface EmergencyRulesDraft {
-  dual: boolean;
-  approver: UserSearchResult | null;
-  docUnlock: boolean;
-  manual: boolean;
-  reason: string;
-  crisis: boolean;
-  highBalance: boolean;
-  recipients: RecipientDraft[];
-  note: string;
-}
-
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   /** HOM-08: which Home sections show, hide balances on open. */
@@ -108,17 +83,27 @@ export type RootStackParamList = {
   GoalWalletSetup: { draftId?: number } | undefined;
   /** WCR-12: the new wallet's account details; `invited` are first names. */
   WalletCreated: { walletId: number; invited: string[] };
+  /** WCR-07 (savings, emergency): progress, then what happened — invites, rules. */
+  SetupDone: {
+    walletId: number;
+    title: string;
+    subtitle: string;
+    /** Under the balance, e.g. "of ₦600,000 · locked to 25 Feb". */
+    caption: string;
+    events: { label: string; title: string; sub?: string }[];
+    openLabel: string;
+  };
+  /** SAV-01…06 + WCR-06: a savings wallet. */
+  SavingsWalletSetup: { draftId?: number } | undefined;
+  /** EMG-01…05 + WCR-06: an emergency fund. */
+  EmergencyWalletSetup: { draftId?: number } | undefined;
   /** Type-specific setup for every type without its own journey. */
   WalletSetup: { type: CreatableWalletType; draftId?: number };
-  // ---- Emergency wallet journey (Step 1 → Step 2) + management ----
-  CreateEmergencyWallet: { draft?: EmergencyStepOne; draftId?: number } | undefined;
-  /** sessionKey ties both steps to one draft (see lib/drafts). */
-  EmergencyAccessRules: { draft: EmergencyStepOne; sessionKey: string; draftId?: number | null; rules?: EmergencyRulesDraft };
+  // ---- Emergency fund management ----
   EmergencyCenter: { walletId: number };
   /** Owner: change rules, beneficiaries and the custom PIN after setup. */
   EditEmergencyRules: { walletId: number };
-  // ---- Savings goals (4-step journey) + plan management ----
-  SavingsGoalSetup: { type: 'savings' | 'goal'; draftId?: number };
+  // ---- Savings plan management ----
   SavingsPlan: { walletId: number };
   EditProfile: undefined;
   ChangePassword: undefined;

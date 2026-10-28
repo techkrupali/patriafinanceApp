@@ -73,6 +73,14 @@ class WalletController extends ApiController
             'emergency.override_national_crisis' => ['sometimes', 'boolean'],
             'emergency.override_high_balance' => ['sometimes', 'boolean'],
             'emergency.beneficiary_note' => ['nullable', 'string', 'max:1000'],
+            'emergency.purposes' => ['sometimes', 'array', 'max:4'],
+            'emergency.purposes.*' => ['in:' . implode(',', EmergencySetting::PURPOSES)],
+            'emergency.keyholders' => ['sometimes', 'array', 'max:6'],
+            'emergency.keyholders.*' => ['integer'],
+            'emergency.required_keyholders' => ['nullable', 'integer', 'between:1,7'],
+            'emergency.request_expiry_hours' => ['nullable', 'in:' . implode(',', EmergencySetting::EXPIRY_HOURS)],
+            'emergency.fast_release_limit' => ['nullable', 'numeric', 'min:0'],
+            'emergency.fast_release_every_days' => ['nullable', 'in:' . implode(',', EmergencySetting::FAST_RELEASE_DAYS)],
             'emergency.beneficiaries' => ['sometimes', 'array', 'max:3'],
             'emergency.beneficiaries.*.user_id' => ['required', 'integer'],
             'emergency.beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
@@ -94,8 +102,14 @@ class WalletController extends ApiController
             'contributors.*.permissions.request' => ['sometimes', 'boolean'],
             'contributors.*.permissions.withdraw' => ['sometimes', 'boolean'],
             'savings_plan' => ['nullable', 'array'],
-            'savings_plan.amount' => ['required_with:savings_plan', 'numeric', 'min:1'],
-            'savings_plan.frequency' => ['required_with:savings_plan', 'in:' . implode(',', SavingsPlan::FREQUENCIES)],
+            // SAV-02/03: a fixed amount on a schedule, a share of salary, round-ups.
+            'savings_plan.schedule' => ['sometimes', 'boolean'],
+            'savings_plan.amount' => ['nullable', 'numeric', 'min:0'],
+            'savings_plan.frequency' => ['sometimes', 'in:' . implode(',', SavingsPlan::FREQUENCIES)],
+            'savings_plan.salary_percent' => ['nullable', 'integer', 'between:1,50'],
+            'savings_plan.roundup_to' => ['nullable', 'in:100,500,1000'],
+            'savings_plan.missed_policy' => ['sometimes', 'in:' . implode(',', SavingsPlan::MISSED_POLICIES)],
+            'savings_plan.notify_others_on_miss' => ['sometimes', 'boolean'],
             'savings_plan.day_of_week' => ['nullable', 'integer', 'between:1,7'],
             'savings_plan.day_of_month' => ['nullable', 'integer', 'between:1,28'],
             'savings_plan.auto_save' => ['sometimes', 'boolean'],
@@ -107,6 +121,21 @@ class WalletController extends ApiController
             'members.*.user_id' => ['nullable', 'integer', 'required_without:members.*.identifier'],
             'members.*.identifier' => ['nullable', 'string', 'max:150'],
             'members.*.role' => ['required', 'in:co_owner,contributor,viewer'],
+            'members.*.can_approve' => ['sometimes', 'boolean'],
+            'members.*.permissions' => ['sometimes', 'array'],
+            'members.*.permissions.view' => ['sometimes', 'boolean'],
+            'members.*.permissions.fund' => ['sometimes', 'boolean'],
+            'members.*.permissions.request' => ['sometimes', 'boolean'],
+            'members.*.permissions.withdraw' => ['sometimes', 'boolean'],
+            // EMG-02: what an emergency contributor puts in each month.
+            'members.*.pledge' => ['nullable', 'numeric', 'min:0'],
+            // SAV-01 colour, SAV-05 lock.
+            'colour' => ['nullable', 'in:' . implode(',', Wallet::COLOURS)],
+            'lock' => ['nullable', 'array'],
+            'lock.mode' => ['required_with:lock', 'in:none,date,target'],
+            'lock.until' => ['nullable', 'required_if:lock.mode,date', 'date', 'after:today'],
+            'lock.early_break' => ['sometimes', 'boolean'],
+            'lock.approval' => ['sometimes', 'boolean'],
             'approval' => ['nullable', 'array'],
             'approval.threshold' => ['nullable', 'numeric', 'min:0'],
             'approval.mode' => ['sometimes', 'in:' . implode(',', Wallet::APPROVAL_MODES)],
@@ -131,8 +160,14 @@ class WalletController extends ApiController
         if (($data['mode'] ?? null) === 'private' && !empty($data['members'])) {
             return $this->fail("A private wallet is just you. Choose Shared to invite people.", 422);
         }
-        if (in_array($data['type'], ['emergency', 'project'], true) && (!empty($data['members']) || !empty($data['approval']))) {
-            return $this->fail('Emergency and project wallets set up their people and approvals in their own steps', 422);
+        if ($data['type'] === 'project' && (!empty($data['members']) || !empty($data['approval']))) {
+            return $this->fail('Project wallets set up their people and approvals in their own steps', 422);
+        }
+        if ($data['type'] === 'emergency' && !empty($data['approval'])) {
+            return $this->fail('Emergency wallets are released by their keyholders', 422);
+        }
+        if (($data['lock']['mode'] ?? 'none') === 'target' && !((float) ($data['target_amount'] ?? 0) > 0)) {
+            return $this->fail('Set a target to lock the wallet until the target is reached', 422);
         }
         if (!empty($data['approval']['lock_until_goal']) && !((float) ($data['target_amount'] ?? 0) > 0)) {
             return $this->fail('Set a target to lock the wallet until the goal is reached', 422);
@@ -161,9 +196,16 @@ class WalletController extends ApiController
         }
         if (!empty($data['savings_plan'])) {
             $data['savings_plan']['amount'] = $kobo($data['savings_plan']['amount'] ?? null);
+            $data['savings_plan']['roundup_to'] = $kobo($data['savings_plan']['roundup_to'] ?? null);
+        }
+        foreach ($data['members'] ?? [] as $i => $m) {
+            $data['members'][$i]['pledge'] = $kobo($m['pledge'] ?? null);
         }
         if (!empty($data['approval'])) {
             $data['approval']['threshold'] = $kobo($data['approval']['threshold'] ?? null);
+        }
+        if (!empty($data['emergency']['fast_release_limit'])) {
+            $data['emergency']['fast_release_limit'] = $kobo($data['emergency']['fast_release_limit']);
         }
         if (!empty($data['emergency']['beneficiaries'])) {
             foreach ($data['emergency']['beneficiaries'] as $i => $b) {

@@ -8,13 +8,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AutomationRule extends Model
 {
+    /**
+     * schedule: on the calendar (frequency + day)
+     * salary:   a share (percent) of each salary-sized bank deposit into Main
+     * roundup:  spending from Main rounded up to roundup_to; swept daily
+     */
+    public const TRIGGERS = ['schedule', 'salary', 'roundup'];
+
     protected $fillable = [
         'user_id',
         'name',
         'from_wallet_id',
         'to_wallet_id',
         'savings_contribution',
+        'trigger',
         'amount',
+        'percent',
+        'roundup_to',
+        'pending_amount',
         'frequency',
         'day_of_week',
         'day_of_month',
@@ -22,6 +33,8 @@ class AutomationRule extends Model
         'enabled',
         'last_run_period',
         'last_run_at',
+        'retry_count',
+        'retry_at',
     ];
 
     protected function casts(): array
@@ -33,7 +46,12 @@ class AutomationRule extends Model
             'min_balance' => 'integer',
             'enabled' => 'boolean',
             'savings_contribution' => 'boolean',
+            'percent' => 'integer',
+            'roundup_to' => 'integer',
+            'pending_amount' => 'integer',
             'last_run_at' => 'datetime',
+            'retry_count' => 'integer',
+            'retry_at' => 'datetime',
         ];
     }
 
@@ -77,8 +95,14 @@ class AutomationRule extends Model
      */
     public function isDue(Carbon $now): bool
     {
-        if (!$this->enabled) {
+        // Salary rules fire when the deposit lands, never on the calendar.
+        if (!$this->enabled || $this->trigger === 'salary') {
             return false;
+        }
+
+        // A missed save trying again (SAV-06 "Try again in 3 days").
+        if ($this->isRetryDue($now)) {
+            return true;
         }
 
         if (!$this->scheduleMatches($now)) {
@@ -108,6 +132,11 @@ class AutomationRule extends Model
         }
 
         return null;
+    }
+
+    public function isRetryDue(Carbon $now): bool
+    {
+        return $this->retry_at !== null && $this->retry_at->lte($now);
     }
 
     /** Does the calendar schedule (frequency + day) line up with $now? */

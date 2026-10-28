@@ -10,6 +10,7 @@ import {
   formatDate,
   formatDateTime,
   label,
+  missedPolicyLabel,
   naira,
   ordinal,
   signedNaira,
@@ -185,6 +186,18 @@ export default function WalletDetailPage({
                 {wallet!.reminder_day ? (
                   <Field name="Save reminder">Monthly, on the {ordinal(wallet!.reminder_day)}</Field>
                 ) : null}
+                {wallet!.lock ? (
+                  <Field name="Lock">
+                    <Badge tone={wallet!.lock.locked ? "amber" : "green"}>
+                      {wallet!.lock.locked ? "Locked" : "Open"}
+                    </Badge>
+                    <span className="mt-1 block text-xs font-normal text-muted">
+                      {wallet!.lock.mode === "date" ? `Until ${formatDate(wallet!.lock.until)}` : "Until the target is reached"}
+                      {" · "}
+                      {!wallet!.lock.early_break ? "no early break" : wallet!.lock.approval ? "early break needs everyone's yes" : "early break allowed"}
+                    </span>
+                  </Field>
+                ) : null}
               </dl>
             )}
           </CardContent>
@@ -235,7 +248,11 @@ export default function WalletDetailPage({
               </dl>
             ) : (
               <p className="text-sm text-muted">
-                This wallet moves funds without multi-signature approval.
+                {emergency
+                  ? "Released by its keyholders — see Emergency Rules below."
+                  : wallet!.lock
+                    ? "No approval rule. Its lock (above) decides when money can leave."
+                    : "This wallet moves funds without multi-signature approval."}
               </p>
             )}
           </CardContent>
@@ -256,7 +273,26 @@ export default function WalletDetailPage({
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
-                <Field name="Purpose">{emergencyLabel(emergency.purpose)}</Field>
+                <Field name="For">{(emergency.purposes ?? [emergency.purpose]).map(emergencyLabel).join(", ")}</Field>
+                <Field name="Release">
+                  {emergency.keyholders && emergency.keyholders.length > 1
+                    ? `${emergency.required_keyholders} of ${emergency.keyholders.length} keyholders`
+                    : "Owner only"}
+                  {emergency.keyholders?.length ? (
+                    <span className="block text-xs font-normal text-muted">{emergency.keyholders.join(", ")}</span>
+                  ) : null}
+                </Field>
+                <Field name="Fast release">
+                  {emergency.fast_release_limit
+                    ? `Up to ${naira(emergency.fast_release_limit)}, every ${emergency.fast_release_every_days} days`
+                    : "Off"}
+                </Field>
+                <Field name="Beneficiaries">
+                  {emergency.beneficiaries?.length ? emergency.beneficiaries.join(" → ") : "None"}
+                  <span className="block text-xs font-normal text-muted">
+                    {[emergency.manual_unlock ? "custom PIN unlock" : null, emergency.unlock_on_document ? "death unlock" : null].filter(Boolean).join(" · ") || "—"}
+                  </span>
+                </Field>
                 <Field name="Lock">
                   <Badge tone={emergency.locked ? "amber" : "green"}>
                     {emergency.locked ? "Locked" : "Unlocked"}
@@ -274,6 +310,28 @@ export default function WalletDetailPage({
                     <Field name="Unlocked">{formatDateTime(emergency.unlocked_at)}</Field>
                   </>
                 )}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Savings plan — savings and goal wallets */}
+      {!isPending && data!.savings_plan ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Savings Plan</CardTitle>
+              <Badge tone={data!.savings_plan.auto_save ? "green" : "gray"}>
+                {data!.savings_plan.auto_save ? "Auto-save on" : "By hand"}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="How money comes in">{data!.savings_plan.label}</Field>
+                <Field name="If a save is missed">{missedPolicyLabel(data!.savings_plan.missed_policy)}</Field>
+                <Field name="Others told of misses">{data!.savings_plan.notify_others_on_miss ? "Yes" : "No"}</Field>
+                <Field name="Savers set their own amount">{data!.savings_plan.allow_contributor_edit ? "Yes" : "No"}</Field>
               </dl>
             </CardContent>
           </Card>

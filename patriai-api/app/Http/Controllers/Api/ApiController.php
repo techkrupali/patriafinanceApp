@@ -265,6 +265,9 @@ abstract class ApiController extends Controller
             'goal_locked' => $wallet->isGoalLocked(),
             'approval_expiry_hours' => $wallet->approvalExpiryHours(),
             'reminder_day' => $wallet->reminderDay(),
+            'colour' => $wallet->meta['colour'] ?? null,
+            // SAV-05: until a date or the target; `locked` while it holds.
+            'lock' => ($lock = $wallet->savingsLock()) ? $lock + ['locked' => $wallet->isGoalLocked()] : null,
             'created_at' => $wallet->created_at?->toIso8601String(),
         ];
 
@@ -361,6 +364,11 @@ abstract class ApiController extends Controller
             'can_approve' => (bool) $invitation->can_approve,
             // Access chosen for this person at invite time (null = role defaults).
             'permissions' => $invitation->permissions ? array_intersect_key($invitation->permissions, array_flip(['view', 'fund', 'request', 'withdraw'])) : null,
+            // Emergency contributors: what they were asked to put in each month (EMG-02).
+            'pledge' => $invitation->pledge_amount ? [
+                'amount' => number_format($invitation->pledge_amount / 100, 2, '.', ''),
+                'label' => '₦' . number_format($invitation->pledge_amount / 100) . ' a month, on the 25th',
+            ] : null,
             // Savings wallets: the plan the invitee is joining.
             'savings' => $invitation->relationLoaded('wallet') && $invitation->wallet
                 ? \App\Services\SavingsService::make()->invitationSummary($invitation->wallet)

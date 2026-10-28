@@ -39,11 +39,11 @@ import { CreateWalletScreen } from '../screens/wallet/CreateWalletScreen';
 import { WalletSetupScreen } from '../screens/wallet/WalletSetupScreen';
 import { GoalWalletSetupScreen } from '../screens/wallet/GoalWalletSetupScreen';
 import { WalletCreatedScreen } from '../screens/wallet/WalletCreatedScreen';
-import { CreateEmergencyWalletScreen } from '../screens/wallet/emergency/CreateEmergencyWalletScreen';
-import { EmergencyAccessRulesScreen } from '../screens/wallet/emergency/EmergencyAccessRulesScreen';
+import { SetupDoneScreen } from '../screens/wallet/SetupDoneScreen';
+import { SavingsWalletSetupScreen } from '../screens/wallet/SavingsWalletSetupScreen';
+import { EmergencyWalletSetupScreen } from '../screens/wallet/EmergencyWalletSetupScreen';
 import { EmergencyCenterScreen } from '../screens/wallet/emergency/EmergencyCenterScreen';
 import { EditEmergencyRulesScreen } from '../screens/wallet/emergency/EditEmergencyRulesScreen';
-import { SavingsGoalSetupScreen } from '../screens/goals/SavingsGoalSetupScreen';
 import { SavingsPlanScreen } from '../screens/goals/SavingsPlanScreen';
 import { InviteMemberScreen } from '../screens/wallet/InviteMemberScreen';
 import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
@@ -247,11 +247,11 @@ export function RootNavigator() {
       <RootStack.Screen name="WalletSetup" component={WalletSetupScreen} />
       <RootStack.Screen name="GoalWalletSetup" component={GoalWalletSetupScreen} />
       <RootStack.Screen name="WalletCreated" component={WalletCreatedScreen} options={{ gestureEnabled: false }} />
-      <RootStack.Screen name="CreateEmergencyWallet" component={CreateEmergencyWalletScreen} />
-      <RootStack.Screen name="EmergencyAccessRules" component={EmergencyAccessRulesScreen} />
+      <RootStack.Screen name="SetupDone" component={SetupDoneScreen} options={{ gestureEnabled: false }} />
+      <RootStack.Screen name="SavingsWalletSetup" component={SavingsWalletSetupScreen} />
+      <RootStack.Screen name="EmergencyWalletSetup" component={EmergencyWalletSetupScreen} />
       <RootStack.Screen name="EmergencyCenter" component={EmergencyCenterScreen} />
       <RootStack.Screen name="EditEmergencyRules" component={EditEmergencyRulesScreen} />
-      <RootStack.Screen name="SavingsGoalSetup" component={SavingsGoalSetupScreen} />
       <RootStack.Screen name="SavingsPlan" component={SavingsPlanScreen} />
       <RootStack.Screen name="InviteMember" component={InviteMemberScreen} />
       <RootStack.Screen name="WalletSettings" component={WalletSettingsScreen} />

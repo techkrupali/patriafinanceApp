@@ -18,7 +18,7 @@ import { useEmergency, useEmergencyActions } from '../../../api/hooks';
 import { dayLabel, formatMoney, groupAmountInput, sanitizeAmountInput, timeLabel } from '../../../lib/format';
 import { notifySuccess, selection } from '../../../lib/haptics';
 import { purposeLabel } from '../../../lib/walletGuides';
-import { beneficiaryRank } from '../../../lib/emergency';
+import { beneficiaryRank } from '../../../lib/emergencyRules';
 import type { EmergencyDocumentType, EmergencyRequest, EmergencyUnlockVia } from '../../../api/types';
 import type { RootScreenProps } from '../../../navigation/types';
 
@@ -42,9 +42,19 @@ const STATUS_STYLE: Record<EmergencyRequest['status'], { label: string; bg: stri
   approved: { label: 'Approved', bg: 'bg-success-soft', text: 'text-brand' },
   rejected: { label: 'Declined', bg: 'bg-danger-soft', text: 'text-danger' },
   cancelled: { label: 'Cancelled', bg: 'bg-lav-faint', text: 'text-muted' },
+  expired: { label: 'Expired', bg: 'bg-lav-faint', text: 'text-muted' },
+  released: { label: 'Released', bg: 'bg-success-soft', text: 'text-brand' },
+  flagged: { label: 'Flagged', bg: 'bg-danger-soft', text: 'text-danger' },
 };
 
-type PinMode = 'unlock' | 'override' | 'withdraw' | null;
+type PinMode = 'unlock' | 'override' | 'withdraw' | 'fast' | null;
+
+/** Title for a request card. */
+function requestTitle(r: EmergencyRequest): string {
+  if (r.method === 'fast_release') return `Fast release${r.amount ? ` · ${formatMoney(r.amount)}` : ''}`;
+  if (r.method === 'document' && r.document_type && r.document_type !== 'proof') return DOC_LABEL[r.document_type];
+  return 'Release request';
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -88,12 +98,18 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
   const [docType, setDocType] = useState<EmergencyDocumentType>('death_certificate');
   const [docNote, setDocNote] = useState('');
   const [amount, setAmount] = useState('');
+  // EMG-04 Release now: amount, what happened, and a photo of the bill.
+  const [fastAmount, setFastAmount] = useState('');
+  const [fastNote, setFastNote] = useState('');
+  const [proof, setProof] = useState<{ uri: string; fileName?: string | null; mimeType?: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const me = e?.me;
   const reasonForUnlock = (unlockReason ?? e?.rules.unlock_reason ?? '').trim();
   const mine = me?.beneficiary;
-  const pinBusy = actions.unlock.isPending || actions.override.isPending || actions.withdraw.isPending;
+  const pinBusy = actions.unlock.isPending || actions.override.isPending || actions.withdraw.isPending || actions.fastRelease.isPending;
+  const fast = e?.rules.fast_release ?? null;
+  const keyholders = e ? [...(e.rules.keyholders ?? [])] : [];
 
   const submitPin = (pin: string) => {
     setPinError(null);
@@ -102,12 +118,48 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
         notifySuccess();
         setPinMode(null);
         if (pinMode === 'withdraw') setAmount('');
+        if (pinMode === 'fast') {
+          setFastAmount('');
+          setFastNote('');
+          setProof(null);
+        }
       },
       onError: (err: Error) => setPinError(err.message),
     };
     if (pinMode === 'unlock') actions.unlock.mutate({ pin, reason: reasonForUnlock || undefined }, done);
     else if (pinMode === 'override') actions.override.mutate(pin, done);
     else if (pinMode === 'withdraw') actions.withdraw.mutate({ amount, pin }, done);
+    else if (pinMode === 'fast' && proof) actions.fastRelease.mutate({ amount: fastAmount, pin, note: fastNote.trim() || undefined, asset: proof }, done);
+  };
+
+  const pickProof = async () => {
+    setError(null);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to attach the bill.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setProof({ uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType });
+  };
+
+  const releaseNow = () => {
+    setError(null);
+    if (!(Number(fastAmount) > 0)) {
+      setError('Enter how much to release.');
+      return;
+    }
+    if (fast && Number(fastAmount) > parseFloat(fast.limit)) {
+      setError(`Fast release is up to ${formatMoney(fast.limit)}.`);
+      return;
+    }
+    if (!proof) {
+      setError('Add a photo of the bill or doctor’s note.');
+      return;
+    }
+    setPinMode('fast');
   };
 
   const confirmLock = () => {
@@ -155,14 +207,14 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
 
   const decide = (r: EmergencyRequest, action: 'approve' | 'reject' | 'cancel') => {
     const titles = {
-      approve: ['Approve this unlock?', 'The wallet unlocks right away and beneficiaries can start withdrawing.'],
-      reject: ['Decline this unlock?', 'The wallet stays locked.'],
+      approve: ['Say yes to this release?', 'Once enough keyholders agree, the fund opens and beneficiaries can start withdrawing.'],
+      reject: r.method === 'fast_release' ? ['Flag this release?', 'The owner and the person who released it are told.'] : ['Decline this release?', 'The fund stays locked.'],
       cancel: ['Cancel your request?', 'You can ask again later.'],
     } as const;
     Alert.alert(titles[action][0], titles[action][1], [
       { text: 'Back', style: 'cancel' },
       {
-        text: action === 'approve' ? 'Approve' : action === 'reject' ? 'Decline' : 'Cancel Request',
+        text: action === 'approve' ? 'Yes, release' : action === 'reject' ? (r.method === 'fast_release' ? 'Flag' : 'Decline') : 'Cancel Request',
         style: action === 'approve' ? 'default' : 'destructive',
         onPress: () =>
           actions.decide.mutate(
@@ -272,7 +324,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
           {me.role === 'approver' && me.can_spend ? (
             <Section title="Act for the Owner">
               <Text className="text-[13px] leading-5 text-muted">
-                As the approver you can withdraw or transfer from this wallet while it's unlocked.
+                As a keyholder you can withdraw or transfer from this fund while it's released.
               </Text>
               <View className="flex-row" style={{ gap: 10 }}>
                 <View className="flex-1">
@@ -341,14 +393,45 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
             </Section>
           ) : null}
 
+          {/* EMG-04: a keyholder releases a small amount at once, with proof */}
+          {me.can_fast_release && fast ? (
+            <Section title="Release Now">
+              <Text className="text-[13px] leading-5 text-muted">
+                Up to {formatMoney(fast.limit)} straight to your Main wallet, once every {fast.every_days} days. The other keyholders check it within 48 hours.
+              </Text>
+              <Input
+                label="Amount"
+                prefix="₦"
+                value={groupAmountInput(fastAmount)}
+                onChangeText={(t) => setFastAmount(sanitizeAmountInput(t))}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+              <Input value={fastNote} onChangeText={setFastNote} placeholder="What happened? (optional)" maxLength={500} />
+              <Button
+                title={proof ? 'Photo of the bill added' : 'Add a Photo of the Bill'}
+                icon={proof ? 'checkmark-circle' : 'camera'}
+                iconPosition="left"
+                variant="secondary"
+                onPress={() => void pickProof()}
+              />
+              <Button title="Release Now" icon="flash" iconPosition="left" loading={actions.fastRelease.isPending} onPress={releaseNow} />
+            </Section>
+          ) : e.locked && fast && me.is_keyholder && fast.next_at ? (
+            <Section title="Release Now">
+              <Text className="text-[13px] leading-5 text-muted">Fast release was used recently. The next one opens {dayLabel(fast.next_at)}.</Text>
+            </Section>
+          ) : null}
+
           {/* Unlock requests */}
           {me.can_request_dual ? (
-            <Section title="Request an Unlock">
+            <Section title="Ask the Keyholders">
               <Text className="text-[13px] leading-5 text-muted">
-                Ask another authorised person to agree. The wallet unlocks once a second person approves.
+                The fund opens once {e.rules.required_keyholders ?? 2} of {(keyholders.length || 1) + 1} keyholders say yes
+                {e.rules.request_expiry_hours ? `. Requests expire after ${e.rules.request_expiry_hours} hours` : ''}.
               </Text>
               <Input value={requestNote} onChangeText={setRequestNote} placeholder="What's the emergency? (optional)" maxLength={500} />
-              <Button title="Request Unlock" icon="people" iconPosition="left" loading={actions.requestDual.isPending} onPress={requestUnlock} />
+              <Button title="Ask for a Release" icon="people" iconPosition="left" loading={actions.requestDual.isPending} onPress={requestUnlock} />
             </Section>
           ) : null}
 
@@ -388,16 +471,14 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
           ) : null}
 
           {e.requests.length > 0 ? (
-            <Section title="Unlock Requests">
+            <Section title="Requests and Releases">
               {e.requests.map((r) => {
                 const st = STATUS_STYLE[r.status];
                 return (
                   <View key={r.id} className="rounded bg-white p-4" style={outline.card}>
                     <View className="flex-row items-start">
                       <View className="flex-1 pr-2">
-                        <Text className="text-[15px] font-bold text-ink">
-                          {r.method === 'document' && r.document_type ? DOC_LABEL[r.document_type] : 'Dual Approval'}
-                        </Text>
+                        <Text className="text-[15px] font-bold text-ink">{requestTitle(r)}</Text>
                         <Text className="text-[12px] text-muted">
                           {r.requested_by?.name ?? 'Someone'} · {dayLabel(r.created_at)}
                         </Text>
@@ -410,8 +491,17 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
                     {r.method === 'document' && r.status === 'pending' ? (
                       <Text className="mt-2 text-[12px] text-muted">Patriai is verifying this document.</Text>
                     ) : null}
+                    {r.method === 'dual_approval' && r.status === 'pending' && r.required_approvals ? (
+                      <Text className="mt-2 text-[12px] text-muted">
+                        {r.approvals ?? 0} of {r.required_approvals} keyholders said yes
+                        {r.expires_at ? ` · expires ${timeLabel(r.expires_at)}` : ''}
+                      </Text>
+                    ) : null}
+                    {r.method === 'fast_release' && r.status === 'released' && r.expires_at ? (
+                      <Text className="mt-2 text-[12px] text-muted">Proof attached · keyholders can check it until {timeLabel(r.expires_at)}</Text>
+                    ) : null}
                     {r.review_note ? <Text className="mt-2 text-[12px] text-muted">Note: {r.review_note}</Text> : null}
-                    {r.can_approve || r.can_cancel ? (
+                    {r.can_approve || r.can_reject || r.can_cancel ? (
                       <View className="mt-3 flex-row" style={{ gap: 8 }}>
                         {r.can_approve ? (
                           <View className="flex-1">
@@ -420,7 +510,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
                         ) : null}
                         {r.can_reject ? (
                           <View className="flex-1">
-                            <Button title="Decline" variant="danger" onPress={() => decide(r, 'reject')} />
+                            <Button title={r.can_flag ? 'Flag' : 'Decline'} variant="danger" onPress={() => decide(r, 'reject')} />
                           </View>
                         ) : null}
                         {r.can_cancel ? (
@@ -442,8 +532,14 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
               <RuleRow
                 icon="people"
                 on={e.rules.dual_approval}
-                title="Dual Approval"
-                detail={e.rules.approver ? `Additional approver: ${e.rules.approver.name}` : null}
+                title={`Keyholders · ${e.rules.required_keyholders ?? 2} of ${keyholders.length + 1} to release`}
+                detail={keyholders.length ? `You and ${keyholders.map((k) => k.name).join(', ')}` : null}
+              />
+              <RuleRow
+                icon="flash"
+                on={Boolean(fast)}
+                title="Fast Release with Proof"
+                detail={fast ? `Up to ${formatMoney(fast.limit)}, once every ${fast.every_days} days` : null}
               />
               <RuleRow
                 icon="document-text"
@@ -511,7 +607,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
 
       <PinSheet
         visible={pinMode !== null}
-        title={pinMode === 'unlock' ? 'Custom PIN' : pinMode === 'override' ? 'Confirm override' : 'Authorize withdrawal'}
+        title={pinMode === 'unlock' ? 'Custom PIN' : pinMode === 'override' ? 'Confirm override' : pinMode === 'fast' ? 'Release now' : 'Authorize withdrawal'}
         subtitle={
           pinMode === 'unlock'
             ? 'Enter the custom PIN you created for this wallet.'
@@ -519,8 +615,8 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
               ? 'Enter your transaction PIN to unlock this wallet.'
               : 'Enter your transaction PIN.'
         }
-        amount={pinMode === 'withdraw' && amount ? formatMoney(amount) : undefined}
-        recipient={pinMode === 'withdraw' ? 'To your main wallet' : undefined}
+        amount={pinMode === 'withdraw' && amount ? formatMoney(amount) : pinMode === 'fast' && fastAmount ? formatMoney(fastAmount) : undefined}
+        recipient={pinMode === 'withdraw' || pinMode === 'fast' ? 'To your main wallet' : undefined}
         allowBiometric={pinMode !== 'unlock'}
         // The emergency wallet's custom PIN is its own 4-digit secret.
         length={pinMode === 'unlock' ? 4 : undefined}

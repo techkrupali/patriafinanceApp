@@ -59,6 +59,13 @@ class WalletSetupService
                 'lock_until_goal' => !empty($approval['lock_until_goal']) ? true : null,
                 'approval_expiry_hours' => isset($approval['expiry_hours']) ? (int) $approval['expiry_hours'] : null,
                 'reminder_day' => isset($data['reminder_day']) ? (int) $data['reminder_day'] : null,
+                'colour' => $data['colour'] ?? null,
+                'lock' => ($data['lock']['mode'] ?? 'none') !== 'none' ? [
+                    'mode' => $data['lock']['mode'],
+                    'until' => $data['lock']['mode'] === 'date' ? $data['lock']['until'] : null,
+                    'early_break' => (bool) ($data['lock']['early_break'] ?? true),
+                    'approval' => (bool) ($data['lock']['approval'] ?? true),
+                ] : null,
             ], fn ($v) => $v !== null && $v !== '');
             $opts = array_filter([
                 'description' => $data['description'] ?? null,
@@ -77,6 +84,8 @@ class WalletSetupService
                 ]);
             }
 
+            $invited = $this->inviteMembers($wallet, $user, $data['members'] ?? []);
+
             if ($data['type'] === 'emergency' && !empty($data['emergency'])) {
                 $this->emergency->configure($wallet, $user, $data['emergency']);
             }
@@ -84,8 +93,6 @@ class WalletSetupService
             if (in_array($data['type'], SavingsService::TYPES, true)) {
                 $this->savings->configure($wallet, $user, $data, $source);
             }
-
-            $invited = $this->inviteMembers($wallet, $user, $data['members'] ?? []);
 
             if ($deposit > 0) {
                 $this->wallets->transferBetweenWallets($source, $wallet, $deposit, $user, "Initial deposit to {$wallet->name}");
@@ -147,8 +154,20 @@ class WalletSetupService
                 $invitee = $this->invitations->resolveInvitee($identifier);
             }
 
+            if ($m['role'] === 'viewer' && !empty($m['can_approve'])) {
+                throw ValidationException::withMessages(["members.{$i}.can_approve" => 'A viewer cannot approve payments.']);
+            }
             try {
-                $invitation = $this->invitations->create($wallet, $owner, $invitee, $identifier, $m['role']);
+                $invitation = $this->invitations->create(
+                    $wallet,
+                    $owner,
+                    $invitee,
+                    $identifier,
+                    $m['role'],
+                    (bool) ($m['can_approve'] ?? false),
+                    $m['permissions'] ?? null,
+                    $m['pledge'] ?? null,
+                );
             } catch (ValidationException $e) {
                 throw ValidationException::withMessages(["members.{$i}" => collect($e->errors())->flatten()->first()]);
             }

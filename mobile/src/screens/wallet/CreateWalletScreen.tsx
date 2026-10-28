@@ -65,16 +65,16 @@ function TypeCard({ item, on, onPress }: { item: (typeof TYPES)[number]; on: boo
 
 /**
  * WCR-01 "What's this wallet for?" — the first step of guided wallet creation.
- * Goal continues into the prototype's WCR flow; the other types keep their own
- * setup journeys (Savings goals, Emergency, Project, and the guided setup).
+ * Goal, Savings and Emergency continue into the prototype's flows; Project and
+ * the other types keep their own setup journeys for now.
  */
 export function CreateWalletScreen({ navigation }: RootScreenProps<'CreateWallet'>) {
   const [type, setType] = useState<CreatableWalletType>('goal');
 
   const next = () => {
     if (type === 'goal') navigation.navigate('GoalWalletSetup');
-    else if (type === 'savings') navigation.navigate('SavingsGoalSetup', { type });
-    else if (type === 'emergency') navigation.navigate('CreateEmergencyWallet');
+    else if (type === 'savings') navigation.navigate('SavingsWalletSetup');
+    else if (type === 'emergency') navigation.navigate('EmergencyWalletSetup');
     else if (type === 'project') navigation.navigate('CreateProject');
     else navigation.navigate('WalletSetup', { type });
   };

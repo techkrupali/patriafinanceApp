@@ -61,6 +61,8 @@ interface PtStepScreenProps {
   closeIcon?: boolean;
   /** Segmented step bar beside the back button. */
   progress?: { step: number; total: number };
+  /** SAV/EMG header: "Savings wallet" and "Step 3 of 8" above the step bar. */
+  flow?: { title: string; step: number; total: number };
   /** Right side of the top row, e.g. the language toggle. */
   headerRight?: React.ReactNode;
   /** Overline above the title, e.g. "STEP 1 OF 5". */
@@ -84,6 +86,7 @@ export function PtStepScreen({
   onBack,
   closeIcon = false,
   progress,
+  flow,
   headerRight,
   step,
   title,
@@ -137,7 +140,20 @@ export function PtStepScreen({
       >
         {onBack ? <PtBackButton onPress={onBack} close={closeIcon} /> : <View style={{ width: 44 }} />}
         {progress ? <PtProgressBar step={progress.step} total={progress.total} /> : null}
-        {headerRight ? <View style={{ marginRight: 8 }}>{headerRight}</View> : progress ? <View style={{ width: 12 }} /> : null}
+        {flow ? (
+          <View style={{ flex: 1, gap: 8, paddingTop: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 }}>
+              <PtText variant="label" color={pt.inkMuted}>
+                {flow.title}
+              </PtText>
+              <PtText variant="label" color={pt.inkMuted}>
+                Step {flow.step} of {flow.total}
+              </PtText>
+            </View>
+            <PtProgressBar step={flow.step} total={flow.total} />
+          </View>
+        ) : null}
+        {headerRight ? <View style={{ marginRight: 8 }}>{headerRight}</View> : progress || flow ? <View style={{ width: 12 }} /> : null}
       </View>
 
       {scroll ? (

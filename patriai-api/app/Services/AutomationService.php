@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\AutomationRule;
+use App\Models\SavingsPlan;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
 use Carbon\Carbon;
@@ -23,6 +25,13 @@ use Illuminate\Validation\ValidationException;
  */
 class AutomationService
 {
+    /** SAV-06: "Try again in 3 days … up to 3 times", "keeps ₦5,000 in Main". */
+    private const RETRY_DAYS = 3;
+
+    private const MAX_RETRIES = 3;
+
+    private const KEEP_IN_SOURCE = 500_000;
+
     public function __construct(
         private readonly WalletService $wallets,
         private readonly NotificationService $notifications,
@@ -76,22 +85,14 @@ class AutomationService
      */
     public function createContributionRule(User $user, Wallet $from, Wallet $savings, array $terms): AutomationRule
     {
-        if ($from->user_id !== $user->id) {
-            throw ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
-        }
-        if ($from->id === $savings->id) {
-            throw ValidationException::withMessages(['source_wallet_id' => 'Choose a different wallet to save from.']);
-        }
-        if (!$savings->canFund($user)) {
-            throw ValidationException::withMessages(['wallet' => "You can't add money to {$savings->name}."]);
-        }
+        $this->guardContribution($user, $from, $savings);
         if ((int) $terms['amount'] <= 0) {
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero.']);
         }
 
         return AutomationRule::create([
             'user_id' => $user->id,
-            'name' => "Saving for {$savings->name}",
+            'name' => $terms['name'] ?? "Saving for {$savings->name}",
             'from_wallet_id' => $from->id,
             'to_wallet_id' => $savings->id,
             'savings_contribution' => true,
@@ -101,6 +102,68 @@ class AutomationService
             'day_of_month' => $terms['frequency'] === 'monthly' ? $terms['day_of_month'] : null,
             'enabled' => $terms['enabled'] ?? true,
         ]);
+    }
+
+    /** SAV-02 "A share of every salary": $percent of each salary-sized deposit into $from. */
+    public function createSalaryRule(User $user, Wallet $from, Wallet $savings, int $percent, bool $enabled = true): AutomationRule
+    {
+        $this->guardContribution($user, $from, $savings);
+        if ($percent < 1 || $percent > 50) {
+            throw ValidationException::withMessages(['salary_percent' => 'Choose between 1% and 50% of each salary.']);
+        }
+
+        return AutomationRule::create([
+            'user_id' => $user->id,
+            'name' => "Save {$percent}% from every salary",
+            'from_wallet_id' => $from->id,
+            'to_wallet_id' => $savings->id,
+            'savings_contribution' => true,
+            'trigger' => 'salary',
+            'percent' => $percent,
+            'amount' => 0,
+            // At most once a calendar month; no day — it fires when salary lands.
+            'frequency' => 'monthly',
+            'enabled' => $enabled,
+        ]);
+    }
+
+    /** SAV-02 "Round-ups": spending from $from rounded up to $step, swept daily. */
+    public function createRoundUpRule(User $user, Wallet $from, Wallet $savings, int $step, bool $enabled = true): AutomationRule
+    {
+        $this->guardContribution($user, $from, $savings);
+        if ($from->type !== 'main') {
+            throw ValidationException::withMessages(['source_wallet_id' => 'Round-ups come from spending in your Main wallet.']);
+        }
+        if (!in_array($step, SavingsPlan::ROUNDUP_STEPS, true)) {
+            throw ValidationException::withMessages(['roundup_to' => 'Round up to ₦100, ₦500 or ₦1,000.']);
+        }
+
+        return AutomationRule::create([
+            'user_id' => $user->id,
+            'name' => 'Round-ups to ₦' . number_format($step / 100),
+            'from_wallet_id' => $from->id,
+            'to_wallet_id' => $savings->id,
+            'savings_contribution' => true,
+            'trigger' => 'roundup',
+            'roundup_to' => $step,
+            'amount' => 0,
+            'frequency' => 'daily',
+            'enabled' => $enabled,
+        ]);
+    }
+
+    /** A saver pays from their own wallet into one they may fund. */
+    private function guardContribution(User $user, Wallet $from, Wallet $savings): void
+    {
+        if ($from->user_id !== $user->id) {
+            throw ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
+        }
+        if ($from->id === $savings->id) {
+            throw ValidationException::withMessages(['source_wallet_id' => 'Choose a different wallet to save from.']);
+        }
+        if (!$savings->canFund($user)) {
+            throw ValidationException::withMessages(['wallet' => "You can't add money to {$savings->name}."]);
+        }
     }
 
     /** Owner-only edit. Re-validates wallet ownership on any wallet change. */
@@ -217,15 +280,22 @@ class AutomationService
             }
 
             $period = $locked->currentPeriod($now);
+            // A missed save trying again: its period was already stamped when it missed.
+            $retrying = $locked->isRetryDue($now);
 
             // Primary idempotency guard: already ran for this period.
-            if ($locked->last_run_period === $period) {
+            if ($locked->last_run_period === $period && !$retrying) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Already ran this period', 'period' => $period];
             }
 
             // A disabled rule never runs, even via a manual force.
             if (!$locked->enabled) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Rule disabled', 'period' => $period];
+            }
+
+            // Salary rules only run when a salary lands (runIncome).
+            if ($locked->trigger === 'salary') {
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Runs when salary lands', 'period' => $period];
             }
 
             // Scheduled runs must match the calendar; a manual force skips only this.
@@ -241,11 +311,18 @@ class AutomationService
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing', 'period' => $period];
             }
 
+            // Round-ups move whatever spending has built up since the last sweep.
+            $amount = $locked->trigger === 'roundup' ? (int) $locked->pending_amount : (int) $locked->amount;
+
             // Defense-in-depth money guards (in addition to the create-time validation):
             // never move a non-positive amount, and re-confirm BOTH wallets still belong
             // to the rule's owner at execution time, so no post-creation change can move
             // money across users or reverse the flow.
-            if ((int) $locked->amount <= 0) {
+            if ($amount <= 0) {
+                if ($locked->trigger === 'roundup') {
+                    $locked->update(['last_run_period' => $period]);
+                }
+
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Non-positive amount', 'period' => $period];
             }
             // A savings contribution may pay into someone else's savings wallet, but only
@@ -259,11 +336,16 @@ class AutomationService
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Source emergency wallet is locked', 'period' => $period];
             }
 
-            $amount = (int) $locked->amount;
             $available = $from->availableToSpend();
+            $plan = $locked->savings_contribution ? $to->savingsPlan : null;
 
             // Must not overdraw funds already committed to approvals/milestones.
             if ($available < $amount) {
+                // Round-ups wait for tomorrow's sweep; a savings plan says what a miss does.
+                if ($plan && $locked->trigger === 'schedule') {
+                    return $this->missed($locked, $plan, $from, $to, $owner, $amount, $available, $period, $now);
+                }
+
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Insufficient available balance', 'period' => $period];
             }
 
@@ -278,8 +360,11 @@ class AutomationService
 
             // Stamp under the same rule lock so a racing runner sees it as done.
             $locked->update([
-                'last_run_period' => $period,
+                'last_run_period' => $retrying ? $locked->last_run_period : $period,
                 'last_run_at' => $now,
+                'retry_count' => 0,
+                'retry_at' => null,
+                'pending_amount' => $locked->trigger === 'roundup' ? max(0, $locked->pending_amount - $amount) : $locked->pending_amount,
             ]);
 
             $this->notifications->push(
@@ -303,6 +388,111 @@ class AutomationService
                 'period' => $period,
             ];
         });
+    }
+
+    /**
+     * SAV-06 "If a save can't happen". retry: try again in 3 days, up to 3 times;
+     * partial: move what's there, keeping ₦5,000 in the source; skip: wait for the
+     * next one. The period is stamped either way, so the schedule doesn't keep
+     * firing; a retry runs on its own clock (retry_at). Runs under the rule lock.
+     */
+    private function missed(AutomationRule $rule, SavingsPlan $plan, Wallet $from, Wallet $to, User $owner, int $amount, int $available, string $period, Carbon $now): array
+    {
+        $result = ['rule_id' => $rule->id, 'status' => 'missed', 'policy' => $plan->missed_policy, 'period' => $period];
+        $stamp = ['last_run_period' => $rule->retry_at ? $rule->last_run_period : $period];
+
+        if ($plan->missed_policy === 'partial') {
+            $move = $available - self::KEEP_IN_SOURCE;
+            if ($move >= 10_000) {
+                $moved = $this->wallets->transferBetweenWallets($from, $to, $move, $owner, 'Automation: ' . $rule->name . ' (part)');
+                $rule->update($stamp + ['last_run_at' => $now, 'retry_count' => 0, 'retry_at' => null]);
+                $this->notifications->push($owner, 'savings_missed', "Saved ₦{$this->naira($move)} into {$to->name}", "{$from->name} didn't have the full ₦{$this->naira($amount)}, so we saved what was there and kept ₦" . number_format(self::KEEP_IN_SOURCE / 100) . " in {$from->name}.", ['wallet_id' => $to->id, 'reference' => $moved['reference']]);
+                $this->tellOthers($plan, $to, $owner, "{$owner->first_name} saved part of their ₦{$this->naira($amount)}");
+
+                return ['status' => 'partial', 'amount' => $this->naira($move), 'reference' => $moved['reference']] + $result;
+            }
+        }
+
+        if ($plan->missed_policy === 'retry' && $rule->retry_count < self::MAX_RETRIES) {
+            $retryAt = $now->copy()->addDays(self::RETRY_DAYS);
+            $rule->update($stamp + ['retry_count' => $rule->retry_count + 1, 'retry_at' => $retryAt]);
+            $this->notifications->push($owner, 'savings_missed', "Couldn't save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. We'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
+            $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save — trying again on {$retryAt->format('j M')}");
+
+            return ['retry_at' => $retryAt->toIso8601String()] + $result;
+        }
+
+        $rule->update($stamp + ['retry_count' => 0, 'retry_at' => null]);
+        $this->notifications->push($owner, 'savings_missed', "Skipped a save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. Your next save happens as planned.", ['wallet_id' => $to->id]);
+        $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save");
+
+        return $result;
+    }
+
+    /** SAV-06 "Tell Emeka too": the wallet's owner and co-owners hear when a saver misses. */
+    private function tellOthers(SavingsPlan $plan, Wallet $savings, User $saver, string $what): void
+    {
+        if (!$plan->notify_others_on_miss) {
+            return;
+        }
+        $ids = $savings->members()->where('status', 'active')->whereIn('role', ['owner', 'co_owner'])->pluck('user_id')
+            ->push($savings->user_id)->unique()->reject(fn ($id) => $id === $saver->id);
+        foreach (User::whereIn('id', $ids)->get() as $user) {
+            $this->notifications->push($user, 'savings_missed', "A save into {$savings->name} was missed", "{$what}.", ['wallet_id' => $savings->id]);
+        }
+    }
+
+    /**
+     * SAV-02 "A share of every salary": a salary-sized bank deposit landed in a
+     * Main wallet — every salary rule saving from it moves its share, at most once
+     * a month, never more than is there.
+     */
+    public function runIncome(Wallet $main, Transaction $credit): array
+    {
+        if ($main->type !== 'main' || $credit->direction !== 'credit' || $credit->type !== 'fund' || $credit->amount < SavingsInsights::SALARY_FLOOR) {
+            return [];
+        }
+
+        $results = [];
+        $rules = AutomationRule::where('from_wallet_id', $main->id)->where('trigger', 'salary')->where('enabled', true)->get();
+        foreach ($rules as $rule) {
+            try {
+                $results[] = DB::transaction(function () use ($rule, $main, $credit) {
+                    $locked = AutomationRule::whereKey($rule->id)->lockForUpdate()->first();
+                    $period = $locked->currentPeriod(now());
+                    if (!$locked->enabled || $locked->last_run_period === $period) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Already saved from a salary this month'];
+                    }
+                    $to = Wallet::find($locked->to_wallet_id);
+                    $owner = $locked->user;
+                    if (!$to || !$owner || $main->user_id !== $owner->id || !$to->canFund($owner)) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing'];
+                    }
+
+                    $amount = min(intdiv($credit->amount * (int) $locked->percent, 100), $main->fresh()->availableToSpend());
+                    if ($amount <= 0) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Nothing available'];
+                    }
+
+                    $result = $this->wallets->transferBetweenWallets($main, $to, $amount, $owner, 'Automation: ' . $locked->name);
+                    $locked->update(['last_run_period' => $period, 'last_run_at' => now()]);
+                    $this->notifications->push(
+                        $owner,
+                        'automation_run',
+                        "Saved ₦{$this->naira($amount)} into {$to->name}",
+                        "{$locked->percent}% of the ₦{$this->naira($credit->amount)} that just landed in {$main->name}.",
+                        ['automation_rule_id' => $locked->id, 'reference' => $result['reference'], 'amount' => $this->naira($amount)],
+                    );
+
+                    return ['rule_id' => $locked->id, 'status' => 'ran', 'amount' => $this->naira($amount), 'reference' => $result['reference']];
+                });
+            } catch (\Throwable $e) {
+                Log::warning("Salary rule {$rule->id} failed: {$e->getMessage()}");
+                $results[] = ['rule_id' => $rule->id, 'status' => 'error', 'reason' => $e->getMessage()];
+            }
+        }
+
+        return $results;
     }
 
     /**

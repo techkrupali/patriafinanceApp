@@ -7,6 +7,7 @@ import { walletSubtitle } from '../../lib/walletRows';
 import { walletVisual } from '../../lib/walletVisual';
 import { PtIconTile, PtRow } from './PtList';
 import type { Wallet } from '../../api/types';
+import { walletColour } from '../../lib/walletColours';
 
 /** A wallet in a Treasury list: type icon tile, name, one-line status, balance. */
 export function PtWalletRow({
@@ -29,7 +30,7 @@ export function PtWalletRow({
       onPress={onPress}
       left={
         <PtIconTile>
-          <Ionicons name={walletVisual(wallet.type).icon} size={19} color={pt.brand} />
+          <Ionicons name={walletVisual(wallet.type).icon} size={19} color={walletColour(wallet.colour) ?? pt.brand} />
         </PtIconTile>
       }
       right={

@@ -34,6 +34,12 @@ class EmergencyService
 {
     private const PIN_MAX_ATTEMPTS = 5;
 
+    /** Keyholders besides the owner (EMG-03). */
+    private const MAX_KEYHOLDERS = 6;
+
+    /** EMG-04: keyholders check a fast release within 48 hours. */
+    private const FAST_RELEASE_REVIEW_HOURS = 48;
+
     private const PIN_LOCK_MINUTES = 15;
 
     private const VIA_LABELS = [
@@ -71,11 +77,11 @@ class EmergencyService
      */
     public function configure(Wallet $wallet, User $owner, array $rules): EmergencySetting
     {
-        [$approver, $people] = $this->validateRules($owner, $rules);
+        [$keyholders, $people] = $this->validateRules($owner, $rules);
 
-        $setting = EmergencySetting::create(['wallet_id' => $wallet->id] + $this->settingAttributes($rules, $approver));
+        $setting = EmergencySetting::create(['wallet_id' => $wallet->id] + $this->settingAttributes($rules, $keyholders));
         $this->syncBeneficiaries($wallet, $rules['beneficiaries'] ?? []);
-        $this->syncMembers($wallet, $owner, $people, $approver);
+        $this->syncMembers($wallet, $owner, $people, $keyholders);
 
         AuditService::make()->log($wallet, $owner, 'emergency_rules_set', 'Emergency access rules activated — wallet locked', [
             'dual_approval' => $setting->dual_approval,
@@ -97,13 +103,13 @@ class EmergencyService
         $setting = $this->requireSetting($wallet);
         $this->requireOwner($wallet, $owner);
         app(PinService::class)->verify($owner, $pin);
-        [$approver, $people] = $this->validateRules($owner, $rules, $setting);
-        $previousApprover = $setting->dual_approval ? $setting->approver_user_id : null;
+        [$keyholders, $people] = $this->validateRules($owner, $rules, $setting);
+        $previousKeyholders = $setting->keyholders($wallet->user_id);
 
-        $added = DB::transaction(function () use ($wallet, $owner, $rules, $setting, $approver, $people) {
-            $setting->update($this->settingAttributes($rules, $approver, $setting));
+        $added = DB::transaction(function () use ($wallet, $owner, $rules, $setting, $keyholders, $people) {
+            $setting->update($this->settingAttributes($rules, $keyholders, $setting));
             $added = $this->syncBeneficiaries($wallet, $rules['beneficiaries'] ?? []);
-            $this->syncMembers($wallet, $owner, $people, $approver);
+            $this->syncMembers($wallet, $owner, $people, $keyholders);
 
             // Requests for an unlock method that's now off can never succeed.
             $off = array_keys(array_filter(['dual_approval' => !$setting->dual_approval, 'document' => !$setting->unlock_on_document]));
@@ -126,10 +132,22 @@ class EmergencyService
             'pin_changed' => !empty($rules['emergency_pin']),
         ]);
 
-        $newApprover = $approver && $approver->id !== $previousApprover;
-        $this->notifyPeople($wallet, $owner, $added, $newApprover);
+        $setting->refresh();
+        $newKeyholders = array_values(array_diff($setting->keyholders($wallet->user_id), $previousKeyholders));
+        $this->notifyPeople($wallet, $owner, $added, $newKeyholders);
 
-        return $setting->refresh();
+        // Keyholders always hear when the release rules change.
+        foreach (User::whereIn('id', array_diff($setting->keyholders($wallet->user_id), [$owner->id], $newKeyholders))->get() as $keyholder) {
+            $this->notifications->push(
+                $keyholder,
+                'emergency_rules_changed',
+                "{$owner->fullName()} changed the rules of {$wallet->name}",
+                'A release now needs ' . $setting->requiredYeses($wallet->user_id) . ' of ' . count($setting->keyholders($wallet->user_id)) . ' keyholders.',
+                ['wallet_id' => $wallet->id],
+            );
+        }
+
+        return $setting;
     }
 
     /**
@@ -144,16 +162,25 @@ class EmergencyService
         $manual = (bool) ($rules['manual_unlock'] ?? false);
         $beneficiaries = array_values($rules['beneficiaries'] ?? []);
 
-        if (!$dual && !$document && !$manual) {
+        // EMG-03 keyholders; the original dual approval named one approver.
+        $keyholders = [];
+        if (array_key_exists('keyholders', $rules)) {
+            foreach (array_values(array_unique(array_map('intval', $rules['keyholders'] ?? []))) as $i => $id) {
+                $keyholders[] = $this->resolvePerson($id, $owner, "emergency.keyholders.{$i}", 'keyholder');
+            }
+            if (count($keyholders) > self::MAX_KEYHOLDERS) {
+                throw ValidationException::withMessages(['emergency.keyholders' => 'You can choose up to ' . self::MAX_KEYHOLDERS . ' keyholders besides you.']);
+            }
+        } elseif ($dual) {
+            $keyholders[] = $this->resolvePerson($rules['approver_user_id'] ?? null, $owner, 'emergency.approver_user_id', 'approver');
+        }
+
+        if (!$keyholders && !$document && !$manual) {
             throw ValidationException::withMessages([
                 'emergency' => 'Choose at least one way this wallet can be unlocked.',
             ]);
         }
 
-        $approver = null;
-        if ($dual) {
-            $approver = $this->resolvePerson($rules['approver_user_id'] ?? null, $owner, 'emergency.approver_user_id', 'approver');
-        }
 
         if ($manual) {
             if (trim((string) ($rules['unlock_reason'] ?? '')) === '') {
@@ -182,24 +209,35 @@ class EmergencyService
         }
 
         // Someone other than the owner has to be able to present the document.
-        if ($document && empty($people) && !$approver) {
+        if ($document && empty($people) && !$keyholders) {
             throw ValidationException::withMessages([
                 'emergency.unlock_on_document' => 'Add a beneficiary or an approver who can submit the death certificate or legal notice.',
             ]);
         }
 
-        return [$approver, $people];
+        return [$keyholders, $people];
     }
 
-    private function settingAttributes(array $rules, ?User $approver, ?EmergencySetting $existing = null): array
+    /** @param list<User> $keyholders */
+    private function settingAttributes(array $rules, array $keyholders, ?EmergencySetting $existing = null): array
     {
         $manual = (bool) ($rules['manual_unlock'] ?? false);
         $newPin = (string) ($rules['emergency_pin'] ?? '');
+        $explicit = array_key_exists('keyholders', $rules);
+        $ids = array_map(fn (User $u) => $u->id, $keyholders);
+        $fast = (int) ($rules['fast_release_limit'] ?? 0);
 
         return [
             'purpose' => $rules['purpose'] ?? $existing?->purpose,
-            'dual_approval' => (bool) ($rules['dual_approval'] ?? false),
-            'approver_user_id' => $approver?->id,
+            'purposes' => array_key_exists('purposes', $rules) ? array_values($rules['purposes'] ?? []) : $existing?->purposes,
+            'dual_approval' => count($ids) > 0,
+            'approver_user_id' => $ids[0] ?? null,
+            'keyholder_ids' => $explicit ? $ids : null,
+            // "2 of 3": the owner plus the keyholders; a request counts as the asker's yes.
+            'required_keyholders' => $explicit && $ids ? max(1, min(count($ids) + 1, (int) ($rules['required_keyholders'] ?? 2))) : null,
+            'request_expiry_hours' => isset($rules['request_expiry_hours']) ? (int) $rules['request_expiry_hours'] : $existing?->request_expiry_hours,
+            'fast_release_limit' => $fast > 0 ? $fast : null,
+            'fast_release_every_days' => (int) ($rules['fast_release_every_days'] ?? $existing?->fast_release_every_days ?? 30),
             'unlock_on_document' => (bool) ($rules['unlock_on_document'] ?? false),
             'manual_unlock' => $manual,
             'unlock_reason' => $manual ? trim((string) $rules['unlock_reason']) : null,
@@ -250,14 +288,15 @@ class EmergencyService
      * wallet list as read-only members — never spenders. People dropped from the
      * rules lose that access, unless they also hold a real role on the wallet.
      */
-    private function syncMembers(Wallet $wallet, User $owner, array $people, ?User $approver): void
+    /** @param list<User> $keyholders */
+    private function syncMembers(Wallet $wallet, User $owner, array $people, array $keyholders): void
     {
         $desired = [];
         foreach ($people as $user) {
             $desired[$user->id] = 'beneficiary';
         }
-        if ($approver && !isset($desired[$approver->id])) {
-            $desired[$approver->id] = 'emergency_approver';
+        foreach ($keyholders as $keyholder) {
+            $desired[$keyholder->id] ??= 'emergency_approver';
         }
 
         WalletMember::where('wallet_id', $wallet->id)
@@ -280,11 +319,12 @@ class EmergencyService
     /** Tell the approver and beneficiaries what they were named for. Call after commit. */
     public function notifyConfigured(Wallet $wallet, User $owner): void
     {
-        $this->notifyPeople($wallet, $owner, null, true);
+        $setting = $wallet->emergencySetting;
+        $this->notifyPeople($wallet, $owner, null, $setting ? array_values(array_diff($setting->keyholders($wallet->user_id), [$owner->id])) : []);
     }
 
-    /** Notify beneficiaries ($onlyUserIds, or all when null) and optionally the approver. */
-    private function notifyPeople(Wallet $wallet, User $owner, ?array $onlyUserIds, bool $approver): void
+    /** Notify beneficiaries ($onlyUserIds, or all when null) and the keyholders in $keyholderIds. */
+    private function notifyPeople(Wallet $wallet, User $owner, ?array $onlyUserIds, array $keyholderIds): void
     {
         $setting = $wallet->emergencySetting;
         if (!$setting) {
@@ -308,12 +348,14 @@ class EmergencyService
             );
         }
 
-        if ($approver && $setting->dual_approval && $setting->approver) {
+        $needed = $setting->requiredYeses($wallet->user_id);
+        $of = count($setting->keyholders($wallet->user_id));
+        foreach (User::whereIn('id', $keyholderIds)->get() as $keyholder) {
             $this->notifications->push(
-                $setting->approver,
+                $keyholder,
                 'emergency_approver_added',
-                "{$owner->fullName()} made you an emergency approver",
-                "You can help unlock {$wallet->name} in an emergency — an unlock needs two people to agree.",
+                "{$owner->fullName()} made you a keyholder of {$wallet->name}",
+                "In an emergency you help decide when money is released — a release needs {$needed} of {$of} keyholders.",
                 ['wallet_id' => $wallet->id],
             );
         }
@@ -334,16 +376,34 @@ class EmergencyService
 
     // ------------------------------------------------------------- authority
 
-    /** Owner, the named approver (when dual approval is on) and every recipient. */
+    /** Who may ask for a release: the keyholders and every beneficiary (EMG-05 "if you can't ask yourself"). */
     public function authorizedUserIds(Wallet $wallet): Collection
     {
         $setting = $wallet->emergencySetting;
-        $ids = collect([$wallet->user_id]);
-        if ($setting?->dual_approval && $setting->approver_user_id) {
-            $ids->push($setting->approver_user_id);
+        $ids = collect($setting ? $setting->keyholders($wallet->user_id) : [$wallet->user_id]);
+        if ($setting && !$setting->dual_approval) {
+            $ids = collect([$wallet->user_id]);
         }
 
         return $ids->concat($wallet->emergencyBeneficiaries()->pluck('user_id'))->unique()->values();
+    }
+
+    /**
+     * Whose yes counts towards a release: the keyholders. Rules made before
+     * keyholders let any authorised person (owner, approver, beneficiaries) agree.
+     */
+    public function approverIds(Wallet $wallet, EmergencySetting $setting): Collection
+    {
+        return $setting->keyholder_ids === null
+            ? $this->authorizedUserIds($wallet)
+            : collect($setting->keyholders($wallet->user_id));
+    }
+
+    public function isKeyholder(Wallet $wallet, User $user): bool
+    {
+        $setting = $wallet->emergencySetting;
+
+        return $setting !== null && in_array($user->id, $setting->keyholders($wallet->user_id), true);
     }
 
     public function isAuthorized(Wallet $wallet, User $user): bool
@@ -438,17 +498,22 @@ class EmergencyService
         return $setting->refresh();
     }
 
-    /** Ask a second authorised person to agree to unlock (dual approval). */
+    /**
+     * Ask the keyholders to release the fund (EMG-03; with one approver this is the
+     * original dual approval). A keyholder's own request counts as their yes, so
+     * "1 of 3" releases at once. Requests expire after the hours the owner chose.
+     */
     public function requestDualApproval(Wallet $wallet, User $requester, ?string $note): EmergencyUnlockRequest
     {
         $setting = $this->requireSetting($wallet);
         if (!$setting->dual_approval) {
-            throw ValidationException::withMessages(['method' => 'Dual approval is not enabled for this wallet.']);
+            throw ValidationException::withMessages(['method' => 'Release by keyholders is not set up for this wallet.']);
         }
         $this->requireLocked($setting);
         if (!$this->isAuthorized($wallet, $requester)) {
             throw ValidationException::withMessages(['wallet' => 'You are not one of the people who can unlock this wallet.']);
         }
+        $this->expireOldRequests($wallet);
         $pending = $wallet->emergencyUnlockRequests()
             ->where('method', 'dual_approval')
             ->where('status', 'pending')
@@ -457,28 +522,53 @@ class EmergencyService
             throw ValidationException::withMessages(['method' => 'An unlock request is already waiting for approval.']);
         }
 
+        $approvers = $this->approverIds($wallet, $setting);
+        $required = $setting->keyholder_ids === null ? 2 : $setting->requiredYeses($wallet->user_id);
+        $yes = $approvers->contains($requester->id) ? [$requester->id] : [];
+
         $request = EmergencyUnlockRequest::create([
             'wallet_id' => $wallet->id,
             'requested_by' => $requester->id,
             'method' => 'dual_approval',
             'note' => $note ?: null,
+            'approvals' => $yes,
+            'required_approvals' => $required,
+            'expires_at' => $setting->request_expiry_hours ? now()->addHours($setting->request_expiry_hours) : null,
         ]);
 
-        AuditService::make()->log($wallet, $requester, 'emergency_unlock_requested', "{$requester->fullName()} asked to unlock the wallet (dual approval)", ['request_id' => $request->id]);
+        AuditService::make()->log($wallet, $requester, 'emergency_unlock_requested', "{$requester->fullName()} asked to release the wallet", ['request_id' => $request->id]);
 
-        foreach ($this->authorizedUserIds($wallet)->reject(fn ($id) => $id === $requester->id) as $id) {
+        if (count($yes) >= $required) {
+            $request->update(['status' => 'approved', 'approved_by' => $requester->id, 'decided_at' => now()]);
+            $this->unlock($wallet, $requester, 'dual_approval', $request->id, $note);
+
+            return $request->refresh();
+        }
+
+        $still = $required - count($yes);
+        foreach ($approvers->reject(fn ($id) => $id === $requester->id) as $id) {
             if ($user = User::find($id)) {
                 $this->notifications->push(
                     $user,
                     'emergency_unlock_requested',
-                    "{$requester->fullName()} asked to unlock {$wallet->name}",
-                    'Your approval is needed — an emergency unlock takes two people.' . ($note ? " Note: {$note}" : ''),
+                    "{$requester->fullName()} asked to release {$wallet->name}",
+                    "Your yes is needed — {$still} more of " . $approvers->count() . ' keyholders must agree.' . ($note ? " Note: {$note}" : ''),
                     ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id],
                 );
             }
         }
 
         return $request;
+    }
+
+    /** Pending requests past their expiry stop counting. */
+    private function expireOldRequests(Wallet $wallet): void
+    {
+        $wallet->emergencyUnlockRequests()
+            ->where('status', 'pending')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<', now())
+            ->update(['status' => 'expired', 'decided_at' => now()]);
     }
 
     /** Submit a death certificate / legal notice for admin verification. */
@@ -523,7 +613,7 @@ class EmergencyService
         return $request;
     }
 
-    /** A second authorised person agrees to a dual-approval request → unlock. */
+    /** A keyholder says yes; enough yeses release the fund. */
     public function approveRequest(EmergencyUnlockRequest $request, User $approver): EmergencyUnlockRequest
     {
         $wallet = $request->wallet;
@@ -531,25 +621,49 @@ class EmergencyService
         if ($request->method !== 'dual_approval' || $request->status !== 'pending') {
             throw ValidationException::withMessages(['request' => 'This request can no longer be approved.']);
         }
-        if (!$setting->dual_approval || !$this->isAuthorized($wallet, $approver)) {
+        if ($request->expires_at && $request->expires_at->isPast()) {
+            $request->update(['status' => 'expired', 'decided_at' => now()]);
+            throw ValidationException::withMessages(['request' => 'This request has expired. Ask again if it is still needed.']);
+        }
+        if (!$setting->dual_approval || !$this->approverIds($wallet, $setting)->contains($approver->id)) {
             throw ValidationException::withMessages(['request' => 'You are not one of the people who can unlock this wallet.']);
         }
         if ($request->requested_by === $approver->id) {
             throw ValidationException::withMessages(['request' => 'Someone other than the requester has to approve.']);
         }
 
-        $request->update(['status' => 'approved', 'approved_by' => $approver->id, 'decided_at' => now()]);
-        if ($setting->isLocked()) {
-            $this->unlock($wallet, $approver, 'dual_approval', $request->id);
-        }
+        return DB::transaction(function () use ($request, $approver, $wallet, $setting) {
+            $locked = EmergencyUnlockRequest::whereKey($request->id)->lockForUpdate()->first();
+            // Requests from before keyholders counted the asker implicitly.
+            $yes = $locked->approvals ?? [$locked->requested_by];
+            if (in_array($approver->id, $yes, true)) {
+                throw ValidationException::withMessages(['request' => 'You already said yes.']);
+            }
+            $yes[] = $approver->id;
+            $required = $locked->required_approvals ?? 2;
 
-        return $request->refresh();
+            if (count($yes) < $required) {
+                $locked->update(['approvals' => $yes]);
+
+                return $locked->refresh();
+            }
+
+            $locked->update(['approvals' => $yes, 'status' => 'approved', 'approved_by' => $approver->id, 'decided_at' => now()]);
+            if ($setting->isLocked()) {
+                $this->unlock($wallet, $approver, 'dual_approval', $locked->id);
+            }
+
+            return $locked->refresh();
+        });
     }
 
-    /** Decline a dual-approval request (any other authorised person). */
+    /** Decline a release request — or flag a fast release for the family to look at. */
     public function rejectRequest(EmergencyUnlockRequest $request, User $user, ?string $note): EmergencyUnlockRequest
     {
         $wallet = $request->wallet;
+        if ($request->method === 'fast_release') {
+            return $this->flagFastRelease($request, $user, $note);
+        }
         if ($request->method !== 'dual_approval' || $request->status !== 'pending') {
             throw ValidationException::withMessages(['request' => 'This request can no longer be declined.']);
         }
@@ -570,6 +684,115 @@ class EmergencyService
             throw ValidationException::withMessages(['request' => 'Only the requester can cancel a pending request.']);
         }
         $request->update(['status' => 'cancelled', 'decided_at' => now()]);
+
+        return $request->refresh();
+    }
+
+    // ------------------------------------------------------------ fast release
+
+    /**
+     * EMG-04 "When every minute counts": a keyholder releases up to the limit at
+     * once, with a photo of the bill, once every N days. The money goes to their
+     * own Main wallet; the other keyholders check it within 48 hours.
+     */
+    public function fastRelease(Wallet $wallet, User $user, int $amountKobo, string $pin, UploadedFile $proof, ?string $note): EmergencyUnlockRequest
+    {
+        $setting = $this->requireSetting($wallet);
+        if (!$setting->fast_release_limit) {
+            throw ValidationException::withMessages(['amount' => 'Fast release is not set up for this fund.']);
+        }
+        if (!$setting->isLocked()) {
+            throw ValidationException::withMessages(['amount' => 'This fund is already released — pay from it directly.']);
+        }
+        if (!$this->isKeyholder($wallet, $user)) {
+            throw ValidationException::withMessages(['wallet' => 'Only keyholders can release money fast.']);
+        }
+        if ($amountKobo <= 0 || $amountKobo > $setting->fast_release_limit) {
+            throw ValidationException::withMessages(['amount' => 'Fast release is up to ₦' . number_format($setting->fast_release_limit / 100) . '.']);
+        }
+        $last = $this->lastFastRelease($wallet);
+        $next = $last?->created_at->copy()->addDays($setting->fast_release_every_days);
+        if ($next && $next->isFuture()) {
+            throw ValidationException::withMessages(['amount' => "Fast release was used on {$last->created_at->format('j M')}. The next one opens on {$next->format('j M')}."]);
+        }
+        $to = $user->mainWallet();
+        if (!$to) {
+            throw ValidationException::withMessages(['amount' => 'You need an active main wallet to receive this money.']);
+        }
+        if ($amountKobo > $wallet->availableToSpend()) {
+            throw ValidationException::withMessages(['amount' => 'That is more than the fund holds right now.']);
+        }
+
+        app(PinService::class)->verify($user, $pin);
+        $path = $proof->store('emergency-documents', 'local');
+
+        $request = DB::transaction(function () use ($wallet, $user, $to, $amountKobo, $path, $note) {
+            $moved = $this->wallets->transferBetweenWallets($wallet, $to, $amountKobo, $user, "Fast release from {$wallet->name}");
+
+            return EmergencyUnlockRequest::create([
+                'wallet_id' => $wallet->id,
+                'requested_by' => $user->id,
+                'method' => 'fast_release',
+                'document_type' => 'proof',
+                'document_path' => $path,
+                'note' => $note ?: null,
+                'amount' => $amountKobo,
+                'reference' => $moved['reference'],
+                'status' => 'released',
+                'decided_at' => now(),
+                'expires_at' => now()->addHours(self::FAST_RELEASE_REVIEW_HOURS),
+            ]);
+        });
+
+        AuditService::make()->log($wallet, $user, 'emergency_fast_release', "{$user->fullName()} released ₦{$this->naira($amountKobo)} fast, with proof", ['request_id' => $request->id, 'amount' => $amountKobo]);
+
+        $setting = $wallet->emergencySetting;
+        foreach (User::whereIn('id', array_diff($setting->keyholders($wallet->user_id), [$user->id]))->get() as $keyholder) {
+            $this->notifications->push(
+                $keyholder,
+                'emergency_fast_release',
+                "{$user->fullName()} released ₦{$this->naira($amountKobo)} from {$wallet->name}",
+                'Check the proof within ' . self::FAST_RELEASE_REVIEW_HOURS . ' hours. You can flag it if something looks wrong.' . ($note ? " Note: {$note}" : ''),
+                ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id],
+            );
+        }
+
+        return $request;
+    }
+
+    /** The latest fast release that counts towards "once every N days". */
+    private function lastFastRelease(Wallet $wallet): ?EmergencyUnlockRequest
+    {
+        return $wallet->emergencyUnlockRequests()
+            ->where('method', 'fast_release')
+            ->whereIn('status', ['released', 'flagged'])
+            ->latest()
+            ->first();
+    }
+
+    /** Another keyholder flags a fast release inside the review window. */
+    private function flagFastRelease(EmergencyUnlockRequest $request, User $user, ?string $note): EmergencyUnlockRequest
+    {
+        $wallet = $request->wallet;
+        if ($request->status !== 'released' || ($request->expires_at && $request->expires_at->isPast())) {
+            throw ValidationException::withMessages(['request' => 'The review window for this release has closed.']);
+        }
+        if (!$this->isKeyholder($wallet, $user) || $request->requested_by === $user->id) {
+            throw ValidationException::withMessages(['request' => 'Only another keyholder can flag this release.']);
+        }
+
+        $request->update(['status' => 'flagged', 'approved_by' => $user->id, 'review_note' => $note ?: null]);
+        AuditService::make()->log($wallet, $user, 'emergency_fast_release_flagged', "{$user->fullName()} flagged a fast release", ['request_id' => $request->id]);
+
+        foreach (User::whereIn('id', array_unique([$wallet->user_id, $request->requested_by]))->where('id', '!=', $user->id)->get() as $person) {
+            $this->notifications->push(
+                $person,
+                'emergency_fast_release_flagged',
+                "{$user->fullName()} flagged a release from {$wallet->name}",
+                '₦' . $this->naira((int) $request->amount) . ' released on ' . $request->created_at->format('j M') . '.' . ($note ? " Note: {$note}" : ''),
+                ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id],
+            );
+        }
 
         return $request->refresh();
     }
@@ -657,13 +880,13 @@ class EmergencyService
         if ($owner && $owner->id !== $by->id) {
             $this->notifications->push($owner, 'emergency_unlocked', "{$wallet->name} was unlocked", "It was unlocked via {$how}.{$why}", ['wallet_id' => $wallet->id]);
         }
-        // The approver may now withdraw on the owner's behalf.
-        if ($setting->dual_approval && $setting->approver && $setting->approver_user_id !== $by->id) {
+        // Keyholders may now withdraw on the owner's behalf.
+        foreach (User::whereIn('id', array_diff($setting->dual_approval ? $setting->keyholders($wallet->user_id) : [], [$wallet->user_id, $by->id]))->get() as $keyholder) {
             $this->notifications->push(
-                $setting->approver,
+                $keyholder,
                 'emergency_unlocked',
                 "{$wallet->name} is unlocked",
-                "As its approver you can now withdraw or transfer from it.{$why}",
+                "As a keyholder you can now withdraw or transfer from it.{$why}",
                 ['wallet_id' => $wallet->id],
             );
         }
@@ -775,6 +998,9 @@ class EmergencyService
             'unlocked_at' => $setting->unlocked_at?->toIso8601String(),
             'unlocked_via' => $setting->unlocked_via,
             'my_emergency_role' => $this->roleOf($wallet, $setting, $viewer),
+            // "2 of 3 to release"
+            'keyholders' => $setting->dual_approval ? count($setting->keyholders($wallet->user_id)) : 0,
+            'required' => $setting->dual_approval ? $setting->requiredYeses($wallet->user_id) : 0,
         ];
     }
 
@@ -786,7 +1012,7 @@ class EmergencyService
         if ($wallet->emergencyBeneficiaries()->where('user_id', $user->id)->exists()) {
             return 'recipient';
         }
-        if ($setting->dual_approval && $setting->approver_user_id === $user->id) {
+        if ($setting->dual_approval && in_array($user->id, $setting->keyholders($wallet->user_id), true)) {
             return 'approver';
         }
 
@@ -802,7 +1028,12 @@ class EmergencyService
         $authorized = $this->isAuthorized($wallet, $viewer);
         $beneficiaries = $wallet->emergencyBeneficiaries()->with('user')->get();
         $mine = $beneficiaries->firstWhere('user_id', $viewer->id);
+        $this->expireOldRequests($wallet);
         $pendingDual = $wallet->emergencyUnlockRequests()->where('method', 'dual_approval')->where('status', 'pending')->exists();
+        $keyholderIds = $setting->dual_approval ? $setting->keyholders($wallet->user_id) : [$wallet->user_id];
+        $isKeyholder = in_array($viewer->id, $keyholderIds, true);
+        $lastFast = $this->lastFastRelease($wallet);
+        $nextFast = $lastFast?->created_at->copy()->addDays($setting->fast_release_every_days);
 
         $myBeneficiary = null;
         if ($mine) {
@@ -826,6 +1057,7 @@ class EmergencyService
 
         return [
             'purpose' => $setting->purpose,
+            'purposes' => $setting->purposes ?? [$setting->purpose],
             'locked' => $locked,
             'unlocked_at' => $setting->unlocked_at?->toIso8601String(),
             'unlocked_via' => $setting->unlocked_via,
@@ -841,6 +1073,16 @@ class EmergencyService
                 'override_national_crisis' => $setting->override_national_crisis,
                 'override_high_balance' => $setting->override_high_balance,
                 'override_balance_threshold' => $this->naira($setting->override_balance_threshold),
+                // EMG-03: the owner plus these people hold keys; a release needs `required_keyholders` of them.
+                'keyholders' => User::whereIn('id', array_values(array_diff($keyholderIds, [$wallet->user_id])))->get()->map(fn (User $u) => $this->person($u))->values(),
+                'required_keyholders' => $setting->dual_approval ? $setting->requiredYeses($wallet->user_id) : 0,
+                'request_expiry_hours' => $setting->request_expiry_hours,
+                'fast_release' => $setting->fast_release_limit ? [
+                    'limit' => $this->naira($setting->fast_release_limit),
+                    'every_days' => $setting->fast_release_every_days,
+                    'last_at' => $lastFast?->created_at?->toIso8601String(),
+                    'next_at' => $nextFast && $nextFast->isFuture() ? $nextFast->toIso8601String() : null,
+                ] : null,
             ],
             'beneficiaries' => $beneficiaries->map(fn (EmergencyBeneficiary $b) => [
                 'id' => $b->id,
@@ -865,6 +1107,8 @@ class EmergencyService
                     && $wallet->balance > $setting->override_balance_threshold,
                 'can_lock' => $isOwner && !$locked,
                 'can_request_dual' => $authorized && $locked && $setting->dual_approval && !$pendingDual,
+                'is_keyholder' => $isKeyholder,
+                'can_fast_release' => $isKeyholder && $locked && (bool) $setting->fast_release_limit && !($nextFast && $nextFast->isFuture()),
                 'can_submit_document' => $authorized && !$isOwner && $locked && $setting->unlock_on_document,
                 'beneficiary' => $myBeneficiary,
             ],
@@ -874,11 +1118,21 @@ class EmergencyService
     public function serializeRequest(EmergencyUnlockRequest $request, ?User $viewer = null): array
     {
         $wallet = $request->wallet;
+        $setting = $wallet->emergencySetting;
+        $yes = $request->approvals ?? [$request->requested_by];
+        $open = $request->status === 'pending' && !($request->expires_at && $request->expires_at->isPast());
         $canDecide = $viewer
-            && $request->status === 'pending'
+            && $open
             && $request->method === 'dual_approval'
             && $request->requested_by !== $viewer->id
-            && $this->isAuthorized($wallet, $viewer);
+            && !in_array($viewer->id, $yes, true)
+            && $setting && $this->approverIds($wallet, $setting)->contains($viewer->id);
+        $canFlag = $viewer
+            && $request->method === 'fast_release'
+            && $request->status === 'released'
+            && $request->expires_at && $request->expires_at->isFuture()
+            && $request->requested_by !== $viewer->id
+            && $this->isKeyholder($wallet, $viewer);
 
         return [
             'id' => $request->id,
@@ -891,10 +1145,15 @@ class EmergencyService
             'requested_by' => $request->requester ? $this->person($request->requester) : null,
             'approved_by' => $request->approver ? $this->person($request->approver) : null,
             'review_note' => $request->review_note,
+            'amount' => $request->amount !== null ? $this->naira($request->amount) : null,
+            'approvals' => count($yes),
+            'required_approvals' => $request->required_approvals ?? ($request->method === 'dual_approval' ? 2 : null),
+            'expires_at' => $request->expires_at?->toIso8601String(),
             'created_at' => $request->created_at?->toIso8601String(),
             'decided_at' => $request->decided_at?->toIso8601String(),
             'can_approve' => $canDecide,
-            'can_reject' => $canDecide,
+            'can_reject' => $canDecide || $canFlag,
+            'can_flag' => $canFlag,
             'can_cancel' => $viewer && $request->status === 'pending' && $request->requested_by === $viewer->id,
         ];
     }

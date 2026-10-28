@@ -137,6 +137,7 @@ Route::prefix('v1')->group(function () {
         Route::post('wallets/{wallet}/spend-requests', [SpendRequestController::class, 'store'])->middleware('throttle:20,1');
 
         // Savings goals — shared plan, milestones, each saver's own auto-save.
+        Route::get('savings/insights', [SavingsController::class, 'insights']);
         Route::get('wallets/{wallet}/savings', [SavingsController::class, 'show']);
         Route::patch('wallets/{wallet}/savings', [SavingsController::class, 'update'])->middleware('throttle:30,1');
         Route::post('wallets/{wallet}/savings/contribution', [SavingsController::class, 'startContribution'])->middleware('throttle:20,1');
@@ -158,6 +159,7 @@ Route::prefix('v1')->group(function () {
         Route::put('wallets/{wallet}/emergency/rules', [EmergencyController::class, 'updateRules'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/requests', [EmergencyController::class, 'requestUnlock'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/withdraw', [EmergencyController::class, 'withdraw'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/emergency/fast-release', [EmergencyController::class, 'fastRelease'])->middleware('throttle:10,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyController::class, 'approve'])->middleware('throttle:20,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/reject', [EmergencyController::class, 'reject'])->middleware('throttle:20,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/cancel', [EmergencyController::class, 'cancel'])->middleware('throttle:20,1');

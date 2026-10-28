@@ -197,13 +197,13 @@ export function resumeDraft(navigator: { navigate: (...args: never[]) => void },
   const navigation = navigator as unknown as NativeStackNavigationProp<RootStackParamList>;
   switch (draft.type) {
     case 'savings':
-      navigation.navigate('SavingsGoalSetup', { type: draft.type, draftId: draft.id });
+      navigation.navigate('SavingsWalletSetup', { draftId: draft.id });
       return;
     case 'goal':
       navigation.navigate('GoalWalletSetup', { draftId: draft.id });
       return;
     case 'emergency':
-      navigation.navigate('CreateEmergencyWallet', { draftId: draft.id });
+      navigation.navigate('EmergencyWalletSetup', { draftId: draft.id });
       return;
     case 'project':
       navigation.navigate('CreateProject', { draftId: draft.id });

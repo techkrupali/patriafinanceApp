@@ -9,6 +9,7 @@ import { api } from './client';
 import { useAuth } from '../store/auth';
 import { getDeviceMeta } from '../lib/device';
 import type {
+  SavingsInsights,
   AddMilestonePayload,
   ApplyLoanPayload,
   ApprovalDetailData,
@@ -1399,6 +1400,20 @@ export function useEmergencyActions(walletId: number) {
         post(`/emergency-requests/${input.requestId}/${input.action}`, input.note ? { note: input.note } : undefined),
       onSuccess,
     }),
+    /** EMG-04: a keyholder releases up to the limit at once, with a photo of the bill. */
+    fastRelease: useMutation({
+      mutationFn: (input: { amount: string; pin: string; note?: string; asset: { uri: string; fileName?: string | null; mimeType?: string | null } }) => {
+        const { asset } = input;
+        const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
+        const form = new FormData();
+        form.append('amount', input.amount);
+        form.append('pin', input.pin);
+        if (input.note) form.append('note', input.note);
+        form.append('proof', { uri: asset.uri, name: asset.fileName || `proof.${ext}`, type: asset.mimeType || 'image/jpeg' } as unknown as Blob);
+        return api<EmergencyWithdrawData>(`/wallets/${walletId}/emergency/fast-release`, { method: 'POST', body: form });
+      },
+      onSuccess,
+    }),
     /** Recipient → their own main wallet, within limit and access delay. */
     withdraw: useMutation({
       mutationFn: (input: { amount: string; pin: string }) =>
@@ -1449,6 +1464,16 @@ export function useDeleteWalletDraft() {
 }
 
 // ---------- Savings goals (plan, milestones, my auto-save) ----------
+
+/** SAV-03: the usual salary and round-up estimates from the last 3 months of Main. */
+export function useSavingsInsights(enabled = true) {
+  return useQuery({
+    queryKey: ['savings', 'insights'] as const,
+    queryFn: () => api<SavingsInsights>('/savings/insights'),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
 
 export function useSavings(walletId: number) {
   return useQuery({

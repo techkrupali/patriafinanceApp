@@ -20,18 +20,25 @@ function ordinal(n: number): string {
 }
 
 function whenLine(r: AutomationRule): string {
+  if (r.trigger === 'salary') return `salary lands in ${r.from_wallet.name}`;
+  if (r.trigger === 'roundup') return `you pay from ${r.from_wallet.name}`;
   if (r.frequency === 'weekly') return `it's ${DAYS[r.day_of_week ?? 0] || 'the set day'}`;
   if (r.frequency === 'monthly') return `it's the ${ordinal(r.day_of_month ?? 1)} of the month`;
   return "it's a new day";
 }
 
 function thenLine(r: AutomationRule): string {
+  if (r.trigger === 'salary') return `move ${r.percent ?? 0}% of it to ${r.to_wallet.name}`;
+  if (r.trigger === 'roundup') return `round up to ${formatNaira(r.roundup_to)} and save the change in ${r.to_wallet.name}`;
   const keep = r.min_balance ? `, keeping ${formatNaira(r.min_balance)} in ${r.from_wallet.name}` : '';
   return `move ${formatNaira(r.amount)} from ${r.from_wallet.name} to ${r.to_wallet.name}${keep}`;
 }
 
 function metaLine(r: AutomationRule): string {
   if (!r.enabled) return 'Paused';
+  if (r.retry_at) return `Missed a save · trying again ${shortDay(r.retry_at.slice(0, 10))}`;
+  if (r.trigger === 'roundup') return parseFloat(r.pending_amount ?? '0') > 0 ? `${formatNaira(r.pending_amount)} in round-ups, saved with the next daily move` : 'Moves the change every day';
+  if (r.trigger === 'salary') return r.last_run_at ? `Last saved ${formatYmd(r.last_run_at.slice(0, 10)).replace(/ \d{4}$/, '')}` : 'Waiting for your next salary';
   if (r.last_run_at) return `Last ran ${formatYmd(r.last_run_at.slice(0, 10)).replace(/ \d{4}$/, '')} · moved ${formatNaira(r.amount)}`;
   return r.next_run_on ? `Next run ${shortDay(r.next_run_on)}` : r.next_run_hint;
 }

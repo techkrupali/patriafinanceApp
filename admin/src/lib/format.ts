@@ -60,6 +60,9 @@ const LABELS: Record<string, string> = {
   admin: "Admin",
   contributor: "Contributor",
   viewer: "Viewer",
+  // Emergency rule members
+  emergency_approver: "Keyholder",
+  beneficiary: "Beneficiary",
   vendor: "Vendor",
   active: "Active",
   invited: "Invited",
@@ -68,6 +71,7 @@ const LABELS: Record<string, string> = {
   frozen: "Frozen",
   closed: "Closed",
   pending: "Pending",
+  flagged: "Flagged",
   successful: "Successful",
   failed: "Failed",
   approved: "Approved",
@@ -169,6 +173,9 @@ const EMERGENCY_LABELS: Record<string, string> = {
   // Uploaded documents
   death_certificate: "Death certificate",
   legal_notice: "Legal notice",
+  proof: "Proof of the emergency",
+  // Release by keyholders, and a keyholder's fast release with proof
+  fast_release: "Fast release",
   // Beneficiary roles (by order) + access
   beneficiary: "Primary beneficiary",
   fallback: "Fallback beneficiary",
@@ -183,6 +190,7 @@ export function emergencyLabel(value: string): string {
 /** Document requests read as their document type, e.g. "Death certificate". */
 export function emergencyMethodLabel(method: string, documentType: string | null): string {
   if (method === "document") return documentType ? emergencyLabel(documentType) : "Document";
+  if (method === "dual_approval") return "Keyholders' release";
   return emergencyLabel(method);
 }
 
@@ -226,4 +234,9 @@ export function ordinal(n: number): string {
   const tens = n % 100;
   if (tens >= 11 && tens <= 13) return `${n}th`;
   return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** SAV-06 "If a save can't happen". */
+export function missedPolicyLabel(policy: string): string {
+  return { retry: "Try again in 3 days", partial: "Save whatever is there", skip: "Skip this time" }[policy] ?? label(policy);
 }

@@ -68,6 +68,8 @@ export interface ApiWallet {
   approval_expiry_hours?: number;
   /** Day of the month savers are reminded (1–28). */
   reminder_day?: number | null;
+  /** SAV-05: locked until a date or the target; `locked` while it holds. */
+  lock?: { mode: "date" | "target"; until: string | null; early_break: boolean; approval: boolean; locked: boolean } | null;
   owner?: {
     id: number;
     name: string;
@@ -298,6 +300,17 @@ export interface WalletDetailData {
   };
   recent_transactions: ApiTransaction[];
   emergency: WalletEmergency | null; // null unless an emergency wallet
+  /** Savings and goal wallets: how everyone saves (SAV-02/03/06). */
+  savings_plan?: {
+    label: string;
+    schedule: boolean;
+    salary_percent: number | null;
+    roundup_to: string | null;
+    missed_policy: "retry" | "partial" | "skip";
+    notify_others_on_miss: boolean;
+    auto_save: boolean;
+    allow_contributor_edit: boolean;
+  } | null;
   /** Invited but not answered yet. */
   invitations: {
     id: number;
@@ -621,9 +634,10 @@ export type EmergencyUnlockVia =
   | "document"
   | "high_balance"
   | "national_crisis";
-export type EmergencyRequestMethod = "dual_approval" | "document";
-export type EmergencyRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
-export type EmergencyDocumentType = "death_certificate" | "legal_notice";
+/** dual_approval: keyholders agree · document: death certificate · fast_release: a keyholder released money at once, with proof */
+export type EmergencyRequestMethod = "dual_approval" | "document" | "fast_release";
+export type EmergencyRequestStatus = "pending" | "approved" | "rejected" | "cancelled" | "expired" | "released" | "flagged";
+export type EmergencyDocumentType = "death_certificate" | "legal_notice" | "proof";
 
 /** Compact user shape used across emergency payloads (EmergencyService::person). */
 export interface EmergencyPerson {
@@ -640,6 +654,17 @@ export interface WalletEmergency {
   unlocked_at: string | null;
   unlocked_via: EmergencyUnlockVia | null;
   override_national_crisis: boolean; // owner opted in to the admin override
+  purposes?: EmergencyPurpose[];
+  /** Full names, owner first. */
+  keyholders?: string[];
+  required_keyholders?: number;
+  request_expiry_hours?: number | null;
+  fast_release_limit?: string | null; // naira string
+  fast_release_every_days?: number;
+  manual_unlock?: boolean;
+  unlock_on_document?: boolean;
+  /** Full names, in order: 1st, then fallbacks. */
+  beneficiaries?: string[];
 }
 
 export interface AdminEmergencyRequest {
@@ -654,6 +679,10 @@ export interface AdminEmergencyRequest {
   approved_by: EmergencyPerson | null; // dual-approval approver
   review_note: string | null;
   reviewed_by: string | null; // admin full name
+  amount?: string | null; // fast release, naira string
+  approvals?: number; // keyholders' yeses so far
+  required_approvals?: number | null;
+  expires_at?: string | null;
   created_at: string | null;
   decided_at: string | null;
   wallet: {
@@ -683,6 +712,10 @@ export interface EmergencyRules {
   override_national_crisis: boolean;
   override_high_balance: boolean;
   override_balance_threshold: string; // naira string
+  keyholders?: EmergencyPerson[]; // besides the owner
+  required_keyholders?: number;
+  request_expiry_hours?: number | null;
+  fast_release?: { limit: string; every_days: number; last_at: string | null; next_at: string | null } | null;
 }
 
 export interface EmergencyBeneficiary {

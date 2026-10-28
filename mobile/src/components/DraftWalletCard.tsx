@@ -1,8 +1,9 @@
 import React from 'react';
 import { Alert, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, outline } from '../theme';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../theme';
+import { PtChip } from './pt/PtChip';
 import { useDeleteWalletDraft } from '../api/hooks';
 import { dayLabel } from '../lib/format';
 import { selection } from '../lib/haptics';
@@ -18,45 +19,59 @@ import type { WalletDraft } from '../api/types';
 export function DraftWalletCard({ draft, onResume }: { draft: WalletDraft; onResume: () => void }) {
   const remove = useDeleteWalletDraft();
   const guide = walletGuide(draft.type);
-  const visual = walletVisual(draft.type);
+  const title = draft.name || `Untitled ${guide.title.toLowerCase()}`;
 
   const discard = () => {
     selection();
-    Alert.alert('Discard this draft?', `"${draft.name || guide.title}" and everything you entered will be deleted.`, [
+    Alert.alert('Discard this draft?', `"${title}" and everything you entered will be deleted.`, [
       { text: 'Keep', style: 'cancel' },
       { text: 'Discard', style: 'destructive', onPress: () => remove.mutate(draft.id) },
     ]);
   };
 
   return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onResume();
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 14,
+        paddingRight: 14,
+        borderRadius: ptRadius.md,
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderColor: pt.line,
+        backgroundColor: pt.raised,
+        opacity: 0.6,
       }}
-      className="flex-row items-center rounded bg-white p-4 active:opacity-90"
-      style={[outline.card, { opacity: 0.6 }]}
-      accessibilityLabel={`Draft ${draft.name || guide.title}, continue setup`}
     >
-      <View className="h-12 w-12 items-center justify-center rounded bg-lav-faint">
-        <Ionicons name={visual.icon} size={22} color={colors.faded} />
-      </View>
-      <View className="ml-4 flex-1 pr-2">
-        <View className="flex-row items-center">
-          <Text className="flex-shrink text-[16px] font-extrabold text-muted" numberOfLines={1}>
-            {draft.name || `Untitled ${guide.title}`}
-          </Text>
-          <View className="ml-2 rounded bg-lav px-2 py-0.5">
-            <Text className="text-[11px] font-bold text-muted">Draft</Text>
-          </View>
+      <Pressable
+        onPress={() => {
+          selection();
+          onResume();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Draft ${title}, continue setup`}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 14 }}
+      >
+        <View style={{ width: 40, height: 40, borderRadius: ptRadius.sm, backgroundColor: pt.sunken, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={walletVisual(draft.type).icon} size={19} color={pt.inkSubtle} />
         </View>
-        <Text className="mt-0.5 text-xs text-faded" numberOfLines={1}>
-          Step {draft.step} of {draft.total_steps} · Saved {dayLabel(draft.updated_at)} · Tap to continue
-        </Text>
-      </View>
-      <Pressable onPress={discard} hitSlop={10} accessibilityLabel="Discard draft">
-        <Ionicons name="trash-outline" size={18} color={colors.faded} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ flexShrink: 1, fontFamily: ptFont.semibold, fontSize: 15, color: pt.inkMuted }} numberOfLines={1}>
+              {title}
+            </Text>
+            <PtChip label="Draft" />
+          </View>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkSubtle }} numberOfLines={1}>
+            Step {draft.step} of {draft.total_steps} · Saved {dayLabel(draft.updated_at)} · Tap to continue
+          </Text>
+        </View>
       </Pressable>
-    </Pressable>
+      <Pressable onPress={discard} hitSlop={10} accessibilityRole="button" accessibilityLabel="Discard draft">
+        <Feather name="trash-2" size={18} color={pt.inkSubtle} />
+      </Pressable>
+    </View>
   );
 }

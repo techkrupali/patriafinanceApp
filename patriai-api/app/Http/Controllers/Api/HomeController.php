@@ -113,6 +113,8 @@ class HomeController extends ApiController
         $rules = AutomationRule::with(['fromWallet', 'toWallet'])
             ->where('user_id', $user->id)
             ->where('enabled', true)
+            // Salary shares and round-ups have no set amount or day to show.
+            ->where('trigger', 'schedule')
             ->get();
         foreach ($rules as $rule) {
             $next = $rule->nextRunOn($now);

@@ -53,15 +53,19 @@ class InvitationService
         string $role,
         bool $canApprove = false,
         ?array $permissions = null,
+        ?int $pledge = null,
     ): WalletInvitation {
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
         }
 
         if ($invitee) {
+            // Emergency keyholders and beneficiaries are view-only rule members; they
+            // can still be invited to put money in.
             $alreadyMember = $wallet->members()
                 ->where('user_id', $invitee->id)
                 ->where('status', 'active')
+                ->whereNotIn('role', ['beneficiary', 'emergency_approver'])
                 ->exists();
             if ($alreadyMember || $invitee->id === $wallet->user_id) {
                 throw ValidationException::withMessages(['invite' => 'This person is already a member of the wallet']);
@@ -89,6 +93,7 @@ class InvitationService
             'role' => $role,
             'can_approve' => $canApprove,
             'permissions' => !empty($permissions) ? SavingsService::normalisePermissions($permissions) : null,
+            'pledge_amount' => $pledge ?: null,
             'status' => 'pending',
             'token' => Str::random(40),
             'expires_at' => now()->addDays(7),
