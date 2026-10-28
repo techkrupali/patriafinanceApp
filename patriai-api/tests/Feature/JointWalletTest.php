@@ -104,6 +104,7 @@ class JointWalletTest extends TestCase
         $id = $this->postJson('/api/v1/wallets', $this->payload($emeka->id, $main->id))->assertCreated()
             ->assertJsonPath('data.wallet.joint.state', 'waiting')
             ->assertJsonPath('data.wallet.joint.limits.per_payment', '50000.00')
+            ->assertJsonPath('data.wallet.joint.notify.big_amount', '100000.00')
             ->json('data.wallet.id');
         $wallet = Wallet::find($id);
 

@@ -19,10 +19,10 @@ export function StatCard({
         <span
           className={cn(
             "h-1.5 w-1.5 shrink-0 rounded-full",
-            accent === "ink" && "bg-slate-300",
+            accent === "ink" && "bg-line-strong",
             accent === "green" && "bg-brand",
             accent === "red" && "bg-danger",
-            accent === "amber" && "bg-amber-500",
+            accent === "amber" && "bg-gold",
           )}
           aria-hidden="true"
         />
@@ -36,7 +36,7 @@ export function StatCard({
           accent === "ink" && "text-ink",
           accent === "green" && "text-brand",
           accent === "red" && "text-danger",
-          accent === "amber" && "text-amber-600",
+          accent === "amber" && "text-warn",
         )}
       >
         {value}

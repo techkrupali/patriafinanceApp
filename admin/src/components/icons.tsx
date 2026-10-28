@@ -233,16 +233,16 @@ export function IconClock({ className }: { className?: string }) {
 }
 
 /** Patriai brand mark: rounded green tile with a P. */
-export function PatriaiMark({ className }: { className?: string }) {
+/**
+ * The Patriai mark, as in the app: an outer ring, a lower inner ring and a gold
+ * seed (mobile `LogoMark`, 88-unit box). Lighter rings on the dark sidebar.
+ */
+export function PatriaiMark({ className, onDark = false }: { className?: string; onDark?: boolean }) {
   return (
-    <span
-      className={
-        "inline-flex items-center justify-center rounded-lg bg-brand font-bold text-mint " +
-        (className ?? "h-9 w-9 text-lg")
-      }
-      aria-hidden="true"
-    >
-      P
-    </span>
+    <svg viewBox="0 0 88 88" className={className ?? "h-9 w-9"} aria-hidden="true">
+      <circle cx="44" cy="44" r="36" fill="none" stroke={onDark ? "#F3F7F4" : "#0B5D4B"} strokeWidth="8" />
+      <circle cx="44" cy="58" r="22" fill="none" stroke={onDark ? "#5FD3A5" : "#1FA07A"} strokeWidth="8" />
+      <circle cx="44" cy="66" r="10" fill="#F2A93B" />
+    </svg>
   );
 }

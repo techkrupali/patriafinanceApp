@@ -584,7 +584,7 @@ class JointService
             'limits' => ['per_payment' => $naira($settings['limits']['per_payment']), 'per_day' => $naira($settings['limits']['per_day'])],
             'expiry_hours' => $wallet->approvalExpiryHours(),
             'always' => $settings['always'],
-            'notify' => $settings['notify'] + ['big_amount' => $naira($settings['notify']['big_amount'])],
+            'notify' => ['big_amount' => $naira($settings['notify']['big_amount'])] + $settings['notify'],
             'leave' => $settings['leave'],
             'leaving' => $settings['leaving'] ?? null,
             'closing' => isset($settings['closing']) ? ['by' => $settings['closing']['by'], 'at' => $settings['closing']['at']] : null,

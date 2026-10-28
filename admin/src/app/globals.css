@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
+/*
+ * The mobile app's design system (client prototype, mobile/src/theme.ts `pt`):
+ * emerald with a gold accent, Plus Jakarta Sans, 12px controls and 18px cards.
+ * Token names are kept from the earlier theme so every screen picks it up.
+ */
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-jakarta);
 
-  --color-navy: #001736;
-  --color-navy-soft: #0a2647;
-  --color-page: #f8f9ff;
-  --color-brand: #1f6feb;
-  --color-brand-dark: #1657c9;
-  --color-brand-soft: #e8f0ff;
-  --color-mint: #5b9dff;
-  --color-ink: #0b1c30;
-  --color-muted: #64748b;
-  --color-lavender: #d3e4fe;
-  --color-rowhover: #eff4ff;
-  --color-danger: #ba1a1a;
-  --color-line: #e5e9f4;
+  --color-navy: #08392f; /* emerald 900: sidebar, overlays, selected pills */
+  --color-navy-soft: #0b4a3c;
+  --color-page: #f3f7f4; /* surface */
+  --color-brand: #0b5d4b; /* emerald 700 */
+  --color-brand-dark: #08392f;
+  --color-brand-soft: #dff3ea; /* emerald 100 */
+  --color-mint: #5fd3a5; /* emerald 300: accents on the dark sidebar */
+  --color-ink: #0e1a16;
+  --color-muted: #56695f;
+  --color-lavender: #e3ece6; /* sunken: quiet fills and hover borders */
+  --color-rowhover: #eef5f1;
+  --color-danger: #b3311a;
+  --color-line: #d3e3da;
+  --color-line-strong: #6f8a7e;
+  --color-gold: #f2a93b;
+  --color-gold-soft: #fcebcc;
+  --color-warn: #8f5400; /* text on gold-soft */
+  --color-info: #1d5fa8;
+  --color-info-soft: #e1ecf9;
 
-  /* Elevation scale — soft, cohesive fintech shadows. */
-  --shadow-card: 0 1px 2px rgba(11, 28, 48, 0.05);
-  --shadow-card-hover: 0 6px 20px rgba(11, 28, 48, 0.09);
-  --shadow-pop: 0 16px 40px -8px rgba(11, 28, 48, 0.22);
+  /* Prototype radii: controls 12px, cards 18px. */
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  /* Flat cards like the app's panels; a little lift on hover and for popovers. */
+  --shadow-card: 0 1px 2px rgba(8, 57, 47, 0.04);
+  --shadow-card-hover: 0 6px 20px rgba(8, 57, 47, 0.08);
+  --shadow-pop: 0 16px 40px -8px rgba(8, 57, 47, 0.24);
 }
 
 @keyframes shimmer-slide {
@@ -47,9 +64,9 @@
 @utility shimmer {
   background-image: linear-gradient(
     100deg,
-    rgba(211, 228, 254, 0.35) 30%,
-    rgba(211, 228, 254, 0.85) 50%,
-    rgba(211, 228, 254, 0.35) 70%
+    rgba(227, 236, 230, 0.45) 30%,
+    rgba(227, 236, 230, 0.95) 50%,
+    rgba(227, 236, 230, 0.45) 70%
   );
   background-size: 200% 100%;
   animation: shimmer-slide 1.6s ease-in-out infinite;
@@ -61,9 +78,9 @@
 }
 
 body {
-  background: #f8f9ff;
-  color: #0b1c30;
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background: #f3f7f4;
+  color: #0e1a16;
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -71,18 +88,18 @@ body {
 /* Subtle, unobtrusive scrollbars for panels and dropdowns. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #c3d6cb transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: #c3d6cb;
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: #6f8a7e;
 }
 
 @media (prefers-reduced-motion: reduce) {

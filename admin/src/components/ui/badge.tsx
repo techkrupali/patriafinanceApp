@@ -6,9 +6,9 @@ type Tone = "green" | "red" | "amber" | "blue" | "gray";
 const tones: Record<Tone, string> = {
   green: "bg-brand-soft text-brand ring-1 ring-inset ring-brand/15",
   red: "bg-danger/10 text-danger ring-1 ring-inset ring-danger/15",
-  amber: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  blue: "bg-lavender/50 text-navy ring-1 ring-inset ring-lavender",
-  gray: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
+  amber: "bg-gold-soft text-warn ring-1 ring-inset ring-gold/30",
+  blue: "bg-info-soft text-info ring-1 ring-inset ring-info/15",
+  gray: "bg-lavender text-muted ring-1 ring-inset ring-line",
 };
 
 export function Badge({

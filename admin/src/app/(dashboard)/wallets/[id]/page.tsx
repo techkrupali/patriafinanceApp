@@ -251,9 +251,11 @@ export default function WalletDetailPage({
               <p className="text-sm text-muted">
                 {emergency
                   ? "Released by its keyholders — see Emergency Rules below."
-                  : wallet!.lock
-                    ? "No approval rule. Its lock (above) decides when money can leave."
-                    : "This wallet moves funds without multi-signature approval."}
+                  : wallet!.joint
+                    ? "Each partner spends alone up to their limits; above them the other partner approves — see Joint below."
+                    : wallet!.lock
+                      ? "No approval rule. Its lock (above) decides when money can leave."
+                      : "This wallet moves funds without multi-signature approval."}
               </p>
             )}
           </CardContent>
@@ -390,7 +392,7 @@ export default function WalletDetailPage({
                         </span>
                       </div>
                       <div className="mt-1 h-1.5 rounded-full bg-line">
-                        <div className={`h-1.5 rounded-full ${pct >= 100 ? "bg-danger" : pct >= 80 ? "bg-amber-600" : "bg-brand"}`} style={{ width: `${pct}%` }} />
+                        <div className={`h-1.5 rounded-full ${pct >= 100 ? "bg-danger" : pct >= 80 ? "bg-gold" : "bg-brand"}`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );

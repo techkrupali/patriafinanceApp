@@ -63,7 +63,7 @@ export function Sidebar() {
   return (
     <aside className="sticky top-0 z-40 flex h-screen w-16 shrink-0 flex-col bg-navy text-white md:w-60">
       <div className="flex items-center gap-3 px-3 py-5 md:px-5">
-        <PatriaiMark />
+        <PatriaiMark onDark />
         <div className="hidden md:block">
           <p className="text-base font-bold leading-tight">Patriai</p>
           <p className="text-[11px] font-medium uppercase tracking-widest text-mint">

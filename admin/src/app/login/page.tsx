@@ -58,7 +58,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-page p-4">
       <Card className="w-full max-w-sm p-8">
         <div className="flex flex-col items-center text-center">
-          <PatriaiMark className="h-12 w-12 text-xl" />
+          <PatriaiMark className="h-14 w-14" />
           <h1 className="mt-4 text-xl font-bold text-ink">Patriai Admin</h1>
           <p className="mt-1 text-sm text-muted">Sign in to manage the platform</p>
         </div>

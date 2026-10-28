@@ -31,16 +31,16 @@ const ATTENTION_TONES: Record<
   { card: string; icon: string; count: string; hint: string }
 > = {
   amber: {
-    card: "border-amber-200 bg-amber-50 hover:border-amber-300",
-    icon: "bg-amber-100 text-amber-700",
-    count: "text-amber-900",
-    hint: "text-amber-700/80",
+    card: "border-gold/40 bg-gold-soft hover:border-gold",
+    icon: "bg-white text-warn",
+    count: "text-warn",
+    hint: "text-warn/80",
   },
   blue: {
-    card: "border-lavender bg-lavender/25 hover:border-brand/30",
-    icon: "bg-white text-navy",
-    count: "text-navy",
-    hint: "text-navy/70",
+    card: "border-info/20 bg-info-soft hover:border-info/40",
+    icon: "bg-white text-info",
+    count: "text-info",
+    hint: "text-info/80",
   },
   red: {
     card: "border-danger/25 bg-danger/5 hover:border-danger/40",
