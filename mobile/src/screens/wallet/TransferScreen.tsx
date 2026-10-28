@@ -12,6 +12,7 @@ import { Chip } from '../../components/Chip';
 import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
+import { BudgetCategoryPicker } from '../../components/BudgetCategoryPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
@@ -49,6 +50,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<TransferSuccessData | null>(null);
@@ -125,6 +127,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
         amount,
         pin,
         description: description.trim() || undefined,
+        budget_category_id: categoryId ?? undefined,
         destination,
       },
       {
@@ -364,6 +367,8 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
                 )}
               </View>
             ) : null}
+
+            <BudgetCategoryPicker walletId={from?.id} enabled={from?.type === 'spending'} value={categoryId} onChange={setCategoryId} className="mt-5" />
 
             <Input
               label="Description (Optional)"

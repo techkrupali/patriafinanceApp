@@ -103,6 +103,15 @@ class EmergencyController extends ApiController
             'request_expiry_hours' => ['nullable', 'in:' . implode(',', EmergencySetting::EXPIRY_HOURS)],
             'fast_release_limit' => ['nullable', 'numeric', 'min:0'],
             'fast_release_every_days' => ['nullable', 'in:' . implode(',', EmergencySetting::FAST_RELEASE_DAYS)],
+            // EMG-03 pay the bill directly; EMG-05 trusted contacts (no app) and what they may do.
+            'pay_directly' => ['sometimes', 'boolean'],
+            'trusted_can_request' => ['sometimes', 'boolean'],
+            'trusted_can_upload' => ['sometimes', 'boolean'],
+            'trusted_can_see_balance' => ['sometimes', 'boolean'],
+            'trusted_contacts' => ['sometimes', 'array', 'max:5'],
+            'trusted_contacts.*.name' => ['required', 'string', 'max:80'],
+            'trusted_contacts.*.phone' => ['required', 'string', 'max:20'],
+            'trusted_contacts.*.relation' => ['nullable', 'string', 'max:80'],
             'beneficiaries' => ['sometimes', 'array', 'max:3'],
             'beneficiaries.*.user_id' => ['required', 'integer'],
             'beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
@@ -114,6 +123,9 @@ class EmergencyController extends ApiController
             $limit = $b['withdrawal_limit'] ?? null;
             $data['beneficiaries'][$i]['withdrawal_limit'] = ($limit === null || (float) $limit <= 0) ? null : $this->toKobo((string) $limit);
         }
+        foreach ($data['trusted_contacts'] ?? [] as $i => $c) {
+            $data['trusted_contacts'][$i]['phone'] = $this->normalizePhone($c['phone']);
+        }
         if (array_key_exists('fast_release_limit', $data)) {
             $limit = $data['fast_release_limit'];
             $data['fast_release_limit'] = ($limit === null || (float) $limit <= 0) ? null : $this->toKobo((string) $limit);
@@ -121,9 +133,10 @@ class EmergencyController extends ApiController
         $pin = $data['pin'];
         unset($data['pin']);
 
-        EmergencyService::make()->updateRules($wallet, $request->user(), $data, $pin);
+        $result = EmergencyService::make()->updateRules($wallet, $request->user(), $data, $pin);
 
-        return $this->detail($request, $wallet, 'Emergency rules updated');
+        // With other keyholders the change waits for their yes (WCR-06).
+        return $this->detail($request, $wallet, $result instanceof EmergencyUnlockRequest ? 'Sent to the keyholders to approve' : 'Emergency rules updated');
     }
 
     // POST /wallets/{wallet}/emergency/lock — owner
@@ -172,9 +185,15 @@ class EmergencyController extends ApiController
         if (!$this->visible($request, $emergencyUnlockRequest->wallet)) {
             return $this->fail('Request not found', 404);
         }
-        EmergencyService::make()->approveRequest($emergencyUnlockRequest, $request->user());
+        $decided = EmergencyService::make()->approveRequest($emergencyUnlockRequest, $request->user())->refresh();
+        $message = match (true) {
+            $decided->status === 'pending' => 'Your yes is counted',
+            $decided->method === 'rule_change' && $decided->status === 'approved' => 'New rules applied',
+            $decided->method === 'rule_change' => $decided->review_note ?: 'The new rules could not be applied',
+            default => 'Unlock approved',
+        };
 
-        return $this->detail($request, $emergencyUnlockRequest->wallet, 'Unlock approved');
+        return $this->detail($request, $emergencyUnlockRequest->wallet, $message);
     }
 
     // POST /emergency-requests/{emergencyUnlockRequest}/reject  { note? }
@@ -211,13 +230,21 @@ class EmergencyController extends ApiController
             'pin' => ['required', self::TXN_PIN],
             'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'], // photo of the bill or doctor's note
             'note' => ['nullable', 'string', 'max:500'],
+            // When the fund pays bills directly: the hospital or clinic's account.
+            'payee' => ['nullable', 'array'],
+            'payee.bank_code' => ['required_with:payee', 'string'],
+            'payee.account_number' => ['required_with:payee', 'digits:10'],
+            'payee.account_name' => ['required_with:payee', 'string', 'max:120'],
+            'payee.bank_name' => ['required_with:payee', 'string', 'max:120'],
         ]);
 
         $service = EmergencyService::make();
-        $released = $service->fastRelease($wallet, $request->user(), $this->toKobo((string) $data['amount']), $data['pin'], $request->file('proof'), $data['note'] ?? null);
+        $released = $service->fastRelease($wallet, $request->user(), $this->toKobo((string) $data['amount']), $data['pin'], $request->file('proof'), $data['note'] ?? null, $data['payee'] ?? null);
         $wallet->unsetRelation('emergencySetting');
 
-        return $this->ok('Money sent to your main wallet', [
+        $to = $released->payee ? "Money sent to {$released->payee['account_name']}" : 'Money sent to your main wallet';
+
+        return $this->ok($to, [
             'emergency' => $service->detail($wallet->refresh(), $request->user()),
             'reference' => $released->reference,
         ], 201);

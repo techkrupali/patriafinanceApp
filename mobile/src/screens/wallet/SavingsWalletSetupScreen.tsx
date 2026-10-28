@@ -34,6 +34,7 @@ import { joinNames, ordinal } from '../../lib/goalPlan';
 import { WALLET_COLOURS, WALLET_COLOUR_KEYS } from '../../lib/walletColours';
 import { confirmLeaveSetup, useDraft, useDraftAutosave } from '../../lib/drafts';
 import { useSetupFlow } from '../../lib/useSetupFlow';
+import { CharityPickerSheet } from '../../components/savings/CharityPickerSheet';
 import { notifySuccess, selection } from '../../lib/haptics';
 import type { FamilyMember, InvitePermissions, SavingsFrequency, SavingsMissedPolicy, WalletColour, WalletDraft } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -144,8 +145,12 @@ interface SavingsForm {
   lockMode: 'none' | 'date' | 'target';
   earlyBreak: boolean;
   earlyApproval: boolean;
+  /** SAV-05 "Where the fee goes": the charity for half of an early-break fee. */
+  charity: { id: number; name: string } | null;
   missed: SavingsMissedPolicy;
   tellOthers: boolean;
+  /** SAV-06 "Tell me — Push and SMS". */
+  sms: boolean;
 }
 
 const EMPTY: SavingsForm = {
@@ -177,8 +182,10 @@ const EMPTY: SavingsForm = {
   lockMode: 'none',
   earlyBreak: true,
   earlyApproval: true,
+  charity: null,
   missed: 'retry',
   tellOthers: false,
+  sms: true,
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
@@ -232,7 +239,7 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
   const step = flow.step;
 
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<null | 'date' | 'source' | 'day' | { role: string }>(null);
+  const [sheet, setSheet] = useState<null | 'date' | 'source' | 'day' | 'charity' | { role: string }>(null);
   const [permsFor, setPermsFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [milestone, setMilestone] = useState({ title: '', amount: '' });
@@ -407,12 +414,14 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
           allow_contributor_edit: form.allowEdit,
           missed_policy: form.missed,
           notify_others_on_miss: shared && form.tellOthers,
+          notify_sms: form.sms,
         },
         lock: {
           mode: form.lockMode,
           until: form.lockMode === 'date' ? form.targetDate ?? undefined : undefined,
           early_break: form.earlyBreak,
           approval: form.earlyApproval,
+          charity_id: form.earlyBreak ? form.charity?.id ?? null : null,
         },
         draft_id: autosave.draftId ?? undefined,
       },
@@ -1038,7 +1047,7 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
             <PtPanel>
               <PtSwitchRow
                 title="Allow early break"
-                subtitle={form.earlyBreak ? 'Money can come out before then' : 'Nothing comes out until it opens'}
+                subtitle={form.earlyBreak ? '5% of the amount is kept as a fee' : 'Nothing comes out until it opens'}
                 value={form.earlyBreak}
                 onChange={(v) => set({ earlyBreak: v })}
               />
@@ -1053,9 +1062,35 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
                   />
                 </>
               ) : null}
+              {form.earlyBreak ? (
+                <>
+                  <PtDivider />
+                  <PtReviewRow
+                    label="Where the fee goes"
+                    value={form.charity ? '50% to a charity you pick' : 'Pick a charity for half of it'}
+                    sub={form.charity ? `${form.charity.name} · 50% Patriai fee` : "Until you pick one, it's all a Patriai fee"}
+                    onEdit={() => setSheet('charity')}
+                    last
+                  />
+                </>
+              ) : null}
             </PtPanel>
+            {form.earlyBreak ? (
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                The fee is a nudge to keep saving. If you do break early, half of it helps someone else.
+              </Text>
+            ) : null}
           </View>
         ) : null}
+        <CharityPickerSheet
+          visible={sheet === 'charity'}
+          value={form.charity?.id ?? null}
+          onPick={(o) => {
+            set({ charity: { id: o.id, name: o.name } });
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
+        />
         <PtDateSheet
           visible={sheet === 'date'}
           title="Lock until"
@@ -1094,7 +1129,7 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
         <View style={{ gap: 10 }}>
           <PtGroupLabel>Let people know</PtGroupLabel>
           <PtPanel>
-            <PtSwitchRow title="Tell me" subtitle="In the app" right={<Text style={{ fontFamily: ptFont.semibold, fontSize: 13, color: pt.inkMuted }}>Always on</Text>} />
+            <PtSwitchRow title="Tell me" subtitle={form.sms ? 'Push and SMS' : 'Push only'} value={form.sms} onChange={(v) => set({ sms: v })} />
             {others ? (
               <>
                 <PtDivider />
@@ -1123,8 +1158,8 @@ function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup
       : !form.earlyBreak
         ? 'No early break'
         : coOwners.length && form.earlyApproval
-          ? `Early break: ${joinNames(coOwners)}'s yes`
-          : 'Early break allowed';
+          ? `Early break: 5% fee and ${joinNames(coOwners)}'s yes`
+          : 'Early break: 5% fee';
   const estimates = form.methods.salary && salary && !form.methods.manual ? `${firstName(me?.full_name ?? 'You')} about ${formatNaira(salaryShare)} a month` : null;
 
   return (

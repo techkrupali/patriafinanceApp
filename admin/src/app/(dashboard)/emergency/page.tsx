@@ -67,6 +67,7 @@ export default function EmergencyPage() {
             <option value="document">Document</option>
             <option value="dual_approval">Keyholders&apos; release</option>
             <option value="fast_release">Fast release</option>
+            <option value="rule_change">Rule change</option>
           </Select>
         </div>
 
@@ -105,17 +106,21 @@ export default function EmergencyPage() {
                     <TD>
                       <p>{emergencyMethodLabel(r.method, r.document_type)}</p>
                       {r.method === "fast_release" && r.amount ? (
-                        <p className="text-xs text-muted">{naira(r.amount)} with proof</p>
-                      ) : r.method === "dual_approval" && r.required_approvals ? (
+                        <p className="text-xs text-muted">
+                          {naira(r.amount)} with proof{r.payee ? ` · paid to ${r.payee.account_name}` : ""}
+                        </p>
+                      ) : (r.method === "dual_approval" || r.method === "rule_change") && r.required_approvals ? (
                         <p className="text-xs text-muted">
                           {r.approvals ?? 0} of {r.required_approvals} said yes
                         </p>
                       ) : null}
                     </TD>
                     <TD>
-                      <p className="font-medium">{r.requested_by?.name ?? "—"}</p>
+                      <p className="font-medium">{r.requested_by?.name ?? r.trusted_contact?.name ?? "—"}</p>
                       {r.requested_by?.username ? (
                         <p className="text-xs text-muted">@{r.requested_by.username}</p>
+                      ) : r.trusted_contact ? (
+                        <p className="text-xs text-muted">Trusted contact · SMS link</p>
                       ) : null}
                     </TD>
                     <TD>

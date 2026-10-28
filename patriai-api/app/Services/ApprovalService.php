@@ -231,13 +231,21 @@ class ApprovalService
                 throw ValidationException::withMessages(['wallet' => 'This emergency wallet is locked.']);
             }
 
+            // Approved: limits are settled; the category must still be allowed, and
+            // locked savings broken early still pay the fee.
+            $rules = SpendRules::make();
+            $plan = $initiator && $request->action !== 'milestone_release'
+                ? $rules->plan($wallet, $initiator, $request->amount, isset($payload['budget_category_id']) ? (int) $payload['budget_category_id'] : null, approved: true)
+                : null;
+            $amount = $plan['net'] ?? $request->amount;
+
             switch ($request->action) {
                 case 'withdrawal':
                 case 'transfer_bank':
                     $txn = $this->wallets->withdrawToBank(
                         $wallet,
                         $initiator,
-                        $request->amount,
+                        $amount,
                         $payload['bank_code'],
                         $payload['account_number'],
                         $payload['account_name'],
@@ -252,7 +260,7 @@ class ApprovalService
                     if (!$to) {
                         throw ValidationException::withMessages(['destination' => 'Destination wallet no longer exists.']);
                     }
-                    $result = $this->wallets->transferBetweenWallets($wallet, $to, $request->amount, $initiator, $payload['description'] ?? $request->description);
+                    $result = $this->wallets->transferBetweenWallets($wallet, $to, $amount, $initiator, $payload['description'] ?? $request->description);
                     $reference = $result['reference'];
                     break;
 
@@ -272,7 +280,7 @@ class ApprovalService
                     $result = $this->wallets->transferBetweenWallets(
                         $wallet,
                         $to,
-                        $request->amount,
+                        $amount,
                         $initiator,
                         $payload['description'] ?? $request->description ?? "Transfer to {$recipient->fullName()}",
                     );
@@ -297,6 +305,9 @@ class ApprovalService
                 'status' => 'executed',
                 'executed_transaction_reference' => $reference,
             ]);
+            if ($plan) {
+                $rules->settle($wallet, $initiator, $reference, $plan);
+            }
 
             if ($initiator) {
                 $this->notifications->push(
@@ -312,9 +323,9 @@ class ApprovalService
                 $this->notifications->push(
                     $recipient,
                     'transfer_received',
-                    'You received ₦' . $this->naira($request->amount),
-                    ($initiator ? $initiator->fullName() : 'Someone') . ' sent you ₦' . $this->naira($request->amount) . '.',
-                    ['amount' => $this->naira($request->amount), 'reference' => $reference],
+                    'You received ₦' . $this->naira($amount),
+                    ($initiator ? $initiator->fullName() : 'Someone') . ' sent you ₦' . $this->naira($amount) . '.',
+                    ['amount' => $this->naira($amount), 'reference' => $reference],
                 );
             }
         } catch (\Throwable $e) {

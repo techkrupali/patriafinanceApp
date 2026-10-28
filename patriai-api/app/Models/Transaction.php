@@ -11,6 +11,7 @@ class Transaction extends Model
     protected $fillable = [
         'reference',
         'wallet_id',
+        'budget_category_id',
         'user_id',
         'type',
         'direction',
@@ -49,5 +50,11 @@ class Transaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** Spending wallets: what the payment was for ("Food and market"). */
+    public function budgetCategory(): BelongsTo
+    {
+        return $this->belongsTo(BudgetCategory::class);
     }
 }

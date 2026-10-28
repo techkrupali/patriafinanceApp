@@ -112,3 +112,10 @@ export function formatE164(e164: string): string {
   if (!match) return e164;
   return `+${match.dial} ${formatNational(match.dial, digits.slice(match.dial.length))}`;
 }
+
+/** "0803 •••• 214" — enough to recognise a number without showing it (matches the server's mask). */
+export function maskPhone(e164: string): string {
+  const digits = e164.replace(/\D/g, '');
+  const local = digits.startsWith('234') ? `0${digits.slice(3)}` : digits;
+  return local.length >= 7 ? `${local.slice(0, 4)} •••• ${local.slice(-3)}` : e164;
+}

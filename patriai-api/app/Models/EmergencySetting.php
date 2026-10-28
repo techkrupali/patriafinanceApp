@@ -26,6 +26,10 @@ class EmergencySetting extends Model
         'request_expiry_hours',
         'fast_release_limit',
         'fast_release_every_days',
+        'pay_directly',
+        'trusted_can_request',
+        'trusted_can_upload',
+        'trusted_can_see_balance',
         'unlock_on_document',
         'manual_unlock',
         'unlock_reason',
@@ -57,6 +61,10 @@ class EmergencySetting extends Model
             'request_expiry_hours' => 'integer',
             'fast_release_limit' => 'integer',
             'fast_release_every_days' => 'integer',
+            'pay_directly' => 'boolean',
+            'trusted_can_request' => 'boolean',
+            'trusted_can_upload' => 'boolean',
+            'trusted_can_see_balance' => 'boolean',
         ];
     }
 

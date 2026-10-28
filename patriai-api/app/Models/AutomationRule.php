@@ -12,8 +12,10 @@ class AutomationRule extends Model
      * schedule: on the calendar (frequency + day)
      * salary:   a share (percent) of each salary-sized bank deposit into Main
      * roundup:  spending from Main rounded up to roundup_to; swept daily
+     * deposit:  a share (percent) of every bank deposit into from_wallet, any
+     *           wallet (client: "percentage of deposits from 1 or more wallets")
      */
-    public const TRIGGERS = ['schedule', 'salary', 'roundup'];
+    public const TRIGGERS = ['schedule', 'salary', 'roundup', 'deposit'];
 
     protected $fillable = [
         'user_id',
@@ -23,6 +25,7 @@ class AutomationRule extends Model
         'savings_contribution',
         'trigger',
         'amount',
+        'fill_to',
         'percent',
         'roundup_to',
         'pending_amount',
@@ -41,6 +44,7 @@ class AutomationRule extends Model
     {
         return [
             'amount' => 'integer',
+            'fill_to' => 'boolean',
             'day_of_week' => 'integer',
             'day_of_month' => 'integer',
             'min_balance' => 'integer',
@@ -95,8 +99,8 @@ class AutomationRule extends Model
      */
     public function isDue(Carbon $now): bool
     {
-        // Salary rules fire when the deposit lands, never on the calendar.
-        if (!$this->enabled || $this->trigger === 'salary') {
+        // Salary and deposit rules fire when the money lands, never on the calendar.
+        if (!$this->enabled || in_array($this->trigger, ['salary', 'deposit'], true)) {
             return false;
         }
 

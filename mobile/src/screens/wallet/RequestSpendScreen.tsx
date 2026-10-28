@@ -12,6 +12,7 @@ import { Chip } from '../../components/Chip';
 import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
+import { BudgetCategoryPicker } from '../../components/BudgetCategoryPicker';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { LoadError } from '../../components/LoadError';
 import { colors, gradients, outline } from '../../theme';
@@ -40,6 +41,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [pending, setPending] = useState<ApprovalRequest | null>(null);
@@ -116,6 +118,7 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
         amount,
         pin,
         description: description.trim() || undefined,
+        budget_category_id: categoryId ?? undefined,
         destination,
       },
       {
@@ -328,6 +331,8 @@ export function RequestSpendScreen({ navigation, route }: RootScreenProps<'Reque
                 )}
               </View>
             ) : null}
+
+            <BudgetCategoryPicker walletId={walletId} enabled={from?.type === 'spending'} value={categoryId} onChange={setCategoryId} className="mt-5" />
 
             <Input
               label="Description (Optional)"

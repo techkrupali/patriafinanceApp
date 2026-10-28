@@ -22,6 +22,7 @@ class SavingsPlan extends Model
         'roundup_to',
         'missed_policy',
         'notify_others_on_miss',
+        'notify_sms',
         'amount',
         'frequency',
         'day_of_week',
@@ -42,6 +43,7 @@ class SavingsPlan extends Model
             'salary_percent' => 'integer',
             'roundup_to' => 'integer',
             'notify_others_on_miss' => 'boolean',
+            'notify_sms' => 'boolean',
         ];
     }
 

@@ -7,17 +7,19 @@ import { PtAvatar, AVATAR_CYCLE, type PtAvatarTone } from '../pt/PtAvatar';
 import { PtCheckbox } from '../pt/PtCheck';
 import { PtField } from '../pt/PtField';
 import { PtOptionSheet } from '../pt/PtOptionSheet';
-import { PtAddRow } from '../pt/PtPeople';
+import { PtAddRow, PtNewPersonForm } from '../pt/PtPeople';
 import { PtDivider, PtGroupLabel, PtNote, PtPanel, PtPills, PtReviewRow, PtSegmented, PtSwitchRow } from '../pt/PtForm';
 import { RecipientSheet } from '../RecipientSheet';
 import { selection } from '../../lib/haptics';
 import { formatNaira, initials } from '../../lib/format';
+import { maskPhone } from '../../lib/phone';
 import {
   EMERGENCY_FOR,
   EXPIRY_HOURS,
   FAST_EVERY_DAYS,
   FAST_LIMITS,
   MAX_BENEFICIARIES,
+  MAX_TRUSTED_CONTACTS,
   beneficiaryRank,
   rankBeneficiaries,
   requiredYeses,
@@ -106,45 +108,70 @@ export function PurposesChecklist({ value, onChange }: { value: EmergencyPurpose
 }
 
 export interface KeyholderCandidate {
-  id: number;
+  /** A Patriai account… */
+  id?: number;
+  /** …or someone invited by phone, who holds a key once they join. */
+  phone?: string;
   name: string;
   avatar?: string | null;
   /** "Contributor" when they put money in. */
   contributes?: boolean;
 }
 
-/** EMG-03 "Who agrees to release money?" — keyholders, approvals needed, expiry. */
+/** EMG-03 "Who agrees to release money?" — keyholders, approvals needed, paying the bill directly, expiry. */
 export function KeyholdersSection({
   value,
   onChange,
   candidates,
   me,
+  invited = [],
+  onInvited,
 }: {
   value: EmergencyRulesState;
   onChange: Change;
   candidates: KeyholderCandidate[];
   me: { name: string; initials: string };
+  /** Phones of candidates invited by phone who are keyholders. */
+  invited?: string[];
+  onInvited?: (phones: string[]) => void;
 }) {
   const [expiryOpen, setExpiryOpen] = useState(false);
-  const n = value.keyholders.length + 1;
-  const required = requiredYeses(value);
+  const n = value.keyholders.length + invited.length + 1;
+  const required = requiredYeses(value, invited.length);
+
+  const toggle = (c: KeyholderCandidate) => {
+    if (c.id !== undefined) {
+      const on = value.keyholders.includes(c.id);
+      onChange({ keyholders: on ? value.keyholders.filter((id) => id !== c.id) : [...value.keyholders, c.id] });
+    } else if (c.phone && onInvited) {
+      onInvited(invited.includes(c.phone) ? invited.filter((p) => p !== c.phone) : [...invited, c.phone]);
+    }
+  };
 
   return (
     <View style={{ gap: 14 }}>
       <PtPanel>
         <PersonLine initialsText={me.initials} tone="brand" name={`${me.name} (you)`} sub="Keyholder" right={<PtCheckbox checked />} />
         {candidates.map((c, i) => {
-          const on = value.keyholders.includes(c.id);
+          const on = c.id !== undefined ? value.keyholders.includes(c.id) : invited.includes(c.phone ?? '');
           return (
-            <React.Fragment key={c.id}>
+            <React.Fragment key={c.id ?? c.phone}>
               <PtDivider />
               <PersonLine
                 initialsText={c.avatar || initials(c.name)}
-                tone={AVATAR_CYCLE[i % AVATAR_CYCLE.length]}
+                tone={c.phone ? 'gold' : AVATAR_CYCLE[i % AVATAR_CYCLE.length]}
                 name={c.name}
-                sub={on ? 'Keyholder' : c.contributes ? 'Contributor only' : 'Not a keyholder'}
+                sub={
+                  on
+                    ? c.phone
+                      ? 'Keyholder · joins with their phone number'
+                      : 'Keyholder'
+                    : c.contributes
+                      ? 'Contributor only'
+                      : 'Not a keyholder'
+                }
                 selected={on}
-                onPress={() => onChange({ keyholders: on ? value.keyholders.filter((id) => id !== c.id) : [...value.keyholders, c.id] })}
+                onPress={() => toggle(c)}
                 right={<PtCheckbox checked={on} />}
               />
             </React.Fragment>
@@ -155,17 +182,29 @@ export function KeyholdersSection({
       <View style={{ gap: 10 }}>
         <PtGroupLabel>Approvals needed</PtGroupLabel>
         {n > 1 ? (
-          <PtSegmented
-            options={Array.from({ length: n }, (_, i) => ({ value: i + 1, label: i + 1 === n ? `All ${n}` : `${i + 1} of ${n}` }))}
-            value={required}
-            onChange={(v) => onChange({ required: v })}
-          />
+          <>
+            <PtSegmented
+              options={Array.from({ length: n }, (_, i) => ({ value: i + 1, label: i + 1 === n ? `All ${n}` : `${i + 1} of ${n}` }))}
+              value={required}
+              onChange={(v) => onChange({ required: v })}
+            />
+            {n === 2 && required === 2 ? (
+              <Text style={{ fontFamily: ptFont.medium, fontSize: 13, color: pt.brand, paddingHorizontal: 4 }}>Dual approval — both of you must agree.</Text>
+            ) : null}
+          </>
         ) : (
           <PtNote>Pick another keyholder so someone else can agree when you can't — two of you is dual approval.</PtNote>
         )}
       </View>
 
       <PtPanel>
+        <PtSwitchRow
+          title="Pay the hospital directly"
+          subtitle="Money goes to the bill, not a person"
+          value={value.payDirectly}
+          onChange={(v) => onChange({ payDirectly: v })}
+        />
+        <PtDivider />
         <PtReviewRow
           label="Requests expire after"
           value={`${value.expiryHours} hours`}
@@ -214,8 +253,8 @@ export function FastReleaseSection({ value, onChange }: { value: EmergencyRulesS
               <Feather name="upload" size={16} color={pt.brand} />
             </View>
             <Text style={{ flex: 1, fontFamily: ptFont.regular, fontSize: 13, lineHeight: 19, color: pt.inkMuted }}>
-              In an emergency, keyholders tap <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>Release now</Text>, snap the bill, and the money goes to their
-              Main wallet.
+              In an emergency, keyholders tap <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>Release now</Text>, snap the bill, and the money goes{' '}
+              {value.payDirectly ? "straight to the hospital or clinic's bank account." : 'to their Main wallet.'}
             </Text>
           </View>
         </>
@@ -303,59 +342,142 @@ export function UnlockYourselfSection({
   );
 }
 
-/** EMG-05 "If you can't ask yourself" — beneficiaries in order, death unlock, crisis override. */
-export function TrustedSection({ value, onChange }: { value: EmergencyRulesState; onChange: Change }) {
+/** One trusted contact or beneficiary line with Remove. */
+function RemovableLine({ name, sub, tone, onPress, onRemove }: { name: string; sub: string; tone: PtAvatarTone; onPress?: () => void; onRemove: () => void }) {
+  return (
+    <PersonLine
+      initialsText={initials(name)}
+      tone={tone}
+      name={name}
+      sub={sub}
+      onPress={onPress}
+      right={
+        <Pressable
+          onPress={() => {
+            selection();
+            onRemove();
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${name}`}
+        >
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 14, color: pt.brand }}>Remove</Text>
+        </Pressable>
+      }
+    />
+  );
+}
+
+/** A checkbox line ("Can upload proof"). */
+function CheckLine({ label, checked, onToggle, last }: { label: string; checked: boolean; onToggle: () => void; last?: boolean }) {
+  return (
+    <View style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: pt.line }}>
+      <Pressable
+        onPress={() => {
+          selection();
+          onToggle();
+        }}
+        // RNGH Pressable on web only exposes the button role.
+        accessibilityRole="button"
+        accessibilityState={{ selected: checked }}
+        accessibilityLabel={label}
+        style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+      >
+        <Text style={{ flex: 1, fontFamily: ptFont.medium, fontSize: 16, color: pt.ink }}>{label}</Text>
+        <PtCheckbox checked={checked} />
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * EMG-05 "If you can't ask yourself": trusted contacts without the app (an SMS
+ * link) and what they may do; then the client's beneficiaries in order (1st,
+ * 2nd fallback, 3rd), death emergency unlock and the crisis override.
+ */
+export function TrustedSection({ value, onChange, ownPhone }: { value: EmergencyRulesState; onChange: Change; ownPhone?: string | null }) {
   const [sheet, setSheet] = useState<{ open: boolean; index: number }>({ open: false, index: 0 });
+  const [adding, setAdding] = useState(false);
   const editing = sheet.index < value.beneficiaries.length ? value.beneficiaries[sheet.index] : null;
   const setList = (list: typeof value.beneficiaries) => onChange({ beneficiaries: rankBeneficiaries(list) });
+  const contacts = value.trustedContacts;
 
   return (
     <View style={{ gap: 14 }}>
-      <PtPanel>
-        {value.beneficiaries.map((b, i) => {
-          const rank = beneficiaryRank(i);
-          return (
-            <React.Fragment key={b.user.id}>
-              <PersonLine
-                initialsText={initials(b.user.full_name)}
-                tone={AVATAR_CYCLE[i % AVATAR_CYCLE.length]}
-                name={b.user.full_name}
-                sub={[rank.title + (rank.isFallback ? ' · fallback' : ''), b.relationship].filter(Boolean).join(' · ')}
-                onPress={() => setSheet({ open: true, index: i })}
-                right={
-                  <Pressable
-                    onPress={() => {
-                      selection();
-                      setList(value.beneficiaries.filter((x) => x.user.id !== b.user.id));
-                    }}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${b.user.full_name}`}
-                  >
-                    <Text style={{ fontFamily: ptFont.bold, fontSize: 14, color: pt.brand }}>Remove</Text>
-                  </Pressable>
-                }
+      <PtGroupLabel>Trusted contacts</PtGroupLabel>
+      {contacts.length > 0 || adding ? (
+        <PtPanel>
+          {contacts.map((c, i) => (
+            <React.Fragment key={c.phone}>
+              {i > 0 ? <PtDivider /> : null}
+              <RemovableLine
+                name={c.name}
+                sub={[c.relation, maskPhone(c.phone)].filter(Boolean).join(' · ')}
+                tone={AVATAR_CYCLE[(i + 2) % AVATAR_CYCLE.length]}
+                onRemove={() => onChange({ trustedContacts: contacts.filter((x) => x.phone !== c.phone) })}
               />
-              <PtDivider />
             </React.Fragment>
-          );
-        })}
-        {value.beneficiaries.length < MAX_BENEFICIARIES ? (
-          <PtAddRow
-            label={value.beneficiaries.length === 0 ? 'Add a beneficiary' : `Add a ${value.beneficiaries.length === 1 ? 'second' : 'third'} (fallback)`}
-            onPress={() => setSheet({ open: true, index: value.beneficiaries.length })}
-          />
-        ) : null}
-      </PtPanel>
+          ))}
+          {adding ? (
+            <>
+              {contacts.length > 0 ? <PtDivider /> : null}
+              <PtNewPersonForm
+                withRelation
+                nameRequired
+                taken={[...contacts.map((c) => c.phone), ownPhone ?? '']}
+                onCancel={() => setAdding(false)}
+                onAdd={(p) => {
+                  onChange({ trustedContacts: [...contacts, { name: p.name, phone: p.phone, relation: p.relation ?? '' }] });
+                  setAdding(false);
+                }}
+              />
+            </>
+          ) : null}
+        </PtPanel>
+      ) : null}
+      {!adding && contacts.length < MAX_TRUSTED_CONTACTS ? <PtAddRow label="Add a trusted contact" onPress={() => setAdding(true)} /> : null}
 
       <PtPanel>
-        {['Can start a release request', 'Can upload proof, like a death certificate', 'Can see the balance'].map((t, i) => (
-          <View key={t} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: i === 2 ? 0 : 1, borderBottomColor: pt.line }}>
-            <Text style={{ flex: 1, fontFamily: ptFont.medium, fontSize: 15, color: pt.ink }}>{t}</Text>
-            <Feather name="check" size={18} color={pt.brand} />
-          </View>
-        ))}
+        <CheckLine label="Can start a release request" checked={value.trustedCanRequest} onToggle={() => onChange({ trustedCanRequest: !value.trustedCanRequest })} />
+        <CheckLine label="Can upload proof" checked={value.trustedCanUpload} onToggle={() => onChange({ trustedCanUpload: !value.trustedCanUpload })} />
+        <CheckLine
+          label="Can see the balance"
+          checked={value.trustedCanSeeBalance}
+          onToggle={() => onChange({ trustedCanSeeBalance: !value.trustedCanSeeBalance })}
+          last
+        />
       </PtPanel>
+      <PtNote>They get an SMS with a secure link. They don't need the app.</PtNote>
+
+      <View style={{ gap: 10, marginTop: 8 }}>
+        <PtGroupLabel>Who receives the money</PtGroupLabel>
+        <PtPanel>
+          {value.beneficiaries.map((b, i) => {
+            const rank = beneficiaryRank(i);
+            return (
+              <React.Fragment key={b.user.id}>
+                <RemovableLine
+                  name={b.user.full_name}
+                  sub={[rank.title + (rank.isFallback ? ' · fallback' : ''), b.relationship].filter(Boolean).join(' · ')}
+                  tone={AVATAR_CYCLE[i % AVATAR_CYCLE.length]}
+                  onPress={() => setSheet({ open: true, index: i })}
+                  onRemove={() => setList(value.beneficiaries.filter((x) => x.user.id !== b.user.id))}
+                />
+                <PtDivider />
+              </React.Fragment>
+            );
+          })}
+          {value.beneficiaries.length < MAX_BENEFICIARIES ? (
+            <PtAddRow
+              label={value.beneficiaries.length === 0 ? 'Add a beneficiary' : `Add a ${value.beneficiaries.length === 1 ? 'second' : 'third'} (fallback)`}
+              onPress={() => setSheet({ open: true, index: value.beneficiaries.length })}
+            />
+          ) : null}
+        </PtPanel>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted, paddingHorizontal: 4 }}>
+          Beneficiaries have a Patriai account. They can ask the keyholders for a release and upload a death certificate.
+        </Text>
+      </View>
 
       <View style={{ gap: 10 }}>
         <PtGroupLabel>If you pass away</PtGroupLabel>

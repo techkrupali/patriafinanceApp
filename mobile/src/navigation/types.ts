@@ -92,11 +92,25 @@ export type RootStackParamList = {
     caption: string;
     events: { label: string; title: string; sub?: string }[];
     openLabel: string;
+    /** Spending (WCR-07): each category, "₦0 of ₦150,000", in place of the balance card. */
+    budget?: { name: string; limit: string }[];
+    /** Giving (WCR-07): what goes out first, in place of the balance card. */
+    payments?: { title: string; sub: string; amount: string }[];
+    /** A note under the list ("The first offering comes from Main this week…"). */
+    note?: string;
   };
   /** SAV-01…06 + WCR-06: a savings wallet. */
   SavingsWalletSetup: { draftId?: number } | undefined;
   /** EMG-01…05 + WCR-06: an emergency fund. */
   EmergencyWalletSetup: { draftId?: number } | undefined;
+  /** SPD-01…06 + WCR-06: a spending wallet. */
+  SpendingWalletSetup: { draftId?: number } | undefined;
+  /** GIV-01…06 + WCR-06: a giving wallet; `addedAccountId` comes back from GIV-07. */
+  GivingWalletSetup: { draftId?: number; addedAccountId?: number } | undefined;
+  /** GIV-07 "Add a recipient, save for later". */
+  AddRecipient: { context?: string; returnTo: 'GivingWalletSetup' };
+  /** WAL-09 "Spending limits" of a spending wallet. */
+  SpendingLimits: { walletId: number };
   /** Type-specific setup for every type without its own journey. */
   WalletSetup: { type: CreatableWalletType; draftId?: number };
   // ---- Emergency fund management ----

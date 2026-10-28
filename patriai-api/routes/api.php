@@ -2,15 +2,18 @@
 
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
+use App\Http\Controllers\Api\Admin\OrganisationAdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\BankController;
+use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\EmergencyController;
 use App\Http\Controllers\Api\FamilyController;
+use App\Http\Controllers\Api\GivingController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\FamilyMemberController;
 use App\Http\Controllers\Api\InvitationController;
@@ -18,10 +21,12 @@ use App\Http\Controllers\Api\KycController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MilestoneController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrganisationController;
 use App\Http\Controllers\Api\PhoneAuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\SavedAccountController;
 use App\Http\Controllers\Api\SavingsController;
 use App\Http\Controllers\Api\SpendRequestController;
 use App\Http\Controllers\Api\SpousalSyncController;
@@ -144,6 +149,26 @@ Route::prefix('v1')->group(function () {
         Route::patch('wallets/{wallet}/savings/contribution', [SavingsController::class, 'updateContribution'])->middleware('throttle:30,1');
         Route::post('wallets/{wallet}/savings/milestones', [SavingsController::class, 'addMilestone'])->middleware('throttle:30,1');
         Route::delete('wallets/{wallet}/savings/milestones/{milestone}', [SavingsController::class, 'removeMilestone'])->middleware('throttle:30,1');
+
+        // Spending wallets — WAL-09 budget, categories and spender limits.
+        Route::get('wallets/{wallet}/budget', [BudgetController::class, 'show']);
+        Route::patch('wallets/{wallet}/budget/categories/{category}', [BudgetController::class, 'updateCategory'])->middleware('throttle:30,1');
+        Route::patch('wallets/{wallet}/budget/spenders/{user}', [BudgetController::class, 'updateSpender'])->middleware('throttle:30,1');
+
+        // Giving wallets — WAL-18, giving dates, payments waiting for a yes.
+        Route::get('wallets/{wallet}/giving', [GivingController::class, 'show']);
+        Route::post('wallets/{wallet}/giving/schedules', [GivingController::class, 'storeSchedule'])->middleware('throttle:30,1');
+        Route::patch('wallets/{wallet}/giving/schedules/{schedule}', [GivingController::class, 'updateSchedule'])->middleware('throttle:30,1');
+        Route::delete('wallets/{wallet}/giving/schedules/{schedule}', [GivingController::class, 'destroySchedule'])->middleware('throttle:30,1');
+        Route::post('giving-payments/{payment}/confirm', [GivingController::class, 'confirm'])->middleware('throttle:20,1');
+        Route::post('giving-payments/{payment}/skip', [GivingController::class, 'skip'])->middleware('throttle:20,1');
+
+        // Saved accounts (GIV-07, SND-16) and the organisations Patriai lists (GIV-02, BRK-02).
+        Route::get('saved-accounts', [SavedAccountController::class, 'index']);
+        Route::post('saved-accounts', [SavedAccountController::class, 'store'])->middleware('throttle:20,1');
+        Route::delete('saved-accounts/{savedAccount}', [SavedAccountController::class, 'destroy'])->middleware('throttle:30,1');
+        Route::post('saved-account-groups', [SavedAccountController::class, 'storeGroup'])->middleware('throttle:20,1');
+        Route::get('organisations', [OrganisationController::class, 'index']);
 
         // Wallet drafts — auto-saved setup, resumable from the wallet list.
         Route::get('wallet-drafts', [WalletDraftController::class, 'index']);
@@ -282,6 +307,12 @@ Route::prefix('v1')->group(function () {
             Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyAdminController::class, 'approve']);
             Route::post('emergency-requests/{emergencyUnlockRequest}/reject', [EmergencyAdminController::class, 'reject']);
             Route::post('wallets/{wallet}/emergency/crisis-unlock', [EmergencyAdminController::class, 'crisisUnlock']);
+
+            // Organisations people give to, and charities' share of early-break fees.
+            Route::get('organisations', [OrganisationAdminController::class, 'index']);
+            Route::post('organisations', [OrganisationAdminController::class, 'store'])->middleware('throttle:60,1');
+            Route::patch('organisations/{organisation}', [OrganisationAdminController::class, 'update'])->middleware('throttle:60,1');
+            Route::post('organisations/{organisation}/donations/paid', [OrganisationAdminController::class, 'markDonationsPaid'])->middleware('throttle:30,1');
         });
     });
 });

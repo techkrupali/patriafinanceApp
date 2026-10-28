@@ -174,17 +174,30 @@ class InvitationController extends ApiController
 
             $invitation->update(['status' => 'accepted', 'responded_at' => now()]);
 
+            // Invited by phone as an emergency keyholder: they hold a key from now on.
+            if ($invitation->keyholder && ($setting = $invitation->wallet->emergencySetting) && $setting->keyholder_ids !== null) {
+                $setting->update([
+                    'keyholder_ids' => array_values(array_unique([...$setting->keyholder_ids, $request->user()->id])),
+                    'dual_approval' => true,
+                ]);
+            }
+
             if (!empty($data['source_wallet_id']) && $invitation->pledge_amount && !in_array($invitation->wallet->type, SavingsService::TYPES, true)) {
-                // EMG-02: "Each person saves automatically on the 25th".
+                // EMG-02 "Each person saves automatically on the 25th"; SPD-04 "Each
+                // person pays their share" on the budget's own day.
                 $source = \App\Models\Wallet::where('id', (int) $data['source_wallet_id'])->where('user_id', $request->user()->id)->first();
                 if (!$source) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
                 }
+                $budget = $invitation->wallet->budget();
+                $weekly = ($budget['period'] ?? null) === 'weekly';
+                $day = (int) ($budget['start_day'] ?? 25);
                 \App\Services\AutomationService::make()->createContributionRule($request->user(), $source, $invitation->wallet->refresh(), [
-                    'name' => "Monthly into {$invitation->wallet->name}",
+                    'name' => ($budget ? 'My share into ' : 'Monthly into ') . $invitation->wallet->name,
                     'amount' => isset($data['amount']) ? $this->toKobo((string) $data['amount']) : $invitation->pledge_amount,
-                    'frequency' => 'monthly',
-                    'day_of_month' => 25,
+                    'frequency' => $weekly ? 'weekly' : 'monthly',
+                    'day_of_week' => $weekly ? $day : null,
+                    'day_of_month' => $weekly ? null : $day,
                 ]);
             } elseif (!empty($data['source_wallet_id'])) {
                 $overrides = array_filter([

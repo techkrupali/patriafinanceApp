@@ -10,10 +10,11 @@ import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
 import { BankPicker } from '../../components/BankPicker';
+import { BudgetCategoryPicker } from '../../components/BudgetCategoryPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
 import { PendingApprovalNotice } from '../../components/PendingApprovalNotice';
 import { colors } from '../../theme';
-import { useVerifyAccount, useWithdraw } from '../../api/hooks';
+import { useVerifyAccount, useWallets, useWithdraw } from '../../api/hooks';
 import { formatMoney, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { isPendingApproval } from '../../api/types';
 import type { ApprovalRequest, Bank, Transaction } from '../../api/types';
@@ -29,6 +30,8 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const wallet = useWallets().data?.find((w) => w.id === walletId);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
@@ -67,6 +70,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
         bank_name: verified.bank_name || bank.bank_name,
         pin,
         description: description.trim() || undefined,
+        budget_category_id: categoryId ?? undefined,
       },
       {
         onSuccess: (data) => {
@@ -178,6 +182,8 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
           ) : (
             <ErrorText message={verifyError} className="mt-3" />
           )}
+
+          <BudgetCategoryPicker walletId={walletId} enabled={wallet?.type === 'spending'} value={categoryId} onChange={setCategoryId} className="mt-5" />
 
           <Input
             label="Description (Optional)"

@@ -16,6 +16,7 @@ class WalletInvitation extends Model
         'can_approve',
         'permissions',
         'pledge_amount',
+        'keyholder',
         'status',
         'token',
         'expires_at',
@@ -28,6 +29,7 @@ class WalletInvitation extends Model
             'can_approve' => 'boolean',
             'permissions' => 'array',
             'pledge_amount' => 'integer',
+            'keyholder' => 'boolean',
             'expires_at' => 'datetime',
             'responded_at' => 'datetime',
         ];

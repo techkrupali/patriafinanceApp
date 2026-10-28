@@ -94,7 +94,16 @@ export interface Wallet {
   /** SAV-01 colour. */
   colour?: WalletColour | null;
   /** SAV-05: locked until a date or the target; `locked` while it holds. */
-  lock?: { mode: 'date' | 'target'; until: string | null; early_break: boolean; approval: boolean; locked: boolean } | null;
+  lock?: {
+    mode: 'date' | 'target';
+    until: string | null;
+    early_break: boolean;
+    approval: boolean;
+    locked: boolean;
+    /** SAV-05: kept from what's taken out early; half to the charity picked. */
+    fee_percent?: number;
+    charity?: { id: number; name: string; area: string | null; state: string | null } | null;
+  } | null;
 }
 
 export type WalletColour = 'emerald' | 'mint' | 'gold' | 'deep' | 'clay' | 'violet';
@@ -129,6 +138,10 @@ export interface SavingsInsights {
   salary: { amount: string; day: number; from: string | null } | null;
   /** Monthly round-up estimate by step: "100" | "500" | "1000" → naira string. */
   roundups: Record<string, string>;
+  /** SPD-02 "Last 3 months you spent about ₦338,000": spending from Main a month. */
+  monthly_spending?: string;
+  /** GIV-03: typical monthly bank deposits by wallet id (naira strings). */
+  monthly_deposits?: Record<string, string>;
 }
 
 /** Per-member granular access matrix ("Assign Wallet Access & Roles"). */
@@ -566,6 +579,8 @@ export interface TransferPayload {
   amount: string;
   pin: string;
   description?: string;
+  /** Spending wallets: what it's for (SPD-03 category). */
+  budget_category_id?: number;
   destination: TransferDestination;
   /** Optional idempotency key — reused from the AI create_transfer hand-off. */
   idempotency_key?: string;
@@ -688,6 +703,8 @@ export interface AssistantChatData {
 }
 
 export interface WithdrawPayload {
+  /** Spending wallets: what it's for. */
+  budget_category_id?: number;
   amount: string;
   bank_code: string;
   account_number: string;
@@ -733,9 +750,17 @@ export interface CreateWalletPayload {
     permissions?: InvitePermissions;
     /** Emergency contributors: naira a month, on the 25th. */
     pledge?: string;
+    /** Emergency: invited by phone, they hold a key once they join. */
+    keyholder?: boolean;
+    /** SPD-05 spenders: categories by name (absent = all) and a daily limit (naira). */
+    spend?: { categories?: string[] | null; daily_limit?: string | null };
   }[];
   colour?: WalletColour;
-  lock?: { mode: 'none' | 'date' | 'target'; until?: string; early_break?: boolean; approval?: boolean };
+  lock?: { mode: 'none' | 'date' | 'target'; until?: string; early_break?: boolean; approval?: boolean; charity_id?: number | null };
+  /** Spending wallets (SPD-02…06). */
+  budget?: BudgetPayload;
+  /** Giving wallets (GIV-01…06). */
+  giving?: GivingPayload;
   /** "When does money need a yes?" — threshold null means any amount. */
   approval?: { threshold: string | null; mode: ApprovalMode; lock_until_goal?: boolean; expiry_hours?: number };
   reminder_day?: number;
@@ -774,6 +799,8 @@ export interface SavingsPlanPayload {
   /** SAV-06 if a save can't happen. */
   missed_policy?: SavingsMissedPolicy;
   notify_others_on_miss?: boolean;
+  /** SAV-06 "Tell me — Push and SMS". */
+  notify_sms?: boolean;
 }
 
 export type SavingsMissedPolicy = 'retry' | 'partial' | 'skip';
@@ -916,6 +943,36 @@ export interface EmergencyRulesPayload {
   /** Naira; null/absent = no fast release. */
   fast_release_limit?: string | null;
   fast_release_every_days?: number;
+  /** EMG-03 "Pay the hospital directly": released money goes to a bank account, not a person. */
+  pay_directly?: boolean;
+  /** EMG-05: people without the app who get an SMS link. Phone as typed; the server normalises it. */
+  trusted_contacts?: EmergencyTrustedContactPayload[];
+  trusted_can_request?: boolean;
+  trusted_can_upload?: boolean;
+  trusted_can_see_balance?: boolean;
+}
+
+export interface EmergencyTrustedContactPayload {
+  name: string;
+  phone: string;
+  relation?: string;
+}
+
+export interface EmergencyTrustedContact {
+  id: number;
+  name: string;
+  relation: string | null;
+  /** Full number for the owner, masked for keyholders. */
+  phone: string;
+  masked_phone: string;
+  link_sent: boolean;
+}
+
+/** Where a pay-directly release went. */
+export interface EmergencyPayee {
+  bank_name?: string;
+  account_number: string;
+  account_name: string;
 }
 
 export interface EmergencyPerson {
@@ -951,7 +1008,7 @@ export interface EmergencyRecipient {
 export interface EmergencyRequest {
   id: number;
   wallet_id: number;
-  method: 'dual_approval' | 'document' | 'fast_release';
+  method: 'dual_approval' | 'document' | 'fast_release' | 'rule_change';
   document_type: EmergencyDocumentType | 'proof' | null;
   has_document: boolean;
   note: string | null;
@@ -965,6 +1022,12 @@ export interface EmergencyRequest {
   can_flag?: boolean;
   requested_by: EmergencyPerson | null;
   approved_by: EmergencyPerson | null;
+  /** Asked by a trusted contact from their SMS link (no account). */
+  trusted_contact?: { name: string; relation: string | null } | null;
+  /** Fast release paid straight to the bill. */
+  payee?: EmergencyPayee | null;
+  /** Rule change: what would change, in words. */
+  changes?: string[] | null;
   review_note: string | null;
   created_at: string | null;
   decided_at: string | null;
@@ -995,7 +1058,13 @@ export interface EmergencyDetail {
     required_keyholders?: number;
     request_expiry_hours?: number | null;
     fast_release?: { limit: string; every_days: number; last_at: string | null; next_at: string | null } | null;
+    pay_directly?: boolean;
+    trusted_can_request?: boolean;
+    trusted_can_upload?: boolean;
+    trusted_can_see_balance?: boolean;
   };
+  /** Owner and keyholders only. */
+  trusted_contacts?: EmergencyTrustedContact[];
   beneficiaries: EmergencyRecipient[];
   /** Owner always; recipients only once the wallet is unlocked. */
   beneficiary_note: string | null;
@@ -1011,6 +1080,8 @@ export interface EmergencyDetail {
     can_request_dual: boolean;
     can_submit_document: boolean;
     is_keyholder?: boolean;
+    /** A rule change is waiting for the keyholders. */
+    pending_rule_change?: boolean;
     can_fast_release?: boolean;
     beneficiary: {
       withdrawal_limit: string | null;
@@ -1785,6 +1856,8 @@ export interface ApplyReferralPayload {
 // ============================================================================
 
 export interface SpendRequestPayload {
+  /** Spending wallets: what it's for. */
+  budget_category_id?: number;
   /** Naira decimal string. */
   amount: string;
   pin: string;
@@ -1881,4 +1954,166 @@ export interface FamilyMemberDetailData {
     pending_requests: number;
     approved_requests_30d: number;
   };
+}
+
+// ============================================================================
+// Spending, Giving, saved accounts (client sheet "Wallets · Savings, Spending, Giving")
+// ============================================================================
+
+export type BudgetPeriod = 'weekly' | 'monthly' | 'one_off';
+export type BudgetFunding = 'topup' | 'split' | 'manual';
+
+export interface BudgetPayload {
+  /** Naira. */
+  amount: string;
+  period: BudgetPeriod;
+  /** Monthly: day 1–28 ("the 25th"); weekly: ISO weekday. */
+  start_day?: number;
+  leftover?: { mode: 'keep' | 'main' | 'wallet'; wallet_id?: number | null };
+  funding?: BudgetFunding;
+  /** Split funding: your own share each period (naira). */
+  my_share?: string;
+  alerts?: { half?: boolean; eighty?: boolean; category_out?: boolean; weekly?: boolean };
+  over_limit?: 'approve' | 'stop';
+  categories?: { name: string; limit: string }[];
+}
+
+export interface BudgetCategoryRow {
+  id: number;
+  name: string;
+  limit: string;
+  spent: string;
+}
+
+/** WAL-09 GET /wallets/{id}/budget */
+export interface BudgetDetail {
+  amount: string;
+  period: BudgetPeriod;
+  start_day: number;
+  period_start: string;
+  next_period_start: string | null;
+  leftover: { mode: 'keep' | 'main' | 'wallet'; wallet_id: number | null; wallet_name: string | null };
+  funding: BudgetFunding;
+  alerts: { half: boolean; eighty: boolean; category_out: boolean; weekly: boolean };
+  over_limit: 'approve' | 'stop';
+  spent: string;
+  categories: BudgetCategoryRow[];
+  /** `pending`: invited, not joined yet. */
+  spenders: { user_id: number | null; name: string | null; role: string; can_spend: boolean; pending?: boolean; categories: string[] | null; daily_limit: string | null }[];
+  viewers: string[];
+  me: { categories: number[] | null; daily_limit: string | null };
+}
+
+export interface BudgetDetailData {
+  budget: BudgetDetail;
+}
+
+export type GivingKind = 'tithes' | 'zakat' | 'charity' | 'parents' | 'dues';
+export type GivingFrequency = 'weekly' | 'monthly' | 'monthly_weekday' | 'once';
+
+export interface GivingSchedulePayload {
+  label: string;
+  /** Naira per giving date (a group splits it evenly). */
+  amount: string;
+  saved_account_id?: number;
+  group_id?: number;
+  frequency: GivingFrequency;
+  day_of_week?: number;
+  day_of_month?: number;
+  week_of_month?: number;
+  run_on?: string;
+}
+
+export interface GivingPayload {
+  kind: GivingKind;
+  source_wallet_id?: number;
+  recipients: ({ saved_account_id: number } | { group_id: number })[];
+  /** Client: fixed amounts and a percentage of deposits, from one or more wallets. */
+  set_aside: (
+    | { kind: 'percent'; source_wallet_id: number; percent: number }
+    | { kind: 'fixed'; source_wallet_id: number; amount: string; day_of_month: number }
+    | { kind: 'roundup'; source_wallet_id: number; roundup_to: string }
+  )[];
+  schedules: GivingSchedulePayload[];
+  ask_first: boolean;
+  thanksgiving_reminder: boolean;
+  pledge?: {
+    name: string;
+    total: string;
+    paid_before: string;
+    due_date: string;
+    saved_account_id?: number;
+    group_id?: number;
+    parts: { date: string; amount: string }[];
+  } | null;
+  receipts: boolean;
+  yearly_statement: boolean;
+  anonymous: boolean;
+}
+
+/** WAL-18 GET /wallets/{id}/giving */
+export interface GivingDetail {
+  kind: GivingKind | null;
+  settings: { kind?: GivingKind; ask_first?: boolean; thanksgiving_reminder?: boolean; receipts?: boolean; yearly_statement?: boolean; anonymous?: boolean; source_wallet_id?: number | null };
+  set_aside: string;
+  given_this_year: string;
+  set_aside_rules: { id: number; name: string; trigger: string; percent: number | null; amount: string; from: string | null; enabled: boolean }[];
+  coming_up: { schedule_id: number; date: string; label: string; amount: string; to: string; when: string; ask_first: boolean }[];
+  schedules: { id: number; label: string; amount: string; to: string; when: string; frequency: GivingFrequency; ask_first: boolean; enabled: boolean; pledge_id: number | null }[];
+  awaiting: { id: number; label: string | null; amount: string; to: string | null; date: string }[];
+  recent: { id: number; label: string | null; amount: string; to: string | null; status: 'paid' | 'failed' | 'skipped'; receipt_no: string | null; note: string | null; date: string }[];
+  pledge: { id: number; name: string; total: string; paid: string; due_date: string | null; to: string | null } | null;
+  recipients: ({ group_id: number; name: string; accounts: string[] } | { saved_account_id: number; name: string; verified: boolean })[];
+  statement: { year: number; enabled: boolean };
+}
+
+export interface GivingDetailData {
+  giving: GivingDetail;
+}
+
+export type OrganisationKind = 'church' | 'mosque' | 'charity' | 'school' | 'other';
+export type CharityCause = 'children' | 'food' | 'education' | 'health' | 'elderly' | 'faith';
+
+export interface Organisation {
+  id: number;
+  name: string;
+  kind: OrganisationKind;
+  cause: CharityCause | null;
+  area: string | null;
+  state: string | null;
+  about: string | null;
+  verified: boolean;
+  bank_name: string;
+  masked_number: string;
+}
+
+export interface OrganisationsData {
+  organisations: Organisation[];
+  total: number;
+  states: string[];
+}
+
+export interface SavedAccount {
+  id: number;
+  nickname: string;
+  account_name: string;
+  account_number: string;
+  masked_number: string;
+  bank_code: string;
+  bank_name: string;
+  category: string;
+  verified: boolean;
+  organisation: { id: number; kind: OrganisationKind; area: string | null; state: string | null } | null;
+  groups: string[];
+}
+
+export interface SavedAccountGroup {
+  id: number;
+  name: string;
+  accounts: { id: number; nickname: string; verified: boolean }[];
+}
+
+export interface SavedAccountsData {
+  accounts: SavedAccount[];
+  groups: SavedAccountGroup[];
 }

@@ -105,6 +105,7 @@ class SavingsService
                 'allow_contributor_edit' => (bool) ($plan['allow_contributor_edit'] ?? false),
                 'missed_policy' => $plan['missed_policy'] ?? 'skip',
                 'notify_others_on_miss' => (bool) ($plan['notify_others_on_miss'] ?? false),
+                'notify_sms' => (bool) ($plan['notify_sms'] ?? false),
             ]);
             $wallet->unsetRelation('savingsPlan');
 
@@ -181,6 +182,13 @@ class SavingsService
             $out[$key] = array_key_exists($key, $permissions) ? (bool) $permissions[$key] : $default;
         }
         $out['can_spend'] = $out['withdraw'];
+        // SPD-05 spenders: which budget categories (ids; absent = all) and a daily limit (kobo).
+        if (array_key_exists('categories', $permissions)) {
+            $out['categories'] = $permissions['categories'] === null ? null : array_values(array_map('intval', (array) $permissions['categories']));
+        }
+        if (array_key_exists('daily_limit', $permissions)) {
+            $out['daily_limit'] = $permissions['daily_limit'] !== null ? (int) $permissions['daily_limit'] : null;
+        }
 
         return $out;
     }
@@ -356,7 +364,7 @@ class SavingsService
                 ? $this->normaliseTerms($data, $plan)
                 : $old;
 
-            $plan->update($new + array_intersect_key($data, array_flip(['auto_save', 'allow_contributor_edit', 'missed_policy', 'notify_others_on_miss', 'salary_percent'])));
+            $plan->update($new + array_intersect_key($data, array_flip(['auto_save', 'allow_contributor_edit', 'missed_policy', 'notify_others_on_miss', 'notify_sms', 'salary_percent'])));
 
             foreach ($this->contributionRules($wallet) as $rule) {
                 $change = [];
@@ -432,6 +440,7 @@ class SavingsService
             'roundup_to' => $plan->roundup_to ? $this->naira($plan->roundup_to) : null,
             'missed_policy' => $plan->missed_policy,
             'notify_others_on_miss' => (bool) $plan->notify_others_on_miss,
+            'notify_sms' => (bool) $plan->notify_sms,
             'auto_save' => $plan->auto_save,
             'allow_contributor_edit' => $plan->allow_contributor_edit,
         ]);

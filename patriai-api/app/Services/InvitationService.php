@@ -54,6 +54,7 @@ class InvitationService
         bool $canApprove = false,
         ?array $permissions = null,
         ?int $pledge = null,
+        bool $keyholder = false,
     ): WalletInvitation {
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
@@ -94,6 +95,8 @@ class InvitationService
             'can_approve' => $canApprove,
             'permissions' => !empty($permissions) ? SavingsService::normalisePermissions($permissions) : null,
             'pledge_amount' => $pledge ?: null,
+            // Emergency funds: becomes a keyholder on joining (EMG-03, invited by phone).
+            'keyholder' => $keyholder && $wallet->type === 'emergency',
             'status' => 'pending',
             'token' => Str::random(40),
             'expires_at' => now()->addDays(7),

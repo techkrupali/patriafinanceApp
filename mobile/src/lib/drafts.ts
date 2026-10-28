@@ -205,6 +205,12 @@ export function resumeDraft(navigator: { navigate: (...args: never[]) => void },
     case 'emergency':
       navigation.navigate('EmergencyWalletSetup', { draftId: draft.id });
       return;
+    case 'spending':
+      navigation.navigate('SpendingWalletSetup', { draftId: draft.id });
+      return;
+    case 'giving':
+      navigation.navigate('GivingWalletSetup', { draftId: draft.id });
+      return;
     case 'project':
       navigation.navigate('CreateProject', { draftId: draft.id });
       return;

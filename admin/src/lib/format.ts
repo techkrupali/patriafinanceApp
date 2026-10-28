@@ -176,6 +176,8 @@ const EMERGENCY_LABELS: Record<string, string> = {
   proof: "Proof of the emergency",
   // Release by keyholders, and a keyholder's fast release with proof
   fast_release: "Fast release",
+  // The owner's new release rules, waiting for the keyholders (WCR-06)
+  rule_change: "Rule change",
   // Beneficiary roles (by order) + access
   beneficiary: "Primary beneficiary",
   fallback: "Fallback beneficiary",

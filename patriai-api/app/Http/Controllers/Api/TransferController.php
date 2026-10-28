@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
 use App\Services\NotificationService;
+use App\Services\SpendRules;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,8 @@ class TransferController extends ApiController
             'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
+            // Spending wallets: what the payment is for (SPD-03 category).
+            'budget_category_id' => ['nullable', 'integer'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],
             'destination.wallet_id' => ['required_if:destination.kind,wallet', 'nullable', 'integer'],
             'destination.identifier' => ['required_if:destination.kind,user', 'nullable', 'string'],
@@ -144,6 +147,10 @@ class TransferController extends ApiController
         if (!$from->canSpend($user)) {
             return $this->fail('You do not have permission to move money out of this wallet', 403);
         }
+        // EMG-03 "Pay the hospital directly": money goes to the bill, not a person.
+        if ($data['destination']['kind'] !== 'bank' && $from->paysBillsDirectly()) {
+            return $this->fail('This emergency fund pays bills directly. Send the money to the hospital or clinic\'s bank account.', 422);
+        }
 
         $amountKobo = $this->toKobo($data['amount']);
         $service = WalletService::make();
@@ -165,9 +172,15 @@ class TransferController extends ApiController
             return $this->fail('Amount exceeds available balance (funds are reserved for pending approvals/milestones).', 422);
         }
 
+        // The wallet's own rules: a spending budget (may stop it, or need an owner's
+        // yes when it goes over a limit) and the early-break fee on locked savings.
+        $rules = SpendRules::make();
+        $plan = $rules->plan($from, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null);
+        $extra = array_filter(['budget_category_id' => $plan['category_id'], 'over_limit' => $plan['over']]);
+
         // Only route to approval when at least one eligible approver exists; otherwise
         // the initiator is the sole controller, so the spend executes directly.
-        $needsApproval = $from->approvalRequiredFor($amountKobo) && $from->eligibleApprovers($user->id)->isNotEmpty();
+        $needsApproval = ($from->approvalRequiredFor($amountKobo) || $plan['over'] !== null) && $from->eligibleApprovers($user->id)->isNotEmpty();
 
         switch ($dest['kind']) {
             case 'wallet':
@@ -179,11 +192,11 @@ class TransferController extends ApiController
                     $req = ApprovalService::make()->create($from, $user, 'transfer_wallet', $amountKobo, 0, $data['description'] ?? null, [
                         'wallet_id' => $to->id,
                         'description' => $data['description'] ?? null,
-                    ]);
+                    ] + $extra);
 
                     return $this->pendingApproval($req, $user);
                 }
-                $result = $service->transferBetweenWallets($from, $to, $amountKobo, $user, $data['description'] ?? null);
+                $result = $service->transferBetweenWallets($from, $to, $plan['net'], $user, $data['description'] ?? null);
                 break;
 
             case 'user':
@@ -202,14 +215,14 @@ class TransferController extends ApiController
                     $req = ApprovalService::make()->create($from, $user, 'transfer_user', $amountKobo, 0, $data['description'] ?? null, [
                         'identifier' => $dest['identifier'],
                         'description' => $data['description'] ?? null,
-                    ]);
+                    ] + $extra);
 
                     return $this->pendingApproval($req, $user);
                 }
                 $result = $service->transferBetweenWallets(
                     $from,
                     $to,
-                    $amountKobo,
+                    $plan['net'],
                     $user,
                     $data['description'] ?? "Transfer to {$recipient->fullName()}",
                 );
@@ -218,10 +231,10 @@ class TransferController extends ApiController
                 NotificationService::make()->push(
                     $recipient,
                     'transfer_received',
-                    'You received ₦' . number_format($amountKobo / 100, 2, '.', ''),
-                    "{$user->fullName()} sent you ₦" . number_format($amountKobo / 100, 2, '.', '') . '.',
+                    'You received ₦' . number_format($plan['net'] / 100, 2, '.', ''),
+                    "{$user->fullName()} sent you ₦" . number_format($plan['net'] / 100, 2, '.', '') . '.',
                     [
-                        'amount' => number_format($amountKobo / 100, 2, '.', ''),
+                        'amount' => number_format($plan['net'] / 100, 2, '.', ''),
                         'reference' => $result['reference'],
                         'from' => $user->fullName(),
                     ],
@@ -242,14 +255,14 @@ class TransferController extends ApiController
                         'account_name' => $dest['account_name'],
                         'bank_name' => $dest['bank_name'],
                         'description' => $data['description'] ?? null,
-                    ]);
+                    ] + $extra);
 
                     return $this->pendingApproval($req, $user);
                 }
                 $txn = $service->withdrawToBank(
                     $from,
                     $user,
-                    $amountKobo,
+                    $plan['net'],
                     $dest['bank_code'],
                     $dest['account_number'],
                     $dest['account_name'],
@@ -259,6 +272,7 @@ class TransferController extends ApiController
                 $result = ['reference' => $txn->reference, 'balance_after' => $txn->balance_after];
         }
 
+        $rules->settle($from, $user, $result['reference'], $plan);
         $from->refresh();
 
         return $this->ok('Transfer successful', [

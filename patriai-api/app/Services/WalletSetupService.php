@@ -26,11 +26,13 @@ class WalletSetupService
         private readonly EmergencyService $emergency,
         private readonly SavingsService $savings,
         private readonly InvitationService $invitations,
+        private readonly BudgetService $budgets,
+        private readonly GivingService $giving,
     ) {}
 
     public static function make(): self
     {
-        return new self(WalletService::make(), EmergencyService::make(), SavingsService::make(), InvitationService::make());
+        return new self(WalletService::make(), EmergencyService::make(), SavingsService::make(), InvitationService::make(), BudgetService::make(), GivingService::make());
     }
 
     /**
@@ -38,14 +40,17 @@ class WalletSetupService
      * initial_deposit?, source_wallet_id?, monthly_amount?, monthly_day?,
      * emergency?, milestones?, contributors?, savings_plan?, mode?, members?,
      * approval? {threshold, mode, lock_until_goal, expiry_hours}, reminder_day?,
-     * draft_id?
+     * budget? (spending), giving? (giving), draft_id?
      */
     public function create(User $user, array $data): Wallet
     {
         $deposit = (int) ($data['initial_deposit'] ?? 0);
         $monthly = (int) ($data['monthly_amount'] ?? 0);
         $planAutoSave = !empty($data['savings_plan']) && ($data['savings_plan']['auto_save'] ?? true);
-        $source = ($deposit > 0 || $monthly > 0 || $planAutoSave)
+        // SPD-04: topped up from Main, or the owner's share of a split.
+        $budgetFunded = $data['type'] === 'spending' && in_array($data['budget']['funding'] ?? 'manual', ['topup', 'split'], true)
+            && ($data['budget']['period'] ?? 'monthly') !== 'one_off';
+        $source = ($deposit > 0 || $monthly > 0 || $planAutoSave || $budgetFunded)
             ? $this->resolveSource($user, $data['source_wallet_id'] ?? null, $deposit)
             : null;
 
@@ -63,8 +68,11 @@ class WalletSetupService
                 'lock' => ($data['lock']['mode'] ?? 'none') !== 'none' ? [
                     'mode' => $data['lock']['mode'],
                     'until' => $data['lock']['mode'] === 'date' ? $data['lock']['until'] : null,
-                    'early_break' => (bool) ($data['lock']['early_break'] ?? true),
+                    'early_break' => $earlyBreak = (bool) ($data['lock']['early_break'] ?? true),
                     'approval' => (bool) ($data['lock']['approval'] ?? true),
+                    // SAV-05 "5% of the amount is kept as a fee", half to the charity picked.
+                    'fee_percent' => $earlyBreak ? SpendRules::EARLY_BREAK_FEE_PERCENT : 0,
+                    'charity_id' => $earlyBreak ? $this->charityId($data['lock']['charity_id'] ?? null) : null,
                 ] : null,
             ], fn ($v) => $v !== null && $v !== '');
             $opts = array_filter([
@@ -84,7 +92,12 @@ class WalletSetupService
                 ]);
             }
 
-            $invited = $this->inviteMembers($wallet, $user, $data['members'] ?? []);
+            // SPD-02…06 first: spenders are limited to categories by name.
+            $categoryIds = $data['type'] === 'spending' && !empty($data['budget'])
+                ? $this->budgets->configure($wallet, $user, $data['budget'], $source)
+                : [];
+
+            $invited = $this->inviteMembers($wallet, $user, $data['members'] ?? [], $categoryIds);
 
             if ($data['type'] === 'emergency' && !empty($data['emergency'])) {
                 $this->emergency->configure($wallet, $user, $data['emergency']);
@@ -92,6 +105,10 @@ class WalletSetupService
 
             if (in_array($data['type'], SavingsService::TYPES, true)) {
                 $this->savings->configure($wallet, $user, $data, $source);
+            }
+
+            if ($data['type'] === 'giving' && !empty($data['giving'])) {
+                $this->giving->configure($wallet, $user, $data['giving']);
             }
 
             if ($deposit > 0) {
@@ -136,10 +153,30 @@ class WalletSetupService
      *
      * @return list<array{0: WalletInvitation, 1: ?User}>
      */
-    private function inviteMembers(Wallet $wallet, User $owner, array $members): array
+    private function inviteMembers(Wallet $wallet, User $owner, array $members, array $categoryIds = []): array
     {
         $out = [];
         foreach (array_values($members) as $i => $m) {
+            // SPD-05 "Food and market only · up to ₦15,000 a day": a spender's limits.
+            if (isset($m['spend']) && $wallet->type === 'spending') {
+                $names = $m['spend']['categories'] ?? null;
+                $ids = null;
+                if (is_array($names)) {
+                    $ids = [];
+                    foreach ($names as $name) {
+                        $id = $categoryIds[strtolower(trim((string) $name))] ?? null;
+                        if (!$id) {
+                            throw ValidationException::withMessages(["members.{$i}.spend.categories" => "{$name} isn't one of the categories."]);
+                        }
+                        $ids[] = $id;
+                    }
+                }
+                $m['permissions'] = array_merge($m['permissions'] ?? [], [
+                    'withdraw' => $m['role'] === 'contributor',
+                    'categories' => $ids,
+                    'daily_limit' => isset($m['spend']['daily_limit']) ? (int) $m['spend']['daily_limit'] : null,
+                ]);
+            }
             if (!empty($m['user_id'])) {
                 $invitee = User::find((int) $m['user_id']);
                 if (!$invitee || $invitee->status !== 'active') {
@@ -167,6 +204,7 @@ class WalletSetupService
                     (bool) ($m['can_approve'] ?? false),
                     $m['permissions'] ?? null,
                     $m['pledge'] ?? null,
+                    (bool) ($m['keyholder'] ?? false),
                 );
             } catch (ValidationException $e) {
                 throw ValidationException::withMessages(["members.{$i}" => collect($e->errors())->flatten()->first()]);
@@ -175,6 +213,20 @@ class WalletSetupService
         }
 
         return $out;
+    }
+
+    /** SAV-05/BRK-02: a charity Patriai lists, for half of any early-break fee. */
+    private function charityId(mixed $id): ?int
+    {
+        if (!$id) {
+            return null;
+        }
+        $charity = \App\Models\Organisation::where('id', (int) $id)->where('active', true)->first();
+        if (!$charity) {
+            throw ValidationException::withMessages(['lock.charity_id' => 'Choose one of the charities listed.']);
+        }
+
+        return $charity->id;
     }
 
     /** The funding source must be the user's own spendable wallet with enough available. */

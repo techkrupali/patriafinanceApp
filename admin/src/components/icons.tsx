@@ -106,6 +106,19 @@ export function IconKyc({ className }: { className?: string }) {
   );
 }
 
+/** Building — organisations people give to. */
+export function IconBuilding({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 20h16" />
+      <path d="M6 20V9l6-4 6 4v11" />
+      <path d="M10 20v-5h4v5" />
+      <path d="M12 5V2.5" />
+      <path d="M10.75 3.5h2.5" />
+    </Svg>
+  );
+}
+
 /** Lifebuoy — emergency wallets. */
 export function IconEmergency({ className }: { className?: string }) {
   return (

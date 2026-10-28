@@ -106,9 +106,63 @@ class Wallet extends Model
         return $this->hasOne(SavingsPlan::class);
     }
 
+    public function emergencyTrustedContacts(): HasMany
+    {
+        return $this->hasMany(EmergencyTrustedContact::class);
+    }
+
+    /** EMG-03 "Pay the hospital directly": money leaving goes to a bank account, never a person's wallet. */
+    public function paysBillsDirectly(): bool
+    {
+        return $this->type === 'emergency' && (bool) $this->emergencySetting?->pay_directly;
+    }
+
     public function savingsMilestones(): HasMany
     {
         return $this->hasMany(SavingsMilestone::class)->orderBy('position');
+    }
+
+    /** SPD-03: spending wallets' budget categories, in order. */
+    public function budgetCategories(): HasMany
+    {
+        return $this->hasMany(BudgetCategory::class)->orderBy('position');
+    }
+
+    /**
+     * SPD-02…06 settings: amount (kobo), period (weekly|monthly|one_off), start_day,
+     * leftover {mode: keep|main|wallet, wallet_id}, funding, alerts, over_limit.
+     */
+    public function budget(): ?array
+    {
+        $budget = $this->meta['budget'] ?? null;
+
+        return $this->type === 'spending' && is_array($budget) && ($budget['amount'] ?? 0) > 0 ? $budget : null;
+    }
+
+    public function givingRecipients(): HasMany
+    {
+        return $this->hasMany(GivingRecipient::class)->orderBy('position');
+    }
+
+    public function givingSchedules(): HasMany
+    {
+        return $this->hasMany(GivingSchedule::class);
+    }
+
+    public function givingPledges(): HasMany
+    {
+        return $this->hasMany(GivingPledge::class);
+    }
+
+    public function givingPayments(): HasMany
+    {
+        return $this->hasMany(GivingPayment::class);
+    }
+
+    /** GIV-06: kind, receipts, yearly statement, anonymous, thanksgiving reminder, source wallet. */
+    public function givingSettings(): array
+    {
+        return (array) ($this->meta['giving'] ?? []);
     }
 
     /**
@@ -224,12 +278,16 @@ class Wallet extends Model
         }
 
         // A keyholder (the dual-approval approver, e.g. a spouse) may withdraw from
-        // an unlocked emergency wallet on the owner's behalf (client video 2026-10-17).
-        if ($member->role === 'emergency_approver') {
+        // an unlocked emergency wallet on the owner's behalf (client video
+        // 2026-10-17) — also when they joined to put money in as a contributor.
+        if ($this->type === 'emergency') {
             $setting = $this->emergencySetting;
-
-            return $this->type === 'emergency' && $setting && !$setting->isLocked()
-                && $setting->dual_approval && in_array($user->id, $setting->keyholders($this->user_id), true);
+            if ($setting && !$setting->isLocked() && $setting->dual_approval && in_array($user->id, $setting->keyholders($this->user_id), true)) {
+                return true;
+            }
+            if ($member->role === 'emergency_approver') {
+                return false;
+            }
         }
 
         // owner/co_owner spend unconditionally.
@@ -377,7 +435,7 @@ class Wallet extends Model
      * with every approver's yes. "Lock until goal is reached" from goal creation
      * is a target lock with early break by approval.
      *
-     * @return array{mode: string, until: ?string, early_break: bool, approval: bool}|null
+     * @return array{mode: string, until: ?string, early_break: bool, approval: bool, fee_percent: int, charity_id: ?int}|null
      */
     public function savingsLock(): ?array
     {
@@ -388,10 +446,13 @@ class Wallet extends Model
                 'until' => $lock['until'] ?? null,
                 'early_break' => (bool) ($lock['early_break'] ?? true),
                 'approval' => (bool) ($lock['approval'] ?? true),
+                // SAV-05: kept from what's taken out early; half to the charity picked.
+                'fee_percent' => (int) ($lock['fee_percent'] ?? 0),
+                'charity_id' => $lock['charity_id'] ?? null,
             ];
         }
         if (($this->meta['lock_until_goal'] ?? false) === true) {
-            return ['mode' => 'target', 'until' => null, 'early_break' => true, 'approval' => true];
+            return ['mode' => 'target', 'until' => null, 'early_break' => true, 'approval' => true, 'fee_percent' => 0, 'charity_id' => null];
         }
 
         return null;

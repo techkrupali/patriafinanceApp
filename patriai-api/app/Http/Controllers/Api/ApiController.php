@@ -267,7 +267,10 @@ abstract class ApiController extends Controller
             'reminder_day' => $wallet->reminderDay(),
             'colour' => $wallet->meta['colour'] ?? null,
             // SAV-05: until a date or the target; `locked` while it holds.
-            'lock' => ($lock = $wallet->savingsLock()) ? $lock + ['locked' => $wallet->isGoalLocked()] : null,
+            'lock' => ($lock = $wallet->savingsLock()) ? $lock + [
+                'locked' => $wallet->isGoalLocked(),
+                'charity' => $lock['charity_id'] ? \App\Models\Organisation::find($lock['charity_id'])?->only(['id', 'name', 'area', 'state']) : null,
+            ] : null,
             'created_at' => $wallet->created_at?->toIso8601String(),
         ];
 

@@ -75,6 +75,8 @@ export interface NewPersonInput {
   role?: string;
   /** Naira, when the form asks for a monthly amount. */
   amount?: string;
+  /** "Family doctor", when the form asks how they're related. */
+  relation?: string;
 }
 
 /**
@@ -85,6 +87,8 @@ export function PtNewPersonForm<R extends string>({
   roles,
   defaultRole,
   withAmount = false,
+  withRelation = false,
+  nameRequired = false,
   taken,
   onAdd,
   onCancel,
@@ -92,6 +96,10 @@ export function PtNewPersonForm<R extends string>({
   roles?: { value: R; label: string }[];
   defaultRole?: R;
   withAmount?: boolean;
+  /** Ask how they're related ("Family doctor"). */
+  withRelation?: boolean;
+  /** Someone who isn't joining needs a name to be recognised by. */
+  nameRequired?: boolean;
   /** Phone numbers already on the list (and your own). */
   taken: string[];
   onAdd: (person: NewPersonInput & { role?: R }) => void;
@@ -102,6 +110,7 @@ export function PtNewPersonForm<R extends string>({
   const [name, setName] = useState('');
   const [role, setRole] = useState<R | undefined>(defaultRole);
   const [amount, setAmount] = useState('');
+  const [relation, setRelation] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const add = () => {
@@ -114,11 +123,15 @@ export function PtNewPersonForm<R extends string>({
       setError("They're already on the list.");
       return;
     }
+    if (nameRequired && !name.trim()) {
+      setError('Enter their name.');
+      return;
+    }
     if (withAmount && !(Number(amount) > 0)) {
       setError('Enter how much they put in each month.');
       return;
     }
-    onAdd({ phone: e164, name: name.trim(), role, amount: withAmount ? amount : undefined });
+    onAdd({ phone: e164, name: name.trim(), role, amount: withAmount ? amount : undefined, relation: withRelation ? relation.trim() : undefined });
   };
 
   return (
@@ -134,7 +147,19 @@ export function PtNewPersonForm<R extends string>({
         }}
         autoFocus
       />
-      <PtField label="Their name (optional)" value={name} onChangeText={setName} placeholder="Chidi" maxLength={60} />
+      <PtField
+        label={nameRequired ? 'Their name' : 'Their name (optional)'}
+        value={name}
+        onChangeText={(t) => {
+          setName(t);
+          setError(null);
+        }}
+        placeholder="Chidi"
+        maxLength={60}
+      />
+      {withRelation ? (
+        <PtField label="How they're related (optional)" value={relation} onChangeText={setRelation} placeholder="Family doctor" maxLength={80} />
+      ) : null}
       {withAmount ? (
         <PtField
           label="Each month"

@@ -142,6 +142,7 @@ export default function EmergencyRequestDetailPage({
   const rules = data?.rules;
   const isDocument = request?.method === "document";
   const isFast = request?.method === "fast_release";
+  const isRuleChange = request?.method === "rule_change";
   // Only document requests are Patriai's call; dual approvals are decided in-app.
   const canReview = isDocument && request?.status === "pending";
 
@@ -203,6 +204,13 @@ export default function EmergencyRequestDetailPage({
                           </span>
                         ) : null}
                       </>
+                    ) : request!.trusted_contact ? (
+                      <>
+                        {request!.trusted_contact.name}
+                        <span className="block text-xs font-normal text-muted">
+                          Trusted contact{request!.trusted_contact.relation ? ` · ${request!.trusted_contact.relation}` : ""} · SMS link
+                        </span>
+                      </>
                     ) : (
                       "—"
                     )}
@@ -213,7 +221,15 @@ export default function EmergencyRequestDetailPage({
                     <Field name="Reviewed by">{request!.reviewed_by ?? "—"}</Field>
                   ) : isFast ? (
                     <>
-                      <Field name="Amount released">{naira(request!.amount ?? "0")}</Field>
+                      <Field name="Amount released">
+                        {naira(request!.amount ?? "0")}
+                        {request!.payee ? (
+                          <span className="block text-xs font-normal text-muted">
+                            Paid to {request!.payee.account_name}
+                            {request!.payee.bank_name ? ` · ${request!.payee.bank_name}` : ""} {request!.payee.account_number}
+                          </span>
+                        ) : null}
+                      </Field>
                       <Field name={request!.status === "flagged" ? "Flagged by" : "Review window ends"}>
                         {request!.status === "flagged" ? request!.approved_by?.name ?? "—" : formatDateTime(request!.expires_at ?? null)}
                       </Field>
@@ -240,12 +256,25 @@ export default function EmergencyRequestDetailPage({
                       <Field name="Review note">{request!.review_note}</Field>
                     </div>
                   ) : null}
+                  {isRuleChange && request!.changes?.length ? (
+                    <div className="col-span-2 sm:col-span-3">
+                      <Field name="New rules">
+                        <ul className="list-disc space-y-1 pl-5 font-normal">
+                          {request!.changes.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      </Field>
+                    </div>
+                  ) : null}
                 </dl>
                 {!isDocument ? (
                   <p className="mt-5 rounded-lg bg-lavender/30 px-3 py-2 text-xs text-muted">
                     {isFast
                       ? "A keyholder released this at once with a photo of the bill. The other keyholders check it within 48 hours and can flag it."
-                      : "Release requests are decided in the app by the fund's keyholders. Shown here for reference only."}
+                      : isRuleChange
+                        ? "Nobody changes an emergency fund's release rules alone: the new rules apply once enough keyholders agree in the app. Shown here for reference only."
+                        : "Release requests are decided in the app by the fund's keyholders. Shown here for reference only."}
                   </p>
                 ) : null}
               </>
@@ -347,6 +376,12 @@ export default function EmergencyRequestDetailPage({
                     </span>
                   ) : null}
                 </Field>
+                <Field name="Pays bills directly">
+                  <Toggle on={Boolean(rules.pay_directly)} />
+                  <span className="block text-xs font-normal text-muted">
+                    Released money goes to the hospital or clinic, not a person
+                  </span>
+                </Field>
                 <Field name="Fast release">
                   <Toggle on={Boolean(rules.fast_release)} />
                   {rules.fast_release ? (
@@ -379,6 +414,32 @@ export default function EmergencyRequestDetailPage({
                 </Field>
                 <Field name="National-crisis override">
                   <Toggle on={rules.override_national_crisis} />
+                </Field>
+                <Field name="Trusted contacts">
+                  {data?.trusted_contacts?.length ? (
+                    <>
+                      {data.trusted_contacts.map((c) => (
+                        <span key={c.id} className="block">
+                          {c.name}
+                          <span className="font-normal text-muted">
+                            {c.relation ? ` · ${c.relation}` : ""} · {c.masked_phone}
+                            {c.link_sent ? "" : " · link not sent"}
+                          </span>
+                        </span>
+                      ))}
+                      <span className="block text-xs font-normal text-muted">
+                        {[
+                          rules.trusted_can_request ? "can start a request" : null,
+                          rules.trusted_can_upload ? "can upload proof" : null,
+                          rules.trusted_can_see_balance ? "can see the balance" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "can only see whether it's released"}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="font-normal text-muted">None</span>
+                  )}
                 </Field>
               </dl>
             ) : (

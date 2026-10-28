@@ -9,6 +9,15 @@ import { api } from './client';
 import { useAuth } from '../store/auth';
 import { getDeviceMeta } from '../lib/device';
 import type {
+  BudgetDetailData,
+  GivingDetailData,
+  GivingSchedulePayload,
+  OrganisationKind,
+  CharityCause,
+  OrganisationsData,
+  SavedAccount,
+  SavedAccountGroup,
+  SavedAccountsData,
   SavingsInsights,
   AddMilestonePayload,
   ApplyLoanPayload,
@@ -1400,15 +1409,24 @@ export function useEmergencyActions(walletId: number) {
         post(`/emergency-requests/${input.requestId}/${input.action}`, input.note ? { note: input.note } : undefined),
       onSuccess,
     }),
-    /** EMG-04: a keyholder releases up to the limit at once, with a photo of the bill. */
+    /** EMG-04: a keyholder releases up to the limit at once, with a photo of the bill — to the bill's bank account when the fund pays directly. */
     fastRelease: useMutation({
-      mutationFn: (input: { amount: string; pin: string; note?: string; asset: { uri: string; fileName?: string | null; mimeType?: string | null } }) => {
+      mutationFn: (input: {
+        amount: string;
+        pin: string;
+        note?: string;
+        asset: { uri: string; fileName?: string | null; mimeType?: string | null };
+        payee?: { bank_code: string; bank_name: string; account_number: string; account_name: string };
+      }) => {
         const { asset } = input;
         const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
         const form = new FormData();
         form.append('amount', input.amount);
         form.append('pin', input.pin);
         if (input.note) form.append('note', input.note);
+        if (input.payee) {
+          for (const [key, value] of Object.entries(input.payee)) form.append(`payee[${key}]`, value);
+        }
         form.append('proof', { uri: asset.uri, name: asset.fileName || `proof.${ext}`, type: asset.mimeType || 'image/jpeg' } as unknown as Blob);
         return api<EmergencyWithdrawData>(`/wallets/${walletId}/emergency/fast-release`, { method: 'POST', body: form });
       },
@@ -1531,3 +1549,119 @@ export function useSavingsActions(walletId: number) {
     }),
   };
 }
+
+// ---------- Spending wallets (WAL-09) ----------
+
+export function useBudget(walletId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['wallets', walletId, 'budget'] as const,
+    queryFn: () => api<BudgetDetailData>(`/wallets/${walletId}/budget`),
+    select: (d) => d.budget,
+    enabled,
+  });
+}
+
+export function useBudgetActions(walletId: number) {
+  const qc = useQueryClient();
+  const onSuccess = (data: BudgetDetailData) => qc.setQueryData(['wallets', walletId, 'budget'], data);
+  return {
+    setLimit: useMutation({
+      mutationFn: (input: { categoryId: number; limit: string }) =>
+        api<BudgetDetailData>(`/wallets/${walletId}/budget/categories/${input.categoryId}`, { method: 'PATCH', body: { limit: input.limit } }),
+      onSuccess,
+    }),
+    setSpender: useMutation({
+      mutationFn: (input: { userId: number; categories: number[] | null; daily_limit: string | null }) =>
+        api<BudgetDetailData>(`/wallets/${walletId}/budget/spenders/${input.userId}`, {
+          method: 'PATCH',
+          body: { categories: input.categories, daily_limit: input.daily_limit },
+        }),
+      onSuccess,
+    }),
+  };
+}
+
+// ---------- Giving wallets (WAL-18) ----------
+
+export function useGiving(walletId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['wallets', walletId, 'giving'] as const,
+    queryFn: () => api<GivingDetailData>(`/wallets/${walletId}/giving`),
+    select: (d) => d.giving,
+    enabled,
+  });
+}
+
+export function useGivingActions(walletId: number) {
+  const qc = useQueryClient();
+  const onSuccess = (data: GivingDetailData) => {
+    qc.setQueryData(['wallets', walletId, 'giving'], data);
+    void qc.invalidateQueries({ queryKey: keys.wallet(walletId) });
+    void qc.invalidateQueries({ queryKey: keys.wallets });
+  };
+  return {
+    addSchedule: useMutation({
+      mutationFn: (input: GivingSchedulePayload & { ask_first?: boolean }) =>
+        api<GivingDetailData>(`/wallets/${walletId}/giving/schedules`, { method: 'POST', body: input }),
+      onSuccess,
+    }),
+    updateSchedule: useMutation({
+      mutationFn: (input: { id: number; amount?: string; enabled?: boolean; ask_first?: boolean }) =>
+        api<GivingDetailData>(`/wallets/${walletId}/giving/schedules/${input.id}`, { method: 'PATCH', body: input }),
+      onSuccess,
+    }),
+    removeSchedule: useMutation({
+      mutationFn: (id: number) => api<GivingDetailData>(`/wallets/${walletId}/giving/schedules/${id}`, { method: 'DELETE' }),
+      onSuccess,
+    }),
+    send: useMutation({
+      mutationFn: (paymentId: number) => api<GivingDetailData>(`/giving-payments/${paymentId}/confirm`, { method: 'POST' }),
+      onSuccess,
+    }),
+    skip: useMutation({
+      mutationFn: (paymentId: number) => api<GivingDetailData>(`/giving-payments/${paymentId}/skip`, { method: 'POST' }),
+      onSuccess,
+    }),
+  };
+}
+
+// ---------- Saved accounts and organisations (GIV-02, GIV-07, SND-16, BRK-02) ----------
+
+export function useSavedAccounts() {
+  return useQuery({
+    queryKey: ['saved-accounts'] as const,
+    queryFn: () => api<SavedAccountsData>('/saved-accounts'),
+  });
+}
+
+export function useSaveAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input:
+        | { organisation_id: number; group?: string }
+        | { account_number: string; bank_code: string; nickname?: string; category?: string; listed?: boolean; group?: string },
+    ) => api<{ account: SavedAccount }>('/saved-accounts', { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['saved-accounts'] }),
+  });
+}
+
+export function useSaveAccountGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; saved_account_ids: number[] }) =>
+      api<{ group: SavedAccountGroup }>('/saved-account-groups', { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['saved-accounts'] }),
+  });
+}
+
+export function useOrganisations(params: { q?: string; kind?: OrganisationKind; state?: string; cause?: CharityCause }, enabled = true) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();
+  return useQuery({
+    queryKey: ['organisations', params] as const,
+    queryFn: () => api<OrganisationsData>(`/organisations${query ? `?${query}` : ''}`),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+

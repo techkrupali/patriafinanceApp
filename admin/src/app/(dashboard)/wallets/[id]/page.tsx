@@ -281,11 +281,18 @@ export default function WalletDetailPage({
                   {emergency.keyholders?.length ? (
                     <span className="block text-xs font-normal text-muted">{emergency.keyholders.join(", ")}</span>
                   ) : null}
+                  {emergency.pay_directly ? (
+                    <span className="block text-xs font-normal text-muted">Paid to the hospital directly</span>
+                  ) : null}
                 </Field>
                 <Field name="Fast release">
                   {emergency.fast_release_limit
                     ? `Up to ${naira(emergency.fast_release_limit)}, every ${emergency.fast_release_every_days} days`
                     : "Off"}
+                </Field>
+                <Field name="Trusted contacts">
+                  {emergency.trusted_contacts?.length ? emergency.trusted_contacts.join(", ") : "None"}
+                  <span className="block text-xs font-normal text-muted">SMS link, no app</span>
                 </Field>
                 <Field name="Beneficiaries">
                   {emergency.beneficiaries?.length ? emergency.beneficiaries.join(" → ") : "None"}
@@ -332,7 +339,136 @@ export default function WalletDetailPage({
                 <Field name="If a save is missed">{missedPolicyLabel(data!.savings_plan.missed_policy)}</Field>
                 <Field name="Others told of misses">{data!.savings_plan.notify_others_on_miss ? "Yes" : "No"}</Field>
                 <Field name="Savers set their own amount">{data!.savings_plan.allow_contributor_edit ? "Yes" : "No"}</Field>
+                {data!.early_break ? (
+                  <Field name="Early break">
+                    {data!.early_break.fee_percent}% fee
+                    <span className="block text-xs font-normal text-muted">
+                      {data!.early_break.charity ? `Half to ${data!.early_break.charity}` : "All a Patriai fee"}
+                    </span>
+                  </Field>
+                ) : null}
               </dl>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Budget — spending wallets (SPD/WAL-09) */}
+      {!isPending && data!.budget ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget</CardTitle>
+              <Badge tone={data!.budget.over_limit === "stop" ? "red" : "amber"}>
+                {data!.budget.over_limit === "stop" ? "Stops over a limit" : "Owner approves over a limit"}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Budget">
+                  {naira(data!.budget.amount)} {data!.budget.period === "one_off" ? "in total" : `a ${data!.budget.period === "weekly" ? "week" : "month"}`}
+                  <span className="block text-xs font-normal text-muted">This period from {formatDate(data!.budget.period_start)}</span>
+                </Field>
+                <Field name="Spent so far">{naira(data!.budget.spent)}</Field>
+                <Field name="Funding">
+                  {data!.budget.funding === "topup" ? "Topped up from Main" : data!.budget.funding === "split" ? "Split between members" : "Added by hand"}
+                </Field>
+                <Field name="Leftover">
+                  {data!.budget.leftover.mode === "wallet" ? `Moves to ${data!.budget.leftover.wallet_name ?? "a wallet"}` : data!.budget.leftover.mode === "main" ? "Back to Main" : "Stays"}
+                </Field>
+              </dl>
+              <div className="mt-5 space-y-3">
+                {data!.budget.categories.map((c) => {
+                  const pct = Math.min(100, (parseFloat(c.spent) / Math.max(1, parseFloat(c.limit))) * 100);
+                  return (
+                    <div key={c.id}>
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium text-ink">{c.name}</span>
+                        <span className="text-muted">
+                          {naira(c.spent)} of {naira(c.limit)}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 rounded-full bg-line">
+                        <div className={`h-1.5 rounded-full ${pct >= 100 ? "bg-danger" : pct >= 80 ? "bg-amber-600" : "bg-brand"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {data!.budget.spenders.some((p) => p.categories || p.daily_limit) ? (
+                <p className="mt-4 text-xs text-muted">
+                  {data!.budget.spenders
+                    .filter((p) => p.categories || p.daily_limit)
+                    .map((p) => `${p.name}: ${p.categories ? `${p.categories.join(", ")} only` : "all categories"}${p.daily_limit ? `, ${naira(p.daily_limit)} a day` : ""}`)
+                    .join(" · ")}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Giving — giving wallets (GIV/WAL-18) */}
+      {!isPending && data!.giving ? (
+        <div className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Giving</CardTitle>
+              {data!.giving.settings.anonymous ? <Badge tone="gray">Gives anonymously</Badge> : null}
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <Field name="Set aside">{naira(data!.giving.set_aside)}</Field>
+                <Field name="Given this year">{naira(data!.giving.given_this_year)}</Field>
+                <Field name="Set aside by">
+                  {data!.giving.set_aside_rules.length ? data!.giving.set_aside_rules.map((r) => r.name).join(" · ") : "By hand"}
+                </Field>
+                <Field name="Recipients">{data!.giving.recipients.map((r) => r.name).join(", ") || "None"}</Field>
+                <Field name="Ask before paying">{data!.giving.settings.ask_first ? "Yes" : "No"}</Field>
+                <Field name="Receipts · statement">
+                  {data!.giving.settings.receipts ? "Receipts" : "No receipts"} · {data!.giving.settings.yearly_statement ? "Yearly statement" : "No statement"}
+                </Field>
+                {data!.giving.pledge ? (
+                  <Field name="Pledge">
+                    {data!.giving.pledge.name}
+                    <span className="block text-xs font-normal text-muted">
+                      {naira(data!.giving.pledge.paid)} of {naira(data!.giving.pledge.total)}
+                    </span>
+                  </Field>
+                ) : null}
+              </dl>
+              {data!.giving.schedules.length ? (
+                <Table containerClassName="mt-5">
+                  <THead>
+                    <tr>
+                      <TH>Giving date</TH>
+                      <TH>To</TH>
+                      <TH>When</TH>
+                      <TH>Amount</TH>
+                      <TH>Status</TH>
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {data!.giving.schedules.map((s) => (
+                      <TR key={s.id}>
+                        <TD className="font-medium">{s.label}</TD>
+                        <TD>{s.to}</TD>
+                        <TD className="text-muted">{s.when}</TD>
+                        <TD>{naira(s.amount)}</TD>
+                        <TD>
+                          <Badge tone={s.enabled ? "green" : "gray"}>{s.enabled ? (s.ask_first ? "Asks first" : "Automatic") : "Paused or done"}</Badge>
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              ) : null}
+              {data!.giving.recent.length ? (
+                <p className="mt-4 text-xs text-muted">
+                  Recently:{" "}
+                  {data!.giving.recent.map((p) => `${naira(p.amount)} to ${p.to} (${p.status}${p.receipt_no ? `, ${p.receipt_no}` : ""})`).join(" · ")}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         </div>

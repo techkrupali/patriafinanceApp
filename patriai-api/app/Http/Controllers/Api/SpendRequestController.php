@@ -45,6 +45,7 @@ class SpendRequestController extends ApiController
             'amount' => ['required', 'numeric', 'min:1'],
             'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
+            'budget_category_id' => ['nullable', 'integer'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],
             'destination.wallet_id' => ['required_if:destination.kind,wallet', 'nullable', 'integer'],
             'destination.identifier' => ['required_if:destination.kind,user', 'nullable', 'string'],
@@ -71,6 +72,9 @@ class SpendRequestController extends ApiController
         if (!$wallet->withinAccessWindow()) {
             return $this->fail('This wallet is outside its scheduled access window. Spending is not allowed right now.', 422);
         }
+        if (($dest['kind'] ?? null) !== 'bank' && $wallet->paysBillsDirectly()) {
+            return $this->fail('This emergency fund pays bills directly. Send the money to the hospital or clinic\'s bank account.', 422);
+        }
 
         // Fee only applies to external (bank) transfers; wallet/user moves are free.
         $spendKobo = $amountKobo + ($dest['kind'] === 'bank' ? $feeKobo : 0);
@@ -92,6 +96,10 @@ class SpendRequestController extends ApiController
         if ($requestLimit !== null && $amountKobo > (int) $requestLimit) {
             return $this->fail('This exceeds your request limit of ₦' . number_format(((int) $requestLimit) / 100, 2, '.', ''), 422);
         }
+
+        // Spending wallets: the requester must be allowed this category (limits are
+        // for the approvers to weigh; a request always waits for them).
+        $plan = \App\Services\SpendRules::make()->plan($wallet, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null, approved: true);
 
         // Resolve the destination and build the action + payload EXACTLY as
         // TransferController does, so the existing approval executor reads them back
@@ -146,7 +154,7 @@ class SpendRequestController extends ApiController
         // existing execute-on-approval path performs the vetted transfer later. If
         // there are too few eligible approvers, create() throws ValidationException
         // and Laravel returns 422 (same as TransferController).
-        $req = ApprovalService::make()->create($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload);
+        $req = ApprovalService::make()->create($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload + array_filter(['budget_category_id' => $plan['category_id']]));
 
         return $this->ok('Spend request submitted for approval', [
             'pending_approval' => true,

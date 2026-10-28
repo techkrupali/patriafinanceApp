@@ -320,6 +320,78 @@ export interface WalletDetailData {
     created_at: string | null;
     expires_at: string | null;
   }[];
+  /** Spending wallets (SPD/WAL-09): the budget this period. */
+  budget?: WalletBudget | null;
+  /** Giving wallets (GIV/WAL-18). */
+  giving?: WalletGiving | null;
+  /** Locked savings that allow an early break (SAV-05): the fee and the charity. */
+  early_break?: { fee_percent: number; charity: string | null } | null;
+}
+
+export interface WalletBudget {
+  amount: string; // naira string
+  period: "weekly" | "monthly" | "one_off";
+  start_day: number;
+  period_start: string;
+  next_period_start: string | null;
+  leftover: { mode: "keep" | "main" | "wallet"; wallet_id: number | null; wallet_name: string | null };
+  funding: "topup" | "split" | "manual";
+  alerts: { half: boolean; eighty: boolean; category_out: boolean; weekly: boolean };
+  over_limit: "approve" | "stop";
+  spent: string;
+  categories: { id: number; name: string; limit: string; spent: string }[];
+  spenders: { user_id: number; name: string | null; role: string; can_spend: boolean; categories: string[] | null; daily_limit: string | null }[];
+  viewers: string[];
+}
+
+export interface WalletGiving {
+  kind: string | null;
+  settings: { ask_first?: boolean; thanksgiving_reminder?: boolean; receipts?: boolean; yearly_statement?: boolean; anonymous?: boolean };
+  set_aside: string;
+  given_this_year: string;
+  set_aside_rules: { id: number; name: string; trigger: string; percent: number | null; amount: string; from: string | null; enabled: boolean }[];
+  coming_up: { schedule_id: number; date: string; label: string; amount: string; to: string; when: string }[];
+  schedules: { id: number; label: string; amount: string; to: string; when: string; enabled: boolean; ask_first: boolean }[];
+  awaiting: { id: number; label: string | null; amount: string; to: string | null; date: string }[];
+  recent: { id: number; label: string | null; amount: string; to: string | null; status: string; receipt_no: string | null; note: string | null; date: string }[];
+  pledge: { name: string; total: string; paid: string; due_date: string | null; to: string | null } | null;
+  recipients: { name: string }[];
+}
+
+/** GET /admin/organisations */
+export interface AdminOrganisation {
+  id: number;
+  name: string;
+  kind: "church" | "mosque" | "charity" | "school" | "other";
+  cause: string | null;
+  area: string | null;
+  state: string | null;
+  about: string | null;
+  account_name: string;
+  account_number: string;
+  bank_code: string;
+  bank_name: string;
+  verified: boolean;
+  active: boolean;
+  saved_by: number | null;
+  owed: string; // naira string, from early-break fees
+  created_at: string | null;
+}
+
+export interface CharityDonationRow {
+  id: number;
+  organisation: string | null;
+  from: string | null;
+  amount: string;
+  receipt_no: string;
+  status: "pending" | "paid";
+  created_at: string | null;
+  paid_at: string | null;
+}
+
+export interface OrganisationsData {
+  organisations: AdminOrganisation[];
+  donations: CharityDonationRow[];
 }
 
 export type LoanStatus =
@@ -634,8 +706,11 @@ export type EmergencyUnlockVia =
   | "document"
   | "high_balance"
   | "national_crisis";
-/** dual_approval: keyholders agree · document: death certificate · fast_release: a keyholder released money at once, with proof */
-export type EmergencyRequestMethod = "dual_approval" | "document" | "fast_release";
+/**
+ * dual_approval: keyholders agree · document: death certificate · fast_release: a keyholder released money at once, with proof
+ * · rule_change: the owner's new release rules, waiting for the keyholders
+ */
+export type EmergencyRequestMethod = "dual_approval" | "document" | "fast_release" | "rule_change";
 export type EmergencyRequestStatus = "pending" | "approved" | "rejected" | "cancelled" | "expired" | "released" | "flagged";
 export type EmergencyDocumentType = "death_certificate" | "legal_notice" | "proof";
 
@@ -665,6 +740,20 @@ export interface WalletEmergency {
   unlock_on_document?: boolean;
   /** Full names, in order: 1st, then fallbacks. */
   beneficiaries?: string[];
+  /** Released money goes to the hospital's bank account, not a person (EMG-03). */
+  pay_directly?: boolean;
+  /** People without the app who can ask for a release from an SMS link, e.g. "Dr Chika Nwosu (Family doctor)". */
+  trusted_contacts?: string[];
+}
+
+/** EMG-05 trusted contact on a request detail (EmergencyService::detail). */
+export interface EmergencyTrustedContact {
+  id: number;
+  name: string;
+  relation: string | null;
+  phone: string;
+  masked_phone: string;
+  link_sent: boolean;
 }
 
 export interface AdminEmergencyRequest {
@@ -677,6 +766,12 @@ export interface AdminEmergencyRequest {
   status: EmergencyRequestStatus;
   requested_by: EmergencyPerson | null;
   approved_by: EmergencyPerson | null; // dual-approval approver
+  /** Asked by a trusted contact from their SMS link (no account) — requested_by is then null. */
+  trusted_contact?: { name: string; relation: string | null } | null;
+  /** Fast release paid straight to the bill. */
+  payee?: { bank_name?: string; account_number: string; account_name: string } | null;
+  /** Rule change: what would change, in words. */
+  changes?: string[] | null;
   review_note: string | null;
   reviewed_by: string | null; // admin full name
   amount?: string | null; // fast release, naira string
@@ -716,6 +811,10 @@ export interface EmergencyRules {
   required_keyholders?: number;
   request_expiry_hours?: number | null;
   fast_release?: { limit: string; every_days: number; last_at: string | null; next_at: string | null } | null;
+  pay_directly?: boolean;
+  trusted_can_request?: boolean;
+  trusted_can_upload?: boolean;
+  trusted_can_see_balance?: boolean;
 }
 
 export interface EmergencyBeneficiary {
@@ -733,6 +832,7 @@ export interface EmergencyRequestDetailData {
   request: AdminEmergencyRequest;
   rules: EmergencyRules | null;
   beneficiaries: EmergencyBeneficiary[];
+  trusted_contacts?: EmergencyTrustedContact[];
 }
 
 /** POST /admin/wallets/{id}/emergency/crisis-unlock (EmergencyService::summary). */

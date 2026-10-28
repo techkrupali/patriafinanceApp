@@ -37,7 +37,7 @@ class EmergencyAdminController extends ApiController
     // GET /admin/emergency-requests?status=&method=
     public function index(Request $request): JsonResponse
     {
-        $page = EmergencyUnlockRequest::with(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer'])
+        $page = EmergencyUnlockRequest::with(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer', 'trustedContact'])
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->when($request->query('method'), fn ($q, $m) => $q->where('method', $m))
             ->latest()
@@ -57,7 +57,7 @@ class EmergencyAdminController extends ApiController
     // GET /admin/emergency-requests/{emergencyUnlockRequest}
     public function show(EmergencyUnlockRequest $emergencyUnlockRequest): JsonResponse
     {
-        $emergencyUnlockRequest->load(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer']);
+        $emergencyUnlockRequest->load(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer', 'trustedContact']);
         $wallet = $emergencyUnlockRequest->wallet;
         $detail = $wallet?->owner ? EmergencyService::make()->detail($wallet, $wallet->owner) : null;
 
@@ -65,6 +65,7 @@ class EmergencyAdminController extends ApiController
             'request' => $this->serialize($emergencyUnlockRequest),
             'rules' => $detail['rules'] ?? null,
             'beneficiaries' => $detail['beneficiaries'] ?? [],
+            'trusted_contacts' => $detail['trusted_contacts'] ?? [],
         ]);
     }
 

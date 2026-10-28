@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ApprovalService;
 use App\Services\EmergencyService;
+use App\Services\BudgetService;
+use App\Services\GivingService;
 use App\Services\KycService;
 use App\Services\SavingsService;
 use App\Services\WalletService;
@@ -81,6 +83,15 @@ class WalletController extends ApiController
             'emergency.request_expiry_hours' => ['nullable', 'in:' . implode(',', EmergencySetting::EXPIRY_HOURS)],
             'emergency.fast_release_limit' => ['nullable', 'numeric', 'min:0'],
             'emergency.fast_release_every_days' => ['nullable', 'in:' . implode(',', EmergencySetting::FAST_RELEASE_DAYS)],
+            // EMG-03 pay the bill directly; EMG-05 trusted contacts (no app) and what they may do.
+            'emergency.pay_directly' => ['sometimes', 'boolean'],
+            'emergency.trusted_can_request' => ['sometimes', 'boolean'],
+            'emergency.trusted_can_upload' => ['sometimes', 'boolean'],
+            'emergency.trusted_can_see_balance' => ['sometimes', 'boolean'],
+            'emergency.trusted_contacts' => ['sometimes', 'array', 'max:5'],
+            'emergency.trusted_contacts.*.name' => ['required', 'string', 'max:80'],
+            'emergency.trusted_contacts.*.phone' => ['required', 'string', 'max:20'],
+            'emergency.trusted_contacts.*.relation' => ['nullable', 'string', 'max:80'],
             'emergency.beneficiaries' => ['sometimes', 'array', 'max:3'],
             'emergency.beneficiaries.*.user_id' => ['required', 'integer'],
             'emergency.beneficiaries.*.relationship' => ['nullable', 'string', 'max:40'],
@@ -110,6 +121,7 @@ class WalletController extends ApiController
             'savings_plan.roundup_to' => ['nullable', 'in:100,500,1000'],
             'savings_plan.missed_policy' => ['sometimes', 'in:' . implode(',', SavingsPlan::MISSED_POLICIES)],
             'savings_plan.notify_others_on_miss' => ['sometimes', 'boolean'],
+            'savings_plan.notify_sms' => ['sometimes', 'boolean'],
             'savings_plan.day_of_week' => ['nullable', 'integer', 'between:1,7'],
             'savings_plan.day_of_month' => ['nullable', 'integer', 'between:1,28'],
             'savings_plan.auto_save' => ['sometimes', 'boolean'],
@@ -129,6 +141,13 @@ class WalletController extends ApiController
             'members.*.permissions.withdraw' => ['sometimes', 'boolean'],
             // EMG-02: what an emergency contributor puts in each month.
             'members.*.pledge' => ['nullable', 'numeric', 'min:0'],
+            // EMG-03: someone invited by phone becomes a keyholder once they join.
+            'members.*.keyholder' => ['sometimes', 'boolean'],
+            // SPD-05: a spender's categories (by name; absent = all) and daily limit.
+            'members.*.spend' => ['sometimes', 'nullable', 'array'],
+            'members.*.spend.categories' => ['nullable', 'array'],
+            'members.*.spend.categories.*' => ['string', 'max:60'],
+            'members.*.spend.daily_limit' => ['nullable', 'numeric', 'min:1'],
             // SAV-01 colour, SAV-05 lock.
             'colour' => ['nullable', 'in:' . implode(',', Wallet::COLOURS)],
             'lock' => ['nullable', 'array'],
@@ -136,6 +155,65 @@ class WalletController extends ApiController
             'lock.until' => ['nullable', 'required_if:lock.mode,date', 'date', 'after:today'],
             'lock.early_break' => ['sometimes', 'boolean'],
             'lock.approval' => ['sometimes', 'boolean'],
+            'lock.charity_id' => ['nullable', 'integer'],
+            // SPD-02…06: the spending budget.
+            'budget' => ['nullable', 'array'],
+            'budget.amount' => ['required_with:budget', 'numeric', 'min:1'],
+            'budget.period' => ['required_with:budget', 'in:' . implode(',', BudgetService::PERIODS)],
+            'budget.start_day' => ['nullable', 'integer', 'between:1,28'],
+            'budget.leftover' => ['nullable', 'array'],
+            'budget.leftover.mode' => ['nullable', 'in:keep,main,wallet'],
+            'budget.leftover.wallet_id' => ['nullable', 'integer'],
+            'budget.funding' => ['nullable', 'in:' . implode(',', BudgetService::FUNDING)],
+            'budget.my_share' => ['nullable', 'numeric', 'min:0'],
+            'budget.alerts' => ['nullable', 'array'],
+            'budget.alerts.half' => ['sometimes', 'boolean'],
+            'budget.alerts.eighty' => ['sometimes', 'boolean'],
+            'budget.alerts.category_out' => ['sometimes', 'boolean'],
+            'budget.alerts.weekly' => ['sometimes', 'boolean'],
+            'budget.over_limit' => ['nullable', 'in:' . implode(',', BudgetService::OVER_LIMIT)],
+            'budget.categories' => ['nullable', 'array', 'max:' . BudgetService::MAX_CATEGORIES],
+            'budget.categories.*.name' => ['required', 'string', 'max:60'],
+            'budget.categories.*.limit' => ['required', 'numeric', 'min:1'],
+            // GIV-01…06: giving.
+            'giving' => ['nullable', 'array'],
+            'giving.kind' => ['nullable', 'in:' . implode(',', GivingService::KINDS)],
+            'giving.source_wallet_id' => ['nullable', 'integer'],
+            'giving.recipients' => ['nullable', 'array', 'max:20'],
+            'giving.recipients.*.saved_account_id' => ['nullable', 'integer'],
+            'giving.recipients.*.group_id' => ['nullable', 'integer'],
+            'giving.set_aside' => ['nullable', 'array', 'max:6'],
+            'giving.set_aside.*.kind' => ['required', 'in:percent,fixed,roundup'],
+            'giving.set_aside.*.source_wallet_id' => ['required', 'integer'],
+            'giving.set_aside.*.percent' => ['nullable', 'integer', 'between:1,50'],
+            'giving.set_aside.*.amount' => ['nullable', 'numeric', 'min:1'],
+            'giving.set_aside.*.day_of_month' => ['nullable', 'integer', 'between:1,28'],
+            'giving.set_aside.*.roundup_to' => ['nullable', 'numeric', 'in:100,500,1000'],
+            'giving.schedules' => ['nullable', 'array', 'max:' . GivingService::MAX_SCHEDULES],
+            'giving.schedules.*.label' => ['required', 'string', 'max:60'],
+            'giving.schedules.*.amount' => ['required', 'numeric', 'min:1'],
+            'giving.schedules.*.saved_account_id' => ['nullable', 'integer'],
+            'giving.schedules.*.group_id' => ['nullable', 'integer'],
+            'giving.schedules.*.frequency' => ['required', 'in:weekly,monthly,monthly_weekday,once'],
+            'giving.schedules.*.day_of_week' => ['nullable', 'integer', 'between:1,7'],
+            'giving.schedules.*.day_of_month' => ['nullable', 'integer', 'between:1,28'],
+            'giving.schedules.*.week_of_month' => ['nullable', 'integer', 'between:1,4'],
+            'giving.schedules.*.run_on' => ['nullable', 'date'],
+            'giving.ask_first' => ['sometimes', 'boolean'],
+            'giving.thanksgiving_reminder' => ['sometimes', 'boolean'],
+            'giving.receipts' => ['sometimes', 'boolean'],
+            'giving.yearly_statement' => ['sometimes', 'boolean'],
+            'giving.anonymous' => ['sometimes', 'boolean'],
+            'giving.pledge' => ['nullable', 'array'],
+            'giving.pledge.name' => ['required_with:giving.pledge', 'string', 'max:80'],
+            'giving.pledge.total' => ['required_with:giving.pledge', 'numeric', 'min:1'],
+            'giving.pledge.paid_before' => ['nullable', 'numeric', 'min:0'],
+            'giving.pledge.due_date' => ['required_with:giving.pledge', 'date'],
+            'giving.pledge.saved_account_id' => ['nullable', 'integer'],
+            'giving.pledge.group_id' => ['nullable', 'integer'],
+            'giving.pledge.parts' => ['nullable', 'array', 'max:12'],
+            'giving.pledge.parts.*.date' => ['required', 'date'],
+            'giving.pledge.parts.*.amount' => ['required', 'numeric', 'min:1'],
             'approval' => ['nullable', 'array'],
             'approval.threshold' => ['nullable', 'numeric', 'min:0'],
             'approval.mode' => ['sometimes', 'in:' . implode(',', Wallet::APPROVAL_MODES)],
@@ -144,6 +222,15 @@ class WalletController extends ApiController
             'reminder_day' => ['nullable', 'integer', 'between:1,28'],
             'draft_id' => ['nullable', 'integer'],
         ]);
+
+        // Validated lists come back in rule order, so an item whose first field is
+        // a later rule can come first; put every list back in the order sent.
+        foreach (['members', 'budget.categories', 'giving.recipients', 'giving.set_aside', 'giving.schedules', 'giving.pledge.parts'] as $path) {
+            if (is_array($list = data_get($data, $path))) {
+                ksort($list);
+                data_set($data, $path, $list);
+            }
+        }
 
         $user = $request->user();
 
@@ -156,6 +243,12 @@ class WalletController extends ApiController
 
         if (!empty($data['emergency']) && $data['type'] !== 'emergency') {
             return $this->fail('Emergency access rules only apply to emergency wallets', 422);
+        }
+        if (!empty($data['budget']) && $data['type'] !== 'spending') {
+            return $this->fail('A budget is for spending wallets', 422);
+        }
+        if (!empty($data['giving']) && $data['type'] !== 'giving') {
+            return $this->fail('Giving dates and recipients are for giving wallets', 422);
         }
         if (($data['mode'] ?? null) === 'private' && !empty($data['members'])) {
             return $this->fail("A private wallet is just you. Choose Shared to invite people.", 422);
@@ -200,9 +293,38 @@ class WalletController extends ApiController
         }
         foreach ($data['members'] ?? [] as $i => $m) {
             $data['members'][$i]['pledge'] = $kobo($m['pledge'] ?? null);
+            if (isset($m['spend']['daily_limit'])) {
+                $data['members'][$i]['spend']['daily_limit'] = $kobo($m['spend']['daily_limit']);
+            }
+        }
+        if (!empty($data['budget'])) {
+            $data['budget']['amount'] = $kobo($data['budget']['amount']);
+            $data['budget']['my_share'] = $kobo($data['budget']['my_share'] ?? null);
+            foreach ($data['budget']['categories'] ?? [] as $i => $c) {
+                $data['budget']['categories'][$i]['limit'] = $kobo($c['limit']);
+            }
+        }
+        if (!empty($data['giving'])) {
+            foreach ($data['giving']['set_aside'] ?? [] as $i => $line) {
+                $data['giving']['set_aside'][$i]['amount'] = $kobo($line['amount'] ?? null);
+                $data['giving']['set_aside'][$i]['roundup_to'] = $kobo($line['roundup_to'] ?? null);
+            }
+            foreach ($data['giving']['schedules'] ?? [] as $i => $sch) {
+                $data['giving']['schedules'][$i]['amount'] = $kobo($sch['amount']);
+            }
+            if (!empty($data['giving']['pledge'])) {
+                $data['giving']['pledge']['total'] = $kobo($data['giving']['pledge']['total']);
+                $data['giving']['pledge']['paid_before'] = $kobo($data['giving']['pledge']['paid_before'] ?? null) ?? 0;
+                foreach ($data['giving']['pledge']['parts'] ?? [] as $i => $part) {
+                    $data['giving']['pledge']['parts'][$i]['amount'] = $kobo($part['amount']);
+                }
+            }
         }
         if (!empty($data['approval'])) {
             $data['approval']['threshold'] = $kobo($data['approval']['threshold'] ?? null);
+        }
+        foreach ($data['emergency']['trusted_contacts'] ?? [] as $i => $c) {
+            $data['emergency']['trusted_contacts'][$i]['phone'] = $this->normalizePhone($c['phone']);
         }
         if (!empty($data['emergency']['fast_release_limit'])) {
             $data['emergency']['fast_release_limit'] = $kobo($data['emergency']['fast_release_limit']);
@@ -336,6 +458,7 @@ class WalletController extends ApiController
             'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'idempotency_key' => ['nullable', 'string', 'max:100'],
+            'budget_category_id' => ['nullable', 'integer'],
         ]);
 
         $user = $request->user();
@@ -444,9 +567,13 @@ class WalletController extends ApiController
             return $this->fail('Amount exceeds available balance (funds are reserved for pending approvals/milestones).', 422);
         }
 
+        // The wallet's own rules: spending budget limits and the early-break fee.
+        $rules = \App\Services\SpendRules::make();
+        $plan = $rules->plan($wallet, $user, $amountKobo, isset($data['budget_category_id']) ? (int) $data['budget_category_id'] : null);
+
         // Only route to approval when at least one eligible approver exists; otherwise
         // the initiator is the sole controller, so the spend executes directly.
-        if ($wallet->approvalRequiredFor($amountKobo) && $wallet->eligibleApprovers($user->id)->isNotEmpty()) {
+        if (($wallet->approvalRequiredFor($amountKobo) || $plan['over'] !== null) && $wallet->eligibleApprovers($user->id)->isNotEmpty()) {
             $req = ApprovalService::make()->create(
                 $wallet,
                 $user,
@@ -460,7 +587,7 @@ class WalletController extends ApiController
                     'account_name' => $data['account_name'],
                     'bank_name' => $data['bank_name'],
                     'description' => $data['description'] ?? null,
-                ],
+                ] + array_filter(['budget_category_id' => $plan['category_id'], 'over_limit' => $plan['over']]),
             );
 
             return $this->ok('Withdrawal submitted for approval', [
@@ -472,15 +599,16 @@ class WalletController extends ApiController
         $txn = WalletService::make()->withdrawToBank(
             $wallet,
             $user,
-            $amountKobo,
+            $plan['net'],
             $data['bank_code'],
             $data['account_number'],
             $data['account_name'],
             $data['bank_name'],
             $data['description'] ?? null,
         );
+        $rules->settle($wallet, $user, $txn->reference, $plan);
 
-        return $this->ok('Withdrawal successful', ['transaction' => $this->serializeTransaction($txn)]);
+        return $this->ok('Withdrawal successful', ['transaction' => $this->serializeTransaction($txn->refresh())]);
     }
 
     /**

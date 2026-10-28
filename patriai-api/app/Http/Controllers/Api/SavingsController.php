@@ -63,6 +63,9 @@ class SavingsController extends ApiController
                 'from' => $i['salary']['from'],
             ] : null,
             'roundups' => collect($i['roundups'])->mapWithKeys(fn ($kobo, $step) => [(string) intdiv($step, 100) => $naira($kobo)]),
+            'monthly_spending' => $naira($i['spending']),
+            // wallet id => typical monthly deposits from banks
+            'monthly_deposits' => collect($i['deposits'])->mapWithKeys(fn ($kobo, $id) => [(string) $id => $naira($kobo)]),
         ]);
     }
 
@@ -88,6 +91,7 @@ class SavingsController extends ApiController
             'salary_percent' => ['sometimes', 'integer', 'between:1,50'],
             'missed_policy' => ['sometimes', 'in:' . implode(',', SavingsPlan::MISSED_POLICIES)],
             'notify_others_on_miss' => ['sometimes', 'boolean'],
+            'notify_sms' => ['sometimes', 'boolean'],
             'target_amount' => ['sometimes', 'nullable', 'numeric', 'min:1'],
             'target_date' => ['sometimes', 'nullable', 'date', 'after:today'],
         ]);

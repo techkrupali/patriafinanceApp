@@ -83,8 +83,10 @@ class WebhookController extends ApiController
                 ],
             );
 
-            // Salary landed in Main: "save 15% from every salary" rules take their share.
+            // Salary landed in Main: "save 15% from every salary" rules take their share;
+            // any wallet's "share of every deposit" rules take theirs.
             AutomationService::make()->runIncome($wallet, $txn);
+            AutomationService::make()->runDeposits($wallet, $txn);
         }
 
         return $this->ok('Wallet credited');

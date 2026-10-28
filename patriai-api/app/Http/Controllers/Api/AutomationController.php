@@ -198,6 +198,7 @@ class AutomationController extends ApiController
             'amount' => number_format($rule->amount / 100, 2, '.', ''),
             // schedule | salary (percent of each salary) | roundup (to roundup_to, swept daily)
             'trigger' => $rule->trigger,
+            'fill_to' => (bool) $rule->fill_to,
             'percent' => $rule->percent,
             'roundup_to' => $rule->roundup_to !== null ? number_format($rule->roundup_to / 100, 2, '.', '') : null,
             'pending_amount' => number_format($rule->pending_amount / 100, 2, '.', ''),
@@ -222,6 +223,9 @@ class AutomationController extends ApiController
         if ($rule->trigger === 'salary') {
             return 'When salary lands';
         }
+        if ($rule->trigger === 'deposit') {
+            return 'Every deposit into ' . ($rule->fromWallet?->name ?? 'the wallet');
+        }
         if ($rule->trigger === 'roundup') {
             return 'Every day, from spending';
         }
@@ -233,6 +237,6 @@ class AutomationController extends ApiController
             'weekly' => 'Weekly on ' . (self::DAY_NAMES[$rule->day_of_week] ?? 'the set day'),
             'monthly' => 'Monthly on day ' . ($rule->day_of_month ?? '?'),
             default => 'Every day',
-        };
+        } . ($rule->fill_to ? ', back up to ₦' . number_format($rule->amount / 100) : '');
     }
 }

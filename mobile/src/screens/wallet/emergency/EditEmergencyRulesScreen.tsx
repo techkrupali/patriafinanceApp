@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { pt } from '../../../theme';
 import { PtStepScreen } from '../../../components/pt/PtStepScreen';
 import { PtButton } from '../../../components/pt/PtButton';
@@ -24,8 +24,10 @@ import type { RootScreenProps } from '../../../navigation/types';
 
 /**
  * Owner changes an emergency fund's rules after setup — what it's for,
- * keyholders, fast release, opening it with the custom PIN, beneficiaries and
- * death emergency unlock. Saving needs the transaction PIN; keyholders are told.
+ * keyholders, paying the bill directly, fast release, opening it with the custom
+ * PIN, trusted contacts, beneficiaries and death emergency unlock. Saving needs
+ * the transaction PIN; when a release needs more than one yes, so does a change
+ * (WCR-06 "nobody can change the release rules alone").
  */
 export function EditEmergencyRulesScreen(props: RootScreenProps<'EditEmergencyRules'>) {
   const detail = useEmergency(props.route.params.walletId);
@@ -59,6 +61,9 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
   const [pinError, setPinError] = useState<string | null>(null);
   const change = (patch: Partial<EmergencyRulesState>) => setRules((r) => ({ ...r, ...patch }));
   const hasCustomPin = saved.rules.has_custom_pin;
+  // Mirrors the server: with more than one yes needed, a change waits for the keyholders.
+  const holders = (saved.rules.keyholders?.length ?? 0) + 1;
+  const needed = saved.rules.dual_approval && holders > 1 ? (saved.rules.required_keyholders ?? 2) : 1;
 
   // Family plus anyone already holding a key, even if they've left every other wallet.
   const candidates = [
@@ -84,10 +89,16 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
     actions.updateRules.mutate(
       { ...rulesPayload(rules, pins, purposes), pin },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           notifySuccess();
           setPinOpen(false);
           navigation.goBack();
+          if (needed > 1 && res.emergency.me.pending_rule_change) {
+            Alert.alert(
+              'Sent to the keyholders',
+              `Nothing changes until ${needed - 1 === 1 ? 'another keyholder says' : `${needed - 1} more keyholders say`} yes.`,
+            );
+          }
         },
         onError: (e) => {
           // A wrong transaction PIN stays on the sheet; anything else is about the rules.
@@ -119,6 +130,9 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
         </>
       }
     >
+      {saved.me.pending_rule_change ? (
+        <PtNote tone="warning">A change you asked for is waiting for the keyholders. Saving again replaces it.</PtNote>
+      ) : null}
       <View style={{ gap: 10 }}>
         <PtGroupLabel>What it's for</PtGroupLabel>
         <PurposesChecklist value={purposes} onChange={setPurposes} />
@@ -134,14 +148,18 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
       <UnlockYourselfSection value={rules} onChange={change} pins={pins} onPins={setPins} hasCustomPin={hasCustomPin} />
       <View style={{ gap: 10 }}>
         <PtGroupLabel>If you can't ask yourself</PtGroupLabel>
-        <TrustedSection value={rules} onChange={change} />
+        <TrustedSection value={rules} onChange={change} ownPhone={me?.phone} />
       </View>
-      <PtNote tone="warning">You'll confirm with your transaction PIN. Every keyholder is told about the change.</PtNote>
+      <PtNote tone="warning">
+        {needed > 1
+          ? `Nobody can change the release rules alone: ${needed} of ${holders} keyholders must agree, you included. You'll confirm with your transaction PIN.`
+          : "You'll confirm with your transaction PIN. Every keyholder is told about the change."}
+      </PtNote>
 
       <PinSheet
         visible={pinOpen}
         title="Confirm changes"
-        subtitle="Enter your transaction PIN to save the new rules."
+        subtitle={needed > 1 ? 'Enter your transaction PIN to send the new rules to the keyholders.' : 'Enter your transaction PIN to save the new rules.'}
         loading={actions.updateRules.isPending}
         error={pinError}
         onSubmit={save}

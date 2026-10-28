@@ -427,10 +427,22 @@ class AdminController extends ApiController
                 'manual_unlock' => $wallet->emergencySetting->manual_unlock,
                 'unlock_on_document' => $wallet->emergencySetting->unlock_on_document,
                 'beneficiaries' => $wallet->emergencyBeneficiaries()->with('user')->get()->map(fn ($b) => $b->user?->fullName())->filter()->values(),
+                'pay_directly' => $wallet->emergencySetting->pay_directly,
+                // EMG-05: people without the app who can ask for a release from an SMS link.
+                'trusted_contacts' => $wallet->emergencyTrustedContacts()->orderBy('id')->get()->map(fn ($c) => trim($c->name . ($c->relation ? " ({$c->relation})" : '')))->values(),
                 'locked' => $wallet->emergencySetting->isLocked(),
                 'unlocked_at' => $wallet->emergencySetting->unlocked_at?->toIso8601String(),
                 'unlocked_via' => $wallet->emergencySetting->unlocked_via,
                 'override_national_crisis' => $wallet->emergencySetting->override_national_crisis,
+            ] : null,
+            // Spending wallets (SPD/WAL-09): the budget this period, by category, and who may spend what.
+            'budget' => $wallet->budget() ? \App\Services\BudgetService::make()->detail($wallet, $wallet->owner) : null,
+            // Giving wallets (GIV/WAL-18): set aside, given, coming up, pledge, recipients, settings.
+            'giving' => $wallet->type === 'giving' ? \App\Services\GivingService::make()->detail($wallet) : null,
+            // Savings broken early pay a fee, half to the charity picked (SAV-05).
+            'early_break' => ($lock = $wallet->savingsLock()) && $lock['early_break'] ? [
+                'fee_percent' => $lock['fee_percent'],
+                'charity' => $lock['charity_id'] ? \App\Models\Organisation::find($lock['charity_id'])?->name : null,
             ] : null,
         ]);
     }

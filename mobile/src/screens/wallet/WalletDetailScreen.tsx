@@ -14,7 +14,9 @@ import { PtChip } from '../../components/pt/PtChip';
 import { PtCard, PtRow } from '../../components/pt/PtList';
 import { LoadError } from '../../components/LoadError';
 import { MemberManageModal } from '../../components/MemberManageModal';
+import { GivingSection } from '../../components/giving/GivingSection';
 import {
+  useBudget,
   useAutomations,
   useFundingDetails,
   useWallet,
@@ -133,7 +135,8 @@ function LinkCard({
 /**
  * WAL-02 Wallet detail: progress ring (or balance) with who's in it, Add money /
  * Pay from wallet, then Activity · Members · Rules · Account. Emergency rules,
- * the savings plan and pending approvals link out from above the tabs.
+ * the savings plan, spending limits (WAL-09) and pending approvals link out from
+ * above the tabs; a giving wallet shows what's coming up (WAL-18).
  */
 export function WalletDetailScreen({ navigation, route }: RootScreenProps<'WalletDetail'>) {
   const { walletId } = route.params;
@@ -163,6 +166,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const richMembers = useWalletMembers(walletId, canManage);
   const invites = useWalletInvitations(walletId, canInvite);
   const funding = useFundingDetails(walletId, tab === 'account');
+  const budget = useBudget(walletId, wallet?.type === 'spending');
 
   const balance = parseFloat(wallet?.balance ?? '0');
   const target = parseFloat(wallet?.target_amount ?? '');
@@ -509,7 +513,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           </View>
 
           {/* Parts of the wallet with their own screens */}
-          {emergency || pending > 0 || wallet.type === 'savings' || wallet.type === 'goal' ? (
+          {emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type) ? (
             <View style={{ gap: 10 }}>
               {emergency ? (
                 <LinkCard
@@ -543,8 +547,18 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                   onPress={() => navigation.navigate('SavingsPlan', { walletId })}
                 />
               ) : null}
+              {wallet.type === 'spending' && budget.data ? (
+                <LinkCard
+                  icon="pie-chart"
+                  title="Spending limits"
+                  subtitle={`${formatNaira(budget.data.spent)} of ${formatNaira(budget.data.amount)} spent · ${budget.data.categories.length} categories`}
+                  onPress={() => navigation.navigate('SpendingLimits', { walletId })}
+                />
+              ) : null}
             </View>
           ) : null}
+
+          {wallet.type === 'giving' ? <GivingSection walletId={walletId} isOwner={role === 'owner'} /> : null}
 
           {/* Tabs */}
           <View>

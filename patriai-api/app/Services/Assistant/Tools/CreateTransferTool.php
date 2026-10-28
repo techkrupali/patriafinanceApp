@@ -146,6 +146,10 @@ class CreateTransferTool implements AssistantTool
             $destType = (isset($input['account_number']) || isset($input['bank'])) ? 'bank' : 'wallet';
         }
 
+        if ($destType !== 'bank' && $from->paysBillsDirectly()) {
+            return $this->reject('That emergency fund pays bills directly — send it to the hospital or clinic\'s bank account.');
+        }
+
         return $destType === 'bank'
             ? $this->handleBank($request, $user, $from, $amountKobo, $input)
             : $this->handleWallet($user, $from, $amountKobo, $input);

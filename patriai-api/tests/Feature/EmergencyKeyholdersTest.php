@@ -190,11 +190,12 @@ class EmergencyKeyholdersTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_changing_rules_tells_the_keyholders(): void
+    public function test_changing_rules_needs_the_keyholders_and_tells_them(): void
     {
         [$wallet, $ngozi, $ada, $obi] = $this->fund();
         Sanctum::actingAs($ngozi);
 
+        // "Nobody can change the release rules alone. Changes need 2 of 3 keyholders too."
         $this->putJson("/api/v1/wallets/{$wallet->id}/emergency/rules", [
             'pin' => '1234',
             'keyholders' => [$ada->id, $obi->id],
@@ -203,8 +204,14 @@ class EmergencyKeyholdersTest extends TestCase
             'unlock_reason' => 'Hospital bills',
             'unlock_on_document' => true,
             'beneficiaries' => [],
-        ])->assertOk()->assertJsonPath('data.emergency.rules.required_keyholders', 3);
+        ])->assertOk()
+            ->assertJsonPath('message', 'Sent to the keyholders to approve')
+            ->assertJsonPath('data.emergency.rules.required_keyholders', 2);
+        $this->assertSame(1, AppNotification::where('user_id', $obi->id)->where('type', 'emergency_rules_change_requested')->count());
 
-        $this->assertSame(1, AppNotification::where('user_id', $obi->id)->where('type', 'emergency_rules_changed')->count());
+        $change = EmergencyUnlockRequest::where('method', 'rule_change')->sole();
+        Sanctum::actingAs($obi);
+        $this->postJson("/api/v1/emergency-requests/{$change->id}/approve")->assertOk()->assertJsonPath('data.emergency.rules.required_keyholders', 3);
+        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('type', 'emergency_rules_changed')->count());
     }
 }

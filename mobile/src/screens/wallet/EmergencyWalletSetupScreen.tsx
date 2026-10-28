@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
+import { PtAmountBox } from '../../components/pt/PtAmountBox';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtText } from '../../components/pt/PtText';
@@ -28,6 +29,7 @@ import {
   purposesLabel,
   requiredYeses,
   rulesPayload,
+  trustedPowers,
   validateManual,
   validateRules,
   type EmergencyPins,
@@ -61,6 +63,8 @@ interface EmergencyForm extends EmergencyRulesState {
   startOn: boolean;
   start: string;
   contributors: Contributor[];
+  /** Phones of contributors invited by phone who hold a key once they join. */
+  phoneKeyholders: string[];
 }
 
 const EMPTY: EmergencyForm = {
@@ -72,6 +76,7 @@ const EMPTY: EmergencyForm = {
   startOn: false,
   start: '',
   contributors: [],
+  phoneKeyholders: [],
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
@@ -84,25 +89,6 @@ function nextSaveDay(): string {
   const d = new Date();
   if (d.getDate() >= SAVE_DAY) d.setMonth(d.getMonth() + 1);
   return `${SAVE_DAY} ${MONTHS[d.getMonth()]}`;
-}
-
-/** Small "₦ 30,000" box at the end of a contributor row. */
-function AmountBox({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  return (
-    <View style={{ width: 118, height: 44, borderRadius: ptRadius.sm, borderWidth: 1.5, borderColor: pt.lineStrong, backgroundColor: pt.raised, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 4 }}>
-      <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.inkMuted }}>₦</Text>
-      <TextInput
-        value={groupAmountInput(value)}
-        onChangeText={(t) => onChange(sanitizeAmountInput(t))}
-        keyboardType="decimal-pad"
-        placeholder="0"
-        placeholderTextColor={pt.inkSubtle}
-        accessibilityLabel={label}
-        // minWidth 0: a web input otherwise keeps its natural width and spills out of the box.
-        style={{ flex: 1, minWidth: 0, fontFamily: ptFont.bold, fontSize: 15, color: pt.ink, paddingVertical: 0, textAlign: 'right' }}
-      />
-    </View>
-  );
 }
 
 /**
@@ -171,23 +157,54 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
   const startWith = form.startOn ? Number(form.start) || 0 : 0;
   const months = target > 0 && monthly > 0 ? Math.max(1, Math.ceil(Math.max(0, target - startWith) / monthly)) : null;
   const savers = ['you', ...form.contributors.map(shortName)];
-  const keyholderNames = [myName, ...form.keyholders.map((id) => firstName(members.find((m) => m.id === id)?.name ?? 'Keyholder'))];
+  // Phone contributors stay keyholders only while they're still contributors.
+  const phoneKeyholders = form.phoneKeyholders.filter((p) => form.contributors.some((c) => c.phone === p));
+  const keyholderCount = form.keyholders.length + phoneKeyholders.length + 1;
+  const required = requiredYeses(form, phoneKeyholders.length);
+  const keyholderNames = [
+    myName,
+    ...form.keyholders.map((id) => firstName(members.find((m) => m.id === id)?.name ?? 'Keyholder')),
+    ...form.contributors.filter((c) => c.phone && phoneKeyholders.includes(c.phone)).map(shortName),
+  ];
+
+  const stewardCard = (text: React.ReactNode) => (
+    <View style={{ flexDirection: 'row', gap: 12, backgroundColor: pt.emerald900, borderRadius: ptRadius.md, padding: 16 }}>
+      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(95,211,165,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+        <Feather name="shield" size={16} color={pt.emerald300} />
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald300 }}>STEWARD SUGGESTS</Text>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: '#FFFFFF' }}>{text}</Text>
+      </View>
+    </View>
+  );
+  const bold = (t: string) => <Text style={{ fontFamily: ptFont.bold }}>{t}</Text>;
+  const reachable = (m: number) => `is reachable in about ${m} month${m === 1 ? '' : 's'}.`;
 
   const steward =
-    months !== null ? (
-      <View style={{ flexDirection: 'row', gap: 12, backgroundColor: pt.emerald900, borderRadius: ptRadius.md, padding: 16 }}>
-        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(95,211,165,0.18)', alignItems: 'center', justifyContent: 'center' }}>
-          <Feather name="shield" size={16} color={pt.emerald300} />
-        </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald300 }}>STEWARD SUGGESTS</Text>
-          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: '#FFFFFF' }}>
-            With {joinNames(savers)} saving, <Text style={{ fontFamily: ptFont.bold }}>{formatNaira(target)}</Text> is reachable in about {months} month
-            {months === 1 ? '' : 's'}.
-          </Text>
-        </View>
-      </View>
-    ) : null;
+    months !== null
+      ? stewardCard(
+          <>
+            With {joinNames(savers)} saving, {bold(formatNaira(target))} {reachable(months)}
+          </>,
+        )
+      : null;
+
+  // EMG-01, before anyone has an amount: split the target across the family over about ten months.
+  const planners = form.contributors.length ? savers : ['you', ...members.slice(0, 3).map((m) => firstName(m.name))];
+  const each = target > 0 ? Math.ceil(target / planners.length / 10 / 5_000) * 5_000 : 0;
+  const firstSteward =
+    steward ??
+    stewardCard(
+      each > 0 ? (
+        <>
+          With {joinNames(planners)} saving about {bold(formatNaira(each))} a month{planners.length > 1 ? ' each' : ''}, {bold(formatNaira(target))}{' '}
+          {reachable(Math.max(1, Math.ceil(target / (each * planners.length))))}
+        </>
+      ) : (
+        `Set a target and see how soon ${joinNames(planners)} can reach it, saving a little every month.`
+      ),
+    );
 
   const validate = (s: Step): string | null => {
     if (s === 'purpose') {
@@ -202,7 +219,7 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
     }
     if (s === 'fast') return validateManual(form, pins, { pinRequired: true });
     // Every way the fund opens is known once the last rules step is done.
-    if (s === 'trusted') return validateRules(form, pins, { pinRequired: true });
+    if (s === 'trusted') return validateRules(form, pins, { pinRequired: true, invited: phoneKeyholders.length });
     return null;
   };
 
@@ -235,9 +252,11 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
         monthly_amount: Number(form.myAmount) > 0 ? form.myAmount : undefined,
         monthly_day: SAVE_DAY,
         members: form.contributors.map((c) =>
-          c.userId ? { user_id: c.userId, role: 'contributor' as const, pledge: c.amount } : { identifier: c.phone, role: 'contributor' as const, pledge: c.amount },
+          c.userId
+            ? { user_id: c.userId, role: 'contributor' as const, pledge: c.amount }
+            : { identifier: c.phone, role: 'contributor' as const, pledge: c.amount, keyholder: phoneKeyholders.includes(c.phone ?? '') },
         ),
-        emergency: rulesPayload(form, pins, form.purposes),
+        emergency: rulesPayload(form, pins, form.purposes, phoneKeyholders.length),
         draft_id: autosave.draftId ?? undefined,
       },
       {
@@ -253,12 +272,12 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
               subtitle:
                 (invited.length ? `We've invited ${joinNames(invited)}. ` : '') +
                 (monthly > 0 ? `Saving starts on ${nextSaveDay()}.` : 'Anyone can add money to it any time.'),
-              caption: [target > 0 ? `of ${formatNaira(target)}` : null, form.keyholders.length ? `${requiredYeses(form)} of ${form.keyholders.length + 1} to release` : null]
+              caption: [target > 0 ? `of ${formatNaira(target)}` : null, keyholderCount > 1 ? `${required} of ${keyholderCount} to release` : null]
                 .filter(Boolean)
                 .join(' · '),
               events: [
                 ...form.contributors.map((c) => {
-                  const key = c.userId !== undefined && form.keyholders.includes(c.userId);
+                  const key = c.userId !== undefined ? form.keyholders.includes(c.userId) : phoneKeyholders.includes(c.phone ?? '');
                   return {
                     label: shortName(c),
                     title: c.phone ? 'SMS invite sent' : 'Invite sent',
@@ -269,6 +288,11 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
                   label: firstName(members.find((m) => m.id === id)?.name ?? 'Keyholder'),
                   title: 'Made a keyholder',
                   sub: 'They can see the fund now',
+                })),
+                ...form.trustedContacts.map((c) => ({
+                  label: c.name,
+                  title: 'SMS link sent',
+                  sub: ['Trusted contact', c.relation.trim() || null].filter(Boolean).join(' · '),
                 })),
               ],
               openLabel: 'Open fund',
@@ -310,7 +334,7 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
           maxLength={100}
         />
         <PurposesChecklist value={form.purposes} onChange={(p) => set({ purposes: p })} />
-        {steward}
+        {firstSteward}
         <PtField
           label="Target"
           prefix="₦"
@@ -336,7 +360,7 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
               <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }}>{myName} (you)</Text>
               <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>From {source?.name ?? 'Main'} · monthly</Text>
             </View>
-            <AmountBox value={form.myAmount} onChange={(v) => set({ myAmount: v })} label="Your monthly amount" />
+            <PtAmountBox value={form.myAmount} onChange={(v) => set({ myAmount: v })} label="Your monthly amount" />
           </View>
           {form.contributors.map((c, i) => (
             <React.Fragment key={c.key}>
@@ -351,7 +375,7 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
                     {c.phone ? 'Invite by phone · not on Patriai yet' : 'From their Main · monthly'}
                   </Text>
                 </View>
-                <AmountBox
+                <PtAmountBox
                   value={c.amount}
                   onChange={(v) => set({ contributors: form.contributors.map((x) => (x.key === c.key ? { ...x, amount: v } : x)) })}
                   label={`Monthly amount for ${c.name || c.phone}`}
@@ -359,7 +383,10 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
                 <Pressable
                   onPress={() => {
                     selection();
-                    set({ contributors: form.contributors.filter((x) => x.key !== c.key) });
+                    set({
+                      contributors: form.contributors.filter((x) => x.key !== c.key),
+                      phoneKeyholders: form.phoneKeyholders.filter((p) => p !== c.phone),
+                    });
                   }}
                   hitSlop={8}
                   accessibilityRole="button"
@@ -447,7 +474,13 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
           value={form}
           onChange={set}
           me={{ name: myName, initials: initials(me?.full_name) }}
-          candidates={members.map((m) => ({ id: m.id, name: m.name, avatar: m.avatar, contributes: form.contributors.some((c) => c.userId === m.id) }))}
+          candidates={[
+            ...members.map((m) => ({ id: m.id, name: m.name, avatar: m.avatar, contributes: form.contributors.some((c) => c.userId === m.id) })),
+            // EMG-03: someone invited by phone (Uncle Obi) can hold a key too, from when they join.
+            ...form.contributors.filter((c) => c.phone).map((c) => ({ phone: c.phone, name: shortName(c), contributes: true })),
+          ]}
+          invited={phoneKeyholders}
+          onInvited={(phones) => set({ phoneKeyholders: phones })}
         />
       </PtStepScreen>
     );
@@ -477,19 +510,18 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
         onBack={back}
         flow={header}
         title="If you can't ask yourself"
-        subtitle="Beneficiaries can ask for a release for you and receive the money, in order. Keyholders still decide."
+        subtitle="Trusted contacts can start a request for you. Keyholders still decide."
         gap={16}
         footer={footer('Review')}
       >
-        <TrustedSection value={form} onChange={set} />
-        <PtNote>Each beneficiary needs a Patriai account. They're told in the app when you add them.</PtNote>
+        <TrustedSection value={form} onChange={set} ownPhone={me?.phone} />
       </PtStepScreen>
     );
   }
 
   // ------------------------------------------------------------ WCR-06
-  const n = form.keyholders.length + 1;
-  const beneficiaryNames = form.beneficiaries.map((b) => firstName(b.user.full_name));
+  const n = keyholderCount;
+  const beneficiaryNames = form.beneficiaries.map((b, i) => `${firstName(b.user.full_name)}${i > 0 ? ' (fallback)' : ''}`);
   const phoneInvites = form.contributors.filter((c) => c.phone).map((c) => c.name || formatE164(c.phone ?? ''));
   return (
     <PtStepScreen
@@ -511,8 +543,8 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
         />
         <PtReviewRow
           label="Release"
-          value={n > 1 ? `${requiredYeses(form)} of ${n} keyholders` : 'Only you'}
-          sub={joinNames(keyholderNames)}
+          value={n > 1 ? `${required} of ${n} keyholders${n === 2 && required === 2 ? ' · dual approval' : ''}` : 'Only you'}
+          sub={[keyholderNames.join(', '), form.payDirectly ? 'paid to the hospital' : null].filter(Boolean).join(' · ')}
           onEdit={() => flow.goTo('release')}
         />
         <PtReviewRow
@@ -528,14 +560,24 @@ function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletS
           onEdit={() => flow.goTo('fast')}
         />
         <PtReviewRow
-          label="If you can't ask yourself"
-          value={beneficiaryNames.length ? joinNames(beneficiaryNames) : 'No beneficiaries'}
+          label="Trusted contacts"
+          value={form.trustedContacts.length ? form.trustedContacts.map((c) => c.name).join(', ') : 'None'}
+          sub={form.trustedContacts.length ? trustedPowers(form) : null}
+          onEdit={() => flow.goTo('trusted')}
+        />
+        <PtReviewRow
+          label="Who receives the money"
+          value={beneficiaryNames.length ? beneficiaryNames.join(', ') : 'No beneficiaries'}
           sub={[form.docUnlock ? 'Death emergency unlock on' : null, form.crisis ? 'National-crisis override' : null].filter(Boolean).join(' · ') || null}
           onEdit={() => flow.goTo('trusted')}
           last
         />
       </PtPanel>
-      <PtNote tone="warning">Only you can change these rules, with your transaction PIN — and every keyholder is told when you do.</PtNote>
+      <PtNote tone="warning">
+        {n > 1 && required > 1
+          ? `Nobody can change the release rules alone. Changes need ${required} of ${n} keyholders too.`
+          : 'Only you can change these rules, with your transaction PIN — and every keyholder is told when you do.'}
+      </PtNote>
     </PtStepScreen>
   );
 }

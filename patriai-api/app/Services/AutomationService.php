@@ -127,6 +127,56 @@ class AutomationService
         ]);
     }
 
+    /**
+     * Client: "percentage of deposits from 1 or more wallets" — $percent of every
+     * bank deposit into $from, whichever of the user's wallets it is.
+     */
+    public function createDepositRule(User $user, Wallet $from, Wallet $to, int $percent, bool $enabled = true): AutomationRule
+    {
+        $this->guardContribution($user, $from, $to);
+        if ($percent < 1 || $percent > 50) {
+            throw ValidationException::withMessages(['percent' => 'Choose between 1% and 50% of each deposit.']);
+        }
+
+        return AutomationRule::create([
+            'user_id' => $user->id,
+            'name' => "{$percent}% of every deposit into {$from->name}",
+            'from_wallet_id' => $from->id,
+            'to_wallet_id' => $to->id,
+            'savings_contribution' => $to->user_id !== $user->id,
+            'trigger' => 'deposit',
+            'percent' => $percent,
+            'amount' => 0,
+            'frequency' => 'daily',
+            'enabled' => $enabled,
+        ]);
+    }
+
+    /**
+     * SPD-04 "Top up from my Main wallet — on the 25th, fill it back to ₦350,000":
+     * moves only what brings $to back up to $level (kobo).
+     */
+    public function createTopUpRule(User $user, Wallet $from, Wallet $to, int $level, string $frequency, ?int $day): AutomationRule
+    {
+        $this->guardContribution($user, $from, $to);
+        if ($level <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero.']);
+        }
+
+        return AutomationRule::create([
+            'user_id' => $user->id,
+            'name' => "Keep {$to->name} topped up",
+            'from_wallet_id' => $from->id,
+            'to_wallet_id' => $to->id,
+            'amount' => $level,
+            'fill_to' => true,
+            'frequency' => $frequency,
+            'day_of_week' => $frequency === 'weekly' ? $day : null,
+            'day_of_month' => $frequency === 'monthly' ? $day : null,
+            'enabled' => true,
+        ]);
+    }
+
     /** SAV-02 "Round-ups": spending from $from rounded up to $step, swept daily. */
     public function createRoundUpRule(User $user, Wallet $from, Wallet $savings, int $step, bool $enabled = true): AutomationRule
     {
@@ -293,9 +343,9 @@ class AutomationService
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Rule disabled', 'period' => $period];
             }
 
-            // Salary rules only run when a salary lands (runIncome).
-            if ($locked->trigger === 'salary') {
-                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Runs when salary lands', 'period' => $period];
+            // Salary and deposit rules only run when money lands (runIncome, runDeposits).
+            if (in_array($locked->trigger, ['salary', 'deposit'], true)) {
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Runs when money lands', 'period' => $period];
             }
 
             // Scheduled runs must match the calendar; a manual force skips only this.
@@ -311,19 +361,24 @@ class AutomationService
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing', 'period' => $period];
             }
 
-            // Round-ups move whatever spending has built up since the last sweep.
-            $amount = $locked->trigger === 'roundup' ? (int) $locked->pending_amount : (int) $locked->amount;
+            // Round-ups move whatever spending has built up since the last sweep; a
+            // top-up only what brings the wallet back to its level.
+            $amount = match (true) {
+                $locked->trigger === 'roundup' => (int) $locked->pending_amount,
+                $locked->fill_to => max(0, (int) $locked->amount - (int) $to->fresh()->balance),
+                default => (int) $locked->amount,
+            };
 
             // Defense-in-depth money guards (in addition to the create-time validation):
             // never move a non-positive amount, and re-confirm BOTH wallets still belong
             // to the rule's owner at execution time, so no post-creation change can move
             // money across users or reverse the flow.
             if ($amount <= 0) {
-                if ($locked->trigger === 'roundup') {
+                if ($locked->trigger === 'roundup' || $locked->fill_to) {
                     $locked->update(['last_run_period' => $period]);
                 }
 
-                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Non-positive amount', 'period' => $period];
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => $locked->fill_to ? 'Already topped up' : 'Non-positive amount', 'period' => $period];
             }
             // A savings contribution may pay into someone else's savings wallet, but only
             // while the saver can still fund it (still a member with the fund permission).
@@ -344,6 +399,10 @@ class AutomationService
                 // Round-ups wait for tomorrow's sweep; a savings plan says what a miss does.
                 if ($plan && $locked->trigger === 'schedule') {
                     return $this->missed($locked, $plan, $from, $to, $owner, $amount, $available, $period, $now);
+                }
+                // Someone's share into a shared wallet (SPD-04 "Split between us").
+                if ($locked->savings_contribution && $locked->trigger === 'schedule') {
+                    return $this->shareMissed($locked, $from, $to, $owner, $amount, $period, $now);
                 }
 
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Insufficient available balance', 'period' => $period];
@@ -407,6 +466,7 @@ class AutomationService
                 $moved = $this->wallets->transferBetweenWallets($from, $to, $move, $owner, 'Automation: ' . $rule->name . ' (part)');
                 $rule->update($stamp + ['last_run_at' => $now, 'retry_count' => 0, 'retry_at' => null]);
                 $this->notifications->push($owner, 'savings_missed', "Saved ₦{$this->naira($move)} into {$to->name}", "{$from->name} didn't have the full ₦{$this->naira($amount)}, so we saved what was there and kept ₦" . number_format(self::KEEP_IN_SOURCE / 100) . " in {$from->name}.", ['wallet_id' => $to->id, 'reference' => $moved['reference']]);
+                $this->sms($plan, $owner, "Patriai: {$from->name} was short, so we saved ₦{$this->naira($move)} of ₦{$this->naira($amount)} into {$to->name}.");
                 $this->tellOthers($plan, $to, $owner, "{$owner->first_name} saved part of their ₦{$this->naira($amount)}");
 
                 return ['status' => 'partial', 'amount' => $this->naira($move), 'reference' => $moved['reference']] + $result;
@@ -417,6 +477,7 @@ class AutomationService
             $retryAt = $now->copy()->addDays(self::RETRY_DAYS);
             $rule->update($stamp + ['retry_count' => $rule->retry_count + 1, 'retry_at' => $retryAt]);
             $this->notifications->push($owner, 'savings_missed', "Couldn't save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. We'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
+            $this->sms($plan, $owner, "Patriai: your ₦{$this->naira($amount)} save into {$to->name} didn't go — {$from->name} was short. We'll try again on {$retryAt->format('j M')}.");
             $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save — trying again on {$retryAt->format('j M')}");
 
             return ['retry_at' => $retryAt->toIso8601String()] + $result;
@@ -424,9 +485,43 @@ class AutomationService
 
         $rule->update($stamp + ['retry_count' => 0, 'retry_at' => null]);
         $this->notifications->push($owner, 'savings_missed', "Skipped a save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. Your next save happens as planned.", ['wallet_id' => $to->id]);
+        $this->sms($plan, $owner, "Patriai: we skipped your ₦{$this->naira($amount)} save into {$to->name} — {$from->name} was short. Your next save happens as planned.");
         $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save");
 
         return $result;
+    }
+
+    /**
+     * SPD-04 "If someone's share doesn't arrive, we remind them and tell you after
+     * 2 days": the payer hears now and again in 2 days; if it still can't go, the
+     * wallet's owner is told. Runs under the rule lock.
+     */
+    private function shareMissed(AutomationRule $rule, Wallet $from, Wallet $to, User $payer, int $amount, string $period, Carbon $now): array
+    {
+        $result = ['rule_id' => $rule->id, 'status' => 'missed', 'period' => $period];
+        if ($rule->retry_at === null) {
+            $retryAt = $now->copy()->addDays(2);
+            $rule->update(['last_run_period' => $period, 'retry_count' => 1, 'retry_at' => $retryAt]);
+            $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} didn't go", "{$from->name} is short of ₦{$this->naira($amount)}. Add money and we'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
+
+            return ['retry_at' => $retryAt->toIso8601String()] + $result;
+        }
+
+        $rule->update(['retry_count' => 0, 'retry_at' => null]);
+        $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} still didn't go", "{$from->name} was short of ₦{$this->naira($amount)} again. {$to->owner->first_name} has been told.", ['wallet_id' => $to->id]);
+        if ($to->owner && $to->owner->id !== $payer->id) {
+            $this->notifications->push($to->owner, 'share_missed', "{$payer->first_name}'s share hasn't arrived", "{$payer->fullName()}'s ₦{$this->naira($amount)} into {$to->name} didn't go through after 2 days.", ['wallet_id' => $to->id]);
+        }
+
+        return $result;
+    }
+
+    /** SAV-06 "Tell me — Push and SMS". */
+    private function sms(SavingsPlan $plan, User $saver, string $text): void
+    {
+        if ($plan->notify_sms && $saver->phone) {
+            SmsService::make()->send($saver->phone, $text);
+        }
     }
 
     /** SAV-06 "Tell Emeka too": the wallet's owner and co-owners hear when a saver misses. */
@@ -488,6 +583,59 @@ class AutomationService
                 });
             } catch (\Throwable $e) {
                 Log::warning("Salary rule {$rule->id} failed: {$e->getMessage()}");
+                $results[] = ['rule_id' => $rule->id, 'status' => 'error', 'reason' => $e->getMessage()];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * A bank deposit landed in $wallet: every "share of every deposit" rule on it
+     * moves its share at once (client: "percentage of deposits from 1 or more
+     * wallets"). Each deposit is taken from once — the rule remembers it.
+     */
+    public function runDeposits(Wallet $wallet, Transaction $credit): array
+    {
+        if ($credit->direction !== 'credit' || $credit->type !== 'fund') {
+            return [];
+        }
+
+        $results = [];
+        $rules = AutomationRule::where('from_wallet_id', $wallet->id)->where('trigger', 'deposit')->where('enabled', true)->get();
+        foreach ($rules as $rule) {
+            try {
+                $results[] = DB::transaction(function () use ($rule, $wallet, $credit) {
+                    $locked = AutomationRule::whereKey($rule->id)->lockForUpdate()->first();
+                    $key = "txn:{$credit->id}";
+                    if (!$locked->enabled || $locked->last_run_period === $key) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Already taken from this deposit'];
+                    }
+                    $to = Wallet::find($locked->to_wallet_id);
+                    $owner = $locked->user;
+                    if (!$to || !$owner || $wallet->user_id !== $owner->id || !$to->canFund($owner)) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing'];
+                    }
+
+                    $amount = min(intdiv($credit->amount * (int) $locked->percent, 100), $wallet->fresh()->availableToSpend());
+                    if ($amount <= 0) {
+                        return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Nothing available'];
+                    }
+
+                    $result = $this->wallets->transferBetweenWallets($wallet, $to, $amount, $owner, 'Automation: ' . $locked->name);
+                    $locked->update(['last_run_period' => $key, 'last_run_at' => now()]);
+                    $this->notifications->push(
+                        $owner,
+                        'automation_run',
+                        "Set aside ₦{$this->naira($amount)} into {$to->name}",
+                        "{$locked->percent}% of the ₦{$this->naira($credit->amount)} that just landed in {$wallet->name}.",
+                        ['automation_rule_id' => $locked->id, 'reference' => $result['reference'], 'amount' => $this->naira($amount)],
+                    );
+
+                    return ['rule_id' => $locked->id, 'status' => 'ran', 'amount' => $this->naira($amount), 'reference' => $result['reference']];
+                });
+            } catch (\Throwable $e) {
+                Log::warning("Deposit rule {$rule->id} failed: {$e->getMessage()}");
                 $results[] = ['rule_id' => $rule->id, 'status' => 'error', 'reason' => $e->getMessage()];
             }
         }

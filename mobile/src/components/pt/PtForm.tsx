@@ -201,6 +201,7 @@ const NOTE_TONES = {
   info: { bg: pt.infoSoft, fg: pt.ink, icon: pt.info, name: 'info' as const },
   success: { bg: pt.brandSoft, fg: pt.ink, icon: pt.brand, name: 'check' as const },
   warning: { bg: '#FDEBC8', fg: pt.ink, icon: '#8F5400', name: 'lock' as const },
+  attention: { bg: '#FDEBC8', fg: pt.ink, icon: '#8F5400', name: 'info' as const },
 };
 
 /** Tinted note under a step ("Saving automatically is how most families reach their goal…"). */
