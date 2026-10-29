@@ -15,10 +15,21 @@ class WalletLockController extends ApiController
             return $err;
         }
 
-        $wallet->update(['status' => 'frozen']);
-        \App\Services\AuditService::make()->log($wallet, $request->user(), 'wallet_frozen', 'Wallet frozen — spending blocked');
+        if ($wallet->status !== 'active') {
+            return $this->fail(match ($wallet->status) {
+                'frozen' => 'This wallet is already paused.',
+                'suspended' => 'Patriai stopped this wallet. Talk to support.',
+                default => 'This wallet is archived.',
+            }, 422);
+        }
 
-        return $this->ok('Wallet frozen. Spending is blocked until you unfreeze it.', [
+        // WAL-12 "Paused by Ngozi — rules and payments are stopped. Money can still come in."
+        $wallet->update(['status' => 'frozen', 'meta' => array_merge($wallet->meta ?? [], [
+            'paused' => ['by' => $request->user()->id, 'at' => now()->toIso8601String()],
+        ])]);
+        \App\Services\AuditService::make()->log($wallet, $request->user(), 'wallet_frozen', 'Paused the wallet', ['summary' => 'paused the wallet', 'detail' => 'Rules and payments stopped']);
+
+        return $this->ok('Wallet paused. Rules and payments are stopped; money can still come in.', [
             'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
         ]);
     }
@@ -30,10 +41,16 @@ class WalletLockController extends ApiController
             return $err;
         }
 
-        $wallet->update(['status' => 'active']);
-        \App\Services\AuditService::make()->log($wallet, $request->user(), 'wallet_unfrozen', 'Wallet unfrozen — spending re-enabled');
+        // Only a pause lifts here; Patriai lifts a suspension.
+        if ($wallet->status !== 'frozen') {
+            return $this->fail($wallet->status === 'suspended' ? 'Patriai stopped this wallet. Talk to support.' : 'This wallet is not paused.', 422);
+        }
+        $meta = $wallet->meta ?? [];
+        unset($meta['paused']);
+        $wallet->update(['status' => 'active', 'meta' => $meta ?: null]);
+        \App\Services\AuditService::make()->log($wallet, $request->user(), 'wallet_unfrozen', 'Resumed the wallet', ['summary' => 'resumed the wallet']);
 
-        return $this->ok('Wallet unfrozen. Spending is enabled again.', [
+        return $this->ok('Wallet resumed. Rules and payments run again.', [
             'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
         ]);
     }

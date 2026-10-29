@@ -273,6 +273,14 @@ abstract class ApiController extends Controller
             'goal' => $wallet->type === 'goal' ? \App\Services\GoalService::make()->summary($wallet) : null,
             'joint' => \App\Services\JointService::make()->summary($wallet),
             'child' => \App\Services\ChildService::make()->summary($wallet),
+            // WAL-08 "Named people" and WAL-06 "Notifications".
+            'approver_ids' => $wallet->approvalMode() === 'named' ? $wallet->namedApprovers()->all() : null,
+            'notify' => $wallet->meta['notify'] ?? null,
+            // WAL-13: archived or closed for good, when and what moved out.
+            'closed' => $wallet->status === 'closed' ? [
+                'mode' => $wallet->meta['closed']['mode'] ?? 'archive',
+                'at' => $wallet->meta['closed']['at'] ?? $wallet->updated_at?->toIso8601String(),
+            ] : null,
             'lock' => ($lock = $wallet->savingsLock()) ? $lock + [
                 'locked' => $wallet->isGoalLocked(),
                 'charity' => $lock['charity_id'] ? \App\Models\Organisation::find($lock['charity_id'])?->only(['id', 'name', 'area', 'state']) : null,
@@ -346,6 +354,8 @@ abstract class ApiController extends Controller
             'fund' => $elevated ? true : (($perms['fund'] ?? true) !== false),
             'request' => $elevated ? true : (($perms['request'] ?? true) !== false),
             'withdraw' => $elevated ? true : ($canSpend && (($perms['withdraw'] ?? true) !== false)),
+            // WAL-07 "See who paid what — turn off to keep amounts private".
+            'see_contributions' => $elevated ? true : (($perms['see_contributions'] ?? true) !== false),
             // Per-member spend-request cap: naira decimal string, or null when unset.
             'request_limit' => ($perms['request_limit'] ?? null) !== null
                 ? number_format(((int) $perms['request_limit']) / 100, 2, '.', '')
@@ -418,6 +428,18 @@ abstract class ApiController extends Controller
             'fail_reason' => $request->fail_reason,
             'expires_at' => $request->expires_at?->toIso8601String(),
             'created_at' => $request->created_at?->toIso8601String(),
+            // WAL-11 asking to unlock: what for, the proof, and who gets paid.
+            'unlock' => !empty($request->payload['unlock']) ? [
+                'purpose' => $request->payload['purpose'] ?? null,
+                'proof_url' => \App\Http\Controllers\Api\WalletManageController::proofUrl($request->payload['proof_path'] ?? null),
+                'early_fee' => number_format(((int) ($request->payload['early_fee'] ?? 0)) / 100, 2, '.', ''),
+            ] : null,
+            'pays_to' => $request->payload['to_name'] ?? $request->payload['account_name'] ?? null,
+            // Rule changes, unlocking and closing (WAL-08/10/13) move no money themselves.
+            'governance' => in_array($request->action, \App\Services\ApprovalService::GOVERNANCE_ACTIONS, true),
+            'approver_names' => isset($request->payload['approver_ids'])
+                ? User::whereIn('id', (array) $request->payload['approver_ids'])->get()->map(fn ($u) => $u->first_name ?: $u->fullName())->values()
+                : null,
         ];
 
         if ($viewer !== null) {

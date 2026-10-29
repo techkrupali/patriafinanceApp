@@ -38,8 +38,22 @@ class ApprovalService
             'transfer_user' => 'transfer',
             'transfer_bank' => 'bank transfer',
             'milestone_release' => 'milestone payout',
+            'rule_change' => 'rule change',
+            'unlock_wallet' => 'unlock',
+            'close_wallet' => 'close',
             default => $action,
         };
+    }
+
+    /** Rule changes, unlocking and closing move no money by themselves (WAL-08/10/13). */
+    public const GOVERNANCE_ACTIONS = ['rule_change', 'unlock_wallet', 'close_wallet'];
+
+    /** "Approval needed: ₦35,000 bank transfer" · "Approval needed: Over ₦50,000 needs Ngozi and Emeka". */
+    private function title(ApprovalRequest $request, string $prefix): string
+    {
+        return in_array($request->action, self::GOVERNANCE_ACTIONS, true)
+            ? "{$prefix}: {$request->description}"
+            : "{$prefix}: ₦" . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action);
     }
 
     private function naira(int $kobo): string
@@ -68,6 +82,11 @@ class ApprovalService
             ]);
         }
 
+        // WAL-08 "Named people, both": only they may answer.
+        if ($wallet->approvalMode() === 'named') {
+            $payload['approver_ids'] = $approvers->all();
+        }
+
         $request = ApprovalRequest::create([
             'wallet_id' => $wallet->id,
             'initiator_id' => $initiator->id,
@@ -94,6 +113,52 @@ class ApprovalService
             if ($approver) {
                 $this->notifications->push($approver, 'approval_requested', $title, "{$initiator->fullName()} requested approval on {$wallet->name}.", $data);
             }
+        }
+
+        return $request;
+    }
+
+    /**
+     * A request every one of $approverIds must say yes to — the initiator counts as
+     * the first yes (WAL-11 "You count as the first yes"). Used for rule changes,
+     * unlocking and closing (owners and co-owners), and for taking money out of a
+     * locked wallet (every approver).
+     *
+     * @param  \Illuminate\Support\Collection<int, int>  $approverIds
+     */
+    public function createGoverned(Wallet $wallet, User $initiator, string $action, int $amountKobo, int $feeKobo, string $description, array $payload, $approverIds): ApprovalRequest
+    {
+        $ids = collect($approverIds)->map(fn ($id) => (int) $id)->reject(fn ($id) => $id === $initiator->id)->unique()->values();
+        if ($ids->isEmpty()) {
+            throw ValidationException::withMessages(['approval' => 'Nobody else holds this wallet to say yes.']);
+        }
+        // One change waits at a time, so two can't undo each other.
+        if (in_array($action, self::GOVERNANCE_ACTIONS, true)
+            && $wallet->approvalRequests()->where('status', 'pending')->whereIn('action', self::GOVERNANCE_ACTIONS)->where('expires_at', '>', now())->exists()) {
+            throw ValidationException::withMessages(['approval' => 'A change is already waiting for a yes. Answer or cancel it first.']);
+        }
+
+        $request = ApprovalRequest::create([
+            'wallet_id' => $wallet->id,
+            'initiator_id' => $initiator->id,
+            'action' => $action,
+            'amount' => $amountKobo,
+            'fee' => $feeKobo,
+            'description' => $description,
+            'payload' => $payload + ['approver_ids' => $ids->all()],
+            'required_approvals' => $ids->count(),
+            'approvals_count' => 0,
+            'status' => 'pending',
+            'expires_at' => now()->addHours($wallet->approvalExpiryHours()),
+        ]);
+
+        $title = $this->title($request, 'Approval needed');
+        foreach (User::whereIn('id', $ids)->get() as $approver) {
+            $this->notifications->push($approver, 'approval_requested', $title, "{$initiator->fullName()} asked on {$wallet->name}.", [
+                'approval_request_id' => $request->id,
+                'wallet_id' => $wallet->id,
+                'amount' => $this->naira($amountKobo),
+            ]);
         }
 
         return $request;
@@ -143,7 +208,8 @@ class ApprovalService
             $request->update(['status' => 'expired']);
             throw ValidationException::withMessages(['approval' => 'This request has expired.']);
         }
-        if (!$request->wallet->canApprove($approver)) {
+        $named = $request->payload['approver_ids'] ?? null;
+        if (is_array($named) ? !in_array($approver->id, array_map('intval', $named), true) : !$request->wallet->canApprove($approver)) {
             throw ValidationException::withMessages(['approval' => 'You are not allowed to approve on this wallet.']);
         }
         if ($request->initiator_id === $approver->id) {
@@ -195,7 +261,7 @@ class ApprovalService
                     $this->notifications->push(
                         $initiator,
                         'approval_rejected',
-                        'Request rejected: ₦' . $this->naira($locked->amount) . ' ' . $this->actionLabel($locked->action),
+                        $this->title($locked, 'Request rejected'),
                         "{$approver->fullName()} rejected your request on {$locked->wallet->name}." . ($note ? " Note: {$note}" : ''),
                         ['approval_request_id' => $locked->id, 'wallet_id' => $locked->wallet_id],
                     );
@@ -231,11 +297,30 @@ class ApprovalService
         // advances to 'executed' or 'failed' here. A crash in between leaves
         // status 'approved' with no executed_transaction_reference, i.e. a
         // discoverable "execution still owed" state.
+        AuditService::make()->log($request->wallet, $approver, $decision === 'reject' ? 'approval_rejected' : 'approval_approved', ($decision === 'reject' ? 'Said no to ' : 'Said yes to ') . $this->subject($request), [
+            'approval_request_id' => $request->id,
+            'action' => $request->action,
+            'amount' => $request->amount,
+            'initiator_id' => $request->initiator_id,
+            'note' => $note,
+        ]);
+
         if ($shouldExecute) {
             $this->execute($request);
         }
 
         return $request->refresh();
+    }
+
+    /** "₦35,000 to Greenfield School" · "Over ₦50,000 needs Ngozi and Emeka". */
+    private function subject(ApprovalRequest $request): string
+    {
+        if (in_array($request->action, self::GOVERNANCE_ACTIONS, true)) {
+            return lcfirst((string) $request->description);
+        }
+        $to = $request->payload['account_name'] ?? null;
+
+        return '₦' . number_format($request->amount / 100) . ($to ? " to {$to}" : '') . ($request->description ? " · {$request->description}" : '');
     }
 
     /**
@@ -260,6 +345,28 @@ class ApprovalService
             // slip money out past the lock.
             if ($wallet->isEmergencyLocked()) {
                 throw ValidationException::withMessages(['wallet' => 'This emergency wallet is locked.']);
+            }
+
+            // Rule changes, unlocking and closing: applied once everyone said yes.
+            if (in_array($request->action, self::GOVERNANCE_ACTIONS, true)) {
+                $approvers = $request->responses()->where('decision', 'approve')->with('approver')->get()->pluck('approver')->filter();
+                $manage = WalletManageService::make();
+                match ($request->action) {
+                    'rule_change' => $manage->applyRules($wallet, $initiator, (array) ($payload['changes'] ?? []), $approvers),
+                    'unlock_wallet' => $manage->removeLock($wallet, $initiator, $approvers),
+                    'close_wallet' => $manage->close($wallet, $initiator, $payload, $approvers),
+                };
+                $request->update(['status' => 'executed']);
+                if ($initiator) {
+                    $this->notifications->push($initiator, 'approval_executed', $this->title($request, 'Approved'), "Everyone said yes on {$wallet->name}. It's done.", ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id]);
+                }
+
+                return;
+            }
+
+            // A request approved after its wallet was paused or suspended waits for it.
+            if ($wallet->isFrozen()) {
+                throw ValidationException::withMessages(['wallet' => $wallet->isSuspended() ? 'This wallet is suspended.' : 'This wallet is paused.']);
             }
 
             // Approved: limits are settled; the category must still be allowed, and
@@ -344,7 +451,7 @@ class ApprovalService
                 $this->notifications->push(
                     $initiator,
                     'approval_executed',
-                    'Approved & sent: ₦' . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action),
+                    $this->title($request, 'Approved & sent'),
                     "Your request on {$wallet->name} was approved and completed.",
                     ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id, 'reference' => $reference],
                 );
@@ -376,7 +483,7 @@ class ApprovalService
                     $initiator,
                     'approval_failed',
                     'Approval could not be completed',
-                    "Your ₦" . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action) . " on {$wallet->name} was approved but failed: {$reason}",
+                    (in_array($request->action, self::GOVERNANCE_ACTIONS, true) ? "Your {$this->actionLabel($request->action)}" : "Your ₦" . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action)) . " on {$wallet->name} was approved but failed: {$reason}",
                     ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id],
                 );
             }

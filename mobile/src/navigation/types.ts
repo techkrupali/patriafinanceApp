@@ -158,8 +158,31 @@ export type RootStackParamList = {
   FamilyMember: { memberId: number };
   SpousalSync: undefined;
   // ---- Wallet governance (Audit / Lock / Automation) ----
+  /** WAL-14 */
   WalletAuditLog: { walletId: number };
+  /** Spending hours: when money may go out (from WAL-06). */
   WalletLock: { walletId: number };
+  // ---- Wallets · Manage (WAL-03…15) ----
+  /** WAL-03 */
+  WalletActivity: { walletId: number };
+  /** WAL-04 */
+  WalletMembers: { walletId: number };
+  /** WAL-05 */
+  WalletAccount: { walletId: number };
+  /** WAL-06 "Name, colour and goal". */
+  WalletBasics: { walletId: number };
+  /** WAL-07 */
+  MemberPermissions: { walletId: number; memberId: number };
+  /** WAL-08 (and the wallet's money rules). */
+  ApprovalRules: { walletId: number };
+  /** WAL-10 */
+  LockWallet: { walletId: number };
+  /** WAL-11 */
+  AskToUnlock: { walletId: number };
+  /** WAL-13 */
+  CloseWallet: { walletId: number };
+  /** WAL-15; `audit` when opened from the audit log's export. */
+  WalletStatement: { walletId: number; audit?: boolean };
   Automations: undefined;
   CreateAutomation: { fromWalletId?: number; toWalletId?: number } | undefined;
   // ---- Support & compliance ----

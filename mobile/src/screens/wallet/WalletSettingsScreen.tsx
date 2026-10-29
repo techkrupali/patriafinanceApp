@@ -1,383 +1,227 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Switch, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Input } from '../../components/Input';
-import { Button } from '../../components/Button';
-import { ErrorText } from '../../components/ErrorText';
+import React, { useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { pt } from '../../theme';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtPanel } from '../../components/pt/PtForm';
+import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
 import { LoadError } from '../../components/LoadError';
-import { colors } from '../../theme';
-import { useUpdateWallet, useWallet, useWalletDeletion } from '../../api/hooks';
-import { selection, notifySuccess } from '../../lib/haptics';
-import type { UpdateWalletPayload } from '../../api/types';
+import { SettingsRow, rulesLine, scheduleLine } from '../../components/wallet/WalletManageUi';
+import { useBudget, useUpdateWallet, useWallet, useWalletDeletion, useWalletInvitations, useWalletLock } from '../../api/hooks';
+import { formatNaira, formatYmd } from '../../lib/format';
+import { notifySuccess } from '../../lib/haptics';
+import { showAlert } from '../../lib/alert';
+import type { WalletNotify } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
+const NOTIFY: { value: WalletNotify; label: string; hint: string }[] = [
+  { value: 'everyone', label: 'Every payment, for all members', hint: 'Everyone in the wallet hears when money comes in or goes out' },
+  { value: 'owners', label: 'Every payment, owners only', hint: 'You and any co-owner hear about every payment' },
+  { value: 'off', label: 'Only approvals and alerts', hint: 'No message for each payment' },
+];
+
+const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] || '';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDate = (ymd: string) => {
+  const [, m, d] = ymd.split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+};
+
+/**
+ * WAL-06 Wallet settings: name, colour and goal · members and permissions ·
+ * approval rules · spending limits and hours · lock · notifications ·
+ * statements · audit log · pause · close or archive. Owners and co-owners.
+ */
 export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'WalletSettings'>) {
   const { walletId } = route.params;
   const detail = useWallet(walletId);
   const update = useUpdateWallet(walletId);
+  const pause = useWalletLock(walletId);
+  const deletion = useWalletDeletion(walletId);
+  const [notifyOpen, setNotifyOpen] = useState(false);
 
-  const wallet = detail.data?.wallet;
-  const approval = detail.data?.approval;
-  const isMain = wallet?.type === 'main';
+  const d = detail.data;
+  const wallet = d?.wallet;
+  const type = wallet?.type;
+  const isMain = type === 'main';
+  const archived = wallet?.status === 'closed';
+  const role = d?.my_role;
+  const invites = useWalletInvitations(walletId, Boolean(wallet) && !isMain && !archived);
+  const budget = useBudget(walletId, type === 'spending');
 
-  const del = useWalletDeletion(walletId);
-  const isArchived = wallet?.status === 'closed';
-  const isOwner = (detail.data?.my_role ?? wallet?.my_role) === 'owner';
-  const delBusy = del.archive.isPending || del.unarchive.isPending || del.remove.isPending;
-
-  const confirmArchive = () => {
-    if (!wallet) return;
-    selection();
-    Alert.alert(
-      'Delete wallet',
-      `"${wallet.name}" will be archived and hidden from your active wallets. You can restore it anytime. The wallet must be empty first.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () =>
-            del.archive.mutate(undefined, {
-              onSuccess: () => {
-                notifySuccess();
-                navigation.goBack();
-              },
-              onError: (e) => Alert.alert('Could not delete', e.message),
-            }),
-        },
-      ],
+  if (detail.isLoading || !d || !wallet) {
+    return (
+      <PtPageScreen title="Wallet settings" onBack={() => navigation.goBack()}>
+        {detail.error ? <LoadError message={(detail.error as Error).message} onRetry={() => void detail.refetch()} /> : <ActivityIndicator color={pt.brand} />}
+      </PtPageScreen>
     );
-  };
+  }
 
-  const restore = () => {
-    selection();
-    del.unarchive.mutate(undefined, {
-      onSuccess: () => notifySuccess(),
-      onError: (e) => Alert.alert('Could not restore', e.message),
-    });
-  };
+  const target = parseFloat(wallet.target_amount ?? '');
+  const approvers = (d.governance?.approvers ?? []).map((a) => a.name);
+  const named = (d.governance?.approvers ?? []).filter((a) => wallet.approver_ids?.includes(a.user_id)).map((a) => a.name);
+  const lock = wallet.lock;
+  const canLock = !['main', 'joint', 'emergency', 'project'].includes(wallet.type);
+  const pendingInvites = invites.data?.length ?? 0;
+  const memberCount = d.members.length;
+  const frozen = wallet.status === 'frozen';
+  const suspended = wallet.status === 'suspended';
+  const notify = NOTIFY.find((n) => n.value === wallet.notify);
 
-  const confirmDeleteForever = () => {
-    if (!wallet) return;
-    selection();
-    Alert.alert(
-      'Delete permanently',
-      `This permanently removes "${wallet.name}" and its history. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete forever',
-          style: 'destructive',
-          onPress: () =>
-            del.remove.mutate(undefined, {
-              onSuccess: () => {
-                notifySuccess();
-                navigation.goBack();
-              },
-              onError: (e) => Alert.alert('Could not delete', e.message),
-            }),
+  const lockLine = lock?.locked
+    ? lock.mode === 'date' && lock.until
+      ? `Locked until ${formatYmd(lock.until)}`
+      : lock.mode === 'target'
+        ? `Locked until ${formatNaira(wallet.target_amount)} is in`
+        : `Locked until ${joinFirst([firstName(wallet.owner?.name), ...(d.governance?.others ?? [])])} agree`
+    : 'Not locked';
+
+  const togglePause = () => {
+    if (frozen) {
+      pause.unfreeze.mutate(undefined, {
+        onSuccess: () => {
+          notifySuccess();
+          navigation.goBack();
         },
-      ],
-    );
-  };
-
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [approvalEnabled, setApprovalEnabled] = useState(false);
-  const [threshold, setThreshold] = useState('');
-  const [required, setRequired] = useState(1);
-  const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    if (!initialized && wallet && approval) {
-      setName(wallet.name);
-      setDescription(wallet.description ?? '');
-      setApprovalEnabled(approval.enabled);
-      setThreshold(approval.threshold ?? '');
-      setRequired(Math.max(approval.required_approvals || 1, 1));
-      setInitialized(true);
-    }
-  }, [initialized, wallet, approval]);
-
-  const save = () => {
-    setError(null);
-    if (!name.trim()) {
-      setError('Give your wallet a name.');
+        onError: (e) => showAlert('Could not resume', e.message),
+      });
       return;
     }
-    const body: UpdateWalletPayload = {
-      name: name.trim(),
-      description: description.trim(),
-    };
-    if (!isMain) {
-      body.approval_enabled = approvalEnabled;
-      if (approvalEnabled) {
-        body.approval_threshold = threshold.trim() ? threshold.trim() : null;
-        body.required_approvals = required;
-      }
-    }
-    update.mutate(body, {
-      onSuccess: () => navigation.goBack(),
-      onError: (e) => setError(e.message),
-    });
+    showAlert(`Pause ${wallet.name}?`, 'Rules and payments stop until someone resumes it. Money can still come in.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Pause wallet',
+        style: 'destructive',
+        onPress: () =>
+          pause.freeze.mutate(undefined, {
+            onSuccess: () => {
+              notifySuccess();
+              navigation.goBack();
+            },
+            onError: (e) => showAlert('Could not pause', e.message),
+          }),
+      },
+    ]);
   };
 
+  const restore = () =>
+    deletion.unarchive.mutate(undefined, {
+      onSuccess: () => {
+        notifySuccess();
+        navigation.goBack();
+      },
+      onError: (e) => showAlert('Could not restore', e.message),
+    });
+
   return (
-    <Screen withBottomInset>
-      <Header title="Wallet settings" />
-
-      {detail.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
-      ) : detail.error ? (
-        <LoadError message={(detail.error as Error).message} onRetry={() => detail.refetch()} />
-      ) : wallet ? (
-        <KeyboardAwareScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 24, paddingTop: 8 }}
-          showsVerticalScrollIndicator={false}
-        >
-            <Input
-              label="Wallet Name"
-              icon="pricetag-outline"
-              value={name}
-              onChangeText={setName}
-              placeholder="Wallet name"
-              maxLength={100}
+    <PtPageScreen title="Wallet settings" subtitle={wallet.name} onBack={() => navigation.goBack()}>
+      <PtPanel>
+        <SettingsRow
+          icon="edit-2"
+          title={isMain ? 'Name' : 'Name, colour and goal'}
+          sub={Number.isFinite(target) && target > 0 ? `${formatNaira(target)}${wallet.target_date ? ` by ${shortDate(wallet.target_date)}` : ''}` : wallet.name}
+          onPress={archived ? undefined : () => navigation.navigate('WalletBasics', { walletId })}
+          last={isMain}
+        />
+        {!isMain ? (
+          <>
+            <SettingsRow
+              icon="user"
+              title="Members and permissions"
+              sub={`${memberCount} member${memberCount === 1 ? '' : 's'}${pendingInvites ? `, ${pendingInvites} invite${pendingInvites === 1 ? '' : 's'}` : ''}`}
+              onPress={() => navigation.navigate('WalletMembers', { walletId })}
             />
-
-            <Input
-              label="Description (Optional)"
-              icon="document-text-outline"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="What's this wallet for?"
-              maxLength={200}
-              containerClassName="mt-5"
+            <SettingsRow
+              icon="check"
+              title="Approval rules"
+              sub={
+                d.governance?.pending_change
+                  ? `Waiting for ${joinFirst(d.governance.pending_change.approver_names ?? [])} to approve a change`
+                  : wallet.type === 'joint'
+                    ? 'Joint rules change together'
+                    : rulesLine({ enabled: Boolean(d.approval.enabled), threshold: d.approval.threshold, mode: wallet.approval_mode, approvers, named })
+              }
+              onPress={archived ? undefined : () => navigation.navigate('ApprovalRules', { walletId })}
             />
-
-            {isMain ? (
-              <View className="mt-7 flex-row items-start rounded bg-lav-faint p-4">
-                <Ionicons name="information-circle" size={18} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
-                <Text className="flex-1 text-[13px] leading-5 text-muted">
-                  Approval controls aren't available on your main wallet.
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text className="mt-8 text-[13px] font-semibold text-muted">
-                  Spending Approvals
-                </Text>
-
-                <View className="mt-2 flex-row items-center rounded bg-lav-faint p-4">
-                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.navy} style={{ marginRight: 10 }} />
-                  <View className="flex-1 pr-2">
-                    <Text className="text-[15px] font-semibold text-ink">Require approval</Text>
-                    <Text className="mt-0.5 text-[13px] leading-5 text-muted">
-                      When on, withdrawals and transfers must be approved by chosen members before they go through.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={approvalEnabled}
-                    onValueChange={(v) => {
-                      selection();
-                      setApprovalEnabled(v);
-                    }}
-                    trackColor={{ false: colors.border, true: colors.brand }}
-                    thumbColor={colors.white}
-                  />
-                </View>
-
-                {approvalEnabled ? (
-                  <>
-                    <Input
-                      label="Approval Threshold (Optional)"
-                      icon="cash-outline"
-                      value={threshold}
-                      onChangeText={(t) => setThreshold(t.replace(/[^0-9.]/g, ''))}
-                      placeholder="0.00"
-                      keyboardType="decimal-pad"
-                      containerClassName="mt-5"
-                    />
-                    <Text className="mt-2 text-[13px] leading-5 text-muted">
-                      {threshold.trim()
-                        ? `Only spends over ${threshold.trim()} will need approval.`
-                        : 'Leave empty to require approval on every spend.'}
-                    </Text>
-
-                    <Text className="mt-6 text-[13px] font-semibold text-muted">
-                      Approvals Required
-                    </Text>
-                    <View className="mt-2 flex-row items-center justify-between rounded bg-lav-faint p-3">
-                      <Pressable
-                        onPress={() => {
-                          selection();
-                          setRequired((n) => Math.max(1, n - 1));
-                        }}
-                        disabled={required <= 1}
-                        className={`h-11 w-11 items-center justify-center rounded bg-white ${
-                          required <= 1 ? 'opacity-40' : 'active:opacity-70'
-                        }`}
-                      >
-                        <Ionicons name="remove" size={22} color={colors.navy} />
-                      </Pressable>
-                      <View className="items-center">
-                        <Text className="text-2xl font-extrabold text-ink">{required}</Text>
-                        <Text className="text-[11px] text-muted">approver{required === 1 ? '' : 's'}</Text>
-                      </View>
-                      <Pressable
-                        onPress={() => {
-                          selection();
-                          setRequired((n) => Math.min(10, n + 1));
-                        }}
-                        disabled={required >= 10}
-                        className={`h-11 w-11 items-center justify-center rounded bg-white ${
-                          required >= 10 ? 'opacity-40' : 'active:opacity-70'
-                        }`}
-                      >
-                        <Ionicons name="add" size={22} color={colors.navy} />
-                      </Pressable>
-                    </View>
-                    <Text className="mt-2 text-[13px] leading-5 text-muted">
-                      Number of approvers who must sign off before a spend executes.
-                    </Text>
-                  </>
-                ) : null}
-              </>
-            )}
-
-            <ErrorText message={error} className="mt-5" />
-
-            <Button title="Save changes" icon="checkmark" onPress={save} loading={update.isPending} className="mt-6" />
-
-            {!isMain ? (
-              <>
-                <Text className="mt-9 text-[13px] font-semibold text-muted">
-                  Wallet Controls
-                </Text>
-                <View className="mt-2 overflow-hidden rounded bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
-                  <Pressable
-                    onPress={() => {
-                      selection();
-                      navigation.navigate('WalletLock', { walletId });
-                    }}
-                    className="flex-row items-center p-4 active:opacity-70"
-                  >
-                    <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                      <Ionicons name="lock-closed-outline" size={19} color={colors.navy} />
-                    </View>
-                    <View className="flex-1 pr-2">
-                      <Text className="text-[15px] font-semibold text-ink">Freeze &amp; scheduled access</Text>
-                      <Text className="mt-0.5 text-[13px] text-muted">
-                        {wallet.status === 'frozen'
-                          ? 'Frozen — spending blocked'
-                          : wallet.access_schedule
-                            ? 'Spending allowed only in a time window'
-                            : 'Freeze the wallet or set a spend window'}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-                  </Pressable>
-                  <View style={{ height: 1, backgroundColor: colors.border }} />
-                  <Pressable
-                    onPress={() => {
-                      selection();
-                      navigation.navigate('WalletAuditLog', { walletId });
-                    }}
-                    className="flex-row items-center p-4 active:opacity-70"
-                  >
-                    <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                      <Ionicons name="receipt-outline" size={19} color={colors.navy} />
-                    </View>
-                    <View className="flex-1 pr-2">
-                      <Text className="text-[15px] font-semibold text-ink">Audit log</Text>
-                      <Text className="mt-0.5 text-[13px] text-muted">Every change to this wallet</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-                  </Pressable>
-                </View>
-
-                {/* Danger zone — delete/archive (owner only) */}
-                {isOwner ? (
-                  <>
-                    <Text className="mt-9 text-[13px] font-semibold text-danger">
-                      Danger Zone
-                    </Text>
-                    <View
-                      className="mt-2 overflow-hidden rounded bg-white"
-                      style={{ borderWidth: 1, borderColor: colors.border }}
-                    >
-                      {isArchived ? (
-                        <>
-                          <Pressable
-                            onPress={restore}
-                            disabled={delBusy}
-                            className="flex-row items-center p-4 active:opacity-70"
-                          >
-                            <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                              <Ionicons name="refresh-outline" size={19} color={colors.navy} />
-                            </View>
-                            <View className="flex-1 pr-2">
-                              <Text className="text-[15px] font-semibold text-ink">Restore wallet</Text>
-                              <Text className="mt-0.5 text-[13px] text-muted">
-                                Move it back to your active wallets
-                              </Text>
-                            </View>
-                            {del.unarchive.isPending ? (
-                              <ActivityIndicator color={colors.navy} />
-                            ) : (
-                              <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-                            )}
-                          </Pressable>
-                          <View style={{ height: 1, backgroundColor: colors.border }} />
-                          <Pressable
-                            onPress={confirmDeleteForever}
-                            disabled={delBusy}
-                            className="flex-row items-center p-4 active:opacity-70"
-                          >
-                            <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-danger-soft">
-                              <Ionicons name="trash-outline" size={19} color={colors.danger} />
-                            </View>
-                            <View className="flex-1 pr-2">
-                              <Text className="text-[15px] font-semibold text-danger">Delete permanently</Text>
-                              <Text className="mt-0.5 text-[13px] text-muted">
-                                Remove this wallet and its history — cannot be undone
-                              </Text>
-                            </View>
-                            {del.remove.isPending ? <ActivityIndicator color={colors.danger} /> : null}
-                          </Pressable>
-                        </>
-                      ) : (
-                        <Pressable
-                          onPress={confirmArchive}
-                          disabled={delBusy}
-                          className="flex-row items-center p-4 active:opacity-70"
-                        >
-                          <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-danger-soft">
-                            <Ionicons name="trash-outline" size={19} color={colors.danger} />
-                          </View>
-                          <View className="flex-1 pr-2">
-                            <Text className="text-[15px] font-semibold text-danger">Delete wallet</Text>
-                            <Text className="mt-0.5 text-[13px] text-muted">
-                              Archives it (reversible). The wallet must be empty.
-                            </Text>
-                          </View>
-                          {del.archive.isPending ? <ActivityIndicator color={colors.danger} /> : null}
-                        </Pressable>
-                      )}
-                    </View>
-                  </>
-                ) : null}
-              </>
+            {type === 'spending' ? (
+              <SettingsRow
+                icon="slash"
+                title="Spending limits"
+                sub={budget.data ? `${formatNaira(budget.data.spent)} of ${formatNaira(budget.data.amount)} spent` : 'Limits by category and person'}
+                onPress={() => navigation.navigate('SpendingLimits', { walletId })}
+              />
             ) : null}
-        </KeyboardAwareScrollView>
+            <SettingsRow
+              icon="clock"
+              title="Spending hours"
+              sub={scheduleLine(wallet.access_schedule)}
+              onPress={archived || suspended ? undefined : () => navigation.navigate('WalletLock', { walletId })}
+              last={!canLock}
+            />
+            {canLock ? (
+              <SettingsRow icon="lock" title="Lock" sub={lockLine} onPress={archived ? undefined : () => navigation.navigate('LockWallet', { walletId })} last />
+            ) : null}
+          </>
+        ) : null}
+      </PtPanel>
+
+      <PtPanel>
+        <SettingsRow
+          icon="bell"
+          title="Notifications"
+          sub={notify?.label ?? 'Money in, for the owner'}
+          onPress={archived ? undefined : () => setNotifyOpen(true)}
+        />
+        <SettingsRow icon="download" title="Statements" sub="PDF or CSV" onPress={() => navigation.navigate('WalletStatement', { walletId })} />
+        <SettingsRow icon="rotate-ccw" title="Audit log" sub="Every change, who and when" onPress={() => navigation.navigate('WalletAuditLog', { walletId })} last />
+      </PtPanel>
+
+      {!isMain && wallet.type !== 'project' ? (
+        <PtPanel>
+          {archived ? (
+            role === 'owner' && wallet.closed?.mode !== 'close' ? (
+              <SettingsRow icon="refresh-ccw" title="Restore this wallet" sub="Make it active again" onPress={restore} last />
+            ) : (
+              <SettingsRow icon="archive" title={wallet.closed?.mode === 'close' ? 'Closed for good' : 'Archived'} sub="Read only. History and statements stay available" last />
+            )
+          ) : (
+            <>
+              <SettingsRow
+                icon={frozen ? 'play' : 'pause'}
+                title={frozen ? 'Resume this wallet' : 'Pause this wallet'}
+                sub={suspended ? 'Patriai stopped this wallet. Talk to support' : frozen ? 'Rules and payments run again' : 'Stops rules and payments for now'}
+                onPress={suspended || pause.freeze.isPending || pause.unfreeze.isPending ? undefined : togglePause}
+              />
+              <SettingsRow
+                icon="trash-2"
+                title="Close or archive"
+                sub="Move what's left, keep the history"
+                danger
+                onPress={suspended ? undefined : () => navigation.navigate('CloseWallet', { walletId })}
+                last
+              />
+            </>
+          )}
+        </PtPanel>
       ) : null}
-    </Screen>
+
+      <View style={{ height: 8 }} />
+      <PtOptionSheet
+        visible={notifyOpen}
+        title="Notifications"
+        options={NOTIFY}
+        value={wallet.notify ?? null}
+        onClose={() => setNotifyOpen(false)}
+        onPick={(value) => {
+          setNotifyOpen(false);
+          update.mutate({ notify: value }, { onSuccess: () => notifySuccess(), onError: (e) => showAlert('Could not save', e.message) });
+        }}
+      />
+    </PtPageScreen>
   );
+}
+
+function joinFirst(names: string[]): string {
+  const n = names.filter(Boolean);
+  if (n.length <= 1) return n[0] ?? 'everyone';
+  return `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
 }

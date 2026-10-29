@@ -193,7 +193,7 @@ class WalletCreationFlowTest extends TestCase
         $this->assertFalse($wallet->fresh()->approvalRequiredFor(1_000_00));
     }
 
-    public function test_settings_change_the_rule_and_a_fixed_count_clears_it(): void
+    public function test_rule_changes_wait_for_the_other_owners_yes(): void
     {
         [$ngozi, $emeka] = $this->family();
         $wallet = Wallet::create(['user_id' => $ngozi->id, 'type' => 'goal', 'name' => 'Fees', 'balance' => 0, 'approval_enabled' => true]);
@@ -201,19 +201,67 @@ class WalletCreationFlowTest extends TestCase
         $this->join($wallet, $emeka, 'co_owner');
         Sanctum::actingAs($ngozi);
 
-        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'majority', 'approval_expiry_hours' => 48, 'reminder_day' => 1])
-            ->assertOk()
-            ->assertJsonPath('data.wallet.approval_mode', 'majority')
-            ->assertJsonPath('data.wallet.reminder_day', 1);
-        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['lock_until_goal' => true])->assertStatus(422);
-        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['required_approvals' => 1])
+        // WAL-08: the reminder isn't a rule and applies now; who decides waits for Emeka.
+        $id = $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'majority', 'approval_expiry_hours' => 72, 'reminder_day' => 1])
             ->assertOk()
             ->assertJsonPath('data.wallet.approval_mode', null)
-            ->assertJsonPath('data.wallet.reminder_day', 1);
+            ->assertJsonPath('data.wallet.reminder_day', 1)
+            ->assertJsonPath('data.pending_change.action', 'rule_change')
+            ->assertJsonPath('data.pending_change.approver_names.0', 'Emeka')
+            ->json('data.pending_change.id');
+        $this->getJson("/api/v1/wallets/{$wallet->id}")->assertJsonPath('data.governance.others.0', 'Emeka')
+            ->assertJsonPath('data.governance.pending_change.id', $id);
+        // One change waits at a time, and a lock needs a target.
+        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_threshold' => 50000])->assertStatus(422);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['lock_until_goal' => true])->assertStatus(422);
+        // Only Emeka is asked.
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertStatus(422);
 
-        // Co-owners can't change who decides.
         Sanctum::actingAs($emeka);
-        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'any'])->assertStatus(403);
+        $this->getJson('/api/v1/approvals?scope=to_me')->assertJsonPath('data.approvals.0.id', $id)->assertJsonPath('data.approvals.0.governance', true);
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk()->assertJsonPath('data.approval.status', 'executed');
+        $this->assertSame('majority', $wallet->fresh()->approvalMode());
+        $this->assertSame(72, $wallet->fresh()->approvalExpiryHours());
+
+        // A co-owner can ask too; the owner says yes. A fixed count clears the rule.
+        $id = $this->patchJson("/api/v1/wallets/{$wallet->id}", ['required_approvals' => 1])->assertOk()
+            ->assertJsonPath('data.pending_change.approver_names.0', 'Ngozi')->json('data.pending_change.id');
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->assertNull($wallet->fresh()->approvalMode());
+
+        // WAL-14: "Emeka changed the yeses needed … Ngozi approved".
+        $this->getJson("/api/v1/wallets/{$wallet->id}/audit-log?category=rules")
+            ->assertOk()
+            ->assertJsonPath('data.audit_log.0.title', 'Emeka changed who decides')
+            ->assertJsonPath('data.audit_log.0.detail', 'From most approvers to a fixed number of yeses · Ngozi approved');
+    }
+
+    public function test_named_people_decide_and_only_they_are_asked(): void
+    {
+        [$ngozi, $emeka, $ada, $tolu, $main] = $this->family();
+        $wallet = Wallet::create(['user_id' => $ngozi->id, 'type' => 'goal', 'name' => 'Fees', 'balance' => 100_000_00, 'approval_enabled' => true, 'approval_threshold' => 5_000_000]);
+        $this->join($wallet, $ngozi, 'owner');
+        $this->join($wallet, $emeka, 'contributor');
+        WalletMember::where('wallet_id', $wallet->id)->where('user_id', $emeka->id)->update(['can_approve' => true]);
+        $this->join($wallet, $ada, 'contributor');
+        WalletMember::where('wallet_id', $wallet->id)->where('user_id', $ada->id)->update(['can_approve' => true]);
+        Sanctum::actingAs($ngozi);
+
+        // Ada can't approve alone, and one name isn't enough.
+        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'named', 'approver_ids' => [$ngozi->id]])->assertStatus(422);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'named', 'approver_ids' => [$ngozi->id, $tolu->id]])->assertStatus(422);
+        // Alone as owner, it applies now.
+        $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_mode' => 'named', 'approver_ids' => [$ngozi->id, $emeka->id]])
+            ->assertOk()->assertJsonPath('data.pending_change', null)
+            ->assertJsonPath('data.wallet.approval_mode', 'named');
+
+        $wallet->refresh();
+        $this->assertSame([$ngozi->id, $emeka->id], $wallet->eligibleApprovers()->all());
+        // Ada asks: Ngozi and Emeka, both.
+        $this->assertSame(2, $wallet->requiredApprovalsFor($ada));
+        // Ngozi asks: she is the first yes, Emeka is the second.
+        $this->assertSame(1, $wallet->requiredApprovalsFor($ngozi));
     }
 
     public function test_reminder_goes_to_savers_once_on_the_day(): void

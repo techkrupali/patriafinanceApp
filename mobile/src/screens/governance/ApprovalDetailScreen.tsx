@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { showAlert } from '../../lib/alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
@@ -99,7 +100,7 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
   };
 
   const confirmCancel = () => {
-    Alert.alert('Cancel request', 'Withdraw this approval request?', [
+    showAlert('Cancel request', 'Withdraw this approval request?', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel request',
@@ -135,9 +136,13 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
             <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
               {approvalActionLabel(approval.action)}
             </Text>
-            <Text className="mt-2 text-[38px] font-extrabold tracking-tight text-white">
-              {formatMoney(approval.amount)}
-            </Text>
+            {approval.governance ? (
+              <Text className="mt-2 text-center text-[20px] font-extrabold leading-7 text-white">{approval.description}</Text>
+            ) : (
+              <Text className="mt-2 text-[38px] font-extrabold tracking-tight text-white">
+                {formatMoney(approval.amount)}
+              </Text>
+            )}
             <View className={`mt-3 flex-row items-center rounded px-3 py-1.5 ${status.bg}`}>
               <Ionicons name={status.icon} size={13} color={statusIconColor(status)} style={{ marginRight: 5 }} />
               <Text className={`text-[11px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
@@ -152,10 +157,36 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
             <DetailRow label="Wallet" value={approval.wallet?.name ?? '—'} />
             <Divider />
             <DetailRow label="Requested by" value={approval.initiator?.name ?? '—'} />
-            {approval.description ? (
+            {approval.description && !approval.governance ? (
               <>
                 <Divider />
-                <DetailRow label="Note" value={approval.description} />
+                <DetailRow label={approval.unlock ? 'What it is for' : 'Note'} value={approval.description} />
+              </>
+            ) : null}
+            {approval.pays_to ? (
+              <>
+                <Divider />
+                <DetailRow label="Pays to" value={approval.pays_to} />
+              </>
+            ) : null}
+            {approval.unlock?.proof_url ? (
+              <>
+                <Divider />
+                <Pressable onPress={() => void Linking.openURL(approval.unlock!.proof_url!)} accessibilityRole="link">
+                  <DetailRow label="Proof" value="Open the attached proof" />
+                </Pressable>
+              </>
+            ) : null}
+            {approval.unlock && parseFloat(approval.unlock.early_fee) > 0 ? (
+              <>
+                <Divider />
+                <DetailRow label="Early unlock fee" value={formatMoney(approval.unlock.early_fee)} />
+              </>
+            ) : null}
+            {approval.approver_names?.length ? (
+              <>
+                <Divider />
+                <DetailRow label="Who approves" value={approval.approver_names.join(', ')} />
               </>
             ) : null}
             {parseFloat(approval.fee) > 0 ? (

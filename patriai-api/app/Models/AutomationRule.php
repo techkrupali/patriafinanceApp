@@ -66,6 +66,16 @@ class AutomationRule extends Model
         ];
     }
 
+    /** WAL-14 "Ngozi added a rule — Save 10% from every salary", on the wallet it pays into. */
+    protected static function booted(): void
+    {
+        static::created(function (AutomationRule $rule) {
+            if ($rule->toWallet && $rule->toWallet->type !== 'main') {
+                \App\Services\AuditService::make()->log($rule->toWallet, $rule->user, 'rule_added', "Added a rule: {$rule->name}", ['summary' => 'added a rule', 'detail' => $rule->name, 'automation_rule_id' => $rule->id]);
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

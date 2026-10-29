@@ -58,6 +58,16 @@ import { WalletSettingsScreen } from '../screens/wallet/WalletSettingsScreen';
 import { AssignAccessScreen } from '../screens/wallet/AssignAccessScreen';
 import { WalletAuditLogScreen } from '../screens/wallet/WalletAuditLogScreen';
 import { WalletLockScreen } from '../screens/wallet/WalletLockScreen';
+import { WalletActivityScreen } from '../screens/wallet/WalletActivityScreen';
+import { WalletMembersScreen } from '../screens/wallet/WalletMembersScreen';
+import { WalletAccountScreen } from '../screens/wallet/WalletAccountScreen';
+import { WalletBasicsScreen } from '../screens/wallet/WalletBasicsScreen';
+import { MemberPermissionsScreen } from '../screens/wallet/MemberPermissionsScreen';
+import { ApprovalRulesScreen } from '../screens/wallet/ApprovalRulesScreen';
+import { LockWalletScreen } from '../screens/wallet/LockWalletScreen';
+import { AskToUnlockScreen } from '../screens/wallet/AskToUnlockScreen';
+import { CloseWalletScreen } from '../screens/wallet/CloseWalletScreen';
+import { WalletStatementScreen } from '../screens/wallet/WalletStatementScreen';
 import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
 import { FamilyMemberScreen } from '../screens/family/FamilyMemberScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
@@ -316,6 +326,16 @@ export function RootNavigator() {
       <RootStack.Screen name="AssignAccess" component={AssignAccessScreen} />
       <RootStack.Screen name="WalletAuditLog" component={WalletAuditLogScreen} />
       <RootStack.Screen name="WalletLock" component={WalletLockScreen} />
+      <RootStack.Screen name="WalletActivity" component={WalletActivityScreen} />
+      <RootStack.Screen name="WalletMembers" component={WalletMembersScreen} />
+      <RootStack.Screen name="WalletAccount" component={WalletAccountScreen} />
+      <RootStack.Screen name="WalletBasics" component={WalletBasicsScreen} />
+      <RootStack.Screen name="MemberPermissions" component={MemberPermissionsScreen} />
+      <RootStack.Screen name="ApprovalRules" component={ApprovalRulesScreen} />
+      <RootStack.Screen name="LockWallet" component={LockWalletScreen} />
+      <RootStack.Screen name="AskToUnlock" component={AskToUnlockScreen} />
+      <RootStack.Screen name="CloseWallet" component={CloseWalletScreen} />
+      <RootStack.Screen name="WalletStatement" component={WalletStatementScreen} />
       <RootStack.Screen name="FamilyHub" component={FamilyHubScreen} />
       <RootStack.Screen name="FamilyMember" component={FamilyMemberScreen} />
       <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />

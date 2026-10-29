@@ -256,6 +256,7 @@ export function approvalModeLabel(mode: string | null | undefined, required: num
   if (mode === "any") return "Any one approver";
   if (mode === "all") return "Everyone who approves";
   if (mode === "majority") return "Most approvers";
+  if (mode === "named") return "Named people, all of them";
   return `${required} approval${required === 1 ? "" : "s"}`;
 }
 
@@ -269,4 +270,11 @@ export function ordinal(n: number): string {
 /** SAV-06 "If a save can't happen". */
 export function missedPolicyLabel(policy: string): string {
   return { retry: "Try again in 3 days", partial: "Save whatever is there", skip: "Skip this time" }[policy] ?? label(policy);
+}
+
+/** A wallet's status as the family sees it (WAL-12): frozen is "Paused", closed "Archived". */
+export function walletStatusLabel(status: string, closedMode?: string | null): string {
+  if (status === "frozen") return "Paused";
+  if (status === "closed") return closedMode === "close" ? "Closed" : "Archived";
+  return label(status);
 }

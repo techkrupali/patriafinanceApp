@@ -40,12 +40,17 @@ function ApprovalCard({ approval, scope, onPress }: { approval: ApprovalRequest;
           <Text className="text-[15px] font-bold text-ink" numberOfLines={1}>
             {approvalActionLabel(approval.action)}
           </Text>
+          {approval.governance && approval.description ? (
+            <Text className="mt-0.5 text-[13px] text-ink" numberOfLines={2}>
+              {approval.description}
+            </Text>
+          ) : null}
           <Text className="mt-0.5 text-xs text-faded" numberOfLines={1}>
             {approval.wallet?.name}
             {scope === 'to_me' && approval.initiator?.name ? ` · by ${approval.initiator.name}` : ''}
           </Text>
         </View>
-        <Text className="text-[15px] font-extrabold text-ink">{formatMoney(approval.amount)}</Text>
+        {approval.governance ? null : <Text className="text-[15px] font-extrabold text-ink">{formatMoney(approval.amount)}</Text>}
       </View>
 
       <View className="mt-3 flex-row items-center justify-between">

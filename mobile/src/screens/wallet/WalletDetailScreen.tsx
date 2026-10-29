@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
+import React from 'react';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { pt, ptFont, ptRadius } from '../../theme';
@@ -11,57 +10,22 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtRing } from '../../components/pt/PtRing';
 import { PtAvatar, AVATAR_CYCLE } from '../../components/pt/PtAvatar';
 import { PtChip } from '../../components/pt/PtChip';
-import { PtCard, PtRow } from '../../components/pt/PtList';
 import { LoadError } from '../../components/LoadError';
-import { MemberManageModal } from '../../components/MemberManageModal';
+import { ActivityRow, StateNotice } from '../../components/wallet/WalletManageUi';
 import { GivingSection } from '../../components/giving/GivingSection';
 import { JointSection } from '../../components/joint/JointSection';
 import { GoalCancelButton } from '../../components/goal/GoalCancelButton';
-import {
-  useBudget,
-  useAutomations,
-  useFundingDetails,
-  useWallet,
-  useWalletInvitations,
-  useWalletMembers,
-  useWalletTransactions,
-} from '../../api/hooks';
+import { useBudget, useWallet, useWalletLock, useWalletTransactions } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
-import { agoLabel, formatNaira, formatYmd, humanizeType, initials } from '../../lib/format';
-import { approvalSummary, joinNames, ordinal } from '../../lib/goalPlan';
+import { formatNaira, formatYmd, humanizeType, initials } from '../../lib/format';
 import { walletColour } from '../../lib/walletColours';
-import { formatE164 } from '../../lib/phone';
-import { canInviteMembers, canManageWallet, roleLabel } from '../../lib/governance';
+import { canManageWallet } from '../../lib/governance';
 import { notifySuccess, selection } from '../../lib/haptics';
-import type { Transaction, WalletMember } from '../../api/types';
+import { showAlert } from '../../lib/alert';
+import type { WalletState } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
 type Tab = 'activity' | 'members' | 'rules' | 'account';
-
-const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "Today, 9:12 am" · "Yesterday" · "1 Oct". */
-function whenLabel(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const today = new Date();
-  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
-  if (days === 0) {
-    const h = d.getHours() % 12 || 12;
-    return `Today, ${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
-  }
-  if (days === 1) return 'Yesterday';
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== today.getFullYear() ? ` ${d.getFullYear()}` : ''}`;
-}
-
-/** "Emeka added money" when someone else paid in; otherwise the description. */
-function activityTitle(t: Transaction, myId: number | undefined): string {
-  if (t.direction === 'credit' && t.by && t.by.id !== myId) return `${t.by.first_name} added money`;
-  return t.description || humanizeType(t.type);
-}
-
-const firstName = (name: string | null | undefined) => (name ?? '').trim().split(/\s+/)[0] || 'Someone';
 
 /** WAL-02 underline tabs. */
 function Tabs({ tabs, value, onChange }: { tabs: { key: Tab; label: string }[]; value: Tab; onChange: (t: Tab) => void }) {
@@ -135,10 +99,12 @@ function LinkCard({
 }
 
 /**
- * WAL-02 Wallet detail: progress ring (or balance) with who's in it, Add money /
- * Pay from wallet, then Activity · Members · Rules · Account. Emergency rules,
- * the savings plan, spending limits (WAL-09) and pending approvals link out from
- * above the tabs; a giving wallet shows what's coming up (WAL-18).
+ * WAL-02 Wallet detail: progress ring (or balance) with who's in it, the
+ * wallet's state (WAL-12), Add money / Pay from wallet, then the latest
+ * activity. Activity · Members · Rules · Account open their own pages
+ * (WAL-03, 04, 08, 05). Emergency rules, the savings plan, spending limits
+ * (WAL-09) and pending approvals link out above; a giving wallet shows what's
+ * coming up (WAL-18), a joint wallet its rules (WAL-19).
  */
 export function WalletDetailScreen({ navigation, route }: RootScreenProps<'WalletDetail'>) {
   const { walletId } = route.params;
@@ -146,10 +112,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const me = useAuth((s) => s.user);
   const detail = useWallet(walletId);
   const txns = useWalletTransactions(walletId);
-  const automations = useAutomations();
-  const [tab, setTab] = useState<Tab>('activity');
-  const [copied, setCopied] = useState(false);
-  const [manageMember, setManageMember] = useState<WalletMember | null>(null);
+  const pause = useWalletLock(walletId);
 
   const wallet = detail.data?.wallet;
   const members = detail.data?.members ?? [];
@@ -159,15 +122,14 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const pending = detail.data?.pending_approvals ?? 0;
   const emergency = detail.data?.emergency ?? null;
   const emergencyLocked = emergency?.locked ?? false;
+  const state = detail.data?.state ?? null;
   const isMain = wallet?.type === 'main';
+  const closed = wallet?.status === 'closed';
+  const stopped = closed || wallet?.status === 'suspended';
 
   const canManage = canManageWallet(role);
-  const canInvite = canInviteMembers(role) && !isMain;
   const canSpend = detail.data?.my_can_spend ?? (role != null && ['owner', 'co_owner'].includes(role));
-  const canRequest = (detail.data?.my_can_request ?? false) && !emergencyLocked;
-  const richMembers = useWalletMembers(walletId, canManage);
-  const invites = useWalletInvitations(walletId, canInvite);
-  const funding = useFundingDetails(walletId, tab === 'account');
+  const canRequest = (detail.data?.my_can_request ?? false) && !emergencyLocked && wallet?.status === 'active';
   const budget = useBudget(walletId, wallet?.type === 'spending');
 
   const balance = parseFloat(wallet?.balance ?? '0');
@@ -175,40 +137,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const hasTarget = Number.isFinite(target) && target > 0;
   const pct = hasTarget ? Math.min((balance / target) * 100, 100) : 0;
   const shared = members.length > 1 || wallet?.mode === 'shared';
-  const allTxns = txns.data?.pages.flatMap((p) => p.transactions) ?? [];
-  const walletRules = (automations.data ?? []).filter((r) => r.from_wallet.id === walletId || r.to_wallet.id === walletId);
-  const pendingInvites = canInvite ? invites.data ?? [] : [];
-  const approvers = members.filter((m) => ['owner', 'co_owner', 'admin'].includes(m.role) || m.can_approve).map((m) => firstName(m.name));
+  const latest = (txns.data?.pages.flatMap((p) => p.transactions) ?? []).slice(0, 5);
 
   const refresh = () => {
     void detail.refetch();
     void txns.refetch();
-    if (canManage) void richMembers.refetch();
-    if (canInvite) void invites.refetch();
-  };
-
-  const openManage = (m: WalletMember) => {
-    const rich = (richMembers.data ?? []).find((r) => r.user_id === m.user_id);
-    if (!rich?.id || rich.role === 'owner') return;
-    selection();
-    setManageMember(rich);
-  };
-
-  const account = funding.data?.account_number ?? wallet?.virtual_account ?? null;
-  const copyAccount = async () => {
-    if (!account) return;
-    selection();
-    await Clipboard.setStringAsync(account);
-    notifySuccess();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-  const shareAccount = () => {
-    if (!account) return;
-    selection();
-    void Share.share({
-      message: `Pay into ${wallet?.name ?? 'our wallet'} on Patriai\nAccount number: ${account}${funding.data?.bank_name ? `\nBank: ${funding.data.bank_name}` : ''}${funding.data?.account_name ? `\nName: ${funding.data.account_name}` : ''}`,
-    });
   };
 
   const tabs: { key: Tab; label: string }[] = [
@@ -217,208 +150,44 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
     { key: 'rules', label: 'Rules' },
     { key: 'account', label: 'Account' },
   ];
+  // WAL-02: each tab is its own page (WAL-03 · 04 · 08 · 05).
+  const openTab = (t: Tab) => {
+    if (t === 'activity') navigation.navigate('WalletActivity', { walletId });
+    else if (t === 'members') navigation.navigate('WalletMembers', { walletId });
+    else if (t === 'rules') navigation.navigate('ApprovalRules', { walletId });
+    else navigation.navigate('WalletAccount', { walletId });
+  };
 
-  const payFromWallet = canSpend
-    ? () => navigation.navigate('Transfer', { walletId })
-    : canRequest
-      ? () => navigation.navigate('RequestSpend', { walletId })
-      : null;
+  const payFromWallet = stopped || wallet?.status === 'frozen'
+    ? null
+    : canSpend
+      ? () => navigation.navigate('Transfer', { walletId })
+      : canRequest
+        ? () => navigation.navigate('RequestSpend', { walletId })
+        : null;
 
-  // ------------------------------------------------------------------ tabs
-  const activity = txns.isLoading ? (
-    <ActivityIndicator color={pt.brand} style={{ marginTop: 24 }} />
-  ) : txns.error ? (
-    <LoadError message={(txns.error as Error).message} onRetry={() => void txns.refetch()} />
-  ) : allTxns.length === 0 ? (
-    <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.inkMuted, paddingVertical: 20, textAlign: 'center' }}>
-      No money in or out yet. Add money to get started.
-    </Text>
-  ) : (
-    <View>
-      {allTxns.map((t) => {
-        const credit = t.direction === 'credit';
-        return (
-          <View key={t.id} style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: credit ? pt.brandSoft : pt.sunken }}>
-              <Feather name={credit ? 'arrow-down-left' : 'arrow-up-right'} size={18} color={credit ? pt.brand : pt.inkMuted} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontFamily: ptFont.semibold, fontSize: 16, lineHeight: 22, color: pt.ink }} numberOfLines={1}>
-                {activityTitle(t, me?.id)}
-              </Text>
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }} numberOfLines={1}>
-                {whenLabel(t.created_at)}
-                {t.status !== 'successful' ? ` · ${humanizeType(t.status)}` : ''}
-              </Text>
-            </View>
-            <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: credit ? pt.emerald500 : pt.ink }}>
-              {credit ? '+' : '−'}
-              {formatNaira(t.amount)}
-            </Text>
-          </View>
-        );
-      })}
-      {txns.hasNextPage ? (
-        <PtButton title="Show more" variant="ghost" loading={txns.isFetchingNextPage} onPress={() => void txns.fetchNextPage()} />
-      ) : null}
-    </View>
-  );
+  const resume = () =>
+    pause.unfreeze.mutate(undefined, {
+      onSuccess: () => notifySuccess(),
+      onError: (e) => showAlert('Could not resume', e.message),
+    });
 
-  const membersTab = (
-    <View style={{ gap: 12, paddingTop: 8 }}>
-      <PtCard>
-        {members.map((m, i) => {
-          const isOwner = m.role === 'owner';
-          const tappable = canManage && !isOwner && richMembers.isSuccess;
-          const you = m.user_id === me?.id;
-          return (
-            <PtRow
-              key={m.user_id}
-              minHeight={64}
-              last={i === members.length - 1 && pendingInvites.length === 0}
-              left={<PtAvatar initials={initials(m.name)} tone={isOwner ? 'brand' : AVATAR_CYCLE[i % AVATAR_CYCLE.length]} />}
-              title={`${m.name}${you ? ' (you)' : ''}`}
-              subtitle={roleLabel(m.role)}
-              right={m.can_approve || ['owner', 'co_owner'].includes(m.role) ? <PtChip label="Approver" tone="brand" /> : undefined}
-              onPress={tappable ? () => openManage(m) : undefined}
-            />
-          );
-        })}
-        {pendingInvites.map((inv, i) => (
-          <PtRow
-            key={`inv-${inv.id}`}
-            minHeight={64}
-            last={i === pendingInvites.length - 1}
-            left={<PtAvatar initials="+" tone="dashed" />}
-            title={inv.invitee_identifier?.startsWith('+') ? formatE164(inv.invitee_identifier) : inv.invitee_identifier ?? 'Invited'}
-            subtitle={`Invited ${agoLabel(inv.created_at)} · ${roleLabel(inv.role).toLowerCase()}`}
-            right={<PtChip label="Pending" tone="warning" />}
-          />
-        ))}
-      </PtCard>
-      {canInvite ? <PtButton title="Add someone to this wallet" variant="secondary" onPress={() => navigation.navigate('InviteMember', { walletId })} /> : null}
-      {canManage && members.length > 1 ? (
-        <PtButton title="Access and permissions" variant="ghost" onPress={() => navigation.navigate('AssignAccess', { walletId })} />
-      ) : null}
-    </View>
-  );
-
-  const lock = wallet?.lock;
-  const lockLine = lock?.locked
-    ? `Locked until ${lock.mode === 'date' && lock.until ? formatYmd(lock.until) : `${formatNaira(wallet?.target_amount)} is reached`}. ${
-        !lock.early_break ? 'Nothing comes out before then.' : lock.approval ? "Taking money out early needs everyone's yes." : 'Early breaks are allowed.'
-      }`
-    : null;
-  const approvalLine = !approval?.enabled
-    ? lockLine ?? 'Approvals are off. Owners and co-owners can pay out directly.'
-    : wallet?.approval_mode
-      ? approvalSummary({
-          mode: wallet.approval_mode,
-          threshold: approval.threshold ? parseFloat(approval.threshold) : null,
-          approvers,
-          lockUntilGoal: Boolean(wallet.goal_locked && lock?.mode !== 'date'),
-        }) + (lock?.locked && lock.mode === 'date' && lockLine ? ` ${lockLine}` : '')
-      : `${approval.threshold ? `Payments over ${formatNaira(approval.threshold)}` : 'Every payment'} need${approval.threshold ? '' : 's'} ${approval.required_approvals} yes${approval.required_approvals === 1 ? '' : 'es'} from ${joinNames(approvers) || 'an approver'}.${lockLine ? ` ${lockLine}` : ''}`;
-
-  const rulesTab = (
-    <View style={{ gap: 12, paddingTop: 8 }}>
-      <PtCard>
-        <PtRow
-          minHeight={64}
-          left={<Feather name="shield" size={20} color={pt.brand} />}
-          title="When money needs a yes"
-          subtitle={approvalLine}
-          onPress={role === 'owner' ? () => navigation.navigate('WalletSettings', { walletId }) : undefined}
-          chevron={role === 'owner'}
-          last={!approval?.enabled && !wallet?.reminder_day && held <= 0}
-        />
-        {approval?.enabled ? (
-          <PtRow
-            left={<Feather name="clock" size={20} color={pt.brand} />}
-            title="Requests expire after"
-            right={`${wallet?.approval_expiry_hours ?? 48} hours`}
-            last={!wallet?.reminder_day && held <= 0}
-          />
-        ) : null}
-        {wallet?.reminder_day ? (
-          <PtRow
-            left={<Feather name="bell" size={20} color={pt.brand} />}
-            title="Monthly reminder"
-            right={`On the ${ordinal(wallet.reminder_day)}`}
-            last={held <= 0}
-          />
-        ) : null}
-        {held > 0 ? (
-          <PtRow left={<Feather name="lock" size={20} color={pt.brand} />} title="Held for approvals" right={formatNaira(held)} last />
-        ) : null}
-      </PtCard>
-
-      {walletRules.length > 0 ? (
-        <PtCard>
-          {walletRules.map((r, i) => (
-            <PtRow
-              key={r.id}
-              minHeight={64}
-              last={i === walletRules.length - 1}
-              left={<Feather name="repeat" size={20} color={r.enabled ? pt.brand : pt.inkSubtle} />}
-              title={r.name}
-              subtitle={`${r.from_wallet.name} → ${r.to_wallet.name} · ${r.enabled ? r.next_run_hint : 'Paused'}`}
-              right={
-                <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>
-                  {r.trigger === 'salary' ? `${r.percent}%` : r.trigger === 'roundup' ? `↑${formatNaira(r.roundup_to)}` : formatNaira(r.amount)}
-                </Text>
-              }
-            />
-          ))}
-        </PtCard>
-      ) : null}
-      {role === 'owner' ? (
-        <PtButton
-          title="New rule"
-          variant="secondary"
-          onPress={() => navigation.navigate('CreateAutomation', isMain ? { fromWalletId: walletId } : { toWalletId: walletId })}
-        />
-      ) : null}
-    </View>
-  );
-
-  const accountTab = (
-    <View style={{ gap: 12, paddingTop: 8 }}>
-      <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 18, gap: 12 }}>
-        <Text style={{ fontFamily: ptFont.medium, fontSize: 13, color: pt.inkMuted }}>Anyone can pay into this wallet directly</Text>
-        {account ? (
-          <Text style={{ fontFamily: MONO, fontWeight: '700', fontSize: 22, letterSpacing: 1, color: pt.ink }} selectable>
-            {account.replace(/^(\d{3})(\d{3})(\d+)$/, '$1 $2 $3')}
-          </Text>
-        ) : funding.isLoading ? (
-          <ActivityIndicator color={pt.brand} style={{ alignSelf: 'flex-start' }} />
-        ) : (
-          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>
-            {funding.error ? (funding.error as Error).message : 'The account number is being set up.'}
-          </Text>
-        )}
-        <View style={{ height: 1, backgroundColor: pt.line }} />
-        {[
-          ['Bank', funding.data?.bank_name ?? wallet?.virtual_account_bank ?? '—'],
-          ['Account name', funding.data?.account_name ?? '—'],
-        ].map(([label, value]) => (
-          <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-            <Text style={{ fontFamily: ptFont.regular, fontSize: 15, color: pt.inkMuted }}>{label}</Text>
-            <Text style={{ flex: 1, textAlign: 'right', fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{value}</Text>
-          </View>
-        ))}
-        {account ? (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-            <PtButton title={copied ? 'Copied' : 'Copy'} variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => void copyAccount()} />
-            <PtButton title="Share" variant="secondary" size="sm" style={{ flex: 1 }} onPress={shareAccount} />
-          </View>
-        ) : null}
-      </View>
-      <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted, paddingHorizontal: 4 }}>
-        This account only accepts money. Paying out still follows the wallet's approval rules.
-      </Text>
-    </View>
-  );
+  /** WAL-12: each notice's one action. */
+  const stateAction = (st: WalletState): { label: string; run: () => void } | null => {
+    switch (st.kind) {
+      case 'paused':
+        return canManage ? { label: 'Resume wallet', run: resume } : null;
+      case 'restricted':
+        return st.me ? { label: "See what's needed", run: () => navigation.navigate('Kyc') } : null;
+      case 'locked':
+        return st.can_ask ? { label: 'Ask to unlock', run: () => navigation.navigate('AskToUnlock', { walletId }) } : null;
+      case 'suspended':
+        return { label: 'Talk to support', run: () => navigation.navigate('Tabs', { screen: 'Steward', params: { ask: `My wallet ${wallet?.name ?? ''} was suspended. What do I do?` } }) };
+      default:
+        return { label: 'Download statement', run: () => navigation.navigate('WalletStatement', { walletId }) };
+    }
+  };
+  const action = state ? stateAction(state) : null;
 
   // ------------------------------------------------------------------ screen
   return (
@@ -491,31 +260,35 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
               ) : null}
               {shared ? <PtChip label="Shared" tone="brand" icon="circle" /> : null}
               {approval?.enabled ? <PtChip label="Approvals on" tone="neutral" icon="lock" /> : null}
-              {wallet.goal_locked ? (
+              {wallet.goal_locked && state?.kind !== 'locked' && !closed ? (
                 <PtChip
                   label={wallet.lock?.mode === 'date' && wallet.lock.until ? `Locked to ${formatYmd(wallet.lock.until).replace(/ \d{4}$/, '')}` : 'Locked until reached'}
                   tone="warning"
                   icon="lock"
                 />
               ) : null}
-              {wallet.status === 'frozen' ? <PtChip label="Frozen" tone="danger" icon="pause" /> : null}
             </View>
           </View>
+
+          {/* WAL-12 */}
+          {state ? <StateNotice state={state} action={action?.label} onAction={action?.run} /> : null}
 
           {/* Actions */}
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <PtButton title="Add money" onPress={() => navigation.navigate('Fund', { walletId })} />
-            </View>
-            {payFromWallet ? (
+          {!stopped ? (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <PtButton title={canSpend ? 'Pay from wallet' : 'Ask to pay'} variant="secondary" onPress={payFromWallet} />
+                <PtButton title="Add money" onPress={() => navigation.navigate('WalletAccount', { walletId })} />
               </View>
-            ) : null}
-          </View>
+              {payFromWallet ? (
+                <View style={{ flex: 1 }}>
+                  <PtButton title={canSpend ? 'Pay from wallet' : 'Ask to pay'} variant="mint" onPress={payFromWallet} />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* Parts of the wallet with their own screens */}
-          {emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type) ? (
+          {!closed && (emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type)) ? (
             <View style={{ gap: 10 }}>
               {emergency ? (
                 <LinkCard
@@ -530,7 +303,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
                 <LinkCard
                   icon="check-circle"
                   tone="dark"
-                  title={`${pending} payment${pending === 1 ? '' : 's'} waiting for a yes`}
+                  title={`${pending} request${pending === 1 ? '' : 's'} waiting for a yes`}
                   subtitle="Review what's waiting on this wallet"
                   onPress={() => navigation.navigate('Approvals', { scope: 'to_me' })}
                 />
@@ -564,15 +337,28 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {wallet.type === 'joint' && wallet.joint ? <JointSection wallet={wallet} myId={me?.id} /> : null}
           {wallet.type === 'goal' && wallet.goal && role === 'owner' && wallet.status === 'active' ? <GoalCancelButton walletId={walletId} name={wallet.name} /> : null}
 
-          {/* Tabs */}
+          {/* Tabs: the latest activity here; each tab opens its own page */}
           <View>
-            <Tabs tabs={tabs} value={tabs.some((t) => t.key === tab) ? tab : 'activity'} onChange={setTab} />
-            {tab === 'members' && !isMain ? membersTab : tab === 'rules' ? rulesTab : tab === 'account' ? accountTab : activity}
+            <Tabs tabs={tabs} value="activity" onChange={openTab} />
+            {txns.isLoading ? (
+              <ActivityIndicator color={pt.brand} style={{ marginTop: 24 }} />
+            ) : txns.error ? (
+              <LoadError message={(txns.error as Error).message} onRetry={() => void txns.refetch()} />
+            ) : latest.length === 0 ? (
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.inkMuted, paddingVertical: 20, textAlign: 'center' }}>
+                {stopped ? 'No money in or out yet.' : 'No money in or out yet. Add money to get started.'}
+              </Text>
+            ) : (
+              <View>
+                {latest.map((t, i) => (
+                  <ActivityRow key={t.id} t={t} myId={me?.id} last={i === latest.length - 1} />
+                ))}
+                <PtButton title="See all activity" variant="ghost" onPress={() => openTab('activity')} />
+              </View>
+            )}
           </View>
         </ScrollView>
       ) : null}
-
-      <MemberManageModal walletId={walletId} member={manageMember} onClose={() => setManageMember(null)} />
     </View>
   );
 }

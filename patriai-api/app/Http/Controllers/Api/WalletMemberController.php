@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Wallet;
 use App\Models\WalletMember;
 use App\Services\NotificationService;
+use App\Services\WalletManageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,10 +18,28 @@ class WalletMemberController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
 
-        $members = $wallet->members()->with('user')->where('status', 'active')->get()
-            ->map(fn ($m) => $this->serializeMember($m));
+        // WAL-04 "WHO PUT IN WHAT": each member's money in and share, unless amounts are private to them.
+        $manage = WalletManageService::make();
+        $seeAmounts = $manage->canSeeContributions($wallet, $request->user());
+        $in = $manage->contributions($wallet);
+        $share = fn (int $kobo) => $in['total'] > 0 ? (int) round($kobo * 100 / $in['total']) : 0;
 
-        return $this->ok('Members fetched', ['members' => $members]);
+        $members = $wallet->members()->with('user')->where('status', 'active')->get()
+            ->sortBy(fn ($m) => [$m->role === 'owner' ? 0 : ($m->role === 'co_owner' ? 1 : 2), -($in['by_user'][$m->user_id] ?? 0)])
+            ->map(fn ($m) => $this->serializeMember($m) + [
+                'put_in' => $seeAmounts ? number_format(($in['by_user'][$m->user_id] ?? 0) / 100, 2, '.', '') : null,
+                'share' => $seeAmounts ? $share($in['by_user'][$m->user_id] ?? 0) : null,
+                'invited_by' => $m->invited_by,
+            ])->values();
+
+        return $this->ok('Members fetched', [
+            'members' => $members,
+            'contributions' => $seeAmounts ? [
+                'total' => number_format($in['total'] / 100, 2, '.', ''),
+                'others' => number_format($in['others'] / 100, 2, '.', ''),
+                'others_share' => $share($in['others']),
+            ] : null,
+        ]);
     }
 
     // PATCH /wallets/{wallet}/members/{member}  { role?, can_approve? }
@@ -53,6 +72,7 @@ class WalletMemberController extends ApiController
             'permissions.fund' => ['sometimes', 'boolean'],
             'permissions.request' => ['sometimes', 'boolean'],
             'permissions.withdraw' => ['sometimes', 'boolean'],
+            'permissions.see_contributions' => ['sometimes', 'boolean'],
             // Per-member spend-request cap (naira, nullable = no limit); stored as kobo.
             'permissions.request_limit' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
@@ -113,7 +133,7 @@ class WalletMemberController extends ApiController
             }
 
             if ($changingPermissions) {
-                foreach (['view', 'fund', 'request', 'withdraw'] as $key) {
+                foreach (['view', 'fund', 'request', 'withdraw', 'see_contributions'] as $key) {
                     if (array_key_exists($key, $data['permissions'])) {
                         $permissions[$key] = (bool) $data['permissions'][$key];
                     }

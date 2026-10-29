@@ -181,6 +181,10 @@ class GoalService
         if (!$account || !$owner) {
             return ['wallet_id' => $wallet->id, 'status' => 'skipped'];
         }
+        // WAL-10 "Still pay the school on time" switched off: the lock holds the payment too.
+        if ($wallet->isGoalLocked() && !($wallet->savingsLock()['pay_payee'] ?? true)) {
+            return ['wallet_id' => $wallet->id, 'status' => 'locked'];
+        }
         if ($wallet->availableToSpend() < $amount + $fee) {
             // Try again tomorrow; tell the owner once a day.
             $this->notifications->push($owner, 'goal_payout_short', "{$wallet->name} can't pay {$account->nickname} yet", 'It has ' . $this->naira($wallet->balance) . ' of the ' . $this->naira($amount) . ' to send. We try again tomorrow at 7:00 am.', ['wallet_id' => $wallet->id]);

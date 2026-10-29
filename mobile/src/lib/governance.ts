@@ -46,6 +46,10 @@ const ACTION_LABELS: Record<ApprovalAction, string> = {
   transfer_wallet: 'Wallet transfer',
   transfer_user: 'Transfer to user',
   transfer_bank: 'Bank transfer',
+  milestone_release: 'Milestone payout',
+  rule_change: 'Rule change',
+  unlock_wallet: 'Unlock wallet',
+  close_wallet: 'Close wallet',
 };
 
 export function approvalActionLabel(action: ApprovalAction | string): string {
@@ -55,6 +59,9 @@ export function approvalActionLabel(action: ApprovalAction | string): string {
 
 export function approvalActionIcon(action: ApprovalAction | string): IconName {
   if (action === 'withdrawal') return 'cash-outline';
+  if (action === 'rule_change') return 'options-outline';
+  if (action === 'unlock_wallet') return 'lock-open-outline';
+  if (action === 'close_wallet') return 'archive-outline';
   return 'paper-plane-outline';
 }
 

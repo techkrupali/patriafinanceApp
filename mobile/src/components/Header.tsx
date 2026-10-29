@@ -29,6 +29,8 @@ export function Header({ title = '', right, className = '', showBack = true }: H
               navigation.goBack();
             }}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
             className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
             style={outline.card}
           >

@@ -529,7 +529,13 @@ class LoanService
             return;
         }
 
-        Wallet::whereIn('id', $ids)->where('status', 'frozen')->update(['status' => 'active']);
+        Wallet::whereIn('id', $ids)->where('status', 'suspended')->get()
+            ->filter(fn (Wallet $w) => ($w->meta['suspended']['reason'] ?? null) === 'loan_default')
+            ->each(function (Wallet $w) {
+            $meta = $w->meta ?? [];
+            unset($meta['suspended']);
+            $w->update(['status' => 'active', 'meta' => $meta ?: null]);
+        });
 
         $meta = $loan->meta ?? [];
         unset($meta['frozen_wallet_ids']);
@@ -569,7 +575,11 @@ class LoanService
                 ->pluck('id');
 
             if ($freezeIds->isNotEmpty()) {
-                Wallet::whereIn('id', $freezeIds)->update(['status' => 'frozen']);
+                // Suspended (Patriai's stop, WAL-12), so the borrower can't resume them.
+                Wallet::whereIn('id', $freezeIds)->get()->each(fn (Wallet $w) => $w->update([
+                    'status' => 'suspended',
+                    'meta' => array_merge($w->meta ?? [], ['suspended' => ['at' => now()->toIso8601String(), 'reason' => 'loan_default', 'loan_id' => $loan->id]]),
+                ]));
                 $meta = $loan->meta ?? [];
                 $meta['frozen_wallet_ids'] = $freezeIds->all();
                 $loan->meta = $meta;

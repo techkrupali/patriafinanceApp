@@ -11,12 +11,24 @@ use Illuminate\Http\Request;
 class ApprovalController extends ApiController
 {
     /** Wallet ids on which this user may act as an approver. */
-    // GET /approvals?status=&scope=to_me|mine
+    // GET /approvals?status=&scope=to_me|mine|wallet&wallet_id=
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
         $scope = $request->query('scope', 'to_me');
         $status = $request->query('status');
+
+        // WAL-03 "Requests": every request on one wallet, for anyone in it.
+        if ($scope === 'wallet') {
+            $wallet = \App\Models\Wallet::find((int) $request->query('wallet_id'));
+            if (!$wallet || !$wallet->isAccessibleBy($user)) {
+                return $this->fail('Wallet not found', 404);
+            }
+            $items = $wallet->approvalRequests()->with(['wallet', 'initiator'])->latest()->orderByDesc('id')->limit(50)->get()
+                ->map(fn ($r) => $this->serializeApprovalRequest($r, $user));
+
+            return $this->ok('Approvals fetched', ['approvals' => $items]);
+        }
 
         if ($scope === 'mine') {
             $query = ApprovalRequest::with(['wallet', 'initiator'])
@@ -31,7 +43,11 @@ class ApprovalController extends ApiController
                 ->whereDoesntHave('responses', fn (Builder $q) => $q->where('approver_id', $user->id));
         }
 
-        $items = $query->latest()->get()->map(fn ($r) => $this->serializeApprovalRequest($r, $user));
+        $items = $query->latest()->get()
+            // Named approvers, rule changes and unlocking ask particular people (WAL-08/11).
+            ->filter(fn ($r) => $scope === 'mine' || !isset($r->payload['approver_ids']) || in_array($user->id, array_map('intval', (array) $r->payload['approver_ids']), true))
+            ->values()
+            ->map(fn ($r) => $this->serializeApprovalRequest($r, $user));
 
         return $this->ok('Approvals fetched', ['approvals' => $items]);
     }

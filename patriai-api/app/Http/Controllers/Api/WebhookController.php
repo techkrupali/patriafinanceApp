@@ -83,6 +83,9 @@ class WebhookController extends ApiController
                 ],
             );
 
+            // WAL-06 "Every payment, for all members".
+            \App\Services\WalletManageService::make()->notifyPayment($wallet, $txn, null);
+
             // Salary landed in Main: "save 15% from every salary" rules take their share;
             // any wallet's "share of every deposit" rules take theirs.
             AutomationService::make()->runIncome($wallet, $txn);

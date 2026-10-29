@@ -301,6 +301,7 @@ class AdminController extends ApiController
     {
         $wallets = Wallet::with('owner')
             ->when($request->query('type'), fn ($q, $t) => $q->where('type', $t))
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->when($request->query('search'), fn ($q, $s) => $q->where(fn ($w) => $w
                 ->where('virtual_account', 'ilike', "%{$s}%")
                 ->orWhere('name', 'ilike', "%{$s}%")))
@@ -444,6 +445,25 @@ class AdminController extends ApiController
                 'fee_percent' => $lock['fee_percent'],
                 'charity' => $lock['charity_id'] ? \App\Models\Organisation::find($lock['charity_id'])?->name : null,
             ] : null,
+            // WAL-12 how the wallet shows (paused by, suspended, locked, archived) as its owner sees it.
+            'state' => \App\Services\WalletManageService::make()->state($wallet, $wallet->owner),
+            'paused_by' => isset($wallet->meta['paused']['by']) ? User::find($wallet->meta['paused']['by'])?->fullName() : null,
+            'suspended' => $wallet->meta['suspended'] ?? null,
+            'closed' => isset($wallet->meta['closed']) ? [...$wallet->meta['closed'], ...[
+                'by_name' => User::find($wallet->meta['closed']['by'] ?? 0)?->fullName(),
+                'moved' => collect($wallet->meta['closed']['moved'] ?? [])->map(fn ($m) => [
+                    'to' => User::find($m['user_id'] ?? 0)?->fullName(),
+                    'wallet' => $m['wallet'] ?? null,
+                    'amount' => number_format(((int) ($m['amount'] ?? 0)) / 100, 2, '.', ''),
+                ])->values(),
+            ]] : null,
+            // WAL-08: named approvers and a rule change waiting for the other owners.
+            'named_approvers' => $wallet->approvalMode() === 'named' ? User::whereIn('id', $wallet->namedApprovers())->get()->map(fn ($u) => $u->fullName())->values() : null,
+            'pending_change' => ($p = $wallet->approvalRequests()->with(['wallet', 'initiator'])->where('status', 'pending')->whereIn('action', \App\Services\ApprovalService::GOVERNANCE_ACTIONS)->latest()->first())
+                ? $this->serializeApprovalRequest($p) : null,
+            // WAL-14: the latest of the append-only audit log.
+            'audit_log' => \App\Models\WalletAuditLog::with('actor')->where('wallet_id', $wallet->id)->latest()->orderByDesc('id')->limit(30)->get()
+                ->map(fn ($l) => \App\Http\Controllers\Api\WalletAuditLogController::serialize($l)),
         ]);
     }
 
@@ -726,19 +746,52 @@ class AdminController extends ApiController
     // PATCH /admin/wallets/{wallet}/status  { status: active|frozen|closed }
     public function updateWalletStatus(Request $request, Wallet $wallet): JsonResponse
     {
-        $data = $request->validate(['status' => ['required', 'in:active,frozen,closed']]);
+        $data = $request->validate([
+            'status' => ['required', 'in:' . implode(',', Wallet::STATUSES)],
+            'reason' => ['nullable', 'string', 'max:200'],
+        ]);
+        $status = $data['status'];
+        if ($status === $wallet->status) {
+            return $this->fail("The wallet is already {$status}", 422);
+        }
+        if ($wallet->type === 'main' && $status === 'closed') {
+            return $this->fail('A main wallet cannot be archived', 422);
+        }
 
-        $wallet->update(['status' => $data['status']]);
+        // WAL-12 "Suspended — we stopped this wallet to protect it" is Patriai's; a pause is the owner's.
+        $meta = $wallet->meta ?? [];
+        unset($meta['suspended'], $meta['paused']);
+        if ($status === 'suspended') {
+            $meta['suspended'] = ['at' => now()->toIso8601String(), 'by_admin' => $request->user()->id, 'reason' => $data['reason'] ?? null];
+        } elseif ($status === 'frozen') {
+            $meta['paused'] = ['by' => null, 'at' => now()->toIso8601String()];
+        } elseif ($status === 'closed') {
+            $meta['closed'] = ['mode' => 'archive', 'at' => now()->toIso8601String(), 'by' => null, 'moved' => []];
+        } else {
+            unset($meta['closed']);
+        }
+        $wallet->update(['status' => $status, 'meta' => $meta ?: null]);
 
-        NotificationService::make()->push(
-            $wallet->owner,
-            'wallet_status_changed',
-            'Wallet status updated',
-            "Your wallet \"{$wallet->name}\" was set to {$data['status']} by support",
-            ['wallet_id' => $wallet->id, 'status' => $data['status']],
-        );
+        $words = [
+            'active' => ['wallet_restored', 'restored the wallet', 'is open again'],
+            'frozen' => ['wallet_frozen', 'paused the wallet', 'was paused by Patriai support'],
+            'suspended' => ['wallet_suspended', 'suspended the wallet', 'was stopped to protect it. Your money is safe; talk to support'],
+            'closed' => ['wallet_archived', 'archived the wallet', 'was archived by Patriai support'],
+        ][$status];
+        \App\Services\AuditService::make()->log($wallet, null, $words[0], ucfirst($words[1]), ['summary' => $words[1], 'detail' => $data['reason'] ?? null, 'admin_id' => $request->user()->id]);
 
-        return $this->ok("Wallet {$data['status']}", [
+        $people = $wallet->members()->where('status', 'active')->pluck('user_id')->push($wallet->user_id)->unique();
+        foreach (User::whereIn('id', $people)->get() as $person) {
+            NotificationService::make()->push(
+                $person,
+                'wallet_status_changed',
+                $status === 'suspended' ? "{$wallet->name} is suspended" : 'Wallet status updated',
+                "{$wallet->name} {$words[2]}.",
+                ['wallet_id' => $wallet->id, 'status' => $status],
+            );
+        }
+
+        return $this->ok("Wallet {$status}", [
             'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
         ]);
     }

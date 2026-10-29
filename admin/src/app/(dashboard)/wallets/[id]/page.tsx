@@ -15,6 +15,7 @@ import {
   naira,
   ordinal,
   signedNaira,
+  walletStatusLabel,
 } from "@/lib/format";
 import type { ApiWallet, WalletDetailData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -28,6 +29,40 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, TableSkeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+
+type WalletStatus = "active" | "frozen" | "suspended" | "closed";
+
+const WALLET_TONES: Record<string, "green" | "amber" | "red"> = { active: "green", frozen: "amber", suspended: "red" };
+
+const STATUS_COPY: Record<WalletStatus | "resume", { title: string; message: string; confirm: string; done: string }> = {
+  active: {
+    title: "Restore this wallet?",
+    message: "Payments and rules run again. Everyone in the wallet is told.",
+    confirm: "Restore",
+    done: "Wallet restored.",
+  },
+  resume: {
+    title: "Resume this wallet?",
+    message: "Rules and payments run again. Everyone in the wallet is told.",
+    confirm: "Resume",
+    done: "Wallet resumed.",
+  },
+  frozen: {
+    title: "Pause this wallet?",
+    message: "Rules and payments stop; money can still come in. The family can resume it themselves.",
+    confirm: "Pause",
+    done: "Wallet paused.",
+  },
+  suspended: {
+    title: "Suspend this wallet?",
+    message: "Nothing goes out until Patriai restores it, and the family can't resume it. They're told their money is safe and to talk to support.",
+    confirm: "Suspend",
+    done: "Wallet suspended.",
+  },
+  closed: { title: "Archive this wallet?", message: "It becomes read only.", confirm: "Archive", done: "Wallet archived." },
+};
+
+const AUDIT_TONES: Record<string, "green" | "amber" | "blue" | "gray"> = { rules: "blue", members: "green", approvals: "amber" };
 
 function Field({ name, children }: { name: string; children: React.ReactNode }) {
   return (
@@ -47,7 +82,7 @@ export default function WalletDetailPage({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [adjusting, setAdjusting] = useState(false);
-  const [freezing, setFreezing] = useState(false);
+  const [target, setTarget] = useState<WalletStatus | null>(null);
   const [crisisUnlocking, setCrisisUnlocking] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
@@ -66,21 +101,18 @@ export default function WalletDetailPage({
   }
 
   const statusMutation = useMutation({
-    mutationFn: (status: "active" | "frozen" | "closed") =>
+    mutationFn: (status: WalletStatus) =>
       api<{ wallet: ApiWallet }>(`/api/v1/admin/wallets/${id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
     onSuccess: (_res, status) => {
-      setFreezing(false);
-      setToast({
-        tone: "green",
-        message: status === "active" ? "Wallet unfrozen." : "Wallet frozen.",
-      });
+      setTarget(null);
+      setToast({ tone: "green", message: STATUS_COPY[status].done });
       invalidate();
     },
     onError: (err: Error) => {
-      setFreezing(false);
+      setTarget(null);
       setToast({ tone: "red", message: err.message });
     },
   });
@@ -97,10 +129,26 @@ export default function WalletDetailPage({
   }
 
   const wallet = data?.wallet;
-  const isFrozen = wallet?.status === "frozen";
-  const isClosed = wallet?.status === "closed";
-  const nextStatus: "active" | "frozen" = isFrozen ? "active" : "frozen";
+  const status = wallet?.status ?? "active";
+  const isClosed = status === "closed";
   const emergency = data?.emergency ?? null;
+  // WAL-12: pause (as an owner would), suspend (Patriai stops it), restore.
+  const actions: { status: WalletStatus; label: string; variant: "primary" | "outline" | "danger" }[] =
+    status === "active"
+      ? [
+          ...(wallet?.type === "main" ? [] : [{ status: "frozen" as const, label: "Pause", variant: "outline" as const }]),
+          { status: "suspended", label: "Suspend", variant: "danger" },
+        ]
+      : status === "frozen"
+        ? [
+            { status: "active", label: "Resume", variant: "primary" },
+            { status: "suspended", label: "Suspend", variant: "danger" },
+          ]
+        : status === "suspended"
+          ? [{ status: "active", label: "Restore", variant: "primary" }]
+          : data?.closed?.mode === "close"
+            ? []
+            : [{ status: "active", label: "Restore", variant: "outline" }];
 
   return (
     <>
@@ -108,21 +156,20 @@ export default function WalletDetailPage({
         title={isPending ? "Wallet" : wallet!.name}
         subtitle={isPending ? undefined : wallet!.owner?.name ?? undefined}
       >
-        {!isPending && <StatusBadge status={wallet!.status} />}
-        {!isPending && !isClosed && (
-          <>
-            <Button variant="outline" onClick={() => setAdjusting(true)}>
-              Adjust balance
-            </Button>
-            <Button
-              variant={isFrozen ? "primary" : "danger"}
-              onClick={() => setFreezing(true)}
-              disabled={statusMutation.isPending}
-            >
-              {isFrozen ? "Unfreeze" : "Freeze"}
-            </Button>
-          </>
+        {!isPending && (
+          <Badge tone={WALLET_TONES[status] ?? "gray"}>{walletStatusLabel(status, data?.closed?.mode)}</Badge>
         )}
+        {!isPending && !isClosed && (
+          <Button variant="outline" onClick={() => setAdjusting(true)}>
+            Adjust balance
+          </Button>
+        )}
+        {!isPending &&
+          actions.map((a) => (
+            <Button key={a.status + a.label} variant={a.variant} onClick={() => setTarget(a.status)} disabled={statusMutation.isPending}>
+              {a.label}
+            </Button>
+          ))}
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -193,10 +240,45 @@ export default function WalletDetailPage({
                       {wallet!.lock.locked ? "Locked" : "Open"}
                     </Badge>
                     <span className="mt-1 block text-xs font-normal text-muted">
-                      {wallet!.lock.mode === "date" ? `Until ${formatDate(wallet!.lock.until)}` : "Until the target is reached"}
+                      {wallet!.lock.mode === "date"
+                        ? `Until ${formatDate(wallet!.lock.until)}`
+                        : wallet!.lock.mode === "agree"
+                          ? "Until the owners agree to unlock it"
+                          : "Until the target is reached"}
                       {" · "}
                       {!wallet!.lock.early_break ? "no early break" : wallet!.lock.approval ? "early break needs everyone's yes" : "early break allowed"}
+                      {wallet!.goal?.payout && wallet!.lock.pay_payee === false ? " · the goal's payee waits too" : ""}
                     </span>
+                  </Field>
+                ) : null}
+                {status === "frozen" ? (
+                  <Field name="Paused">
+                    {data!.paused_by ? `By ${data!.paused_by}` : "By Patriai support"}
+                    <span className="block text-xs font-normal text-muted">Rules and payments stopped; money still comes in</span>
+                  </Field>
+                ) : null}
+                {status === "suspended" ? (
+                  <Field name="Suspended">
+                    {data!.suspended?.at ? formatDateTime(data!.suspended.at) : "—"}
+                    {data!.suspended?.reason ? (
+                      <span className="block text-xs font-normal text-muted">{label(data!.suspended.reason)}</span>
+                    ) : null}
+                  </Field>
+                ) : null}
+                {data!.closed ? (
+                  <Field name={data!.closed.mode === "close" ? "Closed for good" : "Archived"}>
+                    {formatDateTime(data!.closed.at)}
+                    {data!.closed.by_name ? ` by ${data!.closed.by_name}` : ""}
+                    {data!.closed.moved.length ? (
+                      <span className="block text-xs font-normal text-muted">
+                        Moved {data!.closed.moved.map((m) => `${naira(m.amount)} to ${m.to ?? "—"} (${m.wallet ?? "wallet"})`).join(", ")}
+                      </span>
+                    ) : null}
+                  </Field>
+                ) : null}
+                {wallet!.notify ? (
+                  <Field name="Payment alerts">
+                    {{ everyone: "Every payment, all members", owners: "Every payment, owners", off: "Approvals and alerts only" }[wallet!.notify]}
                   </Field>
                 ) : null}
               </dl>
@@ -232,7 +314,18 @@ export default function WalletDetailPage({
                 </Field>
                 <Field name="Who decides">
                   {approvalModeLabel(wallet!.approval_mode, data!.approval.required_approvals)}
+                  {data!.named_approvers?.length ? (
+                    <span className="block text-xs font-normal text-muted">{data!.named_approvers.join(", ")}</span>
+                  ) : null}
                 </Field>
+                {data!.pending_change ? (
+                  <Field name="Change waiting">
+                    {data!.pending_change.description}
+                    <span className="block text-xs font-normal text-muted">
+                      Asked by {data!.pending_change.initiator?.name ?? "—"} · needs {(data!.pending_change.approver_names ?? []).join(", ")}
+                    </span>
+                  </Field>
+                ) : null}
                 <Field name="Requests expire after">
                   {wallet!.approval_expiry_hours ?? 48} hours
                 </Field>
@@ -690,6 +783,45 @@ export default function WalletDetailPage({
           </CardContent>
         </Card>
 
+        {/* WAL-14 audit log */}
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle>Audit Log</CardTitle>
+            <span className="text-xs text-muted">Append-only · latest 30</span>
+          </CardHeader>
+          {isPending ? (
+            <TableSkeleton rows={4} cols={4} />
+          ) : !data!.audit_log?.length ? (
+            <EmptyState message="Nothing recorded yet." />
+          ) : (
+            <Table containerClassName="pb-2">
+              <THead>
+                <tr>
+                  <TH>What</TH>
+                  <TH>Kind</TH>
+                  <TH>Device</TH>
+                  <TH>When</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data!.audit_log.map((a) => (
+                  <TR key={a.id}>
+                    <TD>
+                      <span className="font-medium text-ink">{a.title}</span>
+                      {a.detail ? <span className="block text-xs text-muted">{a.detail}</span> : null}
+                    </TD>
+                    <TD>
+                      <Badge tone={AUDIT_TONES[a.category] ?? "gray"}>{a.category === "other" ? "Wallet" : label(a.category)}</Badge>
+                    </TD>
+                    <TD className="text-muted">{a.device ?? "—"}</TD>
+                    <TD className="text-muted">{formatDateTime(a.created_at)}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+
         {/* Recent transactions */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -766,18 +898,14 @@ export default function WalletDetailPage({
       ) : null}
 
       <ConfirmDialog
-        open={freezing}
-        danger={!isFrozen}
-        title={isFrozen ? "Unfreeze this wallet?" : "Freeze this wallet?"}
-        message={
-          isFrozen
-            ? "The owner regains the ability to move funds in and out of this wallet."
-            : "Debits and transfers will be blocked until the wallet is unfrozen. The owner is notified."
-        }
-        confirmLabel={isFrozen ? "Unfreeze" : "Freeze"}
+        open={target !== null}
+        danger={target === "suspended" || target === "frozen"}
+        title={target ? STATUS_COPY[target === "active" && status === "frozen" ? "resume" : target].title : ""}
+        message={target ? STATUS_COPY[target === "active" && status === "frozen" ? "resume" : target].message : ""}
+        confirmLabel={target ? STATUS_COPY[target === "active" && status === "frozen" ? "resume" : target].confirm : ""}
         busy={statusMutation.isPending}
-        onConfirm={() => statusMutation.mutate(nextStatus)}
-        onCancel={() => setFreezing(false)}
+        onConfirm={() => target && statusMutation.mutate(target)}
+        onCancel={() => setTarget(null)}
       />
 
       <Toast toast={toast} onDismiss={dismissToast} />

@@ -72,6 +72,15 @@ class WalletService
             'status' => 'active',
         ]);
 
+        if ($type !== 'main') {
+            $target = $opts['target_amount'] ?? null;
+            AuditService::make()->log($wallet, $user, 'wallet_created', 'Created the wallet', [
+                'summary' => 'created the wallet',
+                'detail' => $target ? 'Goal ₦' . number_format($target / 100) . (!empty($opts['target_date']) ? ' by ' . \Carbon\Carbon::parse($opts['target_date'])->format('j M Y') : '') : ucfirst($type) . ' wallet',
+                'type' => $type,
+            ]);
+        }
+
         // Funding virtual account on the banking provider. Non-fatal if the
         // provider is briefly unavailable — retried on first funding-details call.
         // A joint wallet gets its account once the partner accepts (JNT WCR-07).
@@ -199,7 +208,8 @@ class WalletService
             $src = $locked[$from->id];
             $dst = $locked[$to->id];
 
-            if ($src->status !== 'active' || $dst->status !== 'active') {
+            // A paused wallet still takes money in (WAL-12); nothing leaves it.
+            if ($src->status !== 'active' || !in_array($dst->status, ['active', 'frozen'], true)) {
                 throw ValidationException::withMessages(['wallet' => 'One of the wallets is not active']);
             }
             if ($src->balance < $amountKobo) {
@@ -253,6 +263,14 @@ class WalletService
 
         $this->recordRoundUp($from, $amountKobo, $to, $description);
 
+        // WAL-06 "Notifications": members who asked to hear about every payment.
+        if (($from->meta['notify'] ?? null) || ($to->meta['notify'] ?? null)) {
+            $manage = WalletManageService::make();
+            foreach (Transaction::where('reference', $result['reference'])->orWhere('meta->pair_reference', $result['reference'])->get() as $txn) {
+                $manage->notifyPayment($txn->wallet_id === $from->id ? $from : $to, $txn, $initiator);
+            }
+        }
+
         return $result;
     }
 
@@ -296,6 +314,9 @@ class WalletService
             $this->banking->payout($txn->reference, $amountNaira, $accountNumber, $bankCode, $description ?: 'Patriai withdrawal');
             $txn->update(['status' => 'successful', 'banking_reference' => $txn->reference]);
             $this->recordRoundUp($wallet, $amountKobo, null, $description);
+            if ($wallet->meta['notify'] ?? null) {
+                WalletManageService::make()->notifyPayment($wallet, $txn, $initiator);
+            }
         } catch (ConnectionException $e) {
             // Timeout / network failure: the payout outcome is UNKNOWN. Do NOT refund
             // blindly (the bank may have executed it) — leave funds reserved as 'pending'

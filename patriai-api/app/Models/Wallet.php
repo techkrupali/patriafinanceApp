@@ -17,9 +17,19 @@ class Wallet extends Model
 
     /**
      * Who decides a spend that needs approval (WCR-09 / WAL-08): the first yes
-     * from any approver, every approver, or more than half of them.
+     * from any approver, every approver, more than half of them, or the people
+     * named in meta.approver_ids, all of them.
      */
-    public const APPROVAL_MODES = ['any', 'all', 'majority'];
+    public const APPROVAL_MODES = ['any', 'all', 'majority', 'named'];
+
+    /**
+     * WAL-12: active; frozen = paused by an owner (money still comes in);
+     * suspended = stopped by Patriai; closed = archived or closed for good.
+     */
+    public const STATUSES = ['active', 'frozen', 'suspended', 'closed'];
+
+    /** WAL-10: until a date, until the target is reached, or until the owners agree. */
+    public const LOCK_MODES = ['date', 'target', 'agree'];
 
     /** How long an approval request waits for answers. */
     public const APPROVAL_EXPIRY_HOURS = [24, 48, 72];
@@ -192,10 +202,49 @@ class Wallet extends Model
             ->exists();
     }
 
-    /** Is this wallet frozen (spending blocked for everyone)? */
+    /** Is spending blocked for everyone: paused by an owner, or suspended by Patriai? */
     public function isFrozen(): bool
     {
+        return in_array($this->status, ['frozen', 'suspended'], true);
+    }
+
+    /** WAL-12 "Paused by Ngozi": rules and payments stop, money still comes in. */
+    public function isPaused(): bool
+    {
         return $this->status === 'frozen';
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === 'suspended';
+    }
+
+    /**
+     * Owner and co-owners: who must agree to rule changes, unlocking and closing
+     * (WAL-08 "Changing these rules — needs Emeka's yes too"), optionally without one.
+     */
+    public function governanceApprovers(?int $excludeUserId = null): Collection
+    {
+        return $this->members()
+            ->where('status', 'active')
+            ->where('role', 'co_owner')
+            ->pluck('user_id')
+            ->prepend($this->user_id)
+            ->unique()
+            ->reject(fn ($id) => $excludeUserId !== null && $id === $excludeUserId)
+            ->values();
+    }
+
+    /** WAL-08 "Named people": the approvers picked by name, still in the wallet. */
+    public function namedApprovers(): Collection
+    {
+        $ids = collect($this->meta['approver_ids'] ?? [])->map(fn ($id) => (int) $id);
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+        $active = $this->members()->where('status', 'active')->where('role', '!=', 'viewer')->pluck('user_id')->push($this->user_id);
+
+        return $ids->filter(fn ($id) => $active->contains($id))->unique()->values();
     }
 
     /** Does this wallet have a weekly scheduled-access window configured? */
@@ -435,12 +484,12 @@ class Wallet extends Model
      * with every approver's yes. "Lock until goal is reached" from goal creation
      * is a target lock with early break by approval.
      *
-     * @return array{mode: string, until: ?string, early_break: bool, approval: bool, fee_percent: int, charity_id: ?int}|null
+     * @return array{mode: string, until: ?string, early_break: bool, approval: bool, fee_percent: int, charity_id: ?int, pay_payee: bool, set_by: ?int}|null
      */
     public function savingsLock(): ?array
     {
         $lock = $this->meta['lock'] ?? null;
-        if (is_array($lock) && in_array($lock['mode'] ?? null, ['date', 'target'], true)) {
+        if (is_array($lock) && in_array($lock['mode'] ?? null, self::LOCK_MODES, true)) {
             return [
                 'mode' => $lock['mode'],
                 'until' => $lock['until'] ?? null,
@@ -449,10 +498,13 @@ class Wallet extends Model
                 // SAV-05: kept from what's taken out early; half to the charity picked.
                 'fee_percent' => (int) ($lock['fee_percent'] ?? 0),
                 'charity_id' => $lock['charity_id'] ?? null,
+                // WAL-10 "Still pay the school on time": the goal's payout still runs.
+                'pay_payee' => (bool) ($lock['pay_payee'] ?? true),
+                'set_by' => $lock['set_by'] ?? null,
             ];
         }
         if (($this->meta['lock_until_goal'] ?? false) === true) {
-            return ['mode' => 'target', 'until' => null, 'early_break' => true, 'approval' => true, 'fee_percent' => 0, 'charity_id' => null];
+            return ['mode' => 'target', 'until' => null, 'early_break' => true, 'approval' => true, 'fee_percent' => 0, 'charity_id' => null, 'pay_payee' => true, 'set_by' => null];
         }
 
         return null;
@@ -464,6 +516,10 @@ class Wallet extends Model
         $lock = $this->savingsLock();
         if (!$lock) {
             return false;
+        }
+        // WAL-10 "Until we both agree": held until the owners unlock it together.
+        if ($lock['mode'] === 'agree') {
+            return true;
         }
         if ($lock['mode'] === 'date') {
             return $lock['until'] !== null && now()->lt(\Illuminate\Support\Carbon::parse($lock['until'])->startOfDay());
@@ -514,7 +570,7 @@ class Wallet extends Model
 
         return match ($mode) {
             'any' => 1,
-            'all' => max(1, $others),
+            'all', 'named' => max(1, $others),
             'majority' => max(1, intdiv($approvers->count(), 2) + 1 - ($approvers->contains($initiator->id) ? 1 : 0)),
         };
     }
@@ -557,6 +613,11 @@ class Wallet extends Model
     /** User ids that can approve on this wallet, optionally excluding one (the initiator). */
     public function eligibleApprovers(?int $excludeUserId = null): Collection
     {
+        // WAL-08 "Named people": only they decide.
+        if ($this->approvalMode() === 'named' && ($named = $this->namedApprovers())->isNotEmpty()) {
+            return $named->reject(fn ($id) => $excludeUserId !== null && $id === $excludeUserId)->values();
+        }
+
         $ids = collect();
 
         // Owner is always an eligible approver.

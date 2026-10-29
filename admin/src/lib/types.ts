@@ -55,7 +55,7 @@ export interface ApiWallet {
   required_approvals: number;
   virtual_account: string | null;
   virtual_account_bank: string | null;
-  status: "active" | "frozen" | "closed";
+  status: "active" | "frozen" | "suspended" | "closed";
   created_at: string | null;
   target_date?: string | null;
   /** Chosen at creation: just the owner, or family adds money and sees everything. */
@@ -69,7 +69,19 @@ export interface ApiWallet {
   /** Day of the month savers are reminded (1–28). */
   reminder_day?: number | null;
   /** SAV-05: locked until a date or the target; `locked` while it holds. */
-  lock?: { mode: "date" | "target"; until: string | null; early_break: boolean; approval: boolean; locked: boolean } | null;
+  lock?: {
+    mode: "date" | "target" | "agree";
+    until: string | null;
+    early_break: boolean;
+    approval: boolean;
+    locked: boolean;
+    /** WAL-10 "Still pay the school on time". */
+    pay_payee?: boolean;
+  } | null;
+  /** WAL-08 "Named people", WAL-06 notifications, WAL-13 archived or closed. */
+  approver_ids?: number[] | null;
+  notify?: "everyone" | "owners" | "off" | null;
+  closed?: { mode: "archive" | "close"; at: string | null } | null;
   /** GLW-01…05. */
   goal?: {
     kind: string;
@@ -363,6 +375,32 @@ export interface WalletDetailData {
   giving?: WalletGiving | null;
   /** Locked savings that allow an early break (SAV-05): the fee and the charity. */
   early_break?: { fee_percent: number; charity: string | null } | null;
+  /** WAL-12: what the owner sees on the wallet. */
+  state?: { kind: "paused" | "restricted" | "locked" | "suspended" | "archived" | "closed"; [key: string]: unknown } | null;
+  paused_by?: string | null;
+  suspended?: { at: string; reason?: string | null } | null;
+  closed?: {
+    mode: "archive" | "close";
+    at: string;
+    by_name: string | null;
+    moved: { to: string | null; wallet: string | null; amount: string }[];
+  } | null;
+  /** WAL-08. */
+  named_approvers?: string[] | null;
+  pending_change?: { id: number; description: string | null; initiator: { name: string } | null; approver_names: string[] | null; expires_at: string | null } | null;
+  /** WAL-14: the latest of the audit log. */
+  audit_log?: WalletAuditEntry[];
+}
+
+export interface WalletAuditEntry {
+  id: number;
+  event: string;
+  category: "rules" | "members" | "approvals" | "other";
+  title: string;
+  detail: string | null;
+  device: string | null;
+  actor: { id: number; name: string; initials: string } | null;
+  created_at: string | null;
 }
 
 export interface WalletBudget {

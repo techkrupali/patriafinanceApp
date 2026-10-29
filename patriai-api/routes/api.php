@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\WalletAuditLogController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WalletDraftController;
 use App\Http\Controllers\Api\WalletLockController;
+use App\Http\Controllers\Api\WalletManageController;
 use App\Http\Controllers\Api\WalletMemberController;
 use App\Http\Controllers\Api\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -138,6 +139,16 @@ Route::prefix('v1')->group(function () {
         Route::post('wallets/{wallet}/freeze', [WalletLockController::class, 'freeze'])->middleware('throttle:30,1');
         Route::post('wallets/{wallet}/unfreeze', [WalletLockController::class, 'unfreeze'])->middleware('throttle:30,1');
         Route::patch('wallets/{wallet}/access-schedule', [WalletLockController::class, 'setSchedule'])->middleware('throttle:30,1');
+
+        // WAL-10/11 lock and ask to unlock, WAL-13 close or archive, WAL-15 statements
+        Route::post('wallets/{wallet}/lock', [WalletManageController::class, 'lock'])->middleware('throttle:20,1,wallet-lock');
+        Route::post('wallets/{wallet}/unlock', [WalletManageController::class, 'unlock'])->middleware('throttle:20,1,wallet-lock');
+        Route::post('wallets/{wallet}/unlock-requests', [WalletManageController::class, 'requestMoney'])->middleware('throttle:10,1,wallet-unlock');
+        Route::get('wallets/{wallet}/close', [WalletManageController::class, 'closePreview']);
+        Route::post('wallets/{wallet}/close', [WalletManageController::class, 'close'])->middleware('throttle:10,1,wallet-close');
+        Route::get('wallets/{wallet}/statement', [WalletManageController::class, 'statement']);
+        Route::post('wallets/{wallet}/statement/link', [WalletManageController::class, 'statementLink'])->middleware('throttle:30,1,wallet-statement');
+        Route::post('wallets/{wallet}/statement/email', [WalletManageController::class, 'email'])->middleware('throttle:5,1,wallet-statement-email');
 
         // Wallet members
         Route::get('wallets/{wallet}/members', [WalletMemberController::class, 'index']);

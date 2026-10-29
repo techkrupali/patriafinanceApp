@@ -5,15 +5,16 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, qs } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { formatDate, label, naira } from "@/lib/format";
+import { formatDate, label, naira, walletStatusLabel } from "@/lib/format";
 import type { WalletsData } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { EmptyState, ErrorState } from "@/components/states";
 import { IconSearch } from "@/components/icons";
-import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
@@ -31,9 +32,12 @@ const TYPES = [
   { value: "giving", label: "Giving" },
 ] as const;
 
+const WALLET_TONES: Record<string, "green" | "amber" | "red"> = { active: "green", frozen: "amber", suspended: "red" };
+
 export default function WalletsPage() {
   const router = useRouter();
   const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -47,8 +51,8 @@ export default function WalletsPage() {
   }, [searchInput]);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["admin", "wallets", { type, search, page }],
-    queryFn: () => api<WalletsData>(`/api/v1/admin/wallets${qs({ type, search, page })}`),
+    queryKey: ["admin", "wallets", { type, status, search, page }],
+    queryFn: () => api<WalletsData>(`/api/v1/admin/wallets${qs({ type, status, search, page })}`),
   });
 
   return (
@@ -77,6 +81,20 @@ export default function WalletsPage() {
               </button>
             ))}
           </div>
+          <Select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter by status"
+          >
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="frozen">Paused</option>
+            <option value="suspended">Suspended</option>
+            <option value="closed">Archived or closed</option>
+          </Select>
           <div className="relative min-w-56 flex-1">
             <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input
@@ -125,7 +143,7 @@ export default function WalletsPage() {
                       {w.virtual_account_bank ? ` · ${w.virtual_account_bank}` : ""}
                     </TD>
                     <TD>
-                      <StatusBadge status={w.status} />
+                      <Badge tone={WALLET_TONES[w.status] ?? "gray"}>{walletStatusLabel(w.status, w.closed?.mode)}</Badge>
                     </TD>
                     <TD className="text-right font-semibold">{naira(w.balance)}</TD>
                     <TD className="text-muted">{formatDate(w.created_at)}</TD>

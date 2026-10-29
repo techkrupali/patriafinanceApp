@@ -14,7 +14,9 @@ use App\Services\ChildService;
 use App\Services\GivingService;
 use App\Services\GoalService;
 use App\Services\JointService;
+use App\Services\AuditService;
 use App\Services\KycService;
+use App\Services\WalletManageService;
 use App\Services\SavingsService;
 use App\Services\WalletService;
 use App\Services\WalletSetupService;
@@ -484,6 +486,11 @@ class WalletController extends ApiController
             ],
             'held_amount' => number_format($wallet->heldAmount() / 100, 2, '.', ''),
             'pending_approvals' => $wallet->approvalRequests()->where('status', 'pending')->count(),
+            // WAL-12: paused, restricted, locked, suspended or archived — or null.
+            'state' => WalletManageService::make()->state($wallet, $user),
+            // WAL-08: who else agrees to rule changes, a change waiting for them, and who can be named.
+            'governance' => $this->governance($wallet, $user),
+            'my_can_see_contributions' => WalletManageService::make()->canSeeContributions($wallet, $user),
             // Emergency wallets only: lock state + the viewer's emergency role.
             'emergency' => EmergencyService::make()->summary($wallet, $user),
             // Savings/goal wallets with a plan: the rule every saver follows.
@@ -491,6 +498,22 @@ class WalletController extends ApiController
             'recent_transactions' => $wallet->transactions()->latest()->limit(10)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
+    }
+
+    private function governance(Wallet $wallet, User $user): array
+    {
+        $pending = $wallet->approvalRequests()->with(['wallet', 'initiator'])->where('status', 'pending')
+            ->whereIn('action', ApprovalService::GOVERNANCE_ACTIONS)->where('expires_at', '>', now())->latest()->first();
+        $approvers = $wallet->members()->with('user')->where('status', 'active')
+            ->where(fn ($q) => $q->whereIn('role', ['owner', 'co_owner', 'admin'])->orWhere('can_approve', true))->get()
+            ->map(fn ($m) => ['user_id' => $m->user_id, 'name' => $m->user?->first_name ?: $m->user?->fullName(), 'role' => $m->role])->values();
+
+        return [
+            'others' => User::whereIn('id', $wallet->governanceApprovers($user->id))->get()->map(fn ($u) => $u->first_name ?: $u->fullName())->values(),
+            'can_change' => in_array($wallet->roleOf($user), Wallet::SPENDING_ROLES, true),
+            'pending_change' => $pending ? $this->serializeApprovalRequest($pending, $user) : null,
+            'approvers' => $approvers,
+        ];
     }
 
     // GET /wallets/{wallet}/transactions
@@ -508,11 +531,21 @@ class WalletController extends ApiController
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
 
+        // WAL-03 "In this month · In since start".
+        $in = fn ($q) => $q->where('direction', 'credit')->where('status', 'successful');
+        $monthStart = now('Africa/Lagos')->startOfMonth()->utc();
+
         return $this->ok('Transactions fetched', [
             // "by": who moved the money, so a shared wallet reads "Emeka added money".
             'transactions' => collect($txns->items())->map(fn ($t) => $this->serializeTransaction($t) + [
                 'by' => $t->user ? ['id' => $t->user->id, 'first_name' => $t->user->first_name ?: $t->user->fullName()] : null,
+                // "Save from every salary · 25 Sep · Ngozi · rule".
+                'rule' => str_starts_with((string) $t->description, 'Automation: ') ? preg_replace('/ \(part\)$/', '', substr($t->description, 12)) : null,
             ]),
+            'summary' => [
+                'in_this_month' => number_format((int) $wallet->transactions()->where($in)->where('created_at', '>=', $monthStart)->sum('amount') / 100, 2, '.', ''),
+                'in_since_start' => number_format((int) $wallet->transactions()->where($in)->sum('amount') / 100, 2, '.', ''),
+            ],
             'pagination' => [
                 'page' => $txns->currentPage(),
                 'per_page' => $txns->perPage(),
@@ -748,37 +781,35 @@ class WalletController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
 
-        $role = $wallet->roleOf($request->user());
+        $user = $request->user();
+        $role = $wallet->roleOf($user);
         if (!in_array($role, ['owner', 'co_owner'], true)) {
             return $this->fail('Only the owner or a co-owner can change wallet settings', 403);
+        }
+        if ($wallet->status === 'closed') {
+            return $this->fail('This wallet is archived. It is read only.', 422);
         }
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:200'],
+            'colour' => ['sometimes', 'nullable', 'in:' . implode(',', Wallet::COLOURS)],
+            'target_amount' => ['sometimes', 'nullable', 'numeric', 'min:1'],
+            'target_date' => ['sometimes', 'nullable', 'date'],
+            'notify' => ['sometimes', 'in:' . implode(',', WalletManageService::NOTIFY)],
             'approval_enabled' => ['sometimes', 'boolean'],
             'approval_threshold' => ['nullable', 'numeric', 'min:0'],
             'required_approvals' => ['sometimes', 'integer', 'min:1'],
             'approval_mode' => ['sometimes', 'nullable', 'in:' . implode(',', Wallet::APPROVAL_MODES)],
+            'approver_ids' => ['sometimes', 'nullable', 'array'],
+            'approver_ids.*' => ['integer'],
             'lock_until_goal' => ['sometimes', 'boolean'],
             'approval_expiry_hours' => ['sometimes', 'integer', 'in:' . implode(',', Wallet::APPROVAL_EXPIRY_HOURS)],
             'reminder_day' => ['sometimes', 'nullable', 'integer', 'between:1,28'],
         ]);
 
-        // Approval-governance fields are owner-only. Co-owners may edit
-        // name/description but must not be able to change who can spend how much.
-        $governanceFields = ['approval_enabled', 'approval_threshold', 'required_approvals', 'approval_mode', 'lock_until_goal', 'approval_expiry_hours'];
-        $touchesGovernance = false;
-        foreach ($governanceFields as $field) {
-            if ($request->exists($field)) {
-                $touchesGovernance = true;
-                break;
-            }
-        }
-        if ($touchesGovernance && $role !== 'owner') {
-            return $this->fail('Only the owner can change approval governance settings', 403);
-        }
         // JNT-03 "Changing these rules" needs both partners: they change together.
+        $touchesGovernance = collect(WalletManageService::GOVERNANCE_FIELDS)->contains(fn ($f) => $request->exists($f));
         if ($touchesGovernance && JointService::make()->settings($wallet)) {
             return $this->fail('Joint rules change together. Suggest the change and your partner confirms it.', 422);
         }
@@ -804,6 +835,47 @@ class WalletController extends ApiController
                 return $this->fail("With {$maxApprovers} eligible approver(s), a spend can require at most {$maxRequired} approval(s) — the initiator can't approve their own request.", 422);
             }
         }
+        if ($request->exists('lock_until_goal') && $request->boolean('lock_until_goal') && !($wallet->target_amount > 0)) {
+            return $this->fail('Set a target to lock the wallet until the goal is reached', 422);
+        }
+
+        // WAL-08 "Named people": two or more who can approve, all of whom must say yes.
+        $mode = $request->exists('approval_mode') ? $data['approval_mode'] : $wallet->approvalMode();
+        if ($mode === 'named') {
+            $named = collect($data['approver_ids'] ?? $wallet->meta['approver_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+            $eligible = $wallet->members()->where('status', 'active')->where(fn ($q) => $q->whereIn('role', ['owner', 'co_owner', 'admin'])->orWhere('can_approve', true))->pluck('user_id')->push($wallet->user_id);
+            if ($named->count() < 2 || $named->diff($eligible)->isNotEmpty()) {
+                return $this->fail('Name at least two people who can approve.', 422);
+            }
+        }
+
+        // Rules: with other owners they agree first (WAL-08 "needs Emeka's yes too").
+        $changes = [];
+        foreach (WalletManageService::GOVERNANCE_FIELDS as $field) {
+            if (!$request->exists($field)) {
+                continue;
+            }
+            $changes[$field] = match ($field) {
+                'approval_enabled', 'lock_until_goal' => $request->boolean($field),
+                'approval_threshold' => $data[$field] !== null ? $this->toKobo((string) $data[$field]) : null,
+                'required_approvals', 'approval_expiry_hours' => (int) $data[$field],
+                'approver_ids' => $mode === 'named' ? $named->sort()->values()->all() : null,
+                default => $data[$field],
+            };
+        }
+        // A fixed count replaces the "who decides" rule.
+        if (array_key_exists('required_approvals', $changes) && !$request->exists('approval_mode')) {
+            $changes['approval_mode'] = null;
+        }
+        if ($mode === 'named' && !array_key_exists('approver_ids', $changes) && array_key_exists('approval_mode', $changes)) {
+            $changes['approver_ids'] = $named->sort()->values()->all();
+        }
+        // Lowering the goal of a wallet locked until the goal would open it.
+        $target = $request->exists('target_amount') && $data['target_amount'] !== null ? $this->toKobo((string) $data['target_amount']) : null;
+        $lockedByTarget = $wallet->isGoalLocked() && ($wallet->savingsLock()['mode'] ?? null) === 'target';
+        if ($target !== null && $lockedByTarget) {
+            $changes['target_amount'] = $target;
+        }
 
         $update = [];
         if ($request->exists('name') && $data['name'] !== null) {
@@ -812,31 +884,17 @@ class WalletController extends ApiController
         if ($request->exists('description')) {
             $update['description'] = $data['description'];
         }
-        if ($request->exists('approval_enabled')) {
-            $update['approval_enabled'] = $request->boolean('approval_enabled');
+        if ($target !== null && !$lockedByTarget) {
+            $update['target_amount'] = $target;
         }
-        if ($request->exists('approval_threshold')) {
-            $update['approval_threshold'] = $data['approval_threshold'] !== null ? $this->toKobo($data['approval_threshold']) : null;
+        if ($request->exists('target_date')) {
+            $update['target_date'] = $data['target_date'];
         }
-        if ($request->exists('required_approvals')) {
-            $update['required_approvals'] = (int) $data['required_approvals'];
-        }
-
         $meta = $wallet->meta ?? [];
-        if ($request->exists('approval_mode')) {
-            $meta['approval_mode'] = $data['approval_mode'];
-        } elseif ($request->exists('required_approvals')) {
-            // A fixed count replaces the "who decides" rule.
-            $meta['approval_mode'] = null;
-        }
-        if ($request->exists('lock_until_goal')) {
-            if ($request->boolean('lock_until_goal') && !($wallet->target_amount > 0)) {
-                return $this->fail('Set a target to lock the wallet until the goal is reached', 422);
+        foreach (['colour', 'notify'] as $field) {
+            if ($request->exists($field)) {
+                $meta[$field] = $data[$field];
             }
-            $meta['lock_until_goal'] = $request->boolean('lock_until_goal') ?: null;
-        }
-        if ($request->exists('approval_expiry_hours')) {
-            $meta['approval_expiry_hours'] = (int) $data['approval_expiry_hours'];
         }
         if ($request->exists('reminder_day')) {
             $meta['reminder_day'] = $data['reminder_day'] !== null ? (int) $data['reminder_day'] : null;
@@ -845,10 +903,32 @@ class WalletController extends ApiController
         if ($meta !== ($wallet->meta ?? [])) {
             $update['meta'] = $meta ?: null;
         }
+        if ($update) {
+            // Log only what actually changed ("Ngozi changed the colour").
+            $before = ['name' => $wallet->name, 'description' => $wallet->description, 'target_amount' => $wallet->target_amount, 'target_date' => $wallet->target_date?->toDateString()]
+                + array_intersect_key($wallet->meta ?? [], array_flip(['colour', 'notify', 'reminder_day']));
+            $wallet->update($update);
+            $wallet->refresh();
+            $after = ['name' => $wallet->name, 'description' => $wallet->description, 'target_amount' => $wallet->target_amount, 'target_date' => $wallet->target_date?->toDateString()]
+                + array_intersect_key($wallet->meta ?? [], array_flip(['colour', 'notify', 'reminder_day']));
+            $labels = ['name' => 'name', 'description' => 'description', 'target_amount' => 'goal', 'target_date' => 'goal date', 'colour' => 'colour', 'notify' => 'notifications', 'reminder_day' => 'reminder'];
+            $what = collect($labels)->filter(fn ($label, $key) => ($before[$key] ?? null) != ($after[$key] ?? null))->values()->all();
+            if ($what) {
+                AuditService::make()->log($wallet, $user, 'settings_changed', 'Changed the ' . WalletManageService::names($what), [
+                    'summary' => 'changed the ' . WalletManageService::names($what),
+                    'detail' => ($before['name'] ?? null) !== ($after['name'] ?? null) ? "From {$before['name']} to {$after['name']}"
+                        : (($before['target_amount'] ?? null) != ($after['target_amount'] ?? null) && $after['target_amount'] ? 'Goal ₦' . number_format($after['target_amount'] / 100) : null),
+                ]);
+            }
+        }
 
-        $wallet->update($update);
+        $result = $changes ? WalletManageService::make()->proposeRules($wallet->refresh(), $user, $changes) : ['applied' => true, 'request' => null];
+        $pending = $result['request'];
 
-        return $this->ok('Wallet settings updated', ['wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true)]);
+        return $this->ok($pending ? 'Sent for approval' : 'Wallet settings updated', [
+            'wallet' => $this->serializeWallet($wallet->refresh(), withOwner: true),
+            'pending_change' => $pending ? $this->serializeApprovalRequest($pending->load(['wallet', 'initiator']), $user) : null,
+        ]);
     }
 
     // POST /wallets/{wallet}/archive — reversible soft delete (status=closed), owner only
@@ -874,7 +954,13 @@ class WalletController extends ApiController
         if ($wallet->status !== 'closed') {
             return $this->fail('This wallet is not archived', 422);
         }
-        $wallet->update(['status' => 'active']);
+        if (($wallet->meta['closed']['mode'] ?? null) === 'close') {
+            return $this->fail('This wallet was closed for good. Its history stays available.', 422);
+        }
+        $meta = $wallet->meta ?? [];
+        unset($meta['closed']);
+        $wallet->update(['status' => 'active', 'meta' => $meta ?: null]);
+        AuditService::make()->log($wallet, $request->user(), 'wallet_restored', 'Restored the wallet', ['summary' => 'restored the wallet']);
 
         return $this->ok('Wallet restored', ['wallet' => $this->serializeWallet($wallet->refresh())]);
     }

@@ -101,7 +101,8 @@ export interface Wallet {
   joint?: JointSummary | null;
   child?: ChildSummary | null;
   lock?: {
-    mode: 'date' | 'target';
+    /** WAL-10: until a date, until the target is reached, or until the owners agree. */
+    mode: 'date' | 'target' | 'agree';
     until: string | null;
     early_break: boolean;
     approval: boolean;
@@ -109,13 +110,24 @@ export interface Wallet {
     /** SAV-05: kept from what's taken out early; half to the charity picked. */
     fee_percent?: number;
     charity?: { id: number; name: string; area: string | null; state: string | null } | null;
+    /** WAL-10 "Still pay the school on time". */
+    pay_payee?: boolean;
+    set_by?: number | null;
   } | null;
+  /** WAL-08 "Named people": who decides, by user id. */
+  approver_ids?: number[] | null;
+  /** WAL-06 "Notifications": null = the owner hears about money in. */
+  notify?: WalletNotify | null;
+  /** WAL-13: archived or closed for good. */
+  closed?: { mode: 'archive' | 'close'; at: string | null } | null;
 }
+
+export type WalletNotify = 'everyone' | 'owners' | 'off';
 
 export type WalletColour = 'emerald' | 'mint' | 'gold' | 'deep' | 'clay' | 'violet';
 
-/** "Any one approver", "everyone", or "more than half". */
-export type ApprovalMode = 'any' | 'all' | 'majority';
+/** "Any one approver", "everyone", "more than half", or "named people, all of them". */
+export type ApprovalMode = 'any' | 'all' | 'majority' | 'named';
 
 export interface Transaction {
   id: number;
@@ -135,6 +147,8 @@ export interface Transaction {
   created_at: string | null;
   /** Who moved the money (wallet activity only). */
   by?: { id: number; first_name: string } | null;
+  /** The automation rule that moved it ("Save from every salary"), wallet activity only. */
+  rule?: string | null;
 }
 
 /** GET /savings/insights — SAV-03 estimates from the last 3 months of Main. */
@@ -158,6 +172,8 @@ export interface MemberPermissions {
   withdraw: boolean;
   /** Max amount this member may request in one spend request (naira string), or null = no cap. */
   request_limit?: string | null;
+  /** WAL-07 "See who paid what". */
+  see_contributions?: boolean;
 }
 
 export interface WalletMember {
@@ -174,6 +190,10 @@ export interface WalletMember {
   permissions?: MemberPermissions;
   /** Present on the members endpoint. */
   status?: string;
+  /** WAL-04 "WHO PUT IN WHAT": naira and percent, null when amounts are private to you. */
+  put_in?: string | null;
+  share?: number | null;
+  invited_by?: number | null;
 }
 
 // ---- Governance (Milestone 3) ----
@@ -215,7 +235,16 @@ export interface WalletInvitation {
   joint?: JointSummary | null;
 }
 
-export type ApprovalAction = 'withdrawal' | 'transfer_wallet' | 'transfer_user' | 'transfer_bank';
+export type ApprovalAction =
+  | 'withdrawal'
+  | 'transfer_wallet'
+  | 'transfer_user'
+  | 'transfer_bank'
+  | 'milestone_release'
+  /** WAL-08/10/13: move no money by themselves. */
+  | 'rule_change'
+  | 'unlock_wallet'
+  | 'close_wallet';
 
 export type ApprovalStatus =
   | 'pending'
@@ -254,6 +283,13 @@ export interface ApprovalRequest {
   my_responded?: boolean;
   /** Only on the detail endpoint. */
   responses?: ApprovalResponse[];
+  /** WAL-11 asking to take money out of a locked wallet. */
+  unlock?: { purpose: string | null; proof_url: string | null; early_fee: string } | null;
+  pays_to?: string | null;
+  /** Rule change, unlock or close: no amount. */
+  governance?: boolean;
+  /** Who was asked, first names (named approvers, owners). */
+  approver_names?: string[] | null;
 }
 
 export type NotificationType =
@@ -447,14 +483,39 @@ export interface WalletDetailData {
   emergency?: EmergencySummary | null;
   /** Savings/goal wallets with a plan (null otherwise). */
   savings?: SavingsSummary | null;
+  /** WAL-12: the one notice the wallet shows, or null. */
+  state?: WalletState | null;
+  /** WAL-08: who else agrees to rule changes, and a change waiting for them. */
+  governance?: WalletGovernance;
+  my_can_see_contributions?: boolean;
+}
+
+export type WalletState =
+  | { kind: 'suspended'; at: string | null }
+  | { kind: 'archived' | 'closed'; at: string | null; by: string | null }
+  | { kind: 'paused'; by: string | null; me: boolean; at: string | null }
+  | { kind: 'locked'; mode: 'date' | 'target' | 'agree'; until: string | null; opens_at: string | null; agree: string | null; can_ask: boolean }
+  | { kind: 'restricted'; who: string; me: boolean; limit: string | null };
+
+export interface WalletGovernance {
+  /** First names of the owner and co-owners besides you ("Needs Emeka's yes too"). */
+  others: string[];
+  can_change: boolean;
+  pending_change: ApprovalRequest | null;
+  /** Who can be named as an approver. */
+  approvers: { user_id: number; name: string; role: string }[];
 }
 
 export interface WalletUpdatedData {
   wallet: Wallet;
+  /** Set when a rule change waits for the other owners' yes. */
+  pending_change?: ApprovalRequest | null;
 }
 
 export interface WalletMembersData {
   members: WalletMember[];
+  /** WAL-04 totals; null when amounts are private to you. */
+  contributions?: { total: string; others: string; others_share: number } | null;
 }
 
 export interface MemberUpdatedData {
@@ -498,6 +559,8 @@ export interface NotificationReadData {
 export interface TransactionsPageData {
   transactions: Transaction[];
   pagination: Pagination;
+  /** WAL-03 "In this month · In since start". */
+  summary?: { in_this_month: string; in_since_start: string };
 }
 
 export interface FundingDetailsData {
@@ -1119,11 +1182,20 @@ export interface EmergencyWithdrawData {
 
 export interface UpdateWalletPayload {
   name?: string;
-  description?: string;
+  description?: string | null;
+  colour?: WalletColour | null;
+  target_amount?: string | null;
+  target_date?: string | null;
+  notify?: WalletNotify;
   approval_enabled?: boolean;
   /** Naira decimal string, or null to require approval on every spend. */
   approval_threshold?: string | null;
   required_approvals?: number;
+  approval_mode?: ApprovalMode | null;
+  approver_ids?: number[] | null;
+  approval_expiry_hours?: number;
+  lock_until_goal?: boolean;
+  reminder_day?: number | null;
 }
 
 export interface UpdateMemberPayload {
@@ -1141,6 +1213,7 @@ export interface UpdateMemberPayload {
     request?: boolean;
     withdraw?: boolean;
     request_limit?: number | null;
+    see_contributions?: boolean;
   };
 }
 
@@ -1888,8 +1961,16 @@ export type AuditEvent =
 export interface AuditLogEntry {
   id: number;
   event: AuditEvent;
+  /** WAL-14 filters. */
+  category?: 'rules' | 'members' | 'approvals' | 'other';
+  /** "Emeka changed the approval limit". */
+  title?: string;
+  /** "From ₦20,000 to ₦50,000 · Ngozi approved". */
+  detail?: string | null;
+  /** iPhone · Android · Web. */
+  device?: string | null;
   description: string;
-  actor: { id: number; name: string } | null;
+  actor: { id: number; name: string; initials?: string } | null;
   meta: Record<string, unknown> | null;
   created_at: string | null;
 }
