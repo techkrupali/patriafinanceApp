@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { API_URL, STORAGE_KEYS } from '../config';
 import { useAuth } from '../store/auth';
+import { useNetwork } from '../store/network';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -70,8 +71,11 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
             : JSON.stringify(options.body),
     });
   } catch {
+    // SYS-04: the app shows it's offline and what it last saw.
+    useNetwork.getState().setOffline(true);
     throw new ApiError('Network error. Check your connection and try again.', 0);
   }
+  useNetwork.getState().setOffline(false);
 
   let json: Envelope<T> | null = null;
   try {

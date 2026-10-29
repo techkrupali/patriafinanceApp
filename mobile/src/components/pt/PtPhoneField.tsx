@@ -44,8 +44,10 @@ export function PtPhoneField({
 
   const onText = (t: string) => {
     let digits = t.replace(/\D/g, '');
-    // Backspacing over a grouping space removes the digit before it.
-    if (digits === value && t.length < shown.length) digits = digits.slice(0, -1);
+    // Backspacing over a grouping space removes the digit before it. Only a single
+    // deleted space counts: pasting the same number unspaced must keep every digit.
+    const deletedSpace = t.length === shown.length - 1 && [...shown].some((ch, i) => ch === ' ' && shown.slice(0, i) + shown.slice(i + 1) === t);
+    if (digits === value && deletedSpace) digits = digits.slice(0, -1);
     onChange(digits.slice(0, 15));
   };
 

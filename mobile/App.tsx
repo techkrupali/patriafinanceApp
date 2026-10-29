@@ -20,6 +20,8 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuth } from './src/store/auth';
 import { useLanguage } from './src/store/language';
 import { useHomePrefs } from './src/store/homePrefs';
+import { useAppLock } from './src/store/appLock';
+import { AppStatusGate, ErrorBoundary, SessionLock } from './src/components/system/SystemStates';
 import { LogoMark, markOnDark, PtLogo } from './src/components/pt/PtLogo';
 import { pt } from './src/theme';
 
@@ -52,6 +54,13 @@ function Gate() {
   const hydrate = useAuth((s) => s.hydrate);
   const hydrateLanguage = useLanguage((s) => s.hydrate);
   const hydrateHomePrefs = useHomePrefs((s) => s.hydrate);
+  const hydrateAppLock = useAppLock((s) => s.hydrate);
+  // ME-13 "Bigger text — follows your phone's text size".
+  const biggerText = useAppLock((s) => s.biggerText);
+  (Text as unknown as { defaultProps?: Record<string, unknown> }).defaultProps = {
+    ...((Text as unknown as { defaultProps?: Record<string, unknown> }).defaultProps ?? {}),
+    allowFontScaling: biggerText,
+  };
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -63,13 +72,20 @@ function Gate() {
   useEffect(() => {
     void hydrateLanguage();
     void hydrateHomePrefs();
+    void hydrateAppLock();
     void hydrate();
-  }, [hydrate, hydrateLanguage, hydrateHomePrefs]);
+  }, [hydrate, hydrateLanguage, hydrateHomePrefs, hydrateAppLock]);
 
   // A font that fails to load falls back to the system font rather than blocking.
   const fontsReady = fontsLoaded || Boolean(fontError);
   if (status === 'loading' || !fontsReady) return <Splash fontsReady={fontsLoaded} />;
-  return <RootNavigator />;
+  return (
+    // SYS-02/03 first; SYS-05 locks the signed-in app after time away.
+    <AppStatusGate>
+      <RootNavigator />
+      {status === 'authed' ? <SessionLock /> : null}
+    </AppStatusGate>
+  );
 }
 
 export default function App() {
@@ -79,7 +95,9 @@ export default function App() {
         <SafeAreaProvider>
           <NavigationContainer>
             <StatusBar style="dark" />
-            <Gate />
+            <ErrorBoundary>
+              <Gate />
+            </ErrorBoundary>
           </NavigationContainer>
         </SafeAreaProvider>
       </QueryClientProvider>

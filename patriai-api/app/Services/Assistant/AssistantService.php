@@ -142,6 +142,9 @@ class AssistantService
      *
      * @return array{block:array, raw:?array}
      */
+    /** Tools that read the person's transactions (ME-12 privacy switch). */
+    private const READS_TRANSACTIONS = ['find_transactions', 'group_transactions', 'flag_transaction'];
+
     private function runTool(Request $request, array $block): array
     {
         $tool = $this->tools->get($block['name'] ?? '');
@@ -152,6 +155,15 @@ class AssistantService
                 'tool_use_id' => $block['id'],
                 'content' => 'Unknown tool.',
                 'is_error' => true,
+            ], 'raw' => null];
+        }
+
+        // ME-12 "Steward can read my transactions" turned off: the tools that read them say so.
+        if (in_array($block['name'] ?? '', self::READS_TRANSACTIONS, true) && $request->user()?->setting('steward_reads_transactions', true) === false) {
+            return ['block' => [
+                'type' => 'tool_result',
+                'tool_use_id' => $block['id'],
+                'content' => json_encode(['error' => 'The person turned off "Steward can read my transactions" in Privacy and data. Tell them, and that they can turn it back on there.']),
             ], 'raw' => null];
         }
 

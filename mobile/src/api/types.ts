@@ -16,6 +16,14 @@ export interface User {
   email_verified: boolean;
   phone_verified: boolean;
   has_pin: boolean;
+  /** ME-18: nothing leaves any wallet until it's unfrozen. */
+  frozen?: boolean;
+  /** ACC-05: payments over ₦50,000 wait until this time after a PIN reset. */
+  pin_reset_hold_until?: string | null;
+  two_factor?: 'authenticator' | 'sms' | 'email' | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
   /** False for phone sign-ups, who log in with their PIN and never set a password. */
   has_password: boolean;
   /** Transaction PIN length: 6 for phone sign-ups, 4 for older accounts. */
@@ -341,6 +349,12 @@ export interface DeviceInfo {
 export interface AuthSessionData {
   user: User;
   token: string;
+  /** Kept on this phone so the next sign-in skips the code (ACC-01 → ACC-02). */
+  device_secret?: string;
+  /** ACC-06: a new phone sends only from this time. */
+  send_after?: string | null;
+  /** ACC-05: after a PIN reset, payments over ₦50,000 wait until this time. */
+  hold_until?: string | null;
 }
 
 export type OtpChannel = 'sms' | 'whatsapp';
@@ -360,7 +374,16 @@ export interface PhoneAccount {
   initials: string;
   avatar_url: string | null;
   pin_length: 4 | 6;
+  /** ACC-06 "Is this your new phone?" — a selfie first, then sends wait 24 hours. */
+  new_device?: boolean;
+  /** ME-08: the two-step method, asked on a new phone. */
+  two_factor?: 'authenticator' | 'sms' | 'email' | null;
 }
+
+/** POST /auth/phone/check: a trusted phone goes to its PIN, anything else gets a code. */
+export type PhoneCheckData =
+  | { next: 'pin'; phone_token: string; account: PhoneAccount }
+  | ({ next: 'code' } & PhoneStartData);
 
 export interface PhoneVerifyData {
   /** Short-lived proof that this phone was verified; spent by register/login/PIN reset. */
@@ -370,8 +393,11 @@ export interface PhoneVerifyData {
 }
 
 export interface PinForgotData {
+  /** ACC-04: the BVN on file, or (before a BVN was checked) a code to the email. */
+  needs: 'bvn' | 'email';
+  bvn_hint?: string;
   /** Masked email the reset code went to. */
-  sent_to: string;
+  sent_to?: string;
   debug_otp?: string;
 }
 
@@ -632,6 +658,9 @@ export interface PhoneRegisterPayload {
   date_of_birth: string;
   pin: string;
   language: 'en' | 'pcm';
+  referral_code?: string | null;
+  /** ONB-10 "Your data, your say". */
+  consents?: { terms: boolean; verify: boolean; steward_learn: boolean; news: boolean };
 }
 
 export type TransferDestination =
@@ -655,6 +684,8 @@ export interface TransferPayload {
   destination: TransferDestination;
   /** Optional idempotency key — reused from the AI create_transfer hand-off. */
   idempotency_key?: string;
+  /** ME-08: the two-step code, on payments over ₦500,000 once it's on. */
+  two_factor_code?: string;
 }
 
 /**
@@ -783,6 +814,8 @@ export interface WithdrawPayload {
   bank_name: string;
   pin: string;
   description?: string;
+  /** ME-08: the two-step code, on payments over ₦500,000 once it's on. */
+  two_factor_code?: string;
 }
 
 // ---- Governance request payloads (Milestone 3) ----

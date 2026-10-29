@@ -6,6 +6,7 @@ import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-
 import { createBottomTabNavigator, type BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
+import { useAppLock } from '../store/appLock';
 import { pt, ptFont } from '../theme';
 import { AppLock } from '../components/AppLock';
 import type { AuthStackParamList, MainTabParamList, RootStackParamList, VendorTabParamList } from './types';
@@ -22,6 +23,12 @@ import { PurposeScreen } from '../screens/auth/PurposeScreen';
 import { WalletReadyScreen } from '../screens/auth/WalletReadyScreen';
 import { UnlockScreen } from '../screens/auth/UnlockScreen';
 import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
+import { GetStartedScreen } from '../screens/auth/GetStartedScreen';
+import { TermsScreen } from '../screens/auth/TermsScreen';
+import { ReferralCodeScreen } from '../screens/auth/ReferralCodeScreen';
+import { NextStepsScreen } from '../screens/auth/NextStepsScreen';
+import { NewDeviceScreen } from '../screens/auth/NewDeviceScreen';
+import { LockedScreen } from '../screens/auth/LockedScreen';
 
 // Tab screens
 import { HomeScreen } from '../screens/HomeScreen';
@@ -68,6 +75,21 @@ import { LockWalletScreen } from '../screens/wallet/LockWalletScreen';
 import { AskToUnlockScreen } from '../screens/wallet/AskToUnlockScreen';
 import { CloseWalletScreen } from '../screens/wallet/CloseWalletScreen';
 import { WalletStatementScreen } from '../screens/wallet/WalletStatementScreen';
+import { PersonalDetailsScreen } from '../screens/me/PersonalDetailsScreen';
+import { LinkedBanksScreen } from '../screens/me/LinkedBanksScreen';
+import { AppLockScreen } from '../screens/me/AppLockScreen';
+import { TwoStepScreen } from '../screens/me/TwoStepScreen';
+import { LoginHistoryScreen } from '../screens/me/LoginHistoryScreen';
+import { MyLimitsScreen } from '../screens/me/MyLimitsScreen';
+import { PrivacyScreen } from '../screens/me/PrivacyScreen';
+import { AppearanceScreen } from '../screens/me/AppearanceScreen';
+import { LanguageScreen } from '../screens/me/LanguageScreen';
+import { ConnectedAppsScreen } from '../screens/me/ConnectedAppsScreen';
+import { SupportChatScreen } from '../screens/me/SupportChatScreen';
+import { FreezeAccountScreen } from '../screens/me/FreezeAccountScreen';
+import { LegalDocScreen, LegalScreen } from '../screens/me/LegalScreen';
+import { AboutScreen } from '../screens/me/AboutScreen';
+import { CloseAccountScreen } from '../screens/me/CloseAccountScreen';
 import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
 import { FamilyMemberScreen } from '../screens/family/FamilyMemberScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
@@ -266,6 +288,9 @@ export function RootNavigator() {
   const hasStoredSession = useAuth((s) => s.hasStoredSession);
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
   const mode = useAuth((s) => s.mode);
+  const returning = useAuth((s) => s.returning);
+  // ME-13 "Reduce motion": screens change without sliding.
+  const reduceMotion = useAppLock((s) => s.reduceMotion);
   const [bypassLock, setBypassLock] = useState(false);
 
   if (status !== 'authed') {
@@ -274,7 +299,10 @@ export function RootNavigator() {
       return <AppLock onUsePassword={() => setBypassLock(true)} />;
     }
     return (
-      <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      // The first screen listed is also where the stack falls back to when it replaces the
+      // signed-in stack after a log out, so a returning person's ONB-02 goes first.
+      <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={returning ? 'GetStarted' : 'Welcome'}>
+        {returning ? <AuthStack.Screen name="GetStarted" component={GetStartedScreen} /> : null}
         <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
         <AuthStack.Screen name="AccountType" component={AccountTypeScreen} />
         <AuthStack.Screen name="Phone" component={PhoneScreen} />
@@ -286,13 +314,19 @@ export function RootNavigator() {
         <AuthStack.Screen name="WalletReady" component={WalletReadyScreen} options={{ gestureEnabled: false }} />
         <AuthStack.Screen name="Unlock" component={UnlockScreen} />
         <AuthStack.Screen name="ForgotPin" component={ForgotPinScreen} />
+        {returning ? null : <AuthStack.Screen name="GetStarted" component={GetStartedScreen} />}
+        <AuthStack.Screen name="Terms" component={TermsScreen} />
+        <AuthStack.Screen name="ReferralCode" component={ReferralCodeScreen} />
+        <AuthStack.Screen name="NextSteps" component={NextStepsScreen} options={{ gestureEnabled: false }} />
+        <AuthStack.Screen name="NewDevice" component={NewDeviceScreen} />
+        <AuthStack.Screen name="Locked" component={LockedScreen} options={{ gestureEnabled: false }} />
       </AuthStack.Navigator>
     );
   }
 
   return (
     // The app opens in the mode last used on this phone (VDM-03 vendor mode, or the family app).
-    <RootStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={mode === 'business' ? 'VendorTabs' : 'Tabs'}>
+    <RootStack.Navigator screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'default' }} initialRouteName={mode === 'business' ? 'VendorTabs' : 'Tabs'}>
       <RootStack.Screen name="Tabs" component={MainTabs} />
       <RootStack.Screen name="VendorTabs" component={VendorTabs} />
       <RootStack.Screen name="CustomiseHome" component={CustomiseHomeScreen} />
@@ -336,6 +370,22 @@ export function RootNavigator() {
       <RootStack.Screen name="AskToUnlock" component={AskToUnlockScreen} />
       <RootStack.Screen name="CloseWallet" component={CloseWalletScreen} />
       <RootStack.Screen name="WalletStatement" component={WalletStatementScreen} />
+      <RootStack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />
+      <RootStack.Screen name="LinkedBanks" component={LinkedBanksScreen} />
+      <RootStack.Screen name="AppLockSettings" component={AppLockScreen} />
+      <RootStack.Screen name="TwoStep" component={TwoStepScreen} />
+      <RootStack.Screen name="LoginHistory" component={LoginHistoryScreen} />
+      <RootStack.Screen name="MyLimits" component={MyLimitsScreen} />
+      <RootStack.Screen name="Privacy" component={PrivacyScreen} />
+      <RootStack.Screen name="Appearance" component={AppearanceScreen} />
+      <RootStack.Screen name="Language" component={LanguageScreen} />
+      <RootStack.Screen name="ConnectedApps" component={ConnectedAppsScreen} />
+      <RootStack.Screen name="SupportChat" component={SupportChatScreen} />
+      <RootStack.Screen name="FreezeAccount" component={FreezeAccountScreen} />
+      <RootStack.Screen name="Legal" component={LegalScreen} />
+      <RootStack.Screen name="LegalDoc" component={LegalDocScreen} />
+      <RootStack.Screen name="About" component={AboutScreen} />
+      <RootStack.Screen name="CloseAccount" component={CloseAccountScreen} />
       <RootStack.Screen name="FamilyHub" component={FamilyHubScreen} />
       <RootStack.Screen name="FamilyMember" component={FamilyMemberScreen} />
       <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />

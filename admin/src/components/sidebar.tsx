@@ -13,6 +13,7 @@ import {
   IconLoans,
   IconProjects,
   IconScale,
+  IconSliders,
   IconStore,
   IconTransactions,
   IconUsers,
@@ -30,7 +31,10 @@ type NavItem = {
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: IconDashboard, exact: true }],
+    items: [
+      { href: "/", label: "Dashboard", icon: IconDashboard, exact: true },
+      { href: "/settings", label: "Settings", icon: IconSliders },
+    ],
   },
   {
     label: "Money",

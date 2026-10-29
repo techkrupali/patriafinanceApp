@@ -24,6 +24,8 @@ export type AuthStackParamList = {
   AccountType: undefined;
   /** ONB-03 */
   Phone: undefined;
+  /** ONB-02 Get started (Patriai was used on this phone before). */
+  GetStarted: undefined;
   /** ACC-01 */
   Login: undefined;
   /** ONB-04, shared by sign-up and log-in. */
@@ -42,12 +44,27 @@ export type AuthStackParamList = {
   CreatePin: { phoneToken: string; details: SignupDetails };
   /** ONB-09 */
   Purpose: undefined;
+  /** ONB-10 terms and consent, then ONB-11 referral, which creates the account. */
+  Terms: { phoneToken: string; details: SignupDetails; pin: string; biometric: boolean };
+  ReferralCode: {
+    phoneToken: string;
+    details: SignupDetails;
+    pin: string;
+    biometric: boolean;
+    consents: { terms: boolean; verify: boolean; steward_learn: boolean; news: boolean };
+  };
   /** ONB-12 */
   WalletReady: undefined;
-  /** ACC-02 */
-  Unlock: { phoneToken: string; account: PhoneAccount };
-  /** Forgot PIN: a code to the email on file, then a new PIN. */
-  ForgotPin: { phoneToken: string; account: PhoneAccount };
+  /** ONB-13 */
+  NextSteps: undefined;
+  /** ACC-02; `phone` for Forgot PIN and the lock screen. */
+  Unlock: { phoneToken: string; account: PhoneAccount; phone?: string };
+  /** ACC-03 → 05: a code to the phone, the BVN (or email code) and a selfie, a new PIN. */
+  ForgotPin: { phone: string };
+  /** ACC-06 */
+  NewDevice: { phoneToken: string; account: PhoneAccount; phone: string };
+  /** ACC-07 */
+  Locked: { phone: string; phoneToken: string; until: string };
 };
 
 /**
@@ -158,6 +175,38 @@ export type RootStackParamList = {
   FamilyMember: { memberId: number };
   SpousalSync: undefined;
   // ---- Wallet governance (Audit / Lock / Automation) ----
+  // ---- Me and settings (ME-03…22) ----
+  /** ME-03 */
+  PersonalDetails: undefined;
+  /** ME-04 */
+  LinkedBanks: undefined;
+  /** ME-07 */
+  AppLockSettings: undefined;
+  /** ME-08 */
+  TwoStep: undefined;
+  /** ME-10 */
+  LoginHistory: undefined;
+  /** ME-11 */
+  MyLimits: undefined;
+  /** ME-12 */
+  Privacy: undefined;
+  /** ME-13 */
+  Appearance: undefined;
+  /** ME-14 (with appearance, connected apps and privacy) */
+  Language: undefined;
+  /** ME-15 */
+  ConnectedApps: undefined;
+  /** ME-17; `topic: 'fraud'` from ME-18 */
+  SupportChat: { topic?: 'fraud' } | undefined;
+  /** ME-18 */
+  FreezeAccount: undefined;
+  /** ME-19 */
+  Legal: undefined;
+  LegalDoc: { key: string };
+  /** ME-20 */
+  About: undefined;
+  /** ME-22 */
+  CloseAccount: undefined;
   /** WAL-14 */
   WalletAuditLog: { walletId: number };
   /** Spending hours: when money may go out (from WAL-06). */

@@ -1,20 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { pt } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtKeypad, PtPinDots } from '../../components/pt/PtPinPad';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtText } from '../../components/pt/PtText';
-import { usePhoneRegister } from '../../api/hooks';
-import { ApiError } from '../../api/client';
-import { useAuth } from '../../store/auth';
-import { useLanguage } from '../../store/language';
 import { isWeakPin, useOnboardingCopy } from '../../lib/onboardingCopy';
 import {
   getBiometricSupport,
   runBiometricPrompt,
-  saveTxnPin,
   type BiometricSupport,
 } from '../../lib/biometrics';
 import { notifyError } from '../../lib/haptics';
@@ -24,16 +19,13 @@ import { SIGNUP_STEPS } from './PhoneScreen';
 const PIN_LENGTH = 6;
 
 /**
- * ONB-06 / ONB-07: create the 6-digit PIN, enter it again, and the account is
- * created. Then ONB-08 offers Face ID / fingerprint when the phone has it.
+ * ONB-06 / ONB-07: create the 6-digit PIN and enter it again; ONB-08 offers
+ * Face ID / fingerprint when the phone has it. Then the terms (ONB-10) and a
+ * referral code (ONB-11), where the account is created.
  */
 export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePin'>) {
   const { phoneToken, details } = route.params;
   const copy = useOnboardingCopy();
-  const lang = useLanguage((s) => s.lang);
-  const beginOnboarding = useAuth((s) => s.beginOnboarding);
-  const setBiometricEnabled = useAuth((s) => s.setBiometricEnabled);
-  const register = usePhoneRegister();
 
   const [phase, setPhase] = useState<'create' | 'confirm' | 'biometric'>('create');
   const [pin, setPin] = useState('');
@@ -54,42 +46,17 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
     setPhase('create');
   };
 
-  const createAccount = (finalPin: string) => {
-    register.mutate(
-      { phone_token: phoneToken, ...details, pin: finalPin, language: lang },
-      {
-        onSuccess: async ({ user, token }) => {
-          await beginOnboarding(user, token);
-          if (support?.available) setPhase('biometric');
-          else navigation.reset({ index: 0, routes: [{ name: 'Purpose' }] });
-        },
-        onError: (e) => {
-          const field = (key: string) => (e instanceof ApiError ? e.errors?.[key]?.[0] : undefined);
-          if (field('phone_token')) {
-            // The phone check expired: verify the number again.
-            navigation.reset({ index: 1, routes: [{ name: 'Welcome' }, { name: 'Phone' }] });
-            return;
-          }
-          const name = field('first_name') ?? field('last_name');
-          const email = field('email');
-          const dob = field('date_of_birth');
-          if (name || email || dob) {
-            navigation.navigate('Details', { phoneToken, serverErrors: { name, email, dob } });
-            return;
-          }
-          startOver(e.message);
-        },
-      },
-    );
-  };
+  // ONB-07 → ONB-08 (Face ID, when the phone has it) → ONB-10 terms → ONB-11 referral,
+  // where the account is created.
+  const goToTerms = (finalPin: string, biometric: boolean) =>
+    navigation.navigate('Terms', { phoneToken, details, pin: finalPin, biometric });
 
   const onDigits = (next: string) => {
-    if (register.isPending) return;
     setError(null);
     if (phase === 'create') {
       setPin(next);
       if (next.length < PIN_LENGTH) return;
-      if (isWeakPin(next)) {
+      if (isWeakPin(next, details.date_of_birth)) {
         startOver(copy.pin.weak);
         return;
       }
@@ -101,7 +68,8 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
         startOver(copy.pin.mismatch);
         return;
       }
-      createAccount(next);
+      if (support?.available) setPhase('biometric');
+      else goToTerms(next, false);
     }
   };
 
@@ -114,10 +82,7 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
         setError(copy.biometric.failed);
         return;
       }
-      // Biometrics authorise payments by unlocking the PIN kept in the keychain.
-      await saveTxnPin(pin);
-      await setBiometricEnabled(true);
-      navigation.reset({ index: 0, routes: [{ name: 'Purpose' }] });
+      goToTerms(pin, true);
     } finally {
       setBioBusy(false);
     }
@@ -133,7 +98,7 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
             <PtButton
               title={copy.biometric.notNow}
               variant="ghost"
-              onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Purpose' }] })}
+              onPress={() => goToTerms(pin, false)}
             />
           </View>
         }
@@ -181,26 +146,19 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
           navigation.goBack();
         }
       }}
-      step={copy.step(4, SIGNUP_STEPS)}
+      step={copy.step(confirming ? 5 : 4, SIGNUP_STEPS)}
       title={confirming ? copy.pin.confirmTitle : copy.pin.title}
       subtitle={confirming ? copy.pin.confirmSubtitle : copy.pin.subtitle}
       gap={44}
       scroll={false}
       footer={
         <>
-          {register.isPending ? (
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator color={pt.brand} />
-              <PtText variant="label" color={pt.inkMuted}>
-                {copy.pin.creating}
-              </PtText>
-            </View>
-          ) : error ? (
+          {error ? (
             <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>
               {error}
             </PtText>
           ) : null}
-          <PtKeypad value={value} onChange={onDigits} length={PIN_LENGTH} disabled={register.isPending} />
+          <PtKeypad value={value} onChange={onDigits} length={PIN_LENGTH} />
         </>
       }
     >

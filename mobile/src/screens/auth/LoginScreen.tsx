@@ -1,26 +1,40 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from '../../config';
 import { pt } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtPhoneField } from '../../components/pt/PtPhoneField';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtLogo } from '../../components/pt/PtLogo';
 import { PtText } from '../../components/pt/PtText';
-import { usePhoneStart } from '../../api/hooks';
+import { usePhoneCheck } from '../../api/hooks';
 import { useOnboardingCopy } from '../../lib/onboardingCopy';
 import { DEFAULT_COUNTRY, isValidE164, toE164, type Country } from '../../lib/phone';
 import type { AuthScreenProps } from '../../navigation/types';
 
 /**
  * ACC-01 Log in: logo, "Welcome back", one phone field with the dial code
- * inside. A code to the phone comes next, then the PIN (ACC-02).
+ * inside. On a phone you trusted before it goes straight to the PIN (ACC-02);
+ * anywhere else a code to the phone comes first.
  */
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const copy = useOnboardingCopy();
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const start = usePhoneStart();
+  const start = usePhoneCheck();
+
+  // The number last signed in on this phone.
+  useEffect(() => {
+    void SecureStore.getItemAsync(STORAGE_KEYS.lastPhone).then((last) => {
+      if (!last || national) return;
+      // Stored as E.164 ("+2348031112233"); the country holds its code without the "+".
+      const prefix = `+${country.dial}`;
+      const local = last.startsWith(prefix) ? last.slice(prefix.length) : '';
+      if (local) setNational(local);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = () => {
     const phone = toE164(country.dial, national);
@@ -33,13 +47,15 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       { phone, channel: 'sms' },
       {
         onSuccess: (data) =>
-          navigation.navigate('Code', {
-            phone,
-            channel: data.channel,
-            resendIn: data.resend_in,
-            flow: 'login',
-            debugOtp: data.debug_otp,
-          }),
+          data.next === 'pin'
+            ? navigation.navigate('Unlock', { phoneToken: data.phone_token, account: data.account, phone })
+            : navigation.navigate('Code', {
+                phone,
+                channel: data.channel,
+                resendIn: data.resend_in,
+                flow: 'login',
+                debugOtp: data.debug_otp,
+              }),
         onError: (e) => setError(e.message),
       },
     );

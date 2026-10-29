@@ -364,6 +364,10 @@ class ApprovalService
                 return;
             }
 
+            // ME-18: the person who asked froze their account since.
+            if ($initiator?->isFrozen()) {
+                throw ValidationException::withMessages(['wallet' => 'The account that asked is frozen.']);
+            }
             // A request approved after its wallet was paused or suspended waits for it.
             if ($wallet->isFrozen()) {
                 throw ValidationException::withMessages(['wallet' => $wallet->isSuspended() ? 'This wallet is suspended.' : 'This wallet is paused.']);

@@ -46,6 +46,7 @@ class User extends Authenticatable
         'password',
         'pin',
         'remember_token',
+        'two_factor_secret',
     ];
 
     protected function casts(): array
@@ -59,7 +60,38 @@ class User extends Authenticatable
             'pin_length' => 'integer',
             'date_of_birth' => 'date',
             'onboarding_purposes' => 'array',
+            // Security fields (ME-05…18, ACC-05) are written with forceFill only.
+            'pin_changed_at' => 'datetime',
+            'pin_reset_hold_until' => 'datetime',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_confirmed_at' => 'datetime',
+            'frozen_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'settings' => 'array',
         ];
+    }
+
+    /** ME-08: two-step verification is on once its first code was confirmed. */
+    public function hasTwoFactor(): bool
+    {
+        return $this->two_factor_method !== null && $this->two_factor_confirmed_at !== null;
+    }
+
+    /** ME-18: the person froze everything; nothing leaves until they unfreeze. */
+    public function isFrozen(): bool
+    {
+        return $this->frozen_at !== null;
+    }
+
+    /** A setting from ME-07/12/13/14 and ONB-10, or its default. */
+    public function setting(string $key, mixed $default = null): mixed
+    {
+        return ($this->settings ?? [])[$key] ?? $default;
+    }
+
+    public function loginEvents(): HasMany
+    {
+        return $this->hasMany(LoginEvent::class);
     }
 
     public function wallets(): HasMany

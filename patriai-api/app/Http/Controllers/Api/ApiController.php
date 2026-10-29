@@ -114,16 +114,34 @@ abstract class ApiController extends Controller
      */
     protected function dailyTransferLimitError(User $user, int $amountKobo): ?JsonResponse
     {
-        $limit = KycService::make()->limits((int) $user->kyc_tier)['daily_transfer_limit'];
-        if ($limit === null) {
+        return $this->spendGuardError($user, $amountKobo, request());
+    }
+
+    /**
+     * Every payment out (ME-11, ME-18, ACC-05/06, ME-08): maintenance, a frozen
+     * account, a new device's hold, the hold after a PIN reset, the single and
+     * daily limits, two-step on big payments and the receiver's balance limit.
+     * The failure carries `data.code` so the app can show the right screen.
+     */
+    protected function spendGuardError(User $user, int $amountKobo, Request $request, bool $internal = false, ?User $recipient = null): ?JsonResponse
+    {
+        $blocked = \App\Services\LimitService::make()->check($user, $amountKobo, $request, $internal, $recipient);
+        if (!$blocked) {
             return null;
         }
+        [$message, $status, $data] = $blocked;
 
-        if ($this->todaysOutgoingKobo($user) + $amountKobo > $limit) {
-            return $this->fail('This exceeds your daily transfer limit for your verification tier. Verify a higher tier to raise it.', 422);
+        return response()->json(['status' => false, 'message' => $message, 'data' => $data], $status);
+    }
+
+    /** Money can't leave this wallet: a frozen account (ME-18) is told why; anyone else lacks the right. */
+    protected function cannotSpendError(User $user): JsonResponse
+    {
+        if ($user->isFrozen()) {
+            return response()->json(['status' => false, 'message' => 'Your account is frozen. Unfreeze it with your PIN and a selfie to send money.', 'data' => ['code' => 'frozen']], 423);
         }
 
-        return null;
+        return $this->fail('You do not have permission to move money out of this wallet', 403);
     }
 
     protected function ok(string $message, mixed $data = null, int $code = 200): JsonResponse
@@ -144,6 +162,18 @@ abstract class ApiController extends Controller
         }
 
         return response()->json($payload, $code);
+    }
+
+    /** A phone number someone types to sign in or change to, in E.164, or a validation error. */
+    protected function validPhone(string $raw): string
+    {
+        $phone = $this->normalizePhone($raw);
+        // Nigerian numbers are always 10 digits after +234; a missing digit would send the code elsewhere.
+        if (!preg_match('/^\+[1-9]\d{7,14}$/', $phone) || (str_starts_with($phone, '+234') && !preg_match('/^\+234\d{10}$/', $phone))) {
+            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number.']);
+        }
+
+        return $phone;
     }
 
     /**
@@ -229,6 +259,13 @@ abstract class ApiController extends Controller
             'language' => $user->language ?? 'en',
             'date_of_birth' => $user->date_of_birth?->toDateString(),
             'onboarding_purposes' => $user->onboarding_purposes ?? [],
+            // ME-18 / ACC-05 / ME-08: the app shows a frozen account, the reset hold and two-step.
+            'frozen' => $user->isFrozen(),
+            'pin_reset_hold_until' => $user->pin_reset_hold_until?->isFuture() ? $user->pin_reset_hold_until->toIso8601String() : null,
+            'two_factor' => $user->hasTwoFactor() ? $user->two_factor_method : null,
+            'address' => $user->address,
+            'city' => $user->city,
+            'state' => $user->state,
             'created_at' => $user->created_at?->toIso8601String(),
         ];
     }

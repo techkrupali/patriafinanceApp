@@ -25,4 +25,10 @@ class SupportRequest extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** ME-17: the chat on this request. */
+    public function messages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SupportMessage::class)->orderBy('id');
+    }
 }

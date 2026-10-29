@@ -148,9 +148,9 @@ export function loanCategoryLabel(category: string): string {
 
 // KYC target tiers map to a human verification name.
 const KYC_TIER_NAMES: Record<number, string> = {
-  1: "Identity",
-  2: "Address",
-  3: "Source of Funds",
+  1: "BVN",
+  2: "NIN and selfie",
+  3: "ID and proof of address",
 };
 
 /** e.g. 2 -> "Address". */

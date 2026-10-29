@@ -39,6 +39,8 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'pin' => static::$pin ??= Hash::make('1234'),
             'remember_token' => Str::random(10),
+            // Feature tests start fully verified; tier tests set the tier they need.
+            'kyc_tier' => 3,
         ];
     }
 

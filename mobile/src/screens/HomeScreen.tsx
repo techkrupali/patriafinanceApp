@@ -10,6 +10,7 @@ import { PtAvatar } from '../components/pt/PtAvatar';
 import { PtChip } from '../components/pt/PtChip';
 import { PtRing } from '../components/pt/PtRing';
 import { PtQuickAction } from '../components/pt/PtTabScreen';
+import { OfflineBanner } from '../components/system/SystemStates';
 import { LoadError } from '../components/LoadError';
 import { QuickActionsSheet, type QuickAction } from '../components/QuickActionsSheet';
 import { useHome, useWallets } from '../api/hooks';
@@ -160,6 +161,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           />
         }
       >
+        <OfflineBanner />
         {header}
 
         {home.isLoading ? (

@@ -69,7 +69,7 @@ const en = {
     confirmTitle: 'Enter it again',
     confirmSubtitle: 'To make sure you remember it',
     mismatch: "Those PINs don't match. Create it again.",
-    weak: 'Pick a harder PIN. Avoid repeated or sequential numbers like 123456.',
+    weak: 'Pick a harder PIN. Avoid your birthday, and repeated or sequential numbers like 123456.',
     creating: 'Creating your account…',
   },
 
@@ -198,7 +198,7 @@ const pcm: Copy = {
     confirmTitle: 'Put am again',
     confirmSubtitle: 'Make we sure say you remember am',
     mismatch: 'The two PIN no match. Create am again.',
-    weak: 'Choose PIN wey hard small. No use number wey repeat or follow each other like 123456.',
+    weak: 'Choose PIN wey hard small. No use your birthday, or number wey repeat or follow each other like 123456.',
     creating: 'We dey open your account…',
   },
 
@@ -268,10 +268,21 @@ export function useOnboardingCopy(): Copy {
   return copies[useLanguage((s) => s.lang)];
 }
 
-/** Rejects 6-digit PINs that are one digit repeated or a straight run (123456, 987654). */
-export function isWeakPin(pin: string): boolean {
+/**
+ * The server's weak-PIN rules (SecurityService::weakPinReason), so a weak PIN is
+ * refused on the PIN step rather than after it: one digit repeated, a run that
+ * may wrap (123456, 890123, 987654), the common patterns, the birthday
+ * (`YYYY-MM-DD`) written ddmmyy / mmddyy / yymmdd / yyddmm, the phone's last digits.
+ */
+export function isWeakPin(pin: string, dateOfBirth?: string | null, phone?: string | null): boolean {
   if (/^(\d)\1+$/.test(pin)) return true;
   const digits = pin.split('').map(Number);
-  const step = digits[1] - digits[0];
-  return Math.abs(step) === 1 && digits.every((d, i) => i === 0 || d - digits[i - 1] === step);
+  const run = (step: number) => digits.every((d, i) => i === 0 || d === (digits[i - 1] + step + 10) % 10);
+  if (run(1) || run(-1) || ['121212', '112233', '123123', '111222', '000111'].includes(pin)) return true;
+  const dob = dateOfBirth?.match(/^\d{2}(\d{2})-(\d{2})-(\d{2})/);
+  if (dob) {
+    const [, y, m, d] = dob;
+    if ([d + m + y, m + d + y, y + m + d, y + d + m].includes(pin)) return true;
+  }
+  return Boolean(phone && phone.replace(/\D/g, '').endsWith(pin));
 }

@@ -8,6 +8,8 @@ import { PtText } from '../../components/pt/PtText';
 import { usePinLogin } from '../../api/hooks';
 import { ApiError } from '../../api/client';
 import { useAuth } from '../../store/auth';
+import { pendingSelfie } from '../../lib/selfie';
+import { TwoStepSheet, twoStepAsked } from '../../components/TwoStepSheet';
 import { useOnboardingCopy } from '../../lib/onboardingCopy';
 import { notifyError, selection } from '../../lib/haptics';
 import type { AuthScreenProps } from '../../navigation/types';
@@ -17,33 +19,63 @@ import type { AuthScreenProps } from '../../navigation/types';
  * their PIN on the raised keypad to finish logging in.
  */
 export function UnlockScreen({ route, navigation }: AuthScreenProps<'Unlock'>) {
-  const { phoneToken, account } = route.params;
+  const { phoneToken, account, phone } = route.params;
   const copy = useOnboardingCopy();
   const setSession = useAuth((s) => s.setSession);
   const login = usePinLogin();
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [asked, setAsked] = useState<ReturnType<typeof twoStepAsked>>(null);
+  const [twoStepError, setTwoStepError] = useState<string | null>(null);
+  // ACC-06: the selfie taken on the new-phone step goes with the PIN.
+  const [selfie] = useState(() => (account.new_device ? pendingSelfie.take() : null));
+
+  const signIn = (value: string, twoFactorCode?: string) =>
+    login.mutate(
+      { phone_token: phoneToken, pin: value, selfie, two_factor_code: twoFactorCode },
+      {
+        onSuccess: ({ user, token }) => void setSession(user, token),
+        onError: (e) => {
+          const data = e instanceof ApiError ? (e.data as { code?: string; until?: string } | undefined) : undefined;
+          const two = twoStepAsked(e);
+          if (two) {
+            setAsked(two);
+            setTwoStepError(twoFactorCode ? e.message : null);
+            return;
+          }
+          // A wrong two-step code (the PIN was right): stay on the code with the reason.
+          if (twoFactorCode && e instanceof ApiError && e.errors?.two_factor_code) {
+            notifyError();
+            setTwoStepError(e.message);
+            return;
+          }
+          notifyError();
+          setPin('');
+          setAsked(null);
+          if (e instanceof ApiError && e.errors?.phone_token) {
+            navigation.reset({ index: 1, routes: [{ name: 'Welcome' }, { name: 'Login' }] });
+            return;
+          }
+          if (data?.code === 'locked' && data.until) {
+            navigation.replace('Locked', { phone: phone ?? '', phoneToken, until: data.until });
+            return;
+          }
+          if (data?.code === 'selfie_required') {
+            navigation.replace('NewDevice', { phoneToken, account, phone: phone ?? '' });
+            return;
+          }
+          if (twoFactorCode) setTwoStepError(e.message);
+          else setError(e.message);
+        },
+      },
+    );
 
   const onDigits = (next: string) => {
     if (login.isPending) return;
     setError(null);
     setPin(next);
     if (next.length < account.pin_length) return;
-    login.mutate(
-      { phone_token: phoneToken, pin: next },
-      {
-        onSuccess: ({ user, token }) => void setSession(user, token),
-        onError: (e) => {
-          notifyError();
-          setPin('');
-          if (e instanceof ApiError && e.errors?.phone_token) {
-            navigation.reset({ index: 1, routes: [{ name: 'Welcome' }, { name: 'Login' }] });
-            return;
-          }
-          setError(e.message);
-        },
-      },
-    );
+    signIn(next);
   };
 
   return (
@@ -68,7 +100,7 @@ export function UnlockScreen({ route, navigation }: AuthScreenProps<'Unlock'>) {
         <PtText variant="title" style={{ fontFamily: ptFont.extrabold }} accessibilityRole="header">
           {copy.unlock.hi(account.first_name)}
         </PtText>
-        <PtText color={pt.inkMuted}>{copy.unlock.enterPin}</PtText>
+        <PtText color={pt.inkMuted}>{account.new_device ? 'Enter your PIN to finish on this phone' : copy.unlock.enterPin}</PtText>
       </View>
 
       <View style={{ paddingVertical: 6 }}>
@@ -85,10 +117,21 @@ export function UnlockScreen({ route, navigation }: AuthScreenProps<'Unlock'>) {
 
       <PtKeypad value={pin} onChange={onDigits} length={account.pin_length} variant="raised" disabled={login.isPending} />
 
+      <TwoStepSheet
+        asked={asked}
+        busy={login.isPending}
+        error={twoStepError}
+        onSubmit={(code) => signIn(pin, code)}
+        onClose={() => {
+          setAsked(null);
+          setPin('');
+        }}
+      />
+
       <Pressable
         onPress={() => {
           selection();
-          navigation.navigate('ForgotPin', { phoneToken, account });
+          navigation.navigate('ForgotPin', { phone: phone ?? '' });
         }}
         accessibilityRole="button"
         style={{ alignSelf: 'center', paddingVertical: 8 }}

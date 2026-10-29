@@ -655,7 +655,10 @@ class AdminController extends ApiController
         $submission->load('user');
 
         return $this->ok('KYC submission fetched', [
-            'submission' => $this->serializeKycSubmission($submission, withPayload: true),
+            'submission' => $this->serializeKycSubmission($submission, withPayload: true) + [
+                // Selfie, ID and proof of address, fetched from /admin/kyc/{id}/files/{key}.
+                'files' => collect(\App\Services\KycService::FILES)->filter(fn ($k) => !empty($submission->payload[$k]))->values(),
+            ],
             'user' => $submission->user ? [
                 'id' => $submission->user->id,
                 'name' => $submission->user->fullName(),

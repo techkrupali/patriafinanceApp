@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { pt, ptFont, ptRadius } from '../theme';
+import { OfflineBanner } from '../components/system/SystemStates';
 import { PtTabScreen, PtQuickAction } from '../components/pt/PtTabScreen';
 import { PtButton } from '../components/pt/PtButton';
 import { PtCard, PtRow, PtSectionTitle } from '../components/pt/PtList';
@@ -66,6 +67,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
         void drafts.refetch();
       }}
     >
+      <OfflineBanner />
       {home.isLoading || wallets.isLoading ? (
         <ActivityIndicator color={pt.brand} style={{ marginTop: 48 }} />
       ) : home.error || wallets.error || !totals ? (

@@ -589,7 +589,7 @@ class WalletController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
         if (!$wallet->canSpend($request->user())) {
-            return $this->fail('You do not have permission to move money out of this wallet', 403);
+            return $this->cannotSpendError($request->user());
         }
         // Additive granular gate: an explicit permissions[withdraw]=false blocks a
         // member who otherwise holds a spend grant. Never loosens canSpend, so
@@ -706,7 +706,7 @@ class WalletController extends ApiController
         // Per-tier daily withdrawal/transfer limit. Fee-inclusive, because
         // todaysOutgoingKobo() accumulates amount + fee for withdrawals — checking
         // the bare amount here would let the fee leak past the daily cap.
-        if ($err = $this->dailyTransferLimitError($user, $amountKobo + $feeKobo)) {
+        if ($err = $this->spendGuardError($user, $amountKobo + $feeKobo, request())) {
             return $err;
         }
 

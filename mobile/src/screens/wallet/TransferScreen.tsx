@@ -11,6 +11,7 @@ import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
 import { ErrorText } from '../../components/ErrorText';
 import { PinSheet } from '../../components/PinSheet';
+import { TwoStepSheet, twoStepAsked } from '../../components/TwoStepSheet';
 import { BankPicker } from '../../components/BankPicker';
 import { BudgetCategoryPicker } from '../../components/BudgetCategoryPicker';
 import { SuccessReceipt } from '../../components/SuccessReceipt';
@@ -118,7 +119,9 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
     return verified?.account_name;
   }, [kind, destWallets, destWalletId, identifier, verified]);
 
-  const authorize = (pin: string) => {
+  // ME-08: over ₦500,000 the server asks for the two-step code; the same payment goes again with it.
+  const [twoStep, setTwoStep] = useState<{ asked: ReturnType<typeof twoStepAsked>; pin: string; error: string | null }>({ asked: null, pin: '', error: null });
+  const authorize = (pin: string, twoFactorCode?: string) => {
     if (!from || !destination) return;
     setPinError(null);
     transfer.mutate(
@@ -126,6 +129,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
         from_wallet_id: from.id,
         amount,
         pin,
+        two_factor_code: twoFactorCode,
         description: description.trim() || undefined,
         budget_category_id: categoryId ?? undefined,
         destination,
@@ -133,6 +137,7 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
       {
         onSuccess: (data) => {
           setPinOpen(false);
+          setTwoStep({ asked: null, pin: '', error: null });
           setReceiptAmount(amount);
           if (isPendingApproval(data)) {
             setPending(data.approval);
@@ -140,7 +145,19 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
             setReceipt(data);
           }
         },
-        onError: (e) => setPinError(e.message),
+        onError: (e) => {
+          const asked = twoStepAsked(e);
+          if (asked) {
+            setPinOpen(false);
+            setTwoStep({ asked, pin, error: twoFactorCode ? e.message : null });
+            return;
+          }
+          if (twoFactorCode) {
+            setTwoStep((t) => ({ ...t, error: e.message }));
+            return;
+          }
+          setPinError(e.message);
+        },
       },
     );
   };
@@ -411,8 +428,15 @@ export function TransferScreen({ navigation, route }: RootScreenProps<'Transfer'
         recipient={recipientLabel}
         loading={transfer.isPending}
         error={pinError}
-        onSubmit={authorize}
+        onSubmit={(pin) => authorize(pin)}
         onClose={() => setPinOpen(false)}
+      />
+      <TwoStepSheet
+        asked={twoStep.asked}
+        busy={transfer.isPending}
+        error={twoStep.error}
+        onSubmit={(code) => authorize(twoStep.pin, code)}
+        onClose={() => setTwoStep({ asked: null, pin: '', error: null })}
       />
     </Screen>
   );

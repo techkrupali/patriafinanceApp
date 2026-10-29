@@ -90,6 +90,8 @@ export function toE164(dial: string, national: string): string {
 
 /** E.164 shape check: '+' then 8–15 digits, first digit non-zero. */
 export function isValidE164(value: string): boolean {
+  // Nigerian numbers are always 10 digits after +234; a missing digit would send the code elsewhere.
+  if (value.startsWith('+234')) return /^\+234\d{10}$/.test(value);
   return /^\+[1-9]\d{7,14}$/.test(value);
 }
 

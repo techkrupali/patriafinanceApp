@@ -26,7 +26,7 @@ function groupAccount(n: string): string {
  * bank and name, next steps, and Go to home. Reading the funding details also
  * retries the virtual account if the bank was slow at sign-up.
  */
-export function WalletReadyScreen(_props: AuthScreenProps<'WalletReady'>) {
+export function WalletReadyScreen({ navigation }: AuthScreenProps<'WalletReady'>) {
   const copy = useOnboardingCopy();
   const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
@@ -150,7 +150,7 @@ export function WalletReadyScreen(_props: AuthScreenProps<'WalletReady'>) {
       </ScrollView>
 
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12) + 18 }}>
-        <PtButton title={copy.ready.goHome} onPress={() => finishOnboarding()} />
+        <PtButton title={copy.ready.goHome} onPress={() => navigation.navigate('NextSteps')} />
       </View>
     </View>
   );

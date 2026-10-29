@@ -145,7 +145,7 @@ class TransferController extends ApiController
             return $this->fail('Source wallet not found', 404);
         }
         if (!$from->canSpend($user)) {
-            return $this->fail('You do not have permission to move money out of this wallet', 403);
+            return $this->cannotSpendError($user);
         }
         // EMG-03 "Pay the hospital directly": money goes to the bill, not a person.
         if ($data['destination']['kind'] !== 'bank' && $from->paysBillsDirectly()) {
@@ -160,9 +160,14 @@ class TransferController extends ApiController
         // Fee only applies to external (bank) transfers; wallet/user moves are free.
         $spendKobo = $amountKobo + ($dest['kind'] === 'bank' ? $feeKobo : 0);
 
-        // Per-tier daily transfer limit (money leaving the wallet). Checked fee-
-        // inclusive so it matches how todaysOutgoingKobo() accumulates amount + fee.
-        if ($err = $this->dailyTransferLimitError($user, $spendKobo)) {
+        // Limits, holds and two-step (ME-11/18, ACC-05/06, ME-08), fee-inclusive so it
+        // matches how the day's total adds up. Moving between your own wallets is free of
+        // limits; paying someone checks how much their account may hold.
+        $ownTarget = $dest['kind'] === 'wallet' && (int) Wallet::whereKey((int) ($dest['wallet_id'] ?? 0))->value('user_id') === $user->id;
+        $receiver = $dest['kind'] === 'user'
+            ? (str_contains((string) $dest['identifier'], '@') ? User::where('email', strtolower($dest['identifier']))->first() : User::where('phone', $dest['identifier'])->first())
+            : null;
+        if ($err = $this->spendGuardError($user, $spendKobo, request(), internal: $ownTarget && $from->user_id === $user->id, recipient: $receiver)) {
             return $err;
         }
 

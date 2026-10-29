@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/page-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Toast, type ToastState } from "@/components/toast";
+import { UserSecurity } from "@/components/admin/user-security";
 import { EditUserModal } from "@/components/admin/edit-user-modal";
 import { SetTierModal } from "@/components/admin/set-tier-modal";
 import { AdjustBalanceModal } from "@/components/admin/adjust-balance-modal";
@@ -599,41 +600,12 @@ export default function UserDetailPage({
         </Card>
       </div>
 
-      {/* Devices + Recent transactions */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Devices</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isPending ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-            ) : data!.devices.length === 0 ? (
-              <p className="text-sm text-muted">No registered devices.</p>
-            ) : (
-              <ul className="space-y-4">
-                {data!.devices.map((d, i) => (
-                  <li key={i} className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ink">
-                        {d.device_name ?? "Unknown device"}
-                      </p>
-                      <p className="text-xs text-muted">
-                        Last active {formatDateTime(d.last_active_at)}
-                      </p>
-                    </div>
-                    {d.platform ? <Badge tone="gray">{d.platform}</Badge> : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+      {/* Security, limits, devices and login history (ME-05…24, ACC-02…07) */}
+      <UserSecurity userId={id} onToast={setToast} />
 
-        <Card className="lg:col-span-2">
+      {/* Recent transactions */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Recent Transactions</CardTitle>
           </CardHeader>

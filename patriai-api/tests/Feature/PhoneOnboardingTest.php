@@ -127,22 +127,30 @@ class PhoneOnboardingTest extends TestCase
         OtpCode::query()->delete(); // clear the resend cooldown for the helper below
 
         $verified = $this->verifyPhone();
-        $this->assertSame(['first_name' => 'Ngozi', 'initials' => 'NO', 'avatar_url' => null, 'pin_length' => 4], $verified['account']);
+        $this->assertSame(['first_name' => 'Ngozi', 'initials' => 'NO', 'avatar_url' => null, 'pin_length' => 4, 'new_device' => false, 'two_factor' => null], $verified['account']);
 
-        for ($i = 0; $i < 5; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $verified['phone_token'], 'pin' => '9999'])
                 ->assertStatus(422)->assertJsonValidationErrors('pin');
         }
+        // ACC-07: the fifth miss locks it for 30 minutes and says until when.
+        $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $verified['phone_token'], 'pin' => '9999'])
+            ->assertStatus(423)->assertJsonPath('data.code', 'locked');
         // Locked now, even with the right PIN (factory PIN is 1234).
         $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $verified['phone_token'], 'pin' => '1234'])
-            ->assertStatus(422)->assertJsonValidationErrors('pin');
+            ->assertStatus(423);
 
-        $this->travel(16)->minutes();
+        $this->travel(31)->minutes();
+        OtpCode::query()->delete();
+        $verified = $this->verifyPhone();
         $res = $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $verified['phone_token'], 'pin' => '1234'])
             ->assertOk()
             ->assertJsonPath('data.user.id', $user->id);
         $this->assertNotEmpty($res->json('data.token'));
+        $this->assertNotEmpty($res->json('data.device_secret'));
         $this->assertNotNull($user->refresh()->phone_verified_at);
+        // ME-10: the misses and the block are in the login history.
+        $this->assertSame(['failed', 'failed', 'failed', 'failed', 'failed', 'blocked', 'ok'], $user->loginEvents()->orderBy('id')->pluck('status')->all());
     }
 
     public function test_suspended_number_is_refused_after_the_code(): void
@@ -183,31 +191,42 @@ class PhoneOnboardingTest extends TestCase
         $this->postJson('/api/v1/auth/phone/start', ['phone' => self::PHONE, 'channel' => 'sms'])->assertOk();
     }
 
-    public function test_forgot_pin_needs_the_email_code_and_ends_old_sessions(): void
+    public function test_forgot_pin_needs_a_code_and_a_selfie_and_holds_big_payments(): void
     {
         Mail::fake();
         $user = User::factory()->create(['phone' => self::PHONE, 'email' => 'ngozi@example.com']);
         $old = $user->createToken('old-phone')->plainTextToken;
+        $device = ['device_id' => 'ngozi-phone', 'device_name' => 'iPhone', 'platform' => 'ios'];
 
+        // ACC-04: no BVN checked yet, so the second check is a code to the email on file.
         $token = $this->verifyPhone()['phone_token'];
         $res = $this->postJson('/api/v1/auth/pin/forgot', ['phone_token' => $token])
             ->assertOk()
+            ->assertJsonPath('data.needs', 'email')
             ->assertJsonPath('data.sent_to', 'ng***@example.com');
         $emailCode = $res->json('data.debug_otp');
+        $selfie = \Illuminate\Http\UploadedFile::fake()->image('selfie.jpg');
 
-        $this->postJson('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => '000000', 'pin' => '482915'])
+        $this->post('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => $emailCode, 'pin' => '482915'] + $device, ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('selfie');
+        $this->post('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => '000000', 'pin' => '482915', 'selfie' => $selfie] + $device, ['Accept' => 'application/json'])
             ->assertStatus(422)->assertJsonValidationErrors('code');
-        $this->postJson('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => $emailCode, 'pin' => '482915'])
+        // ACC-05 "Not your birthday or 123456".
+        $this->post('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => $emailCode, 'pin' => '123456', 'selfie' => $selfie] + $device, ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('pin');
+        $this->post('/api/v1/auth/pin/reset', ['phone_token' => $token, 'code' => $emailCode, 'pin' => '482915', 'selfie' => $selfie] + $device, ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('data.user.pin_length', 6);
+        // "For your safety, payments over ₦50,000 wait 24 hours."
+        $this->assertTrue($user->refresh()->pin_reset_hold_until->isFuture());
 
         $this->app['auth']->forgetGuards();
         $this->withHeader('Authorization', "Bearer {$old}")->getJson('/api/v1/auth/me')->assertUnauthorized();
 
-        // The new PIN logs in next time.
+        // The new PIN logs in next time, on the same phone.
         OtpCode::query()->delete();
         $next = $this->verifyPhone()['phone_token'];
-        $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $next, 'pin' => '482915'])->assertOk();
+        $this->postJson('/api/v1/auth/phone/login', ['phone_token' => $next, 'pin' => '482915'] + $device)->assertOk();
     }
 
     public function test_six_digit_pin_authorises_payments_and_changes_without_a_password(): void

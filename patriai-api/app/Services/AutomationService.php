@@ -390,8 +390,9 @@ class AutomationService
             if ($from->user_id !== $owner->id || ($to->user_id !== $owner->id && !$savingsOk)) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallets not both owned by the rule owner', 'period' => $period];
             }
-            // WAL-12 "Paused — rules and payments are stopped" (and suspended or archived).
-            if ($from->status !== 'active' || $to->status !== 'active') {
+            // WAL-12 "Paused — rules and payments are stopped" (and suspended or archived);
+            // ME-18 a frozen account's rules stop too.
+            if ($from->status !== 'active' || $to->status !== 'active' || $owner->isFrozen()) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet is paused or closed', 'period' => $period];
             }
             // CHW-02 "Pause during school holidays — restarts when term begins".
@@ -599,7 +600,7 @@ class AutomationService
                     if (!$to || !$owner || $main->user_id !== $owner->id || !$to->canFund($owner)) {
                         return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing'];
                     }
-                    if ($main->fresh()->status !== 'active' || $to->status !== 'active') {
+                    if ($main->fresh()->status !== 'active' || $to->status !== 'active' || $owner->isFrozen()) {
                         return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet is paused or closed'];
                     }
 
@@ -655,7 +656,7 @@ class AutomationService
                     if (!$to || !$owner || $wallet->user_id !== $owner->id || !$to->canFund($owner)) {
                         return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet or owner missing'];
                     }
-                    if ($wallet->fresh()->status !== 'active' || $to->status !== 'active') {
+                    if ($wallet->fresh()->status !== 'active' || $to->status !== 'active' || $owner->isFrozen()) {
                         return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Wallet is paused or closed'];
                     }
 

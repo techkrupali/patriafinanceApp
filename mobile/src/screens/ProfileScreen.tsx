@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -9,8 +9,9 @@ import { PtCard, PtIconTile, PtRow, PtSectionTitle } from '../components/pt/PtLi
 import { PtAvatar } from '../components/pt/PtAvatar';
 import { PtChip } from '../components/pt/PtChip';
 import { PtButton } from '../components/pt/PtButton';
-import { LanguageSheet } from '../components/LanguageSheet';
-import { useDevices, useHome, useLogoutApi, useMyVendorProfile, useUpdateProfile } from '../api/hooks';
+import { PtSheet } from '../components/pt/PtSheet';
+import { PtSwitchRow } from '../components/pt/PtForm';
+import { useDevices, useHome, useLogoutApi, useMyVendorProfile } from '../api/hooks';
 import { useTeamInvites, useVendorHome } from '../api/projectFlow';
 import { useAuth } from '../store/auth';
 import { useLanguage } from '../store/language';
@@ -53,35 +54,30 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
   const user = useAuth((s) => s.user);
   const logoutLocal = useAuth((s) => s.logout);
   const lang = useLanguage((s) => s.lang);
-  const setLang = useLanguage((s) => s.setLang);
   const home = useHome();
   const devices = useDevices();
   const logoutApi = useLogoutApi();
-  const updateProfile = useUpdateProfile();
   const qc = useQueryClient();
-  const [langOpen, setLangOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [keepTrusted, setKeepTrusted] = useState(true);
 
   const tier = user?.kyc_tier ?? 0;
   const unread = home.data?.unread_notifications ?? 0;
   const deviceCount = devices.data?.length ?? 0;
   const contact = [user?.username ? `@${user.username}` : null, user?.phone ? formatE164(user.phone) : null].filter(Boolean).join(' · ');
 
-  const confirmLogout = () => {
-    Alert.alert('Log out', 'You will need your phone number and PIN to log back in.', [
-      { text: 'Cancel', style: 'cancel' },
+  // ME-21 "Log out?" — and whether this phone stays trusted (skips the selfie next time).
+  const doLogout = () =>
+    logoutApi.mutate(
+      { keep_trusted: keepTrusted },
       {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () =>
-          logoutApi.mutate(undefined, {
-            onSettled: async () => {
-              await logoutLocal();
-              qc.clear();
-            },
-          }),
+        onSettled: async () => {
+          setLogoutOpen(false);
+          await logoutLocal();
+          qc.clear();
+        },
       },
-    ]);
-  };
+    );
 
   return (
     <PtTabScreen title="More">
@@ -127,7 +123,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
 
       {/* Settings */}
       <PtCard>
-        <PtRow title="Account level" right={`Tier ${tier}`} chevron minHeight={46} onPress={() => navigation.navigate('Kyc')} />
+        <PtRow title="Account level" right={`Tier ${tier} · Free`} chevron minHeight={46} onPress={() => navigation.navigate('Kyc')} />
         <PtRow title="Security" right="PIN, Face ID" chevron minHeight={46} onPress={() => navigation.navigate('SecurityCenter')} />
         <PtRow
           title="Notifications"
@@ -144,7 +140,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
           onPress={() => navigation.navigate('Devices')}
         />
         <PtRow title="Refer and earn" right="Invite families" chevron minHeight={46} onPress={() => navigation.navigate('Referral')} />
-        <PtRow title="Language" right={lang === 'pcm' ? 'Pidgin' : 'English'} chevron minHeight={46} onPress={() => setLangOpen(true)} />
+        <PtRow title="Language, apps and privacy" right={lang === 'pcm' ? 'Pidgin' : 'English'} chevron minHeight={46} onPress={() => navigation.navigate('Language')} />
         <PtRow title="Help, disputes and legal" chevron minHeight={46} last onPress={() => navigation.navigate('HelpFaq')} />
       </PtCard>
 
@@ -163,18 +159,22 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </PtCard>
       </View>
 
-      <PtButton title="Log out" variant="ghost" onPress={confirmLogout} loading={logoutApi.isPending} />
+      <PtButton title="Log out" variant="ghost" onPress={() => setLogoutOpen(true)} loading={logoutApi.isPending} />
 
-      <LanguageSheet
-        visible={langOpen}
-        value={lang}
-        onClose={() => setLangOpen(false)}
-        onPick={(l) => {
-          setLangOpen(false);
-          void setLang(l);
-          updateProfile.mutate({ language: l });
-        }}
-      />
+      <PtSheet
+        visible={logoutOpen}
+        title="Log out?"
+        subtitle="You'll need your phone number and PIN to log back in."
+        onClose={() => setLogoutOpen(false)}
+        footer={
+          <View style={{ gap: 4 }}>
+            <PtButton title="Log out" onPress={doLogout} loading={logoutApi.isPending} />
+            <PtButton title="Cancel" variant="ghost" onPress={() => setLogoutOpen(false)} />
+          </View>
+        }
+      >
+        <PtSwitchRow title="Keep this phone trusted" subtitle="Skip the selfie check next time" value={keepTrusted} onChange={setKeepTrusted} />
+      </PtSheet>
     </PtTabScreen>
   );
 }

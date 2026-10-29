@@ -19,7 +19,7 @@ import type { RootScreenProps } from '../../navigation/types';
 export function ChatBubble({ mine, name, time, body }: { mine: boolean; name: string; time: string; body: string }) {
   return (
     <View style={{ alignItems: mine ? 'flex-end' : 'flex-start', gap: 4 }}>
-      <Text style={{ fontFamily: ptFont.medium, fontSize: 11, color: pt.inkSubtle }}>{mine ? `You · ${time}` : `${name} · ${time}`}</Text>
+      <Text style={{ fontFamily: ptFont.medium, fontSize: 11, color: pt.inkSubtle }}>{[mine ? 'You' : name, time].filter(Boolean).join(' · ')}</Text>
       <View
         style={{
           maxWidth: '82%',

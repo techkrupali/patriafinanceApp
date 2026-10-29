@@ -1,127 +1,122 @@
 import React, { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
-import { Screen } from '../../components/Screen';
-import { KeyboardAwareScrollView } from '../../components/KeyboardAwareScrollView';
-import { Header } from '../../components/Header';
-import { Input } from '../../components/Input';
-import { Button } from '../../components/Button';
-import { ErrorText } from '../../components/ErrorText';
-import { useChangePin } from '../../api/hooks';
-import { useAuth, useTxnPinLength } from '../../store/auth';
+import { ActivityIndicator } from 'react-native';
+import { pt } from '../../theme';
+import { PtStepScreen } from '../../components/pt/PtStepScreen';
+import { PtKeypad, PtPinDots } from '../../components/pt/PtPinPad';
+import { PtText } from '../../components/pt/PtText';
+import { TwoStepSheet, twoStepAsked } from '../../components/TwoStepSheet';
+import { useChangePinSecure } from '../../api/account';
+import { useTxnPinLength } from '../../store/auth';
 import { saveTxnPin } from '../../lib/biometrics';
+import { useAuth } from '../../store/auth';
+import { isWeakPin } from '../../lib/onboardingCopy';
+import { notifyError, notifySuccess } from '../../lib/haptics';
+import { showAlert } from '../../lib/alert';
 import type { RootScreenProps } from '../../navigation/types';
 
-/** New PINs are 6 digits (client prototype); older 4-digit PINs move up on change. */
-const NEW_PIN_LENGTH = 6;
-
+/**
+ * ME-06 Change PIN: the PIN you use now, then "Enter a new PIN — 6 digits.
+ * Not your birthday or 123456." twice. With two-step on, its code too.
+ */
 export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
-  const user = useAuth((s) => s.user);
-  const setUser = useAuth((s) => s.setUser);
-  const biometricEnabled = useAuth((s) => s.biometricEnabled);
-  const hasPin = user?.has_pin ?? true;
-  // Phone sign-ups have no password; their current PIN is the check.
-  const needsPassword = user?.has_password !== false;
   const currentLength = useTxnPinLength();
-
-  const [password, setPassword] = useState('');
-  const [currentPin, setCurrentPin] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
+  const biometric = useAuth((s) => s.biometricEnabled);
+  const user = useAuth((s) => s.user);
+  const change = useChangePinSecure();
+  const [phase, setPhase] = useState<'current' | 'new' | 'confirm'>('current');
+  const [current, setCurrent] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const change = useChangePin();
+  const [asked, setAsked] = useState<ReturnType<typeof twoStepAsked>>(null);
+  const [twoErr, setTwoErr] = useState<string | null>(null);
 
-  const submit = () => {
-    setError(null);
-    if (needsPassword && !password) {
-      setError('Enter your password to confirm it is you.');
-      return;
-    }
-    if (hasPin && currentPin.length !== currentLength) {
-      setError(`Enter your current ${currentLength}-digit PIN.`);
-      return;
-    }
-    if (newPin.length !== NEW_PIN_LENGTH) {
-      setError(`New PIN must be exactly ${NEW_PIN_LENGTH} digits.`);
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setError('New PINs do not match.');
-      return;
-    }
+  const restart = (message: string) => {
+    notifyError();
+    setError(message);
+    setPin('');
+    setConfirm('');
+    setPhase('new');
+  };
+
+  const submit = (code?: string) =>
     change.mutate(
-      {
-        new_pin: newPin,
-        ...(needsPassword ? { password } : {}),
-        ...(hasPin ? { current_pin: currentPin } : {}),
-      },
+      { current_pin: current, new_pin: pin, two_factor_code: code },
       {
         onSuccess: async () => {
-          // Keep the biometric-cached PIN in sync so authorize keeps working.
-          if (biometricEnabled) await saveTxnPin(newPin);
-          if (user) await setUser({ ...user, has_pin: true, pin_length: NEW_PIN_LENGTH });
-          Alert.alert('PIN updated', 'Your transaction PIN has been changed.', [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
+          // Face ID authorises payments with the PIN kept in the keychain: keep it current.
+          if (biometric) await saveTxnPin(pin);
+          notifySuccess();
+          setAsked(null);
+          showAlert('PIN changed', 'Use your new PIN from now on.');
+          navigation.goBack();
         },
-        onError: (e) => setError(e.message),
+        onError: (e) => {
+          const two = twoStepAsked(e);
+          if (two) {
+            setAsked(two);
+            setTwoErr(code ? e.message : null);
+            return;
+          }
+          if (code) {
+            setTwoErr(e.message);
+            return;
+          }
+          if (/current|wrong pin|locked/i.test(e.message)) {
+            notifyError();
+            setError(e.message);
+            setCurrent('');
+            setPin('');
+            setConfirm('');
+            setPhase('current');
+            return;
+          }
+          restart(e.message);
+        },
       },
     );
+
+  const length = phase === 'current' ? currentLength : 6;
+  const value = phase === 'current' ? current : phase === 'new' ? pin : confirm;
+
+  const onDigits = (next: string) => {
+    if (change.isPending) return;
+    setError(null);
+    if (phase === 'current') {
+      setCurrent(next);
+      if (next.length === currentLength) setPhase('new');
+      return;
+    }
+    if (phase === 'new') {
+      setPin(next);
+      if (next.length < 6) return;
+      if (isWeakPin(next, user?.date_of_birth, user?.phone)) return restart('Too easy to guess. Not your birthday or 123456.');
+      if (next === current) return restart('Choose a PIN you haven\'t used now.');
+      setPhase('confirm');
+      return;
+    }
+    setConfirm(next);
+    if (next.length < 6) return;
+    if (next !== pin) return restart('Those PINs don\'t match. Start again.');
+    submit();
   };
 
   return (
-    <Screen withBottomInset>
-      <Header title="Change PIN" />
-      <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
-          <Text className="text-[15px] leading-6 text-muted">
-            Your PIN authorizes every transfer and withdrawal. Keep it secret.
-          </Text>
-          <View className="mt-6" style={{ gap: 16 }}>
-            {needsPassword ? (
-              <Input
-                label="Account Password"
-                icon="lock-closed-outline"
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Your password"
-                secureTextEntry
-              />
-            ) : null}
-            {hasPin ? (
-              <Input
-                label="Current PIN"
-                icon="keypad-outline"
-                value={currentPin}
-                onChangeText={(t) => setCurrentPin(t.replace(/[^0-9]/g, '').slice(0, currentLength))}
-                placeholder={'•'.repeat(currentLength)}
-                keyboardType="number-pad"
-                secureTextEntry
-                maxLength={currentLength}
-              />
-            ) : null}
-            <Input
-              label="New PIN"
-              icon="keypad-outline"
-              value={newPin}
-              onChangeText={(t) => setNewPin(t.replace(/[^0-9]/g, '').slice(0, NEW_PIN_LENGTH))}
-              placeholder="••••••"
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={NEW_PIN_LENGTH}
-            />
-            <Input
-              label="Confirm New PIN"
-              icon="keypad-outline"
-              value={confirmPin}
-              onChangeText={(t) => setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, NEW_PIN_LENGTH))}
-              placeholder="••••••"
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={NEW_PIN_LENGTH}
-            />
-          </View>
-          <ErrorText message={error} className="mt-4" />
-          <Button title="Update PIN" icon="checkmark" onPress={submit} loading={change.isPending} className="mt-6" />
-      </KeyboardAwareScrollView>
-    </Screen>
+    <PtStepScreen
+      onBack={() => navigation.goBack()}
+      title={phase === 'current' ? 'Enter your PIN' : phase === 'new' ? 'Enter a new PIN' : 'Enter it again'}
+      subtitle={phase === 'current' ? 'The one you use now' : '6 digits. Not your birthday or 123456.'}
+      gap={40}
+      scroll={false}
+      footer={
+        <>
+          {change.isPending ? <ActivityIndicator color={pt.brand} /> : error ? <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>{error}</PtText> : null}
+          <PtKeypad value={value} onChange={onDigits} length={length} disabled={change.isPending} />
+        </>
+      }
+    >
+      <PtPinDots length={length} filled={value.length} />
+      <TwoStepSheet asked={asked} busy={change.isPending} error={twoErr} onSubmit={(code) => submit(code)} onClose={() => restart('Change cancelled.')} />
+    </PtStepScreen>
   );
 }

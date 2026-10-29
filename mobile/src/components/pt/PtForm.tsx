@@ -236,12 +236,15 @@ export function PtReviewRow({
   value,
   sub,
   onEdit,
+  right,
   last = false,
 }: {
   label: string;
   value: string;
   sub?: string | null;
   onEdit?: () => void;
+  /** Instead of Edit, e.g. a done tick; inside the row so the divider spans it. */
+  right?: React.ReactNode;
   last?: boolean;
 }) {
   return (
@@ -263,7 +266,9 @@ export function PtReviewRow({
         >
           <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.brand }}>Edit</Text>
         </Pressable>
-      ) : null}
+      ) : (
+        right ?? null
+      )}
     </View>
   );
 }

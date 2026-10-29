@@ -6,7 +6,7 @@ import type { User } from '../api/types';
 export type AuthStatus = 'loading' | 'authed' | 'guest';
 
 /** Where "Next steps" on the wallet-ready screen sends a brand-new user. */
-export type PostOnboardingRoute = 'Kyc' | 'FamilyHub' | 'CreateWallet' | 'Invitations' | 'BusinessSetup';
+export type PostOnboardingRoute = 'Kyc' | 'FamilyHub' | 'CreateWallet' | 'Invitations' | 'BusinessSetup' | 'CreateAutomation';
 
 /** VON-01 "For my family" or "For my business": which home the app opens on. */
 export type AppMode = 'family' | 'business';
@@ -18,6 +18,10 @@ interface AuthState {
   biometricEnabled: boolean;
   /** A persisted session exists in SecureStore (used for biometric quick sign-in). */
   hasStoredSession: boolean;
+  /** Someone signed in on this phone before: open on ONB-02 rather than ONB-01's tour. */
+  returning: boolean;
+  /** The session was restored from the phone when the app opened (SYS-05 then checks the time away). */
+  restored: boolean;
   hydrate: () => Promise<void>;
   setSession: (user: User, token: string) => Promise<void>;
   /**
@@ -63,23 +67,26 @@ export const useAuth = create<AuthState>((set, get) => ({
   status: 'loading',
   biometricEnabled: false,
   hasStoredSession: false,
+  returning: false,
+  restored: false,
   postAuthRoute: null,
   mode: 'family',
 
   hydrate: async () => {
     try {
-      const [token, userJson, bio, mode] = await Promise.all([
+      const [token, userJson, bio, mode, lastPhone] = await Promise.all([
         SecureStore.getItemAsync(STORAGE_KEYS.token),
         SecureStore.getItemAsync(STORAGE_KEYS.user),
         SecureStore.getItemAsync(STORAGE_KEYS.biometric),
         SecureStore.getItemAsync(STORAGE_KEYS.mode),
+        SecureStore.getItemAsync(STORAGE_KEYS.lastPhone),
       ]);
       const biometricEnabled = bio === '1';
-      set({ mode: mode === 'business' ? 'business' : 'family' });
+      set({ mode: mode === 'business' ? 'business' : 'family', returning: Boolean(lastPhone) });
       const user: User | null = userJson ? JSON.parse(userJson) : null;
 
       if (token && user && !biometricEnabled) {
-        set({ user, token, status: 'authed', biometricEnabled, hasStoredSession: true });
+        set({ user, token, status: 'authed', biometricEnabled, hasStoredSession: true, restored: true });
       } else {
         // Either no session, or a session locked behind biometrics.
         set({
@@ -98,7 +105,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   setSession: async (user, token) => {
     await SecureStore.setItemAsync(STORAGE_KEYS.token, token);
     await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(user));
-    set({ user, token, status: 'authed', hasStoredSession: true });
+    set({ user, token, status: 'authed', hasStoredSession: true, restored: false });
   },
 
   beginOnboarding: async (user, token) => {
@@ -152,13 +159,14 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await clearPersisted();
-    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false, mode: 'family' });
+    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false, mode: 'family', returning: true });
   },
 
   sessionExpired: async () => {
     if (get().status !== 'authed') return;
     await clearPersisted();
-    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false });
+    // Someone whose session ended has used Patriai on this phone: ONB-02, not the tour.
+    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false, returning: true });
   },
 }));
 

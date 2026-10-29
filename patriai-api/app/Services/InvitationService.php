@@ -60,6 +60,10 @@ class InvitationService
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
         }
+        // ME-23 "Tier 2 · Up to 3 wallets, shared wallets": sharing starts at Tier 2.
+        if (!LimitService::make()->tier((int) ($wallet->owner?->kyc_tier ?? 0))['shared_wallets']) {
+            throw ValidationException::withMessages(['invite' => 'Shared wallets start at Tier 2. Verify your NIN and a selfie to invite people.']);
+        }
 
         if ($invitee) {
             // Emergency keyholders and beneficiaries are view-only rule members; they

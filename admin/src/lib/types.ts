@@ -663,7 +663,8 @@ export interface KycData {
 
 /** Tier-specific fields captured on the mobile KYC form. */
 export interface KycPayload {
-  // tier 1 — identity
+  // Tier 1 — BVN; Tier 2 — NIN and a selfie; Tier 3 — ID document and proof of address (ME-23).
+  // Older submissions: tier 1 also had NIN/ID, tier 2 an address, tier 3 source of funds.
   bvn?: string;
   nin?: string;
   id_type?: string;
@@ -677,9 +678,15 @@ export interface KycPayload {
   occupation?: string;
   business_name?: string;
   monthly_income?: string | number;
+  selfie?: string;
+  id_photo?: string;
+  id_back?: string;
+  proof?: string;
 }
 
 export interface KycSubmission {
+  /** Which photos/documents there are (selfie, id_photo, id_back, proof). */
+  files?: string[];
   id: number;
   target_tier: number;
   type: string;

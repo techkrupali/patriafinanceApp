@@ -65,8 +65,10 @@ export function CodeScreen({ route, navigation }: AuthScreenProps<'Code'>) {
       { phone, code: value },
       {
         onSuccess: ({ phone_token, account }) => {
-          if (account) {
-            navigation.replace('Unlock', { phoneToken: phone_token, account });
+          if (account?.new_device) {
+            navigation.replace('NewDevice', { phoneToken: phone_token, account, phone });
+          } else if (account) {
+            navigation.replace('Unlock', { phoneToken: phone_token, account, phone });
           } else {
             navigation.replace('Details', { phoneToken: phone_token });
           }

@@ -14,7 +14,7 @@ import { selection } from '../../lib/haptics';
 import type { OtpChannel } from '../../api/types';
 import type { AuthScreenProps } from '../../navigation/types';
 
-export const SIGNUP_STEPS = 5;
+export const SIGNUP_STEPS = 7;
 
 /** ONB-03 radio card: brand-tinted with a filled dot when chosen. */
 function ChannelCard({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {

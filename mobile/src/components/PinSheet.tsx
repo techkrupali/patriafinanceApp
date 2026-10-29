@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PinPad } from './PinPad';
 import { ErrorText } from './ErrorText';
 import { colors } from '../theme';
+import { useAppLock } from '../store/appLock';
 import { useAuth, useTxnPinLength } from '../store/auth';
 import {
   getBiometricSupport,
@@ -58,7 +59,11 @@ export function PinSheet({
   const insets = useSafeAreaInsets();
   const txnPinLength = useTxnPinLength();
   const pinLength = length ?? txnPinLength;
-  const biometricEnabled = useAuth((s) => s.biometricEnabled) && allowBiometric;
+  // ME-07 "Ask for PIN on payments over ₦100,000 — even with Face ID on".
+  const pinOver = useAppLock((s) => s.pinOver);
+  // `amount` is shown as "₦600,000.00": read the number out of it.
+  const overLimit = pinOver !== null && amount !== undefined && parseFloat(amount.replace(/[^\d.]/g, '')) > pinOver;
+  const biometricEnabled = useAuth((s) => s.biometricEnabled) && allowBiometric && !overLimit;
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('pin');
   const [bioFailed, setBioFailed] = useState(false);

@@ -5,10 +5,14 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import * as SecureStore from 'expo-secure-store';
 import { api } from './client';
 import { useAuth } from '../store/auth';
 import { getDeviceMeta } from '../lib/device';
+import { appendFile, type PickedFile } from '../lib/upload';
+import { STORAGE_KEYS } from '../config';
 import type {
+  PhoneCheckData,
   BudgetDetailData,
   GivingDetailData,
   GivingSchedulePayload,
@@ -289,8 +293,29 @@ export function usePhoneStart() {
 
 export function usePhoneVerify() {
   return useMutation({
-    mutationFn: (input: { phone: string; code: string }) =>
-      api<PhoneVerifyData>('/auth/phone/verify', { method: 'POST', body: input }),
+    mutationFn: async (input: { phone: string; code: string }) => {
+      const device = await getDeviceMeta();
+      return api<PhoneVerifyData>('/auth/phone/verify', { method: 'POST', body: { ...input, device_id: device.device_id } });
+    },
+  });
+}
+
+/** Keep what a new session gives this phone: its secret (to skip the code next time) and the number. */
+async function rememberDevice(data: AuthSessionData, phone?: string): Promise<AuthSessionData> {
+  if (data.device_secret) await SecureStore.setItemAsync(STORAGE_KEYS.deviceSecret, data.device_secret);
+  const number = phone ?? data.user?.phone;
+  if (number) await SecureStore.setItemAsync(STORAGE_KEYS.lastPhone, number);
+  return data;
+}
+
+/** ACC-01: a phone this person trusted goes straight to the PIN; otherwise a code. */
+export function usePhoneCheck() {
+  return useMutation({
+    mutationFn: async (input: { phone: string; channel?: OtpChannel }) => {
+      const device = await getDeviceMeta();
+      const secret = await SecureStore.getItemAsync(STORAGE_KEYS.deviceSecret);
+      return api<PhoneCheckData>('/auth/phone/check', { method: 'POST', body: { ...input, device_id: device.device_id, device_secret: secret ?? undefined } });
+    },
   });
 }
 
@@ -299,16 +324,27 @@ export function usePhoneRegister() {
   return useMutation({
     mutationFn: async (input: PhoneRegisterPayload) => {
       const device = await getDeviceMeta();
-      return api<AuthSessionData>('/auth/phone/register', { method: 'POST', body: { ...input, ...device } });
+      return rememberDevice(await api<AuthSessionData>('/auth/phone/register', { method: 'POST', body: { ...input, ...device } }));
     },
   });
 }
 
+/** ACC-02 (and ACC-06 with a selfie on a new phone, ME-08 with the two-step code). */
 export function usePinLogin() {
   return useMutation({
-    mutationFn: async (input: { phone_token: string; pin: string }) => {
+    mutationFn: async (input: { phone_token: string; pin: string; selfie?: PickedFile | null; two_factor_code?: string | null }) => {
       const device = await getDeviceMeta();
-      return api<AuthSessionData>('/auth/phone/login', { method: 'POST', body: { ...input, ...device } });
+      const secret = await SecureStore.getItemAsync(STORAGE_KEYS.deviceSecret);
+      const form = new FormData();
+      form.append('phone_token', input.phone_token);
+      form.append('pin', input.pin);
+      form.append('device_id', device.device_id);
+      form.append('device_name', device.device_name);
+      form.append('platform', device.platform);
+      if (secret) form.append('device_secret', secret);
+      if (input.two_factor_code) form.append('two_factor_code', input.two_factor_code);
+      if (input.selfie) await appendFile(form, 'selfie', input.selfie, 'selfie');
+      return rememberDevice(await api<AuthSessionData>('/auth/phone/login', { method: 'POST', body: form }));
     },
   });
 }
@@ -320,12 +356,36 @@ export function usePinForgot() {
   });
 }
 
+/** ACC-04/05: the BVN (or the email code), a selfie and the new PIN. */
 export function usePinReset() {
   return useMutation({
-    mutationFn: async (input: { phone_token: string; code: string; pin: string }) => {
+    mutationFn: async (input: { phone_token: string; bvn?: string; code?: string; pin: string; selfie: PickedFile }) => {
       const device = await getDeviceMeta();
-      return api<AuthSessionData>('/auth/pin/reset', { method: 'POST', body: { ...input, ...device } });
+      const form = new FormData();
+      form.append('phone_token', input.phone_token);
+      form.append('pin', input.pin);
+      if (input.bvn) form.append('bvn', input.bvn);
+      if (input.code) form.append('code', input.code);
+      form.append('device_id', device.device_id);
+      form.append('device_name', device.device_name);
+      form.append('platform', device.platform);
+      await appendFile(form, 'selfie', input.selfie, 'selfie');
+      return rememberDevice(await api<AuthSessionData>('/auth/pin/reset', { method: 'POST', body: form }));
     },
+  });
+}
+
+/** ACC-07 "Freeze my account", with the phone checked by a code. */
+export function useAuthFreeze() {
+  return useMutation({
+    mutationFn: (input: { phone_token: string }) => api<{ frozen: boolean }>('/auth/freeze', { method: 'POST', body: input }),
+  });
+}
+
+/** ONB-11 "Code from Chioma Nwosu". */
+export function useReferralLookup() {
+  return useMutation({
+    mutationFn: (code: string) => api<{ from: string }>('/auth/referral', { method: 'POST', body: { code } }),
   });
 }
 
@@ -337,9 +397,13 @@ export function useSaveOnboarding() {
   });
 }
 
+/** ME-21: `keep_trusted` false makes this phone's next sign-in a new device (code and selfie). */
 export function useLogoutApi() {
   return useMutation({
-    mutationFn: () => api('/auth/logout', { method: 'POST' }),
+    mutationFn: async (input?: { keep_trusted: boolean }) => {
+      if (input && !input.keep_trusted) await SecureStore.deleteItemAsync(STORAGE_KEYS.deviceSecret);
+      return api('/auth/logout', { method: 'POST', body: input ?? {} });
+    },
   });
 }
 
@@ -435,15 +499,10 @@ export function useUpdateProfile() {
 export function useUpdateAvatar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (asset: { uri: string; fileName?: string | null; mimeType?: string | null }) => {
-      const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
+    mutationFn: async (asset: PickedFile) => {
       const form = new FormData();
-      // React Native's FormData file part: { uri, name, type }.
-      form.append('avatar', {
-        uri: asset.uri,
-        name: asset.fileName || `avatar.${ext}`,
-        type: asset.mimeType || 'image/jpeg',
-      } as unknown as Blob);
+      // The phone sends { uri, name, type }; a browser needs the file itself.
+      await appendFile(form, 'avatar', asset, 'avatar');
       return api<MeData>('/profile/avatar', { method: 'POST', body: form });
     },
     onSuccess: async (d) => {

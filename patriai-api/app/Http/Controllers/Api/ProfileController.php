@@ -26,6 +26,14 @@ class ProfileController extends ApiController
 
         $user = $request->user();
 
+        // ME-02 "Name — Matches your BVN. Contact support to change it."
+        if ((int) $user->kyc_tier >= 1 && (
+            (array_key_exists('first_name', $data) && trim($data['first_name']) !== $user->first_name)
+            || (array_key_exists('last_name', $data) && trim($data['last_name']) !== $user->last_name)
+        )) {
+            return $this->fail('Your name matches your BVN. Contact support to change it.', 422, ['first_name' => ['Your name matches your BVN. Contact support to change it.']]);
+        }
+
         // Usernames are stored lowercase and unique case-insensitively.
         if (array_key_exists('username', $data)) {
             $uname = strtolower($data['username']);
@@ -113,7 +121,11 @@ class ProfileController extends ApiController
             app(\App\Services\PinService::class)->verify($user, $data['current_pin']);
         }
 
+        if (strlen($data['new_pin']) === 6) {
+            \App\Services\SecurityService::make()->assertStrongPin($data['new_pin'], $user);
+        }
         $user->update(['pin' => Hash::make($data['new_pin']), 'pin_length' => strlen($data['new_pin'])]);
+        $user->forceFill(['pin_changed_at' => now()])->save();
 
         return $this->ok('Transaction PIN updated', ['user' => $this->serializeUser($user)]);
     }

@@ -1,320 +1,109 @@
 import React from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtNote } from '../../components/pt/PtForm';
 import { LoadError } from '../../components/LoadError';
-import { colors, gradients, radius } from '../../theme';
 import { useKyc } from '../../api/hooks';
-import { statusIconColor } from '../../lib/governance';
-import { dayLabel, formatMoney } from '../../lib/format';
-import {
-  TIER_SHORT_NAMES,
-  kycRequirementLabel,
-  kycStatusVisual,
-  submissionStatusVisual,
-  tierName,
-} from '../../lib/kyc';
-import type { KycLimits, KycState } from '../../api/types';
+import { useLimits } from '../../api/account';
+import { formatNaira } from '../../lib/format';
+import { showAlert } from '../../lib/alert';
+import { selection } from '../../lib/haptics';
 import type { RootScreenProps } from '../../navigation/types';
 
-const STEPS = [0, 1, 2, 3];
+const WALLETS: Record<number, string> = {
+  1: '1 wallet',
+  2: 'Up to 3 wallets, shared wallets',
+  3: 'Up to 20 wallets, vendor payments over ₦1m',
+};
 
-/** '₦…' amount, or 'Unlimited' when the API returns null (no cap). */
-function limitLabel(value: string | null): string {
-  return value == null ? 'Unlimited' : formatMoney(value);
-}
-
-function TierStepper({ kyc }: { kyc: KycState }) {
-  const pendingTarget =
-    kyc.status === 'pending' && kyc.pending_submission ? kyc.pending_submission.target_tier : null;
-
-  return (
-    <View className="mt-5 flex-row">
-      {STEPS.map((t, i) => {
-        const passed = t < kyc.tier;
-        const current = t === kyc.tier;
-        const isPending = t === pendingTarget;
-
-        // Connector segment is "reached" (brand) once its higher endpoint tier is done.
-        const leftReached = t <= kyc.tier;
-        const rightReached = t + 1 <= kyc.tier;
-
-        let nodeClass = 'border-2 border-border bg-lav-faint';
-        let inner: React.ReactNode = (
-          <Text className="text-[13px] font-bold text-faded">{t}</Text>
-        );
-        if (passed) {
-          nodeClass = 'bg-brand';
-          inner = <Ionicons name="checkmark" size={18} color={colors.white} />;
-        } else if (current) {
-          nodeClass = 'border-2 border-brand-glow bg-navy';
-          inner = <Text className="text-[13px] font-bold text-white">{t}</Text>;
-        } else if (isPending) {
-          nodeClass = 'border-2 border-brand bg-lav-soft';
-          inner = <Ionicons name="time-outline" size={16} color={colors.brand} />;
-        }
-
-        return (
-          <View key={t} className="flex-1 items-center">
-            <View className="w-full flex-row items-center">
-              <View
-                className={`h-0.5 flex-1 ${i === 0 ? 'bg-transparent' : leftReached ? 'bg-brand' : 'bg-border'}`}
-              />
-              <View className={`h-9 w-9 items-center justify-center rounded-full ${nodeClass}`}>
-                {inner}
-              </View>
-              <View
-                className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? 'bg-transparent' : rightReached ? 'bg-brand' : 'bg-border'}`}
-              />
-            </View>
-            <Text
-              className={`mt-2 text-[10px] font-semibold ${current ? 'text-brand' : 'text-faded'}`}
-              numberOfLines={1}
-            >
-              {TIER_SHORT_NAMES[t]}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function LimitsCard({ limits, title }: { limits: KycLimits; title: string }) {
-  return (
-    <>
-      <Text className="mt-8 text-lg font-bold text-ink">{title}</Text>
-      <Card className="mt-3 py-1">
-        <LimitRow icon="wallet-outline" label="Wallets" value={`Up to ${limits.max_wallets}`} />
-        <Divider />
-        <LimitRow
-          icon="paper-plane-outline"
-          label="Daily transfer limit"
-          value={limitLabel(limits.daily_transfer_limit)}
-        />
-        <Divider />
-        <LimitRow icon="cash-outline" label="Loan cap" value={formatMoney(limits.loan_cap)} />
-      </Card>
-    </>
-  );
-}
-
+/**
+ * ME-23 Account level: your verification tier and plan, then each tier — what
+ * it needs, what you can send a day and hold — with "You are here" and Next.
+ */
 export function KycScreen({ navigation }: RootScreenProps<'Kyc'>) {
-  const query = useKyc();
-  const kyc = query.data;
-  const status = kyc ? kycStatusVisual(kyc.status) : null;
-  const next = kyc?.next_tier ?? null;
-  const pending = kyc?.status === 'pending' ? kyc.pending_submission : null;
-  // Surface the last rejection only when the user isn't mid-review, so they know
-  // why a tier was rejected and can resubmit. Hide it once the user has reached
-  // (or passed) that tier — a stale rejection for an already-achieved tier is noise.
-  const lastRejected = !pending ? (kyc?.last_rejected ?? null) : null;
-  const rejected =
-    lastRejected && kyc && lastRejected.target_tier > kyc.tier ? lastRejected : null;
+  const kyc = useKyc();
+  const limits = useLimits();
+  const tier = kyc.data?.tier ?? 0;
+  const pending = kyc.data?.pending_submission;
+  const rejected = kyc.data?.last_rejected;
+  const next = tier < 3 ? (tier === 0 ? 1 : tier + 1) : null;
 
   return (
-    <Screen withBottomInset>
-      <Header title="Verification" />
-
-      {query.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
-      ) : query.error ? (
-        <LoadError message={(query.error as Error).message} onRetry={() => query.refetch()} />
-      ) : kyc && status ? (
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.navy} />
-          }
-        >
-          {/* Hero: current tier + status */}
-          <LinearGradient
-            colors={gradients.navy}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: radius, padding: 24 }}
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                Current tier
-              </Text>
-              <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
-                <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
-                <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
-              </View>
+    <PtPageScreen
+      title="Account level"
+      subtitle="Verification tier and plan"
+      onBack={() => navigation.goBack()}
+      footer={
+        next ? (
+          <PtButton
+            title={pending ? `Tier ${pending.target_tier} is being checked` : `Upgrade to Tier ${next}`}
+            disabled={Boolean(pending)}
+            onPress={() => navigation.navigate('KycSubmit', { targetTier: next })}
+          />
+        ) : undefined
+      }
+    >
+      {kyc.isLoading || limits.isLoading ? (
+        <ActivityIndicator color={pt.brand} />
+      ) : !kyc.data || !limits.data ? (
+        <LoadError message={((kyc.error ?? limits.error) as Error | null)?.message} onRetry={() => { void kyc.refetch(); void limits.refetch(); }} />
+      ) : (
+        <>
+          <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.md, padding: 16, flexDirection: 'row' }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontFamily: ptFont.medium, fontSize: 12, color: pt.onDarkMuted }}>Verification</Text>
+              <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, color: '#FFFFFF' }}>{tier === 0 ? 'Phone only' : `Tier ${tier}`}</Text>
             </View>
-            <Text className="mt-2 text-[38px] font-extrabold leading-tight tracking-tight text-white">
-              Tier {kyc.tier}
-            </Text>
-            <Text className="mt-1 text-[13px] text-white/60">
-              {kyc.tier === 0 ? 'Not verified yet' : `${tierName(kyc.tier)} verified`}
-              {' · '}
-              {kyc.tier} of {kyc.max_tier}
-            </Text>
-          </LinearGradient>
+            <Pressable
+              onPress={() => {
+                selection();
+                showAlert('Plans are coming', 'Free is the plan for everyone for now. Pro, with more wallets and rules, comes later.');
+              }}
+              accessibilityRole="button"
+              style={{ flex: 1, gap: 2 }}
+            >
+              <Text style={{ fontFamily: ptFont.medium, fontSize: 12, color: pt.onDarkMuted }}>Plan · compare</Text>
+              <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, color: '#FFFFFF' }}>Free ›</Text>
+            </Pressable>
+          </View>
 
-          {/* Tier progress stepper */}
-          <TierStepper kyc={kyc} />
+          {pending ? <PtNote tone="info" icon="clock">{`Tier ${pending.target_tier} is with our team. It usually takes under a day; we'll tell you.`}</PtNote> : null}
+          {!pending && rejected ? <PtNote tone="attention">{`Tier ${rejected.target_tier} wasn't approved${rejected.review_note ? `: ${rejected.review_note}` : '.'} Try again.`}</PtNote> : null}
 
-          {/* Current limits */}
-          <LimitsCard limits={kyc.limits} title="Your current limits" />
-
-          {/* Rejected submission — surfaced so the user knows why & can resubmit */}
-          {rejected ? (
-            <Card className="mt-8 border border-danger-soft">
-              <View className="flex-row items-center">
-                <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-danger-soft">
-                  <Ionicons name="close-circle" size={22} color={colors.danger} />
+          {limits.data.tiers.map((t) => {
+            const here = t.tier === Math.max(1, tier) && tier > 0;
+            const done = t.tier < tier || (t.tier === tier && tier > 0 && !here);
+            const isNext = t.tier === next;
+            return (
+              <View
+                key={t.tier}
+                style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 10, borderWidth: here ? 2 : 0, borderColor: pt.brand }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>Tier {t.tier}</Text>
+                  {here ? <PtChip label="You are here" tone="brand" icon="circle" /> : t.tier < tier || done ? <PtChip label="Done" tone="success" icon="check" /> : isNext ? <PtChip label="Next" tone="neutral" icon="arrow-right" /> : null}
                 </View>
-                <View className="flex-1 pr-2">
-                  <Text className="text-[15px] font-bold text-ink">
-                    Tier {rejected.target_tier} verification was rejected
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-muted">
-                    Reviewed {dayLabel(rejected.reviewed_at ?? rejected.created_at)}
-                  </Text>
-                </View>
-              </View>
-              <View className="mt-4 flex-row items-start rounded bg-danger-soft p-3.5">
-                <Ionicons name="information-circle" size={17} color={colors.danger} style={{ marginRight: 8, marginTop: 1 }} />
-                <Text className="flex-1 text-[13px] leading-5 text-ink">
-                  {rejected.review_note?.trim()
-                    ? rejected.review_note
-                    : 'Your submission couldn’t be verified. Please check your details and resubmit below.'}
-                </Text>
-              </View>
-            </Card>
-          ) : null}
-
-          {/* Verification state */}
-          {pending ? (
-            <>
-              <Text className="mt-8 text-lg font-bold text-ink">Verification under review</Text>
-              <Card className="mt-3">
-                <View className="flex-row items-center">
-                  <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav-soft">
-                    <Ionicons name="hourglass-outline" size={22} color={colors.navy} />
+                <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>Needs: {t.needs}</Text>
+                <View style={{ flexDirection: 'row' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.6, color: pt.inkMuted }}>SEND A DAY</Text>
+                    <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{formatNaira(t.daily)}</Text>
                   </View>
-                  <View className="flex-1 pr-2">
-                    <Text className="text-[15px] font-bold text-ink">
-                      Tier {pending.target_tier} · {tierName(pending.target_tier)}
-                    </Text>
-                    <Text className="mt-0.5 text-xs text-muted">
-                      Submitted {dayLabel(pending.created_at)}
-                    </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.6, color: pt.inkMuted }}>BALANCE</Text>
+                    <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{t.max_balance ? formatNaira(t.max_balance) : 'No limit'}</Text>
                   </View>
-                  {(() => {
-                    const sv = submissionStatusVisual(pending.status);
-                    return (
-                      <View className={`flex-row items-center rounded px-2.5 py-1 ${sv.bg}`}>
-                        <Ionicons name={sv.icon} size={12} color={statusIconColor(sv)} style={{ marginRight: 4 }} />
-                        <Text className={`text-[10px] font-bold uppercase tracking-wider ${sv.text}`}>{sv.label}</Text>
-                      </View>
-                    );
-                  })()}
                 </View>
-                <View className="mt-4 flex-row items-start rounded bg-lav-faint p-3.5">
-                  <Ionicons name="information-circle" size={17} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
-                  <Text className="flex-1 text-[13px] leading-5 text-muted">
-                    We're reviewing your documents. This usually takes a short while — we'll update your tier
-                    and limits once it's approved.
-                  </Text>
-                </View>
-                {pending.review_note ? (
-                  <Text className="mt-3 text-[13px] leading-5 text-muted">{pending.review_note}</Text>
-                ) : null}
-              </Card>
-            </>
-          ) : next ? (
-            <>
-              <Text className="mt-8 text-lg font-bold text-ink">
-                Upgrade to Tier {next.tier} · {tierName(next.tier)}
-              </Text>
-
-              {/* Requirements */}
-              <Card className="mt-3">
-                <Text className="text-[13px] font-semibold text-muted">
-                  What You'll Need
-                </Text>
-                <View className="mt-3" style={{ gap: 12 }}>
-                  {next.requirements.map((req) => (
-                    <View key={req} className="flex-row items-start">
-                      <Ionicons name="ellipse-outline" size={18} color={colors.brand} style={{ marginRight: 10, marginTop: 1 }} />
-                      <Text className="flex-1 text-[14px] leading-5 text-ink">{kycRequirementLabel(req)}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View className="mt-4" style={{ height: 1, backgroundColor: colors.border }} />
-
-                <Text className="mt-4 text-[13px] font-semibold text-muted">
-                  What You'll Unlock
-                </Text>
-                <View className="mt-2">
-                  <BenefitRow icon="wallet-outline" label="Wallets" value={`Up to ${next.benefits.max_wallets}`} />
-                  <BenefitRow
-                    icon="paper-plane-outline"
-                    label="Daily transfer"
-                    value={limitLabel(next.benefits.daily_transfer_limit)}
-                  />
-                  <BenefitRow icon="cash-outline" label="Loan cap" value={formatMoney(next.benefits.loan_cap)} />
-                </View>
-              </Card>
-
-              <Button
-                title={`Verify Tier ${next.tier}`}
-                icon="shield-checkmark"
-                iconPosition="left"
-                onPress={() => navigation.navigate('KycSubmit', { targetTier: next.tier })}
-                className="mt-5"
-              />
-            </>
-          ) : (
-            <Card className="mt-8 items-center py-8">
-              <View className="h-16 w-16 items-center justify-center rounded bg-success-soft">
-                <Ionicons name="shield-checkmark" size={30} color={colors.brand} />
+                <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{WALLETS[t.tier]}</Text>
               </View>
-              <Text className="mt-4 text-base font-bold text-ink">Fully verified</Text>
-              <Text className="mt-1.5 text-center text-sm text-muted">
-                You've reached Tier {kyc.max_tier} — the highest verification level. Your limits are maxed out.
-              </Text>
-            </Card>
-          )}
-        </ScrollView>
-      ) : null}
-    </Screen>
-  );
-}
-
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.border }} />;
-}
-
-function LimitRow({ icon, label, value }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
-  return (
-    <View className="flex-row items-center py-3.5">
-      <View className="mr-3.5 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-        <Ionicons name={icon} size={19} color={colors.navy} />
-      </View>
-      <Text className="flex-1 text-[15px] font-semibold text-ink">{label}</Text>
-      <Text className="ml-3 text-[15px] font-bold text-ink" numberOfLines={1}>{value}</Text>
-    </View>
-  );
-}
-
-function BenefitRow({ icon, label, value }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
-  return (
-    <View className="flex-row items-center py-2">
-      <Ionicons name={icon} size={16} color={colors.brand} style={{ marginRight: 8 }} />
-      <Text className="flex-1 text-[13px] text-muted">{label}</Text>
-      <Text className="ml-3 text-[14px] font-bold text-ink" numberOfLines={1}>{value}</Text>
-    </View>
+            );
+          })}
+        </>
+      )}
+    </PtPageScreen>
   );
 }

@@ -63,9 +63,11 @@ class AssistantAppKnowledgeTest extends TestCase
     public function test_limits_answer_uses_real_kyc_tiers(): void
     {
         $out = $this->ask('limits');
-        $this->assertStringContainsString('₦200,000', $out['answer']); // tier 0-1 daily
-        $this->assertStringContainsString('₦2,000,000', $out['answer']); // tier 2 daily
-        $this->assertStringContainsString('25 wallets', $out['answer']); // tier 3 wallets
+        // ME-23: Tier 1 ₦50,000 a day / ₦300,000; Tier 2 ₦200,000 / ₦500,000; Tier 3 ₦5,000,000, 20 wallets.
+        $this->assertStringContainsString('send ₦50,000 a day, hold up to ₦300,000', $out['answer']);
+        $this->assertStringContainsString('send ₦200,000 a day, hold up to ₦500,000', $out['answer']);
+        $this->assertStringContainsString('send ₦5,000,000 a day', $out['answer']);
+        $this->assertStringContainsString('up to 20 wallets', $out['answer']);
     }
 
     // Pending/failed explanation is present and accurate (no invented cause).

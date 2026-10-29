@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\Admin\AdminController;
+use App\Http\Controllers\Api\Admin\AdminSecurityController;
+use App\Http\Controllers\Api\AppStatusController;
+use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
 use App\Http\Controllers\Api\Admin\OrganisationAdminController;
@@ -68,7 +72,16 @@ Route::prefix('v1')->group(function () {
         Route::post('phone/login', [PhoneAuthController::class, 'login'])->middleware('throttle:10,1,phone-login');
         Route::post('pin/forgot', [PhoneAuthController::class, 'forgotPin'])->middleware('throttle:5,1,pin-forgot');
         Route::post('pin/reset', [PhoneAuthController::class, 'resetPin'])->middleware('throttle:5,1,pin-reset');
+        // ACC-01 → ACC-02 on a trusted phone; ONB-11 referral code; ACC-07 freeze before signing in.
+        Route::post('phone/check', [PhoneAuthController::class, 'check'])->middleware('throttle:10,1,phone-check');
+        Route::post('referral', [PhoneAuthController::class, 'referral'])->middleware('throttle:20,1,referral');
+        Route::post('freeze', [PhoneAuthController::class, 'freeze'])->middleware('throttle:5,1,auth-freeze');
     });
+
+    // SYS-02/03 (before sign-in) and ME-19 Legal.
+    Route::get('app/status', [AppStatusController::class, 'show'])->middleware('throttle:60,1,app-status');
+    Route::get('legal', [AppStatusController::class, 'legal']);
+    Route::get('legal/{key}', [AppStatusController::class, 'document'])->where('key', '[a-z_]+');
 
     // Banking rails webhook (server-to-server)
     Route::post('webhooks/banking', [WebhookController::class, 'banking']);
@@ -87,6 +100,37 @@ Route::prefix('v1')->group(function () {
         Route::post('devices', [ProfileController::class, 'registerDevice']);
         Route::get('devices', [ProfileController::class, 'devices']);
         Route::delete('devices/{device}', [ProfileController::class, 'removeDevice'])->middleware('throttle:30,1');
+
+        // Me and settings (ME-02…24): security, limits, devices, logins, account.
+        Route::get('security', [AccountController::class, 'security']);
+        Route::get('limits', [AccountController::class, 'limits']);
+        Route::put('settings', [AccountController::class, 'updateSettings'])->middleware('throttle:60,1,settings');
+        Route::post('security/pin', [AccountController::class, 'changePin'])->middleware('throttle:10,1,change-pin');
+        Route::post('security/two-factor', [AccountController::class, 'startTwoFactor'])->middleware('throttle:10,1,two-factor');
+        Route::post('security/two-factor/confirm', [AccountController::class, 'confirmTwoFactor'])->middleware('throttle:10,1,two-factor');
+        Route::delete('security/two-factor', [AccountController::class, 'disableTwoFactor'])->middleware('throttle:10,1,two-factor');
+        Route::get('security/devices', [AccountController::class, 'devices']);
+        Route::post('security/devices/logout-others', [AccountController::class, 'logoutOthers'])->middleware('throttle:10,1,device-logout');
+        Route::post('security/devices/{device}/logout', [AccountController::class, 'logoutDevice'])->middleware('throttle:20,1,device-logout');
+        Route::get('security/logins', [AccountController::class, 'logins']);
+        Route::post('account/freeze', [AccountController::class, 'freeze'])->middleware('throttle:10,1,account-freeze');
+        Route::post('account/unfreeze', [AccountController::class, 'unfreeze'])->middleware('throttle:10,1,account-freeze');
+        Route::get('account/close', [AccountController::class, 'closeChecklist']);
+        Route::post('account/close', [AccountController::class, 'close'])->middleware('throttle:5,1,account-close');
+        Route::post('account/export', [AccountController::class, 'export'])->middleware('throttle:3,60,account-export');
+        Route::get('profile/details', [AccountController::class, 'details']);
+        Route::put('profile/details', [AccountController::class, 'updateDetails'])->middleware('throttle:30,1,profile');
+        Route::post('profile/email', [AccountController::class, 'startEmail'])->middleware('throttle:5,1,profile-email');
+        Route::post('profile/email/confirm', [AccountController::class, 'confirmEmail'])->middleware('throttle:10,1,profile-email');
+        Route::post('profile/phone', [AccountController::class, 'startPhone'])->middleware('throttle:5,1,profile-phone');
+        Route::post('profile/phone/confirm', [AccountController::class, 'confirmPhone'])->middleware('throttle:10,1,profile-phone');
+        Route::get('bank-accounts', [AccountController::class, 'bankAccounts']);
+        Route::post('bank-accounts', [AccountController::class, 'linkBankAccount'])->middleware('throttle:10,1,bank-accounts');
+        Route::patch('bank-accounts/{account}/default', [AccountController::class, 'defaultBankAccount'])->middleware('throttle:30,1,bank-accounts');
+        Route::delete('bank-accounts/{account}', [AccountController::class, 'removeBankAccount'])->middleware('throttle:30,1,bank-accounts');
+        // ME-17 Chat with support
+        Route::get('support/chat', [SupportChatController::class, 'show']);
+        Route::post('support/chat', [SupportChatController::class, 'send'])->middleware('throttle:30,1,support-chat');
 
         Route::get('dashboard', [DashboardController::class, 'index']);
         // Home tab + Treasury header (client prototype HOM-01 / TRS-01).
@@ -346,6 +390,19 @@ Route::prefix('v1')->group(function () {
             Route::patch('users/{user}', [AdminController::class, 'updateUser']);
             Route::patch('users/{user}/status', [AdminController::class, 'updateUserStatus']);
             Route::patch('users/{user}/kyc-tier', [AdminController::class, 'setUserKycTier']);
+            // A person's protections (ME-05…18, ACC-05…07)
+            Route::get('users/{user}/security', [AdminSecurityController::class, 'show']);
+            Route::post('users/{user}/unlock-pin', [AdminSecurityController::class, 'unlockPin']);
+            Route::post('users/{user}/unfreeze', [AdminSecurityController::class, 'unfreeze']);
+            Route::post('users/{user}/lift-holds', [AdminSecurityController::class, 'liftHolds']);
+            Route::post('users/{user}/devices/{device}/logout', [AdminSecurityController::class, 'logoutDevice']);
+            Route::get('users/{user}/unfreeze-selfie', [AdminSecurityController::class, 'unfreezeSelfie']);
+            Route::get('devices/{device}/selfie', [AdminSecurityController::class, 'deviceSelfie']);
+            Route::get('kyc/{submission}/files/{key}', [AdminSecurityController::class, 'kycFile']);
+            Route::get('support-requests/{supportRequest}/messages', [AdminSecurityController::class, 'messages']);
+            Route::post('support-requests/{supportRequest}/messages', [AdminSecurityController::class, 'reply'])->middleware('throttle:60,1');
+            Route::get('system-settings', [AdminSecurityController::class, 'settings']);
+            Route::put('system-settings', [AdminSecurityController::class, 'updateSettings']);
             Route::get('wallets', [AdminController::class, 'wallets']);
             Route::get('wallets/{wallet}', [AdminController::class, 'walletDetail']);
             Route::post('wallets/{wallet}/adjust', [AdminController::class, 'adjustWallet']);

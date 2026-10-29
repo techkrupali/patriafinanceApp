@@ -205,11 +205,11 @@ class AppKnowledgeTool implements AssistantTool
             ],
             'limits' => [
                 'title' => 'Transfer & wallet limits',
-                'answer' => 'Your daily transfer limit and how many wallets you can hold depend on your KYC tier: '
-                    .'Tier 0–1 — '.$naira($t01['daily_transfer_limit']).'/day, up to '.$t01['max_wallets'].' wallets; '
-                    .'Tier 2 — '.$naira($t2['daily_transfer_limit']).'/day, up to '.$t2['max_wallets'].' wallets; '
-                    .'Tier 3 — '.$naira($t3['daily_transfer_limit']).', up to '.$t3['max_wallets'].' wallets. '
-                    .'Verify a higher tier (Profile → Identity verification) to raise your limits.',
+                'answer' => 'What you can send and hold depends on your verification tier: '
+                    .'Tier 1 (phone and BVN) — send '.$naira($t01['daily_transfer_limit']).' a day, hold up to '.$naira($t01['max_balance']).', 1 wallet; '
+                    .'Tier 2 (NIN and a selfie) — send '.$naira($t2['daily_transfer_limit']).' a day, hold up to '.$naira($t2['max_balance']).', up to '.$t2['max_wallets'].' wallets and shared wallets; '
+                    .'Tier 3 (ID document and proof of address) — send '.$naira($t3['daily_transfer_limit']).' a day, no balance limit, up to '.$t3['max_wallets'].' wallets. '
+                    .'One payment can be up to the daily amount. Verify a higher tier from More → Account level.',
             ],
             'pin_and_security' => [
                 'title' => 'PIN & security',

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Services\AccountService;
 use App\Services\AccountSetupService;
+use App\Services\NotificationService;
+use App\Services\SecurityService;
 use App\Services\VendorAccountService;
 use App\Services\OtpService;
 use App\Services\PinService;
@@ -33,6 +36,33 @@ class PhoneAuthController extends ApiController
 
     public function __construct(private readonly OtpService $otp) {}
 
+    // POST /auth/phone/check  { phone, device_id?, device_secret?, channel? }
+    // ACC-01 → ACC-02: a phone this person proved before (it holds the secret we gave
+    // it) goes straight to the PIN. Anything else gets a code, exactly like /start, so
+    // the answer never says whether a number has an account.
+    public function check(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+            'device_id' => ['nullable', 'string', 'max:120'],
+            'device_secret' => ['nullable', 'string', 'max:128'],
+            'channel' => ['nullable', 'in:sms,whatsapp'],
+        ]);
+        $phone = $this->validPhone($data['phone']);
+        $user = User::where('phone', $phone)->first();
+        if ($user && $user->status === 'active' && SecurityService::make()->isTrusted($user, $data['device_id'] ?? null, $data['device_secret'] ?? null)) {
+            $token = Str::random(48);
+            Cache::put($this->tokenKey($token), $phone, now()->addMinutes(self::TOKEN_MINUTES));
+
+            return $this->ok('Enter your PIN', ['next' => 'pin', 'phone_token' => $token, 'account' => $this->account($user)]);
+        }
+
+        $request->merge(['channel' => $data['channel'] ?? 'sms']);
+        $sent = $this->start($request)->getData(true)['data'];
+
+        return $this->ok('Code sent', ['next' => 'code'] + $sent);
+    }
+
     // POST /auth/phone/start  { phone, channel: sms|whatsapp }
     public function start(Request $request): JsonResponse
     {
@@ -59,12 +89,13 @@ class PhoneAuthController extends ApiController
         ]);
     }
 
-    // POST /auth/phone/verify  { phone, code }
+    // POST /auth/phone/verify  { phone, code, device_id? }
     public function verify(Request $request): JsonResponse
     {
         $data = $request->validate([
             'phone' => ['required', 'string', 'max:20'],
             'code' => ['required', 'digits:6'],
+            'device_id' => ['nullable', 'string', 'max:120'],
         ]);
         $phone = $this->validPhone($data['phone']);
 
@@ -72,7 +103,7 @@ class PhoneAuthController extends ApiController
 
         $user = User::where('phone', $phone)->first();
         if ($user && $user->status !== 'active') {
-            return $this->fail('Account is suspended. Contact support.', 403);
+            return $this->fail($user->status === 'closed' ? 'This account was closed.' : 'Account is suspended. Contact support.', 403);
         }
         if ($user && !$user->phone_verified_at) {
             $user->forceFill(['phone_verified_at' => now()])->save();
@@ -81,18 +112,31 @@ class PhoneAuthController extends ApiController
         $token = Str::random(48);
         Cache::put($this->tokenKey($token), $phone, now()->addMinutes(self::TOKEN_MINUTES));
 
+        $security = SecurityService::make();
+
         return $this->ok('Phone verified', [
             'phone_token' => $token,
-            'account' => $user ? [
-                'first_name' => $user->first_name ?: $user->fullName(),
-                'initials' => $this->initials($user),
-                'avatar_url' => $user->avatar_url,
-                'pin_length' => (int) ($user->pin_length ?? 4),
+            'account' => $user ? $this->account($user) + [
+                // ACC-06 "Is this your new phone?": a selfie, then sends wait 24 hours.
+                'new_device' => $security->hasTrustedDevices($user) && !$user->devices()->where('device_id', (string) ($data['device_id'] ?? ''))->whereNotNull('trusted_at')->exists(),
+                'two_factor' => $user->hasTwoFactor() ? $user->two_factor_method : null,
             ] : null,
         ]);
     }
 
-    // POST /auth/phone/register  { phone_token, first_name, last_name, email, date_of_birth, pin, language? }
+    // POST /auth/referral  { code } — ONB-11 "Code from Chioma Nwosu"
+    public function referral(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:64']]);
+        $owner = User::whereRaw('lower(referral_code) = ?', [strtolower(trim($data['code']))])->where('status', 'active')->first();
+        if (!$owner) {
+            return $this->fail('That code isn\'t one we know. Check it, or skip.', 404);
+        }
+
+        return $this->ok('Code found', ['from' => $owner->fullName()]);
+    }
+
+    // POST /auth/phone/register  { phone_token, first_name, last_name, email, date_of_birth, pin, consents{}, … }
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -105,18 +149,30 @@ class PhoneAuthController extends ApiController
             'pin' => ['required', 'digits:6'],
             'language' => ['nullable', 'in:en,pcm'],
             'referral_code' => ['nullable', 'string', 'max:64'],
+            // ONB-10 "Your data, your say": the terms and BVN/NIN checks are required.
+            'consents' => ['nullable', 'array'],
+            'consents.terms' => ['nullable', 'boolean'],
+            'consents.verify' => ['nullable', 'boolean'],
+            'consents.steward_learn' => ['nullable', 'boolean'],
+            'consents.news' => ['nullable', 'boolean'],
             'device_id' => ['nullable', 'string', 'max:120'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'in:android,ios,web'],
         ], [
             'date_of_birth.before_or_equal' => 'You must be 18 or older to open an account.',
         ]);
+        if (isset($data['consents']) && (empty($data['consents']['terms']) || empty($data['consents']['verify']))) {
+            throw ValidationException::withMessages(['consents' => 'Agree to the terms and to being verified with your BVN and NIN to open an account.']);
+        }
+        $security = SecurityService::make();
+        $security->assertStrongPin($data['pin'], null, $data['date_of_birth']);
         $phone = $this->phoneFromToken($data['phone_token']);
 
         if (User::where('phone', $phone)->exists()) {
             throw ValidationException::withMessages(['phone_token' => 'This number already has an account. Log in instead.']);
         }
 
+        $consents = $data['consents'] ?? [];
         $user = DB::transaction(fn () => User::create([
             'first_name' => trim($data['first_name']),
             'last_name' => trim($data['last_name']),
@@ -130,21 +186,34 @@ class PhoneAuthController extends ApiController
             'language' => $data['language'] ?? 'en',
         ]));
         // The code proved the phone; the email is confirmed later from statements/receipts.
-        $user->forceFill(['phone_verified_at' => now(), 'last_login_at' => now()])->save();
+        $user->forceFill([
+            'phone_verified_at' => now(),
+            'last_login_at' => now(),
+            'pin_changed_at' => now(),
+            'settings' => [
+                'consents' => ['terms' => true, 'verify' => true, 'at' => now()->toIso8601String()],
+                'steward_reads_transactions' => (bool) ($consents['steward_learn'] ?? true),
+                'partner_offers' => (bool) ($consents['news'] ?? false),
+                'product_research' => true,
+            ],
+        ])->save();
 
         AccountSetupService::make()->setUp($user, $data['referral_code'] ?? null);
         // INV-V1: a family invited this number to build their project before it had an account.
         VendorAccountService::make()->linkInvites($user);
-        $this->recordDevice($request, $user);
+        // The phone that signed up is the first trusted one: no selfie, no hold.
+        $trusted = $security->trustDevice($request, $user, holdSends: false);
+        $security->recordLogin($user, $request, 'ok', 'sign_up');
         Cache::forget($this->tokenKey($data['phone_token']));
 
         return $this->ok('Account created', [
             'user' => $this->serializeUser($user),
-            'token' => $user->createToken($data['device_name'] ?? 'mobile')->plainTextToken,
+            'token' => $security->issueToken($user, $trusted['device']),
+            'device_secret' => $trusted['secret'],
         ], 201);
     }
 
-    // POST /auth/phone/login  { phone_token, pin }
+    // POST /auth/phone/login  { phone_token, pin, device_*, selfie? (new phone), two_factor_code? }
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -153,71 +222,160 @@ class PhoneAuthController extends ApiController
             'device_id' => ['nullable', 'string', 'max:120'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'in:android,ios,web'],
+            'device_secret' => ['nullable', 'string', 'max:128'],
+            'selfie' => ['nullable', 'file', 'image', 'max:8192'],
+            'two_factor_code' => ['nullable', 'string', 'max:10'],
         ]);
         $user = $this->accountFromToken($data['phone_token']);
+        $security = SecurityService::make();
+        $pins = app(PinService::class);
 
-        // Locks the PIN after repeated misses, whichever device tries.
-        app(PinService::class)->verify($user, $data['pin']);
+        // ACC-07 "Locked for 30 minutes": the PIN locks after 5 misses, whichever phone tries.
+        if ($until = $pins->lockedUntil($user)) {
+            $security->recordLogin($user, $request, 'blocked', 'locked');
 
+            return $this->locked($until);
+        }
+        try {
+            $pins->verify($user, $data['pin']);
+        } catch (ValidationException $e) {
+            $security->recordLogin($user, $request, 'failed', 'wrong_pin');
+            if ($until = $pins->lockedUntil($user)) {
+                return $this->locked($until);
+            }
+            throw $e;
+        }
+
+        // ACC-06 a phone we haven't seen: a selfie (and the two-step code, if on) first.
+        $trusted = $security->isTrusted($user, $data['device_id'] ?? null, $data['device_secret'] ?? null)
+            || $user->devices()->where('device_id', (string) ($data['device_id'] ?? ''))->whereNotNull('trusted_at')->exists();
+        $newDevice = !$trusted && $security->hasTrustedDevices($user);
+        if ($newDevice && !$request->hasFile('selfie')) {
+            return response()->json(['status' => false, 'message' => 'Take a selfie to confirm this new phone is yours.', 'data' => ['code' => 'selfie_required']], 422);
+        }
+        if (($newDevice || !$trusted) && $user->hasTwoFactor()) {
+            if (empty($data['two_factor_code'])) {
+                $sentTo = $user->two_factor_method === 'authenticator' ? null : $security->sendTwoFactorCode($user);
+
+                return response()->json(['status' => false, 'message' => 'Enter your two-step code.', 'data' => ['code' => 'two_factor_required', 'method' => $user->two_factor_method, 'sent_to' => $sentTo]], 422);
+            }
+            $security->verifyTwoFactorCode($user, $data['two_factor_code']);
+        }
+
+        $device = $security->trustDevice($request, $user, holdSends: $newDevice, selfie: $request->file('selfie'));
         $user->update(['last_login_at' => now()]);
-        $this->recordDevice($request, $user);
+        $security->recordLogin($user, $request, 'ok', $newDevice ? 'new_device' : null, $newDevice);
         Cache::forget($this->tokenKey($data['phone_token']));
+        if ($newDevice) {
+            NotificationService::make()->push($user, 'security_new_device', 'New phone signed in', ($request->input('device_name') ?: 'A new phone') . ' signed in to your account. It can send money from ' . $device['device']->send_after?->copy()->setTimezone('Africa/Lagos')->format('j M, g:i a') . '. Wasn\'t you? Freeze your account.', []);
+        }
 
         return $this->ok('Login successful', [
             'user' => $this->serializeUser($user),
-            'token' => $user->createToken($data['device_name'] ?? 'mobile')->plainTextToken,
+            'token' => $security->issueToken($user, $device['device']),
+            'device_secret' => $device['secret'],
+            'send_after' => $device['device']->send_after?->toIso8601String(),
         ]);
     }
 
-    // POST /auth/pin/forgot  { phone_token } — second check: a code to the email on file
+    private function locked(\Carbon\Carbon $until): JsonResponse
+    {
+        return response()->json([
+            'status' => false,
+            'message' => 'Your PIN was wrong ' . PinService::MAX_ATTEMPTS . ' times. We locked the app to protect your money. Try again at ' . $until->copy()->setTimezone('Africa/Lagos')->format('g:i a') . '.',
+            'data' => ['code' => 'locked', 'until' => $until->toIso8601String()],
+        ], 423);
+    }
+
+    // POST /auth/pin/forgot  { phone_token } — ACC-04 "Prove it's you": the BVN on file
+    // (or, before a BVN was checked, a code to the email on file), then a selfie.
     public function forgotPin(Request $request): JsonResponse
     {
         $data = $request->validate(['phone_token' => ['required', 'string']]);
         $user = $this->accountFromToken($data['phone_token'], requirePin: false);
 
+        if ($this->bvnOnFile($user)) {
+            return $this->ok('Prove it\'s you', ['needs' => 'bvn', 'bvn_hint' => '•••••••' . substr($this->bvnOnFile($user), -4)]);
+        }
         $code = $this->otp->issue($user->email, 'pin_reset');
 
         return $this->ok('Code sent', [
+            'needs' => 'email',
             'sent_to' => $this->maskEmail($user->email),
             ...(config('app.debug') && !app()->isProduction() ? ['debug_otp' => $code] : []),
         ]);
     }
 
-    // POST /auth/pin/reset  { phone_token, code, pin }
+    // POST /auth/pin/reset  { phone_token, bvn | code, selfie, pin }
     public function resetPin(Request $request): JsonResponse
     {
         $data = $request->validate([
             'phone_token' => ['required', 'string'],
-            'code' => ['required', 'digits:6'],
+            'bvn' => ['nullable', 'digits:11'],
+            'code' => ['nullable', 'digits:6'],
+            'selfie' => ['required', 'file', 'image', 'max:8192'],
             'pin' => ['required', 'digits:6'],
             'device_id' => ['nullable', 'string', 'max:120'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'in:android,ios,web'],
-        ]);
+        ], ['selfie.required' => 'Take a selfie to prove it\'s you.']);
         $user = $this->accountFromToken($data['phone_token'], requirePin: false);
+        $security = SecurityService::make();
+        // A weak PIN is refused before the code is used up.
+        $security->assertStrongPin($data['pin'], $user);
 
-        $this->otp->verify($user->email, 'pin_reset', $data['code']);
+        if ($bvn = $this->bvnOnFile($user)) {
+            if (!isset($data['bvn']) || !hash_equals($bvn, $data['bvn'])) {
+                $security->recordLogin($user, $request, 'failed', 'wrong_bvn');
+                throw ValidationException::withMessages(['bvn' => 'That BVN doesn\'t match the one you verified with.']);
+            }
+        } else {
+            $this->otp->verify($user->email, 'pin_reset', (string) ($data['code'] ?? ''));
+        }
 
-        $user->update(['pin' => Hash::make($data['pin']), 'pin_length' => 6, 'last_login_at' => now()]);
+        $security->setPin($user, $data['pin']);
+        // ACC-05 "For your safety, payments over ₦50,000 wait 24 hours."
+        $user->forceFill(['pin_reset_hold_until' => now()->addHours(SecurityService::NEW_DEVICE_HOURS), 'last_login_at' => now()])->save();
         $user->tokens()->delete(); // sessions opened with the old PIN end here
-        Cache::forget("pin_attempts:{$user->id}"); // PinService lockout counter
-        $this->recordDevice($request, $user);
+        $device = $security->trustDevice($request, $user, holdSends: false, selfie: $request->file('selfie'));
+        $security->recordLogin($user, $request, 'ok', 'pin_reset');
         Cache::forget($this->tokenKey($data['phone_token']));
+        NotificationService::make()->push($user, 'security_pin_reset', 'Your PIN was reset', 'Payments over ₦50,000 wait 24 hours. Wasn\'t you? Freeze your account now.', []);
 
         return $this->ok('PIN reset', [
             'user' => $this->serializeUser($user),
-            'token' => $user->createToken($data['device_name'] ?? 'mobile')->plainTextToken,
+            'token' => $security->issueToken($user, $device['device']),
+            'device_secret' => $device['secret'],
+            'hold_until' => $user->pin_reset_hold_until->toIso8601String(),
         ]);
     }
 
-    private function validPhone(string $raw): string
+    // POST /auth/freeze  { phone_token } — ACC-07 "Freeze my account", before signing in
+    public function freeze(Request $request): JsonResponse
     {
-        $phone = $this->normalizePhone($raw);
-        if (!preg_match('/^\+[1-9]\d{7,14}$/', $phone)) {
-            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number.']);
-        }
+        $data = $request->validate(['phone_token' => ['required', 'string']]);
+        $user = $this->accountFromToken($data['phone_token'], requirePin: false);
+        AccountService::make()->freeze($user, 'locked_screen');
 
-        return $phone;
+        return $this->ok('Account frozen', ['frozen' => true]);
+    }
+
+    /** The BVN this person verified with (Tier 1), or null. */
+    private function bvnOnFile(User $user): ?string
+    {
+        $bvn = \App\Models\KycSubmission::where('user_id', $user->id)->where('status', 'approved')->where('target_tier', 1)->latest()->first()?->payload['bvn'] ?? null;
+
+        return $bvn ? (string) $bvn : null;
+    }
+
+    private function account(User $user): array
+    {
+        return [
+            'first_name' => $user->first_name ?: $user->fullName(),
+            'initials' => $this->initials($user),
+            'avatar_url' => $user->avatar_url,
+            'pin_length' => (int) ($user->pin_length ?? 4),
+        ];
     }
 
     private function tokenKey(string $token): string

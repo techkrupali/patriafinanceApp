@@ -302,6 +302,10 @@ class Wallet extends Model
         if ($this->isFrozen()) {
             return false;
         }
+        // ME-18: a person who froze their account sends from no wallet, shared ones included.
+        if ($user->isFrozen()) {
+            return false;
+        }
         if ($this->isEmergencyLocked()) {
             return false;
         }

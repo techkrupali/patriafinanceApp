@@ -33,23 +33,38 @@ class KycService
      */
     public function limits(int $tier): array
     {
-        return match (true) {
-            $tier >= 3 => ['max_wallets' => 25, 'daily_transfer_limit' => null, 'loan_cap' => 100_000_000], // ₦1,000,000
-            $tier === 2 => ['max_wallets' => 10, 'daily_transfer_limit' => 200_000_000, 'loan_cap' => 20_000_000], // ₦2,000,000 / ₦200,000
-            default => ['max_wallets' => 5, 'daily_transfer_limit' => 20_000_000, 'loan_cap' => 5_000_000], // ₦200,000 / ₦50,000 (tier 0/1)
-        };
+        // Sending, holding and wallets come from the tiers (LimitService, ME-23).
+        $t = LimitService::make()->tier($tier);
+
+        return [
+            'max_wallets' => $t['max_wallets'],
+            'daily_transfer_limit' => $t['daily'],
+            'single_payment_limit' => $t['single'],
+            'max_balance' => $t['max_balance'],
+            'loan_cap' => match (true) {
+                $tier >= 3 => 100_000_000, // ₦1,000,000
+                $tier === 2 => 20_000_000, // ₦200,000
+                default => 5_000_000, // ₦50,000
+            },
+        ];
     }
 
-    /** Required field names for a given target tier. */
+    /**
+     * What each tier asks for (ME-23, KYC-02/03/05/07/08): Tier 1 the BVN; Tier 2
+     * the NIN and a selfie; Tier 3 an ID document and proof of address.
+     */
     public function requirements(int $tier): array
     {
         return match ($tier) {
-            1 => ['bvn', 'nin', 'id_type', 'id_number'],
-            2 => ['address', 'city', 'state'],
-            3 => ['source_of_funds', 'occupation'],
+            1 => ['bvn'],
+            2 => ['nin', 'selfie'],
+            3 => ['id_type', 'id_photo', 'address', 'city', 'state', 'proof'],
             default => [],
         };
     }
+
+    /** The photos and files a tier keeps (stored privately; admin views them). */
+    public const FILES = ['selfie', 'id_photo', 'id_back', 'proof'];
 
     /** Validation rules for the payload of a given target tier. */
     private function rules(int $tier): array
@@ -57,20 +72,19 @@ class KycService
         return match ($tier) {
             1 => [
                 'bvn' => ['required', 'digits:11'],
-                'nin' => ['required', 'digits:11'],
-                'id_type' => ['required', 'in:nin_slip,drivers_license,passport,voters_card'],
-                'id_number' => ['required', 'string', 'max:50'],
             ],
             2 => [
+                'nin' => ['required', 'digits:11'],
+                'selfie' => ['required', 'file', 'image', 'max:8192'],
+            ],
+            3 => [
+                'id_type' => ['required', 'in:passport,drivers_licence,voters_card,national_id'],
+                'id_photo' => ['required', 'file', 'image', 'max:8192'],
+                'id_back' => ['nullable', 'file', 'image', 'max:8192'],
                 'address' => ['required', 'string', 'max:200'],
                 'city' => ['required', 'string', 'max:100'],
                 'state' => ['required', 'string', 'max:100'],
-            ],
-            3 => [
-                'source_of_funds' => ['required', 'in:employment,business,investment,other'],
-                'occupation' => ['required_without:business_name', 'nullable', 'string', 'max:120'],
-                'business_name' => ['required_without:occupation', 'nullable', 'string', 'max:120'],
-                'monthly_income' => ['nullable', 'numeric', 'min:0'],
+                'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
             ],
             default => [],
         };
@@ -96,6 +110,12 @@ class KycService
         }
 
         $clean = Validator::make($payload, $this->rules($targetTier))->validate();
+        // Photos and documents are kept privately; the payload holds where.
+        foreach (self::FILES as $key) {
+            if (($clean[$key] ?? null) instanceof \Illuminate\Http\UploadedFile) {
+                $clean[$key] = $clean[$key]->store("kyc/{$u->id}", 'local');
+            }
+        }
 
         return KycSubmission::create([
             'user_id' => $u->id,
@@ -120,6 +140,10 @@ class KycService
         ]);
 
         $s->user->kyc_tier = $s->target_tier;
+        // Tier 3 (KYC-08 "Where do you live?"): the checked address becomes the profile's.
+        if ((int) $s->target_tier === 3) {
+            $s->user->forceFill(collect($s->payload)->only(['address', 'city', 'state'])->all());
+        }
         $s->user->save();
 
         $this->notifications->push(

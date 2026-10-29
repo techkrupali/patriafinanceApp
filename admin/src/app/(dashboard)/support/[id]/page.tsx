@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ErrorState } from "@/components/states";
 import { Toast, type ToastState } from "@/components/toast";
+import { SupportChat } from "@/components/admin/support-chat";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -155,6 +156,9 @@ export default function SupportDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* ME-17 Chat with support */}
+      <SupportChat requestId={id} onError={(message) => setToast({ tone: "red", message })} />
 
       <ConfirmDialog
         open={confirm !== null}

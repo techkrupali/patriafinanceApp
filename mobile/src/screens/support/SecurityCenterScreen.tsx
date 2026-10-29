@@ -1,227 +1,91 @@
 import React from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { BiometricSwitch } from '../../components/BiometricSwitch';
-import { Card } from '../../components/Card';
-import { colors, gradients, radius } from '../../theme';
-import { useDashboard } from '../../api/hooks';
-import { useAuth } from '../../store/auth';
-import { tierName } from '../../lib/kyc';
-import { selection } from '../../lib/haptics';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtPanel } from '../../components/pt/PtForm';
+import { LoadError } from '../../components/LoadError';
+import { SettingsRow } from '../../components/wallet/WalletManageUi';
+import { useSecurity } from '../../api/account';
+import { agoLabel, formatNaira } from '../../lib/format';
 import type { RootScreenProps } from '../../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+const MONTH = 30 * 86_400_000;
 
-function Row({
-  icon,
-  tint = 'bg-lav-faint',
-  iconColor = colors.navy,
-  title,
-  subtitle,
-  onPress,
-  right,
-}: {
-  icon: IconName;
-  tint?: string;
-  iconColor?: string;
-  title: string;
-  subtitle?: string;
-  onPress?: () => void;
-  right?: React.ReactNode;
-}) {
-  return (
-    <Pressable
-      onPress={
-        onPress
-          ? () => {
-              selection();
-              onPress();
-            }
-          : undefined
-      }
-      disabled={!onPress}
-      className="flex-row items-center py-3.5 active:opacity-70"
-    >
-      <View className={`mr-3.5 h-10 w-10 items-center justify-center rounded ${tint}`}>
-        <Ionicons name={icon} size={19} color={iconColor} />
-      </View>
-      <View className="flex-1">
-        <Text className="text-[15px] font-semibold text-ink">{title}</Text>
-        {subtitle ? <Text className="mt-0.5 text-xs text-muted">{subtitle}</Text> : null}
-      </View>
-      {right ?? (onPress ? <Ionicons name="chevron-forward" size={18} color={colors.faded} /> : null)}
-    </Pressable>
-  );
+/** "Changed 3 months ago" / "Changed today". */
+function changedLabel(iso: string | null): string {
+  if (!iso) return 'Not changed yet';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 86_400_000) return 'Changed today';
+  if (ms < MONTH) return `Changed ${agoLabel(iso)}`;
+  const months = Math.round(ms / MONTH);
+  return `Changed ${months} month${months === 1 ? '' : 's'} ago`;
 }
 
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.border }} />;
+/** "today, 7:02 pm". */
+function lastLabel(iso: string | null): string {
+  if (!iso) return 'No sign-ins yet';
+  const d = new Date(iso);
+  const h = d.getHours() % 12 || 12;
+  const time = `${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+  return d.toDateString() === new Date().toDateString() ? `Last: today, ${time}` : `Last: ${d.getDate()}/${d.getMonth() + 1}, ${time}`;
 }
 
-const TIPS: { icon: IconName; text: string }[] = [
-  { icon: 'lock-closed-outline', text: 'Patriai staff will never ask for your PIN or password.' },
-  { icon: 'finger-print-outline', text: 'Turn on biometric unlock for faster, safer sign-in.' },
-  { icon: 'trending-up-outline', text: 'Verify a higher KYC tier to raise your limits.' },
-  { icon: 'phone-portrait-outline', text: "Review your devices regularly and remove any you don't recognise." },
-];
-
+/**
+ * ME-05 Security centre: how protected the account is ("Strong · 4 of 5
+ * done") and the one thing left, then PIN, Face ID and app lock, two-step,
+ * devices, login history, account level, limits — and report fraud or freeze.
+ */
 export function SecurityCenterScreen({ navigation }: RootScreenProps<'SecurityCenter'>) {
-  const { data: dashboard, isLoading, error, refetch, isRefetching } = useDashboard();
-  const user = useAuth((s) => s.user);
-  const biometricEnabled = useAuth((s) => s.biometricEnabled);
-
-  const hasPin = Boolean(user?.has_pin);
-  const kycTier = dashboard?.kyc?.tier ?? user?.kyc_tier ?? 0;
-  const kycOn = kycTier >= 1;
-
-  const protections = [hasPin, biometricEnabled, kycOn];
-  const activeCount = protections.filter(Boolean).length;
-  const total = protections.length;
-  const pct = Math.round((activeCount / total) * 100);
-  const allOn = activeCount === total;
+  const q = useSecurity();
+  const s = q.data;
 
   return (
-    <Screen withBottomInset>
-      <Header title="Security Center" />
-
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
-        }
-      >
-        {isLoading ? (
-          <View className="items-center py-24">
-            <ActivityIndicator size="large" color={colors.navy} />
-          </View>
-        ) : (
-          <>
-            {/* Score hero */}
-            <LinearGradient
-              colors={gradients.navy}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ borderRadius: radius, padding: 24 }}
-            >
-              <View className="flex-row items-center">
-                <View className="mr-3.5 h-12 w-12 items-center justify-center rounded bg-white/15">
-                  <Ionicons
-                    name={allOn ? 'shield-checkmark' : 'shield-half'}
-                    size={26}
-                    color={colors.brandGlow}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                    Security status
-                  </Text>
-                  <Text className="mt-1 text-xl font-extrabold leading-tight text-white">
-                    {allOn ? 'Your account is protected' : 'Boost your protection'}
-                  </Text>
-                </View>
-              </View>
-
-              <View className="mt-5 h-2 overflow-hidden rounded-full bg-white/15">
-                <View
-                  className="h-2 rounded-full bg-brand-mint"
-                  style={{ width: `${Math.max(pct, 4)}%` }}
-                />
-              </View>
-              <Text className="mt-2.5 text-[13px] text-white/70">
-                {activeCount} of {total} protections on
+    <PtPageScreen title="Security" subtitle={s ? `${s.score.label} · ${s.score.done} of ${s.score.total} done` : null} onBack={() => navigation.goBack()}>
+      {q.isLoading ? (
+        <ActivityIndicator color={pt.brand} />
+      ) : !s ? (
+        <LoadError message={(q.error as Error | null)?.message} onRetry={() => void q.refetch()} />
+      ) : (
+        <>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: s.frozen_at ? pt.dangerSoft : pt.brandSoft, borderRadius: ptRadius.md, padding: 16 }}>
+            <Feather name={s.frozen_at ? 'alert-triangle' : 'shield'} size={20} color={s.frozen_at ? pt.danger : pt.brand} style={{ marginTop: 2 }} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>
+                {s.frozen_at ? 'Your account is frozen' : s.score.done >= 4 ? 'Your account is well protected' : 'Your account needs a little more'}
               </Text>
-            </LinearGradient>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                {s.frozen_at ? 'Nothing can leave your wallets. Unfreeze it with your PIN and a selfie.' : s.score.next ?? 'Everything is on.'}
+              </Text>
+            </View>
+          </View>
 
-            {/* Protection checklist */}
-            <Text className="mt-7 text-[13px] font-bold text-muted">Protection</Text>
-            <Card className="mt-3 py-1">
-              <Row
-                icon="keypad-outline"
-                tint="bg-success-soft"
-                iconColor={colors.brand}
-                title="Transaction PIN"
-                subtitle={hasPin ? 'On — required for every spend' : 'Not set'}
-                onPress={() => navigation.navigate('ChangePin')}
-                right={
-                  hasPin ? (
-                    <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
-                  ) : (
-                    <View className="rounded bg-lav-faint px-2.5 py-1">
-                      <Text className="text-[11px] font-bold text-brand">Set up</Text>
-                    </View>
-                  )
-                }
-              />
-              <Divider />
-              <Row
-                icon="finger-print-outline"
-                tint="bg-success-soft"
-                iconColor={colors.brand}
-                title="Biometric unlock"
-                subtitle={biometricEnabled ? 'On · unlock and payments' : 'Off'}
-                right={<BiometricSwitch />}
-              />
-              <Divider />
-              <Row
-                icon="shield-checkmark-outline"
-                tint="bg-success-soft"
-                iconColor={colors.brand}
-                title="Identity verification (KYC)"
-                subtitle={`Tier ${kycTier} · ${tierName(kycTier)}`}
-                onPress={() => navigation.navigate('Kyc')}
-                right={
-                  <View className="flex-row items-center">
-                    {kycOn ? (
-                      <Ionicons name="checkmark-circle" size={22} color={colors.brand} style={{ marginRight: 2 }} />
-                    ) : null}
-                    <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-                  </View>
-                }
-              />
-              <Divider />
-              <Row
-                icon="phone-portrait-outline"
-                title="Sign-in devices"
-                subtitle="Review where you're signed in"
-                onPress={() => navigation.navigate('Devices')}
-              />
-              {/* Phone sign-ups log in with their PIN and have no password. */}
-              {user?.has_password !== false ? (
-                <>
-                  <Divider />
-                  <Row
-                    icon="key-outline"
-                    title="Password"
-                    subtitle="Change your sign-in password"
-                    onPress={() => navigation.navigate('ChangePassword')}
-                  />
-                </>
-              ) : null}
-            </Card>
+          <PtPanel>
+            <SettingsRow icon="key" title="Change PIN" sub={changedLabel(s.pin_changed_at)} onPress={() => navigation.navigate('ChangePin')} />
+            <SettingsRow
+              icon="smile"
+              title="Face ID and app lock"
+              sub={s.settings.app_lock ? `On · locks after ${s.settings.lock_after === 0 ? 'right away' : `${s.settings.lock_after} minute${s.settings.lock_after === 1 ? '' : 's'}`}` : 'Off'}
+              onPress={() => navigation.navigate('AppLockSettings')}
+            />
+            <SettingsRow icon="shield" title="Two-step verification" sub={s.two_factor.on ? `On · ${s.two_factor.method === 'authenticator' ? 'authenticator app' : s.two_factor.method === 'sms' ? 'SMS code' : 'email code'}` : 'Off'} onPress={() => navigation.navigate('TwoStep')} />
+            <SettingsRow icon="smartphone" title="Devices you're logged in on" sub={`${s.devices} device${s.devices === 1 ? '' : 's'} · log out any of them`} onPress={() => navigation.navigate('Devices')} />
+            <SettingsRow icon="clock" title="Login history" sub={lastLabel(s.last_login_at)} onPress={() => navigation.navigate('LoginHistory')} />
+            <SettingsRow icon="award" title="Account level" sub={`Tier ${s.tier} · Free plan`} onPress={() => navigation.navigate('Kyc')} />
+            <SettingsRow icon="bar-chart-2" title="My limits" sub={`Tier ${s.tier} · ${formatNaira(s.daily_limit)} a day`} onPress={() => navigation.navigate('MyLimits')} last />
+          </PtPanel>
 
-            {/* Stay safe tips */}
-            <Text className="mt-7 text-[13px] font-bold text-muted">Stay Safe</Text>
-            <Card className="mt-3 py-1">
-              {TIPS.map((tip, i) => (
-                <View key={tip.text}>
-                  {i > 0 ? <Divider /> : null}
-                  <View className="flex-row items-center py-3.5">
-                    <View className="mr-3.5 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                      <Ionicons name={tip.icon} size={18} color={colors.navy} />
-                    </View>
-                    <Text className="flex-1 text-[13px] leading-5 text-muted">{tip.text}</Text>
-                  </View>
-                </View>
-              ))}
-            </Card>
-          </>
-        )}
-      </ScrollView>
-    </Screen>
+          <PtPanel>
+            <SettingsRow
+              icon="alert-triangle"
+              title={s.frozen_at ? 'Unfreeze my account' : 'Report fraud or freeze my account'}
+              danger={!s.frozen_at}
+              onPress={() => navigation.navigate('FreezeAccount')}
+              last
+            />
+          </PtPanel>
+        </>
+      )}
+    </PtPageScreen>
   );
 }

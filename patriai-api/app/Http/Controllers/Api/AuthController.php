@@ -210,6 +210,11 @@ class AuthController extends ApiController
     // POST /auth/logout
     public function logout(Request $request): JsonResponse
     {
+        // ME-21 "Keep this phone trusted — skip the selfie check next time".
+        if ($request->has('keep_trusted') && !$request->boolean('keep_trusted')) {
+            $device = \App\Services\SecurityService::make()->currentDevice($request, $request->user());
+            $device?->forceFill(['trusted_at' => null, 'secret_hash' => null])->save();
+        }
         $request->user()->currentAccessToken()->delete();
 
         return $this->ok('Logged out');

@@ -186,7 +186,7 @@ class LoanController extends ApiController
             return $this->fail('Wallet not found', 404);
         }
         if (!$wallet->canSpend($user)) {
-            return $this->fail('You do not have permission to move money out of this wallet', 403);
+            return $this->cannotSpendError($user);
         }
 
         $result = LoanService::make()->repay($loan, $user, $wallet, $this->toKobo($data['amount']));

@@ -20,6 +20,7 @@ import { Toast, type ToastState } from "@/components/toast";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SecureFile } from "@/components/secure-file";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function Field({ name, children }: { name: string; children: React.ReactNode }) {
@@ -31,43 +32,43 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
   );
 }
 
-/** Renders the tier-specific submitted fields. */
-function PayloadFields({ tier, payload }: { tier: number; payload: KycPayload }) {
-  if (tier === 1) {
-    return (
-      <>
-        <Field name="BVN">{payload.bvn ?? "—"}</Field>
-        <Field name="NIN">{payload.nin ?? "—"}</Field>
-        <Field name="ID type">{payload.id_type ? label(payload.id_type) : "—"}</Field>
-        <Field name="ID number">{payload.id_number ?? "—"}</Field>
-      </>
-    );
-  }
-  if (tier === 2) {
-    return (
-      <>
-        <Field name="Address">{payload.address ?? "—"}</Field>
-        <Field name="City">{payload.city ?? "—"}</Field>
-        <Field name="State">{payload.state ?? "—"}</Field>
-      </>
-    );
-  }
-  if (tier === 3) {
-    return (
-      <>
-        <Field name="Source of funds">{payload.source_of_funds ?? "—"}</Field>
-        {payload.business_name ? (
-          <Field name="Business name">{payload.business_name}</Field>
-        ) : (
-          <Field name="Occupation">{payload.occupation ?? "—"}</Field>
-        )}
-        {payload.monthly_income != null && payload.monthly_income !== "" ? (
-          <Field name="Monthly income">{naira(payload.monthly_income)}</Field>
-        ) : null}
-      </>
-    );
-  }
-  return <p className="text-sm text-muted">No details submitted.</p>;
+const FILE_NAMES: Record<string, string> = { selfie: "Selfie", id_photo: "ID photo page", id_back: "ID signature page", proof: "Proof of address" };
+
+/**
+ * The tier's details (ME-23): Tier 1 the BVN; Tier 2 the NIN and a selfie;
+ * Tier 3 an ID document and proof of address. Older submissions show what
+ * they had (NIN/ID at Tier 1, address at Tier 2, source of funds at Tier 3).
+ */
+function PayloadFields({ id, tier, payload, files }: { id: string; tier: number; payload: KycPayload; files: string[] }) {
+  const rows: [string, React.ReactNode][] = [];
+  if (payload.bvn) rows.push(["BVN", payload.bvn]);
+  if (payload.nin) rows.push(["NIN", payload.nin]);
+  if (payload.id_type) rows.push(["ID type", label(payload.id_type)]);
+  if (payload.id_number) rows.push(["ID number", payload.id_number]);
+  if (payload.address) rows.push(["Address", payload.address]);
+  if (payload.city) rows.push(["Area / city", payload.city]);
+  if (payload.state) rows.push(["State", payload.state]);
+  if (payload.source_of_funds) rows.push(["Source of funds", payload.source_of_funds]);
+  if (payload.business_name) rows.push(["Business name", payload.business_name]);
+  if (payload.occupation) rows.push(["Occupation", payload.occupation]);
+  if (payload.monthly_income != null && payload.monthly_income !== "") rows.push(["Monthly income", naira(payload.monthly_income)]);
+  if (!rows.length && !files.length) return <p className="text-sm text-muted">No details submitted for Tier {tier}.</p>;
+
+  return (
+    <>
+      {rows.map(([name, value]) => (
+        <Field key={name} name={name}>{value}</Field>
+      ))}
+      {files.map((key) => {
+        const path = (payload as Record<string, unknown>)[key];
+        return (
+          <Field key={key} name={FILE_NAMES[key] ?? label(key)}>
+            <SecureFile url={`/api/v1/admin/kyc/${id}/files/${key}`} name={FILE_NAMES[key] ?? key} pdf={typeof path === "string" && path.toLowerCase().endsWith(".pdf")} />
+          </Field>
+        );
+      })}
+    </>
+  );
 }
 
 export default function KycDetailPage({
@@ -250,8 +251,10 @@ export default function KycDetailPage({
             ) : (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3">
                 <PayloadFields
+                  id={id}
                   tier={submission!.target_tier}
                   payload={submission!.payload}
+                  files={submission!.files ?? []}
                 />
               </dl>
             )}
