@@ -1318,12 +1318,16 @@ export interface RepayLoanPayload {
 
 export type ProjectStatus = 'active' | 'completed' | 'cancelled';
 
-export type MilestoneStatus = 'planned' | 'funded' | 'submitted' | 'approved' | 'released' | 'rejected';
+export type MilestoneStatus = 'proposed' | 'planned' | 'funded' | 'submitted' | 'approved' | 'released' | 'rejected' | 'cancelled';
 
 /** The current user's relationship to a project. */
-/** A funder who joined the project wallet (PRW-05) is a co-owner or contributor. */
-export type ProjectRole = 'owner' | 'vendor' | 'co_owner' | 'contributor';
+/** A funder who joined the project wallet (PRW-05) is a co-owner or contributor; the builder's team (VDM-11) has a role too. */
+export type ProjectRole = 'owner' | 'vendor' | 'co_owner' | 'contributor' | 'site_manager' | 'foreman' | 'accounts';
 export type ProjectKind = 'building' | 'renovation' | 'event' | 'community';
+/** INV-V1…V5: the builder was invited, asked for changes, accepted, or declined. */
+export type VendorStatus = 'invited' | 'changes_proposed' | 'accepted' | 'declined';
+/** PRJ-01 chip: "1 to review", "Saving", "Planning"… */
+export type ProjectPhase = 'to_review' | 'planning' | 'saving' | 'in_progress' | 'done' | 'cancelled';
 
 /** PRW-06: what the builder sends, who says yes, and what's held back. */
 export interface ProjectRelease {
@@ -1335,6 +1339,29 @@ export interface ProjectRelease {
   retention_months: number;
 }
 
+export interface ProjectVendor {
+  id: number;
+  /** The business name ("Adeyemi Builders Ltd"). */
+  name: string;
+  /** The person ("Tunde Adeyemi"). */
+  person: string;
+  profile_id: number | null;
+  verified: boolean;
+  account_last4: string | null;
+}
+
+/** PRJ-12 "Adeyemi Builders declined · Fully booked". */
+export interface VendorDeclined {
+  user_id: number;
+  vendor_profile_id?: number;
+  name: string;
+  reason: 'fully_booked' | 'budget_too_low' | 'outside_area' | 'not_my_work' | 'other';
+  message?: string;
+  /** YYYY-MM */
+  start_month?: string;
+  at: string;
+}
+
 export interface Project {
   id: number;
   title: string;
@@ -1344,18 +1371,36 @@ export interface Project {
   wallet_balance: string;
   /** Naira decimal string — the project budget. */
   budget: string;
+  /** Naira — what the wallet is saving towards (budget plus buffer). */
+  target: string;
+  /** Naira — every milestone that's planned, funded or paid. */
+  plan_total: string;
   /** Naira decimal string — reserved against un-released milestones. */
   reserved: string;
   /** Naira decimal string — escrow not yet reserved by a milestone. */
   available: string;
-  /** Naira decimal string — already paid out to the vendor. */
+  /** Naira decimal string — already paid out to the vendor (less refunds). */
   released: string;
+  /** PRJ-03 "Paid so far": what reached the builder. */
+  paid_so_far: string;
+  /** PRJ-03 "₦3,000,000 of ₦6,800,000 done". */
+  done_amount: string;
   status: ProjectStatus;
-  vendor: PersonRef | null;
-  owner: PersonRef | null;
+  phase: ProjectPhase;
+  to_review: number;
+  vendor_status: VendorStatus | null;
+  vendor: ProjectVendor | null;
+  vendor_declined: VendorDeclined | null;
+  reinvite_on: string | null;
+  owner: { id: number; name: string } | null;
+  /** "Eze family" */
+  family: string | null;
+  approvers: { id: number; name: string; first_name: string }[];
   my_role: ProjectRole | null;
   milestones_total: number;
   milestones_released: number;
+  /** PRJ-03 "Adeyemi Builders finished tiling — check the photos and release ₦1,710,000". */
+  attention: { milestone_id: number; title: string; release_now: string; status: MilestoneStatus } | null;
   /** PRW-01…06, for projects set up in the guided flow. */
   setup?: {
     kind: ProjectKind | null;
@@ -1367,8 +1412,37 @@ export interface Project {
     vendor_invite: string | null;
   } | null;
   /** Naira: retention held back until after handover. */
-  held_back?: string;
+  held_back: string;
+  /** Naira: what's in the project wallet. */
+  in_wallet: string;
   created_at: string | null;
+}
+
+export interface Deliverable {
+  text: string;
+  done: boolean;
+}
+
+/** INV-V3 (the builder) or PRJ-05 (the family): a new amount or dates waiting for the other side. */
+export interface MilestoneChange {
+  by: 'vendor' | 'family';
+  user_id: number;
+  /** Naira */
+  amount?: string;
+  starts_on?: string;
+  due_date?: string;
+  why?: string;
+  attachment?: { id?: number; name: string; url: string } | null;
+  at: string;
+}
+
+/** PRJ-06/07 "0 of 2 · Ngozi and Chidi". */
+export interface MilestoneApproval {
+  needs_all: boolean;
+  required: number;
+  yes: number;
+  request_id: number | null;
+  approvers: { id: number; name: string; first_name: string; said_yes: boolean; asked_at: string | null }[];
 }
 
 export interface Milestone {
@@ -1376,24 +1450,48 @@ export interface Milestone {
   sequence: number;
   title: string;
   description: string | null;
+  deliverables: Deliverable[];
+  proof_needed: string | null;
   /** Naira decimal string reserved for this milestone. */
   amount: string;
+  /** PRJ-06 "₦1,710,000 now, ₦190,000 held back". */
+  release_now: string;
+  hold_back: string;
   /** Optional deadline, ISO date (YYYY-MM-DD). */
   due_date: string | null;
   status: MilestoneStatus;
-  /** Vendor-supplied proof of work, once submitted. */
+  origin: 'family' | 'vendor';
+  /** PRJ-11: a milestone the builder proposed. */
+  proposal: {
+    reason: 'family_asked' | 'found_on_site' | 'price_change' | 'other' | null;
+    why: string | null;
+    family_note: string | null;
+    by: string | null;
+    was_total: string;
+    new_total: string;
+    funding_gap: string;
+  } | null;
+  change_request: MilestoneChange | null;
+  /** The builder's note when they submitted. */
   proof: string | null;
-  /** Uploaded image/video evidence attached to this milestone. */
+  /** Uploaded photos, videos and receipts. */
   evidence: MilestoneEvidence[];
   submitted_at: string | null;
+  submitted_by: string | null;
   released_at: string | null;
   released_transaction_reference: string | null;
+  paid_now: string | null;
+  refunded: string | null;
   /** PRW-03 "Nov to Dec 2026": when the work starts (due_date is when it ends). */
   starts_on?: string | null;
   /** Naira held back from this payment until after handover. */
   retention?: string;
   retention_due_at?: string | null;
   retention_released_at?: string | null;
+  /** PRJ-06 "Something isn't right" → sent back with this note. */
+  rejection: string | null;
+  approval: MilestoneApproval | null;
+  dispute: { id: number; number: string; status: DisputeStatus } | null;
   created_at: string | null;
 }
 
@@ -1422,9 +1520,31 @@ export interface ProjectCreatedData {
   wallet: Wallet;
 }
 
+export interface ProjectDocument {
+  id: number;
+  kind: 'contract' | 'boq' | 'other';
+  name: string;
+  url: string;
+  uploaded_by: string | null;
+  created_at: string | null;
+}
+
+/** PRJ-10 "Budget vs actual". */
+export interface ProjectBudget {
+  budget: string;
+  committed: string;
+  lines: { milestone_id: number; title: string; spent: string; planned: string }[];
+  extras: { milestone_id: number; title: string; amount: string }[];
+  extras_total: string;
+  buffer: string;
+  buffer_left: string;
+  over_buffer: string;
+}
+
 export interface ProjectDetailData {
   project: Project;
-  wallet: Wallet;
+  /** Not shown to the builder's foreman. */
+  wallet: Wallet | null;
   owner: ProjectContact | null;
   vendor: ProjectContact | null;
   my_role: ProjectRole | null;
@@ -1433,6 +1553,26 @@ export interface ProjectDetailData {
   reserved: string;
   available: string;
   released: string;
+  documents: ProjectDocument[];
+  receipts: { id: number; url: string; caption: string | null; milestone_id: number; created_at: string | null }[];
+  site_photos: number;
+  budget: ProjectBudget;
+  /** PRJ-12 "3 in Enugu with 4.5 stars or more" (no builder yet). */
+  suggestions: { near: string | null; count: number } | null;
+  /** Milestones this person already rated the builder for (VND-04). */
+  reviewed_milestones: number[];
+  can: {
+    approve: boolean;
+    edit: boolean;
+    invite_vendor: boolean;
+    accept: boolean;
+    propose: boolean;
+    submit: boolean;
+    upload: boolean;
+    chat: boolean;
+    dispute: boolean;
+    see_money: boolean;
+  };
 }
 
 /** Vendor assign/remove both return the updated project. */
@@ -1479,6 +1619,8 @@ export interface CreateProjectPayload {
 }
 
 export interface AssignVendorPayload {
+  /** VND-02 "Add to a project": a builder from the directory. */
+  vendor_profile_id?: number;
   /** Existing app user picked via @username search (in-app). */
   vendor_user_id?: number;
   /** Or a vendor's email/phone (external). */
@@ -1487,8 +1629,9 @@ export interface AssignVendorPayload {
 
 export interface MilestoneEvidence {
   id: number;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'receipt';
   url: string;
+  caption: string | null;
   uploaded_by: string | null;
   created_at: string | null;
 }
@@ -1496,14 +1639,17 @@ export interface MilestoneEvidence {
 export interface AddMilestonePayload {
   title: string;
   description?: string;
-  /** Naira decimal string — must be ≤ the project's available escrow. */
+  /** Naira decimal string. */
   amount: string;
   /** Optional deadline, YYYY-MM-DD. */
   due_date?: string;
+  deliverables?: string[];
 }
 
 export interface SubmitMilestonePayload {
-  proof: string;
+  note?: string;
+  /** VDM-05 ticks, in the deliverables' order. */
+  done?: boolean[];
 }
 
 export interface RejectMilestonePayload {
@@ -1851,34 +1997,116 @@ export type DisputeCategory =
   | 'vendor'
   | 'account'
   | 'other';
-export type DisputeStatus = 'open' | 'under_review' | 'resolved' | 'rejected';
+/** open: waiting for the builder · responded · fixing: the family accepted a fix · escalated: with Patriai. */
+export type DisputeStatus = 'open' | 'responded' | 'fixing' | 'escalated' | 'resolved' | 'under_review' | 'rejected';
+/** DSP-02 "What is it about?" */
+export type DisputeKind = 'milestone' | 'payment_made' | 'payment_received' | 'other';
+/** DSP-03 "What's wrong?" */
+export type DisputeReason = 'not_as_agreed' | 'not_finished' | 'poor_quality' | 'overcharged' | 'not_delivered' | 'other';
+/** DSP-03 "What would make it right?" */
+export type DisputeRemedy = 'fix' | 'partial_refund' | 'full_refund';
+export type DisputeOutcome = 'fixed' | 'partial_refund' | 'full_refund' | 'released' | 'resolved';
 
-export interface Dispute {
+/** A DSP-01 / VDM-08 row. */
+export interface DisputeSummary {
   id: number;
+  number: string | null;
   subject: string;
-  category: DisputeCategory;
-  reference: string | null;
-  description: string;
+  kind: DisputeKind;
+  category: string;
   status: DisputeStatus;
-  resolution: string | null;
+  /** "Waiting for builder", "Reply by 27 Oct", "Refunded ₦18,400"… */
+  status_label: string;
+  active: boolean;
+  against: string | null;
+  raised_by: string | null;
+  project: { id: number; title: string } | null;
+  milestone: { id: number; title: string } | null;
+  amount_on_hold: string | null;
+  reply_by: string | null;
+  decision_due: string | null;
+  outcome: DisputeOutcome | null;
+  released_amount: string | null;
+  refund_amount: string | null;
   resolved_at: string | null;
+  created_at: string | null;
+  viewer: 'vendor' | 'family';
+}
+
+export interface DisputeOffer {
+  type: 'fix' | 'partial_refund' | 'disagree';
+  status: 'open' | 'accepted' | 'declined' | 'replaced' | 'closed';
+  fix_by?: string;
+  /** Naira */
+  amount?: string;
+}
+
+export interface DisputeMessage {
+  id: number;
+  kind: 'message' | 'offer' | 'system' | 'decision';
+  body: string | null;
+  offer: DisputeOffer | null;
+  from: 'family' | 'vendor' | 'patriai';
+  name: string;
+  mine: boolean;
   created_at: string | null;
 }
 
+/** DSP-05/06/07/09: one dispute, shaped for whoever is looking. */
+export interface DisputeDetail {
+  id: number;
+  number: string | null;
+  subject: string;
+  kind: DisputeKind;
+  category: string;
+  status: DisputeStatus;
+  reason: DisputeReason | null;
+  reason_label: string | null;
+  remedy: DisputeRemedy | null;
+  remedy_label: string | null;
+  description: string;
+  reference: string | null;
+  amount_on_hold: string | null;
+  raised_by: { id: number; name: string; first_name: string } | null;
+  against: { id: number; name: string; profile_id: number | null } | null;
+  project: { id: number; title: string } | null;
+  milestone: { id: number; title: string; amount: string; status: MilestoneStatus } | null;
+  reply_by: string | null;
+  vendor_replied: boolean;
+  escalated_at: string | null;
+  escalation_note: string | null;
+  decision_due: string | null;
+  evidence_until: string | null;
+  outcome: DisputeOutcome | null;
+  resolution: string | null;
+  released_amount: string | null;
+  refund_amount: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+  messages: DisputeMessage[];
+  files: { id: number; kind: 'image' | 'video' | 'document'; url: string; name: string; from: 'family' | 'vendor' }[];
+  open_offer_id: number | null;
+  can: { reply: boolean; message: boolean; answer_offer: boolean; escalate: boolean; add_evidence: boolean; rate: boolean };
+  viewer: 'vendor' | 'family' | 'admin' | null;
+}
+
 export interface DisputesPageData {
-  disputes: Dispute[];
+  disputes: DisputeSummary[];
   pagination: Pagination;
 }
 
-export interface DisputeCreatedData {
-  dispute: Dispute;
+export interface DisputeData {
+  dispute: DisputeDetail;
 }
 
-export interface RaiseDisputePayload {
-  subject: string;
-  category: DisputeCategory;
-  reference?: string | null;
+export interface OpenDisputePayload {
+  kind: Exclude<DisputeKind, 'other'>;
+  milestone_id?: number;
+  reference?: string;
+  reason: DisputeReason;
+  remedy?: DisputeRemedy;
   description: string;
+  subject?: string;
 }
 
 // ============================================================================
@@ -1929,39 +2157,88 @@ export interface SpendRequestPayload {
 // Vendor Discovery (directory of vendor profiles; assignment stays in Projects)
 // ============================================================================
 
+/** VDM-01 "What you do"; the older categories are still on some profiles. */
 export type VendorCategory =
-  | 'construction'
+  | 'building'
+  | 'tiling'
+  | 'electrical'
+  | 'plumbing'
   | 'events'
+  | 'school'
   | 'catering'
+  | 'construction'
   | 'education'
-  | 'tech'
-  | 'logistics'
-  | 'fashion'
-  | 'health'
   | 'other';
+
+export interface VendorReviewLine {
+  rating: number;
+  body: string | null;
+  /** "Ifeoma, Enugu" */
+  by: string;
+  tags: string[];
+  created_at: string | null;
+}
 
 export interface VendorListing {
   /** VendorProfile id (route param for the detail screen). */
   id: number;
   user_id: number;
   business_name: string;
+  rc_number: string | null;
+  since_year: number | null;
   category: VendorCategory | string;
+  services: string[];
   bio: string | null;
   location: string | null;
+  areas: string | null;
+  logo_url: string | null;
+  past_work: { url: string; caption: string | null }[];
   verified: boolean;
   /** The vendor's personal name. */
   name: string;
   initials: string;
+  rating: number | null;
+  reviews: number;
+  latest_review: VendorReviewLine | null;
   projects_completed: number;
   member_since: string | null;
 }
 
 export interface VendorDetail extends VendorListing {
-  /** Contact identifiers — used to assign this vendor to a project. */
   email: string;
   phone: string | null;
-  /** PRW-04 "14 projects · 52 milestones paid · 0 open disputes". */
+  /** PRW-04 / VND-02 "14 projects · 52 milestones paid · 0 open disputes". */
   stats?: { projects: number; milestones_paid: number; open_disputes: number };
+}
+
+export type VerificationItemStatus = 'todo' | 'pending' | 'approved' | 'redo' | 'waiting';
+
+/** VON-09 "Verification". */
+export interface VendorVerification {
+  status: VendorProfileStatus;
+  items: { item: 'owner' | 'id_document' | 'cac' | 'directors' | 'address' | 'bank'; label: string; sub: string; status: VerificationItemStatus; note: string | null }[];
+  needs_you: number;
+  ready: boolean;
+  documents: { id: number; item: string; name: string }[];
+  directors: { id: number; name: string; share_percent: number | null; is_owner: boolean; status: 'waiting' | 'submitted' | 'verified' }[];
+  has: Record<'bvn' | 'nin' | 'selfie' | 'id_front' | 'id_back' | 'cac_certificate' | 'cac_status_report' | 'address_proof', boolean>;
+}
+
+export type VendorProfileStatus = 'draft' | 'submitted' | 'needs_changes' | 'verified';
+
+/** The business's own view of its profile. */
+export interface MyVendorProfile extends VendorListing {
+  stats: { projects: number; milestones_paid: number; open_disputes: number };
+  status: VendorProfileStatus;
+  verification: VendorVerification;
+  id_type: 'passport' | 'drivers_licence' | 'voters_card' | 'national_id' | null;
+  address: string | null;
+  tin: string | null;
+  team_size: string | null;
+  auto_withdraw: boolean;
+  bank: { account_name: string | null; bank_name: string | null; bank_code: string | null; last4: string } | null;
+  submitted_at: string | null;
+  verified_at: string | null;
 }
 
 export interface VendorsPageData {
@@ -1974,14 +2251,84 @@ export interface VendorDetailData {
 }
 
 export interface MyVendorProfileData {
-  profile: VendorListing | null;
+  profile: MyVendorProfile | null;
 }
 
 export interface UpsertVendorPayload {
-  business_name: string;
-  category: VendorCategory | string;
+  business_name?: string;
+  rc_number?: string | null;
+  since_year?: number | null;
+  category?: VendorCategory | string;
+  services?: string[];
   bio?: string | null;
   location?: string | null;
+  areas?: string | null;
+  team_size?: string | null;
+}
+
+/** VDM-03 "NEEDS YOU". */
+export interface VendorNeed {
+  kind: 'invite' | 'change' | 'redo' | 'due' | 'dispute';
+  project_id: number;
+  milestone_id?: number;
+  dispute_id?: number;
+  title: string;
+  sub: string;
+}
+
+/** VDM-03 vendor home. */
+export interface VendorHomeData {
+  business: { id: number; name: string; initials: string; logo_url: string | null; status: VendorProfileStatus; verified: boolean } | null;
+  team_role: 'owner' | 'site_manager' | 'foreman' | 'accounts' | null;
+  paid_this_month: string;
+  waiting: string;
+  needs: VendorNeed[];
+  projects: { id: number; title: string; sub: string; vendor_status: VendorStatus; status: ProjectStatus; my_role: ProjectRole | null }[];
+}
+
+/** VDM-06 payouts. */
+export interface VendorPayouts {
+  available: string;
+  wallet_id: number | null;
+  held_back: string;
+  held_back_projects: number;
+  account: { name: string | null; bank_name: string | null; bank_code: string | null; last4: string; account_number: string } | null;
+  auto_withdraw: boolean;
+  can_be_paid: boolean;
+  recent: { id: number; title: string; kind: 'payout' | 'retention' | 'withdrawal'; amount: string; direction: 'credit' | 'debit'; date: string | null; status: string }[];
+}
+
+export type TeamRole = 'site_manager' | 'foreman' | 'accounts';
+
+/** VDM-10 / INV-VT1 a team member or an invite. */
+export interface TeamMember {
+  id: number;
+  name: string | null;
+  phone: string | null;
+  role: TeamRole;
+  role_label: string;
+  status: 'pending' | 'active' | 'declined' | 'removed';
+  projects: { id: number; title: string; location: string | null }[];
+  can: string;
+  cannot: string;
+  business: { id: number; name: string; owner: string | null } | null;
+  invited_at: string | null;
+}
+
+export interface VendorTeamData {
+  owner: { name: string };
+  members: TeamMember[];
+  projects: { id: number; title: string; location: string | null }[];
+}
+
+/** The project chat. */
+export interface ProjectMessage {
+  id: number;
+  body: string;
+  name: string;
+  initials: string;
+  mine: boolean;
+  created_at: string | null;
 }
 
 // ============================================================================

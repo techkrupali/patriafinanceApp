@@ -119,6 +119,31 @@ export function IconBuilding({ className }: { className?: string }) {
   );
 }
 
+/** Storefront — vendors (businesses families pay by milestone). */
+export function IconStore({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 9.5 5.5 5h13L20 9.5" />
+      <path d="M4 9.5c0 1.4 1.1 2.5 2.5 2.5S9 10.9 9 9.5c0 1.4 1.1 2.5 2.5 2.5h1c1.4 0 2.5-1.1 2.5-2.5 0 1.4 1.1 2.5 2.5 2.5S20 10.9 20 9.5" />
+      <path d="M5.5 12v7.5h13V12" />
+      <path d="M10 19.5v-4h4v4" />
+    </Svg>
+  );
+}
+
+/** Scales — disputes Patriai decides. */
+export function IconScale({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 4v16" />
+      <path d="M8 20h8" />
+      <path d="M5 7h14" />
+      <path d="m5 7-2.5 6a3 3 0 0 0 5 0L5 7Z" />
+      <path d="m19 7-2.5 6a3 3 0 0 0 5 0L19 7Z" />
+    </Svg>
+  );
+}
+
 /** Lifebuoy — emergency wallets. */
 export function IconEmergency({ className }: { className?: string }) {
   return (

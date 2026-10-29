@@ -480,22 +480,76 @@ abstract class ApiController extends Controller
 
     protected function serializeProject(Project $project, ?User $viewer = null): array
     {
+        $naira = fn (int $kobo) => number_format($kobo / 100, 2, '.', '');
+        $milestones = $project->relationLoaded('milestones') ? $project->milestones : $project->milestones()->orderBy('sequence')->get();
+        $planned = $milestones->whereNotIn('status', ['cancelled', 'proposed']);
+        $released = $planned->where('status', 'released');
+        $toReview = $planned->whereIn('status', ['submitted', 'approved']);
+        $retentionPct = (int) ($project->meta['release']['retention_percent'] ?? 0);
+        $profile = $project->vendor_id ? \App\Models\VendorProfile::where('user_id', $project->vendor_id)->first() : null;
+        $doneGross = (int) $released->sum(fn (Milestone $m) => $m->amount - (int) ($m->meta['refunded'] ?? 0));
+        $heldBack = $project->heldBack();
+        $retentionPaid = (int) $released->whereNotNull('retention_released_at')->sum('retention');
+        $paidSoFar = $doneGross - (int) $released->sum('retention') + $retentionPaid;
+        $balance = (int) ($project->wallet?->balance ?? 0);
+        $first = $planned->whereNotIn('status', ['released'])->sortBy('sequence')->first();
+        $phase = match (true) {
+            $project->status === 'completed' => 'done',
+            $project->status === 'cancelled' => 'cancelled',
+            $toReview->isNotEmpty() => 'to_review',
+            !$project->vendor_id || in_array($project->vendor_status, ['invited', 'changes_proposed', 'declined'], true) => 'planning',
+            $released->isEmpty() && $first && $first->status === 'planned' => 'saving',
+            default => 'in_progress',
+        };
+        $attention = $toReview->sortBy('sequence')->first();
+        $family = $project->owner?->last_name ? "{$project->owner->last_name} family" : $project->owner?->fullName();
+        $approvers = collect([$project->owner])->filter();
+        if ($project->wallet) {
+            $approvers = $approvers->merge(User::whereIn('id', $project->wallet->members()->where('status', 'active')->where('role', 'co_owner')->pluck('user_id'))->get());
+        }
+
         return [
             'id' => $project->id,
             'title' => $project->title,
             'description' => $project->description,
             'wallet_id' => $project->wallet_id,
             'wallet_balance' => $project->wallet ? $project->wallet->balanceNaira() : number_format(0, 2, '.', ''),
-            'budget' => number_format($project->budget / 100, 2, '.', ''),
-            'reserved' => number_format($project->reservedAmount() / 100, 2, '.', ''),
-            'available' => number_format($project->availableToAllocate() / 100, 2, '.', ''),
-            'released' => number_format($project->releasedAmount() / 100, 2, '.', ''),
+            'budget' => $naira($project->budget),
+            'target' => $project->wallet?->target_amount ? $naira((int) $project->wallet->target_amount) : $naira($project->budget),
+            'plan_total' => $naira((int) $planned->sum('amount')),
+            'reserved' => $naira($project->reservedAmount()),
+            'available' => $naira($project->availableToAllocate()),
+            'released' => $naira($project->releasedAmount()),
+            // PRJ-03 "Paid so far ₦2,700,000 · ₦3,000,000 of ₦6,800,000 done · ₦300,000 held back".
+            'paid_so_far' => $naira($paidSoFar),
+            'done_amount' => $naira($doneGross),
             'status' => $project->status,
-            'vendor' => $project->vendor ? ['id' => $project->vendor->id, 'name' => $project->vendor->fullName()] : null,
+            'phase' => $phase,
+            'to_review' => $toReview->count(),
+            'vendor_status' => $project->vendor_id ? ($project->vendor_status ?? 'accepted') : ($project->vendor_status === 'declined' ? 'declined' : null),
+            'vendor' => $project->vendor ? [
+                'id' => $project->vendor->id,
+                'name' => $profile?->business_name ?? $project->vendor->fullName(),
+                'person' => $project->vendor->fullName(),
+                'profile_id' => $profile?->id,
+                'verified' => (bool) $profile?->verified,
+                'account_last4' => $profile?->account_number ? substr($profile->account_number, -4) : null,
+            ] : null,
+            'vendor_declined' => $project->meta['vendor_declined'] ?? null,
+            'reinvite_on' => $project->meta['reinvite_on'] ?? null,
             'owner' => $project->owner ? ['id' => $project->owner->id, 'name' => $project->owner->fullName()] : null,
+            'family' => $family,
+            'approvers' => $approvers->unique('id')->map(fn (User $u) => ['id' => $u->id, 'name' => $u->fullName(), 'first_name' => $u->first_name])->values(),
             'my_role' => $viewer !== null ? $project->roleOf($viewer) : null,
-            'milestones_total' => (int) $project->milestones()->count(),
-            'milestones_released' => (int) $project->milestones()->where('status', 'released')->count(),
+            'milestones_total' => $planned->count(),
+            'milestones_released' => $released->count(),
+            // PRJ-03 "Adeyemi Builders finished tiling — check the photos and release ₦1,710,000".
+            'attention' => $attention ? [
+                'milestone_id' => $attention->id,
+                'title' => $attention->title,
+                'release_now' => $naira($attention->amount - intdiv($attention->amount * $retentionPct, 100)),
+                'status' => $attention->status,
+            ] : null,
             // PRW-01…06: what, where, when, the buffer and the release rules.
             'setup' => $project->meta ? [
                 'kind' => $project->meta['kind'] ?? null,
@@ -506,37 +560,110 @@ abstract class ApiController extends Controller
                 'release' => $project->meta['release'] ?? null,
                 'vendor_invite' => $project->meta['vendor_invite'] ?? null,
             ] : null,
-            'held_back' => number_format($project->heldBack() / 100, 2, '.', ''),
+            'held_back' => $naira($heldBack),
+            'in_wallet' => $naira($balance),
             'created_at' => $project->created_at?->toIso8601String(),
         ];
     }
 
     protected function serializeMilestone(Milestone $milestone): array
     {
+        $naira = fn (int $kobo) => number_format($kobo / 100, 2, '.', '');
+        $project = $milestone->project;
+        $retentionPct = (int) ($project?->meta['release']['retention_percent'] ?? 0);
+        $change = $milestone->change_request;
+        if ($change && isset($change['amount'])) {
+            $change['amount'] = $naira((int) $change['amount']);
+        }
+        $dispute = in_array($milestone->status, ['released', 'cancelled', 'proposed'], true) ? null : $milestone->activeDispute();
+
+        // PRJ-06/07 "0 of 2 · Ngozi and Chidi": who has said yes to this payout.
+        $approval = null;
+        if ($project && in_array($milestone->status, ['submitted', 'approved'], true)) {
+            $request = !empty($milestone->meta['approval_request_id']) ? ApprovalRequest::with('responses')->find($milestone->meta['approval_request_id']) : null;
+            $request = $request && $request->status === 'pending' ? $request : null;
+            $ids = collect([$project->owner_id])->merge($project->wallet?->members()->where('status', 'active')->where('role', 'co_owner')->pluck('user_id') ?? [])->unique();
+            $yes = $request ? collect([$request->initiator_id])->merge($request->responses->where('decision', 'approve')->pluck('approver_id')) : collect();
+            $people = User::whereIn('id', $ids)->get()->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : 1)->values();
+            $approval = [
+                'needs_all' => (bool) $project->wallet?->approval_enabled,
+                'required' => $project->wallet?->approval_enabled ? $people->count() : 1,
+                'yes' => $people->whereIn('id', $yes)->count(),
+                'request_id' => $request?->id,
+                'approvers' => $people->map(fn (User $u) => ['id' => $u->id, 'name' => $u->fullName(), 'first_name' => $u->first_name, 'said_yes' => $yes->contains($u->id), 'asked_at' => $request?->created_at?->toIso8601String()])->values(),
+            ];
+        }
+
         return [
             'id' => $milestone->id,
             'sequence' => (int) $milestone->sequence,
             'title' => $milestone->title,
             'description' => $milestone->description,
-            'amount' => number_format($milestone->amount / 100, 2, '.', ''),
+            'deliverables' => $milestone->deliverables ?? [],
+            'proof_needed' => $milestone->proof_needed,
+            'amount' => $naira($milestone->amount),
+            // PRJ-06 "₦1,710,000 now, ₦190,000 held back".
+            'release_now' => $naira($milestone->amount - intdiv($milestone->amount * $retentionPct, 100)),
+            'hold_back' => $naira(intdiv($milestone->amount * $retentionPct, 100)),
             'due_date' => $milestone->due_date?->toDateString(),
             'status' => $milestone->status,
+            'origin' => $milestone->origin ?? 'family',
+            'proposal' => $milestone->status === 'proposed' ? $this->proposal($milestone) : null,
+            'change_request' => $change,
             'proof' => $milestone->proof,
             'submitted_at' => $milestone->submitted_at?->toIso8601String(),
+            'submitted_by' => $milestone->submitted_by ? $milestone->submitter?->fullName() : null,
             'released_at' => $milestone->released_at?->toIso8601String(),
             'released_transaction_reference' => $milestone->released_transaction_reference,
+            'paid_now' => isset($milestone->meta['paid_now']) ? $naira((int) $milestone->meta['paid_now']) : null,
+            'refunded' => isset($milestone->meta['refunded']) ? $naira((int) $milestone->meta['refunded']) : null,
             'starts_on' => $milestone->meta['starts_on'] ?? null,
-            'retention' => number_format($milestone->retention / 100, 2, '.', ''),
+            'retention' => $naira((int) $milestone->retention),
             'retention_due_at' => $milestone->retention_due_at?->toIso8601String(),
             'retention_released_at' => $milestone->retention_released_at?->toIso8601String(),
+            'rejection' => $milestone->meta['rejection'] ?? null,
+            'approval' => $approval,
+            'dispute' => $dispute ? ['id' => $dispute->id, 'number' => $dispute->number, 'status' => $dispute->status] : null,
             'evidence' => $milestone->evidence->map(fn ($e) => [
                 'id' => $e->id,
                 'kind' => $e->kind,
                 'url' => $e->url,
+                'caption' => $e->caption,
                 'uploaded_by' => $e->user?->fullName(),
                 'created_at' => $e->created_at?->toIso8601String(),
             ])->values(),
             'created_at' => $milestone->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** PRJ-11 "New project total ₦7,450,000 · Was ₦6,800,000 · Funding gap ₦650,000". */
+    private function proposal(Milestone $milestone): array
+    {
+        $project = $milestone->project;
+        $was = (int) $project->milestones()->whereNotIn('status', ['cancelled', 'proposed'])->sum('amount');
+        $target = (int) ($project->wallet?->target_amount ?: $project->budget);
+        $naira = fn (int $k) => number_format($k / 100, 2, '.', '');
+
+        return [
+            'reason' => $milestone->meta['reason'] ?? null,
+            'why' => $milestone->meta['why'] ?? null,
+            'family_note' => $milestone->meta['family_note'] ?? null,
+            'by' => !empty($milestone->meta['proposed_by']) ? User::find($milestone->meta['proposed_by'])?->fullName() : null,
+            'was_total' => $naira($was),
+            'new_total' => $naira($was + $milestone->amount),
+            'funding_gap' => $naira(max(0, $was + $milestone->amount - max($target, $was))),
+        ];
+    }
+
+    protected function serializeDocument(\App\Models\ProjectDocument $doc): array
+    {
+        return [
+            'id' => $doc->id,
+            'kind' => $doc->kind,
+            'name' => $doc->name,
+            'url' => $doc->url,
+            'uploaded_by' => $doc->user?->fullName(),
+            'created_at' => $doc->created_at?->toIso8601String(),
         ];
     }
 

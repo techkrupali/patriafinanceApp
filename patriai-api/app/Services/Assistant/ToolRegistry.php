@@ -10,6 +10,7 @@ use App\Services\Assistant\Tools\CreateSupportRequestTool;
 use App\Services\Assistant\Tools\CreateTransferTool;
 use App\Services\Assistant\Tools\CreateWalletTool;
 use App\Services\Assistant\Tools\FindTransactionsTool;
+use App\Services\Assistant\Tools\FindVendorsTool;
 use App\Services\Assistant\Tools\FlagTransactionTool;
 use App\Services\Assistant\Tools\GroupTransactionsTool;
 use App\Services\Assistant\Tools\GetWalletsTool;
@@ -37,6 +38,7 @@ class ToolRegistry
         $this->register(new ApproveWithdrawalTool());
         $this->register(new FlagTransactionTool());
         $this->register(new CreateSupportRequestTool());
+        $this->register(new FindVendorsTool());
     }
 
     public function register(AssistantTool $tool): void

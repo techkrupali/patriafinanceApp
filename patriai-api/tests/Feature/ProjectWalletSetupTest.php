@@ -13,8 +13,10 @@ use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -33,6 +35,7 @@ class ProjectWalletSetupTest extends TestCase
         parent::setUp();
         Http::fake(fn () => Http::response(['status' => true, 'statuscode' => '00', 'data' => ['balance' => 0]]));
         Carbon::setTestNow(Carbon::parse('2026-10-28 10:00:00'));
+        Storage::fake('public');
     }
 
     protected function tearDown(): void
@@ -96,7 +99,8 @@ class ProjectWalletSetupTest extends TestCase
         $res = $this->postJson('/api/v1/projects', array_replace_recursive($payload, $overrides))->assertCreated()
             ->assertJsonPath('data.project.setup.kind', 'building')
             ->assertJsonPath('data.project.setup.release.retention_percent', 10)
-            ->assertJsonPath('data.project.vendor.name', 'Adeyemi Okafor')
+            ->assertJsonPath('data.project.vendor.name', 'Adeyemi Builders Ltd')
+            ->assertJsonPath('data.project.vendor_status', 'invited')
             ->assertJsonPath('data.wallet.target_amount', '19425000.00');
 
         return [Project::find($res->json('data.project.id')), $ngozi, $emeka, $emekaMain, $ada, $builder, $saved];
@@ -117,7 +121,7 @@ class ProjectWalletSetupTest extends TestCase
         // Ngozi's ₦700,000 each month; Emeka and Ada asked for theirs.
         $this->assertSame(70_000_000, AutomationRule::where('user_id', $ngozi->id)->where('to_wallet_id', $wallet->id)->sole()->amount);
         $this->assertSame(['co_owner', 'contributor'], WalletInvitation::where('wallet_id', $wallet->id)->orderBy('id')->pluck('role')->all());
-        $this->assertSame(1, AppNotification::where('user_id', $builder->id)->where('type', 'project_vendor_assigned')->count());
+        $this->assertSame(1, AppNotification::where('user_id', $builder->id)->where('type', 'project_vendor_invited')->count());
 
         // Emeka joins and his share starts; he can see the project.
         Sanctum::actingAs($emeka);
@@ -140,14 +144,23 @@ class ProjectWalletSetupTest extends TestCase
         $this->postJson('/api/v1/invitations/' . WalletInvitation::where('invitee_user_id', $emeka->id)->sole()->id . '/accept')->assertOk();
         [$foundation, $roofing] = $project->milestones()->orderBy('sequence')->get();
 
-        // A planned milestone is reserved when the builder submits, if the money is there.
+        // The builder accepts the milestones (INV-V2), then submits with the photos and video the release rules ask for.
         Sanctum::actingAs($builder);
+        $this->postJson("/api/v1/milestones/{$foundation->id}/submit", ['note' => 'Done'])->assertStatus(422);
+        $this->postJson("/api/v1/projects/{$project->id}/accept")->assertOk()->assertJsonPath('data.project.vendor_status', 'accepted');
+        // Once accepted, the money already in is set aside for the milestones in order (₦1,200,000 covers both).
+        $this->assertSame(['funded', 'funded'], $project->milestones()->orderBy('sequence')->pluck('status')->all());
+        $this->postJson("/api/v1/milestones/{$foundation->id}/submit", ['note' => 'Done'])->assertStatus(422)->assertJsonValidationErrors('evidence');
+        $this->proof($foundation);
         $this->postJson("/api/v1/milestones/{$foundation->id}/submit", ['proof' => 'Photos and a video walk-through'])->assertOk()->assertJsonPath('data.milestone.status', 'submitted');
-        $this->assertSame(100_000_000, $project->refresh()->reservedAmount());
+        $this->assertSame(120_000_000, $project->refresh()->reservedAmount());
 
-        // Ngozi says yes; it waits for Emeka.
+        // Ngozi says yes with her PIN; it waits for Emeka.
         Sanctum::actingAs($ngozi);
-        $this->postJson("/api/v1/milestones/{$foundation->id}/approve")->assertOk()->assertJsonPath('data.milestone.status', 'approved');
+        $this->postJson("/api/v1/milestones/{$foundation->id}/approve")->assertStatus(422)->assertJsonValidationErrors('pin');
+        $this->postJson("/api/v1/milestones/{$foundation->id}/approve", ['pin' => '9999'])->assertStatus(422);
+        $this->postJson("/api/v1/milestones/{$foundation->id}/approve", ['pin' => '1234'])->assertOk()->assertJsonPath('data.milestone.status', 'approved')
+            ->assertJsonPath('data.milestone.approval.yes', 1)->assertJsonPath('data.milestone.approval.required', 2);
         Sanctum::actingAs($emeka);
         $this->postJson('/api/v1/approvals/' . ApprovalRequest::sole()->id . '/respond', ['decision' => 'approve'])->assertOk();
         $foundation->refresh();
@@ -160,9 +173,10 @@ class ProjectWalletSetupTest extends TestCase
 
         // Roofing: not enough free money left for the next planned milestone? It's ₦200,000 of ₦1,100,000 left.
         Sanctum::actingAs($builder);
+        $this->proof($roofing);
         $this->postJson("/api/v1/milestones/{$roofing->id}/submit", ['proof' => 'Photos'])->assertOk();
         Sanctum::actingAs($ngozi);
-        $this->postJson("/api/v1/milestones/{$roofing->id}/approve")->assertOk();
+        $this->postJson("/api/v1/milestones/{$roofing->id}/approve", ['pin' => '1234'])->assertOk();
         Sanctum::actingAs($emeka);
         $this->postJson('/api/v1/approvals/' . ApprovalRequest::latest('id')->first()->id . '/respond', ['decision' => 'approve'])->assertOk();
 
@@ -183,7 +197,16 @@ class ProjectWalletSetupTest extends TestCase
         [$project, , , , , $builder] = $this->house(['move_in_wallet_id' => null]);
         $foundation = $project->milestones()->orderBy('sequence')->first();
         Sanctum::actingAs($builder);
-        $this->postJson("/api/v1/milestones/{$foundation->id}/submit", ['proof' => 'Photos'])->assertStatus(422);
+        $this->postJson("/api/v1/projects/{$project->id}/accept")->assertOk();
+        $this->proof($foundation);
+        $this->postJson("/api/v1/milestones/{$foundation->id}/submit", ['proof' => 'Photos'])->assertStatus(422)->assertJsonValidationErrors('milestone');
+    }
+
+    /** The photos and the video walk-through the release rules ask for. */
+    private function proof(Milestone $milestone): void
+    {
+        $this->post("/api/v1/milestones/{$milestone->id}/evidence", ['file' => UploadedFile::fake()->image('floor.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->post("/api/v1/milestones/{$milestone->id}/evidence", ['file' => UploadedFile::fake()->create('walk.mp4', 200, 'video/mp4')], ['Accept' => 'application/json'])->assertOk();
     }
 
     public function test_milestones_cant_be_more_than_the_budget_and_buffer(): void

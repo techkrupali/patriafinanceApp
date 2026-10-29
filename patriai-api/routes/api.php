@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminController;
+use App\Http\Controllers\Api\Admin\DisputeAdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
 use App\Http\Controllers\Api\Admin\OrganisationAdminController;
+use App\Http\Controllers\Api\Admin\VendorAdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AuthController;
@@ -28,6 +30,7 @@ use App\Http\Controllers\Api\OrganisationController;
 use App\Http\Controllers\Api\PhoneAuthController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ProjectFlowController;
 use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\SavedAccountController;
 use App\Http\Controllers\Api\SavingsController;
@@ -239,10 +242,15 @@ Route::prefix('v1')->group(function () {
         Route::get('referrals', [ReferralController::class, 'index']);
         Route::post('referrals/apply', [ReferralController::class, 'apply'])->middleware('throttle:10,1');
 
-        // Dispute Center (report a problem with a payment/project)
+        // Disputes (DSP-01…09): a milestone's payment waits while the builder answers; Patriai decides if they can't agree.
         Route::get('disputes', [DisputeController::class, 'index']);
-        Route::post('disputes', [DisputeController::class, 'store'])->middleware('throttle:20,1');
+        Route::post('disputes', [DisputeController::class, 'store'])->middleware('throttle:30,1,dispute');
         Route::get('disputes/{dispute}', [DisputeController::class, 'show']);
+        Route::post('disputes/{dispute}/files', [DisputeController::class, 'addFile'])->middleware('throttle:30,1,dispute-files');
+        Route::post('disputes/{dispute}/respond', [DisputeController::class, 'respond'])->middleware('throttle:30,1,dispute');
+        Route::post('disputes/{dispute}/messages', [DisputeController::class, 'message'])->middleware('throttle:60,1,dispute-chat');
+        Route::post('disputes/{dispute}/offers/{message}/answer', [DisputeController::class, 'answerOffer'])->middleware('throttle:30,1,dispute');
+        Route::post('disputes/{dispute}/escalate', [DisputeController::class, 'escalate'])->middleware('throttle:30,1,dispute');
 
         // Loans (Patria Lending)
         Route::get('loans', [LoanController::class, 'index']);
@@ -252,26 +260,72 @@ Route::prefix('v1')->group(function () {
         Route::post('loans/{loan}/repay', [LoanController::class, 'repay'])->middleware('throttle:15,1');
         Route::post('loans/{loan}/cancel', [LoanController::class, 'cancel'])->middleware('throttle:30,1');
 
-        // Vendor Directory (browse/search vendors, then assign via projects/{project}/vendor).
-        // NOTE: vendors/me MUST come before vendors/{vendorProfile} (route-model-binding).
+        // Vendor Directory (VND-01/02/04: browse, a profile, rate) and a business account (VDM-01, VON-01…10).
+        // NOTE: vendors/me… MUST come before vendors/{vendorProfile} (route-model-binding).
         Route::get('vendors', [VendorController::class, 'index']);
         Route::get('vendors/me', [VendorController::class, 'me']);
-        Route::put('vendors/me', [VendorController::class, 'upsert'])->middleware('throttle:20,1');
+        Route::put('vendors/me', [VendorController::class, 'upsert'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/owner', [VendorController::class, 'owner'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/documents', [VendorController::class, 'uploadDocument'])->middleware('throttle:60,1,vendor-setup');
+        Route::delete('vendors/me/documents/{document}', [VendorController::class, 'deleteDocument'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/directors', [VendorController::class, 'addDirector'])->middleware('throttle:10,1,vendor-directors');
+        Route::delete('vendors/me/directors/{director}', [VendorController::class, 'removeDirector'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/address', [VendorController::class, 'address'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/bank', [VendorController::class, 'bank'])->middleware('throttle:10,1,vendor-bank');
+        Route::patch('vendors/me/payouts', [VendorController::class, 'payoutSettings'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/logo', [VendorController::class, 'logo'])->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/past-work', [VendorController::class, 'addPastWork'])->middleware('throttle:60,1,vendor-setup');
+        Route::delete('vendors/me/past-work/{index}', [VendorController::class, 'removePastWork'])->whereNumber('index')->middleware('throttle:60,1,vendor-setup');
+        Route::post('vendors/me/submit', [VendorController::class, 'submit'])->middleware('throttle:10,1,vendor-submit');
+        Route::get('vendors/me/team', [VendorController::class, 'team']);
+        Route::post('vendors/me/team', [VendorController::class, 'invite'])->middleware('throttle:30,1,vendor-team');
+        Route::patch('vendors/me/team/{member}', [VendorController::class, 'updateMember'])->middleware('throttle:30,1,vendor-team');
+        Route::delete('vendors/me/team/{member}', [VendorController::class, 'removeMember'])->middleware('throttle:30,1,vendor-team');
         Route::get('vendors/{vendorProfile}', [VendorController::class, 'show']);
+        Route::get('vendors/{vendorProfile}/reviews', [VendorController::class, 'reviews']);
+        Route::post('vendors/{vendorProfile}/reviews', [VendorController::class, 'review'])->middleware('throttle:10,1,vendor-review');
+
+        // Vendor mode (VDM-03 home, VDM-06 payouts, VDM-08 disputes) and joining a builder's team (INV-VT1).
+        Route::get('vendor/home', [VendorController::class, 'home']);
+        Route::get('vendor/payouts', [VendorController::class, 'payouts']);
+        Route::get('vendor/disputes', [VendorController::class, 'disputes']);
+        Route::get('team-invites', [VendorController::class, 'teamInvites']);
+        Route::post('team-invites/{member}/answer', [VendorController::class, 'answerTeamInvite'])->middleware('throttle:30,1,vendor-team');
 
         // Vendor & Project System (escrow-backed milestones)
         Route::get('projects', [ProjectController::class, 'index']);
-        Route::post('projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
+        Route::post('projects', [ProjectController::class, 'store'])->middleware('throttle:20,1,project-setup');
         Route::get('projects/{project}', [ProjectController::class, 'show']);
-        Route::post('projects/{project}/cancel', [ProjectController::class, 'cancel'])->middleware('throttle:30,1');
-        Route::post('projects/{project}/vendor', [ProjectController::class, 'assignVendor'])->middleware('throttle:30,1');
-        Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1');
-        Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1');
-        Route::delete('milestones/{milestone}', [ProjectController::class, 'removeMilestone'])->middleware('throttle:30,1');
-        Route::post('milestones/{milestone}/evidence', [MilestoneController::class, 'uploadEvidence'])->middleware('throttle:20,1');
-        Route::post('milestones/{milestone}/submit', [MilestoneController::class, 'submit'])->middleware('throttle:20,1');
-        Route::post('milestones/{milestone}/approve', [MilestoneController::class, 'approve'])->middleware('throttle:20,1');
-        Route::post('milestones/{milestone}/reject', [MilestoneController::class, 'reject'])->middleware('throttle:30,1');
+        Route::post('projects/{project}/cancel', [ProjectController::class, 'cancel'])->middleware('throttle:30,1,project-owner');
+        Route::post('projects/{project}/vendor', [ProjectController::class, 'assignVendor'])->middleware('throttle:30,1,project-owner');
+        Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1,project-owner');
+        Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1,project-owner');
+        Route::delete('milestones/{milestone}', [ProjectController::class, 'removeMilestone'])->middleware('throttle:30,1,project-owner');
+        Route::post('milestones/{milestone}/evidence', [MilestoneController::class, 'uploadEvidence'])->middleware('throttle:60,1,milestone-evidence');
+        Route::post('milestones/{milestone}/submit', [MilestoneController::class, 'submit'])->middleware('throttle:30,1,milestone-review');
+        Route::post('milestones/{milestone}/approve', [MilestoneController::class, 'approve'])->middleware('throttle:30,1,milestone-review');
+        Route::post('milestones/{milestone}/reject', [MilestoneController::class, 'reject'])->middleware('throttle:30,1,milestone-review');
+        Route::delete('milestones/{milestone}/evidence/{evidence}', [MilestoneController::class, 'deleteEvidence'])->middleware('throttle:60,1,milestone-evidence');
+
+        // The family and the builder working on a project: the invitation (INV-V1…V5, PRJ-12), the builder's
+        // new milestones (VDM-09, PRJ-11), the family's edits (PRJ-05), deliverables, documents (PRJ-09), chat.
+        Route::post('projects/{project}/accept', [ProjectFlowController::class, 'accept'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/decline', [ProjectFlowController::class, 'decline'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/send-changes', [ProjectFlowController::class, 'sendChanges'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/changes/answer', [ProjectFlowController::class, 'answerChanges'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/reinvite-reminder', [ProjectFlowController::class, 'remindReinvite'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/milestones/propose', [ProjectFlowController::class, 'propose'])->middleware('throttle:60,1,project-flow');
+        Route::post('projects/{project}/documents', [ProjectFlowController::class, 'uploadDocument'])->middleware('throttle:60,1,project-flow');
+        Route::delete('projects/{project}/documents/{document}', [ProjectFlowController::class, 'deleteDocument'])->middleware('throttle:60,1,project-flow');
+        Route::get('projects/{project}/messages', [ProjectFlowController::class, 'messages']);
+        Route::post('projects/{project}/messages', [ProjectFlowController::class, 'send'])->middleware('throttle:60,1,project-chat');
+        Route::post('milestones/{milestone}/change', [ProjectFlowController::class, 'askChange'])->middleware('throttle:60,1,project-flow');
+        Route::delete('milestones/{milestone}/change', [ProjectFlowController::class, 'clearChange'])->middleware('throttle:30,1,project-flow');
+        Route::patch('milestones/{milestone}/proposal', [ProjectFlowController::class, 'updateProposal'])->middleware('throttle:60,1,project-flow');
+        Route::post('milestones/{milestone}/proposal/answer', [ProjectFlowController::class, 'answerProposal'])->middleware('throttle:60,1,project-flow');
+        Route::patch('milestones/{milestone}', [ProjectFlowController::class, 'edit'])->middleware('throttle:30,1,project-flow');
+        Route::post('milestones/{milestone}/family-change/answer', [ProjectFlowController::class, 'answerFamilyChange'])->middleware('throttle:60,1,project-flow');
+        Route::patch('milestones/{milestone}/deliverables', [ProjectFlowController::class, 'tick'])->middleware('throttle:60,1,project-flow');
 
         // ---- Admin ----
         Route::prefix('admin')->middleware('admin')->group(function () {
@@ -311,6 +365,19 @@ Route::prefix('v1')->group(function () {
             // Projects (Vendor & Project System)
             Route::get('projects', [AdminController::class, 'projects']);
             Route::get('projects/{project}', [AdminController::class, 'projectShow']);
+
+            // Vendors: verify a business item by item (VON-09) and grant the badge.
+            Route::get('vendors', [VendorAdminController::class, 'index']);
+            Route::get('vendors/{vendorProfile}', [VendorAdminController::class, 'show']);
+            Route::get('vendors/{vendorProfile}/documents/{document}', [VendorAdminController::class, 'document']);
+            Route::get('vendors/{vendorProfile}/directors/{director}/selfie', [VendorAdminController::class, 'selfie']);
+            Route::post('vendors/{vendorProfile}/review', [VendorAdminController::class, 'review'])->middleware('throttle:60,1,admin-vendor-review');
+
+            // Disputes: Patriai's decision when the two sides can't agree (DSP-08/09).
+            Route::get('disputes', [DisputeAdminController::class, 'index']);
+            Route::get('disputes/{dispute}', [DisputeAdminController::class, 'show']);
+            Route::post('disputes/{dispute}/decide', [DisputeAdminController::class, 'decide'])->middleware('throttle:30,1,admin-dispute');
+            Route::post('disputes/{dispute}/messages', [DisputeAdminController::class, 'message'])->middleware('throttle:60,1,admin-dispute');
 
             // KYC & Compliance (tier verification)
             Route::get('kyc', [AdminController::class, 'kyc']);

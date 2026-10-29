@@ -56,6 +56,26 @@ const STATUS_TONES: Record<string, Tone> = {
   funded: "blue",
   submitted: "amber",
   planned: "gray",
+  // Vendors (VON-09)
+  verified: "green",
+  needs_changes: "red",
+  draft: "gray",
+  redo: "red",
+  waiting: "amber",
+  todo: "gray",
+  // Disputes
+  open: "amber",
+  responded: "blue",
+  fixing: "blue",
+  escalated: "red",
+  under_review: "amber",
+  resolved: "green",
+  // A builder's answer to the invitation
+  invited: "amber",
+  changes_proposed: "amber",
+  accepted: "green",
+  declined: "red",
+  proposed: "blue",
 };
 
 /** Badge that picks its tone from a known status string. */

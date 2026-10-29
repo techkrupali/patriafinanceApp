@@ -35,8 +35,6 @@ import type {
   AutomationRunData,
   AutomationsData,
   HomeData,
-  DisputeCreatedData,
-  DisputesPageData,
   EmergencyDetailData,
   EmergencyDocumentType,
   EmergencyRequest,
@@ -50,7 +48,6 @@ import type {
   WalletDraftsData,
   FamilyMemberDetailData,
   PendingApprovalData,
-  RaiseDisputePayload,
   MyVendorProfileData,
   ReferralData,
   SpendRequestPayload,
@@ -867,107 +864,7 @@ export function useCancelProject(projectId: number) {
   });
 }
 
-export function useAssignVendor(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: AssignVendorPayload) =>
-      api<ProjectMutatedData>(`/projects/${projectId}/vendor`, { method: 'POST', body: input }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
-export function useRemoveVendor(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      api<ProjectMutatedData>(`/projects/${projectId}/vendor`, { method: 'DELETE' }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
-export function useAddMilestone(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: AddMilestonePayload) =>
-      api<MilestoneCreatedData>(`/projects/${projectId}/milestones`, {
-        method: 'POST',
-        body: input,
-      }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
-export function useRemoveMilestone(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (milestoneId: number) =>
-      api(`/milestones/${milestoneId}`, { method: 'DELETE' }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
-export function useSubmitMilestone(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { milestoneId: number; proof: string }) =>
-      api<MilestoneData>(`/milestones/${input.milestoneId}/submit`, {
-        method: 'POST',
-        body: { proof: input.proof },
-      }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
 /** Upload image/video evidence (multipart) to a milestone. */
-export function useUploadMilestoneEvidence(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: {
-      milestoneId: number;
-      asset: { uri: string; fileName?: string | null; mimeType?: string | null };
-    }) => {
-      const { asset } = input;
-      const ext = asset.mimeType?.split('/')[1] || asset.uri.split('.').pop() || 'jpg';
-      const form = new FormData();
-      form.append('file', {
-        uri: asset.uri,
-        name: asset.fileName || `evidence.${ext}`,
-        type: asset.mimeType || 'image/jpeg',
-      } as unknown as Blob);
-      return api<MilestoneData>(`/milestones/${input.milestoneId}/evidence`, {
-        method: 'POST',
-        body: form,
-      });
-    },
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
-export function useApproveMilestone(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (milestoneId: number) =>
-      api<MilestoneApprovedData>(`/milestones/${milestoneId}/approve`, { method: 'POST' }),
-    onSuccess: () => {
-      invalidateProject(qc, projectId);
-      // Escrow → vendor: balances moved, refresh every wallet query + the list.
-      void qc.invalidateQueries({ queryKey: keys.wallets });
-    },
-  });
-}
-
-export function useRejectMilestone(projectId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { milestoneId: number; note?: string }) =>
-      api<MilestoneData>(`/milestones/${input.milestoneId}/reject`, {
-        method: 'POST',
-        body: { note: input.note },
-      }),
-    onSuccess: () => invalidateProject(qc, projectId),
-  });
-}
-
 // ---------- KYC & compliance (Milestone 6 — progressive identity tiers) ----------
 
 export function useKyc() {
@@ -1211,31 +1108,7 @@ export function useWalletDeletion(walletId: number) {
   return { archive, unarchive, remove };
 }
 
-// ---------- Dispute Center ----------
-
-export function useDisputes() {
-  return useInfiniteQuery({
-    queryKey: keys.disputes,
-    queryFn: ({ pageParam }) =>
-      api<DisputesPageData>(`/disputes?page=${pageParam}&per_page=20`),
-    initialPageParam: 1,
-    getNextPageParam: (last) =>
-      last.pagination.page < last.pagination.last_page ? last.pagination.page + 1 : undefined,
-  });
-}
-
-export function useRaiseDispute() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: RaiseDisputePayload) =>
-      api<DisputeCreatedData>('/disputes', { method: 'POST', body: input }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: keys.disputes });
-      void qc.invalidateQueries({ queryKey: keys.notifications });
-      void qc.invalidateQueries({ queryKey: keys.unreadCount });
-    },
-  });
-}
+// Disputes: see projectFlow.ts (DSP-01…09).
 
 // ---------- Referral & Rewards ----------
 
@@ -1295,19 +1168,6 @@ export function useMyVendorProfile() {
   return useQuery({
     queryKey: keys.myVendorProfile,
     queryFn: () => api<MyVendorProfileData>('/vendors/me'),
-  });
-}
-
-/** Create or update the user's own vendor profile ("Become a vendor"). */
-export function useUpsertVendorProfile() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: UpsertVendorPayload) =>
-      api<MyVendorProfileData>('/vendors/me', { method: 'PUT', body: input }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: keys.myVendorProfile });
-      void qc.invalidateQueries({ queryKey: ['vendors'] });
-    },
   });
 }
 

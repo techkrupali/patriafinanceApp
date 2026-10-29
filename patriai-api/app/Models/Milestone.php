@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A single milestone within a Project. Its amount is a reservation against the
- * project's escrow wallet. Lifecycle: planned (PRW-03, set up before the money
- * is in; reserved once the builder submits) | funded -> submitted ->
- * approved/released (money moves to the vendor, less any retention held until
- * after handover) | rejected (back to funded for revision).
+ * project's escrow wallet. Lifecycle: proposed (VDM-09, added by the builder,
+ * waiting for the family) | planned (PRW-03, set up before the money is in;
+ * reserved once the builder submits) | funded -> submitted -> approved/released
+ * (money moves to the vendor, less any retention held until after handover) |
+ * rejected (back to funded for revision) | cancelled (a dispute refunded it).
  */
 class Milestone extends Model
 {
@@ -20,12 +21,17 @@ class Milestone extends Model
         'sequence',
         'title',
         'description',
+        'deliverables',
+        'proof_needed',
+        'change_request',
+        'origin',
         'amount',
         'retention',
         'due_date',
         'status',
         'proof',
         'submitted_at',
+        'submitted_by',
         'released_at',
         'retention_due_at',
         'retention_released_at',
@@ -44,6 +50,8 @@ class Milestone extends Model
             'retention_due_at' => 'datetime',
             'retention_released_at' => 'datetime',
             'meta' => 'array',
+            'deliverables' => 'array',
+            'change_request' => 'array',
         ];
     }
 
@@ -55,5 +63,21 @@ class Milestone extends Model
     public function evidence(): HasMany
     {
         return $this->hasMany(MilestoneEvidence::class)->latest();
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(Dispute::class);
+    }
+
+    /** DSP-02 "Opening a dispute puts the milestone payment on hold until it is sorted." */
+    public function activeDispute(): ?Dispute
+    {
+        return $this->disputes()->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review'])->latest('id')->first();
     }
 }

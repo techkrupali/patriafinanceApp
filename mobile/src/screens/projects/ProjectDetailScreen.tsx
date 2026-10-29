@@ -1,748 +1,296 @@
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Clipboard from 'expo-clipboard';
-import * as ImagePicker from 'expo-image-picker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
-import { LoadError } from '../../components/LoadError';
-import { ErrorText } from '../../components/ErrorText';
-import { colors, gradients, radius } from '../../theme';
-import {
-  useApproveMilestone,
-  useCancelProject,
-  useProject,
-  useRejectMilestone,
-  useRemoveMilestone,
-  useRemoveVendor,
-  useSubmitMilestone,
-  useUploadMilestoneEvidence,
-} from '../../api/hooks';
-import { statusIconColor } from '../../lib/governance';
-import { formatMoney, dayLabel } from '../../lib/format';
+import React, { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { useCancelProject, useProject } from '../../api/hooks';
+import { useAnswerVendorChanges, useRemindReinvite } from '../../api/projectFlow';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtAvatar } from '../../components/pt/PtAvatar';
+import { PtChoiceCard, PtNote, PtPanel, PtReviewRow } from '../../components/pt/PtForm';
+import { PtSectionTitle } from '../../components/pt/PtList';
+import { ActionTiles, AttentionCard, LoadingBlock, MoneyTiles, ProgressLine } from '../../components/project/ProjectUi';
+import { formatNaira, formatYmd, initials } from '../../lib/format';
+import { DECLINE_REASONS, isVendorSide, milestoneChip, monthName, namesList, townOf } from '../../lib/projects';
 import { selection } from '../../lib/haptics';
-import {
-  canRemoveMilestone,
-  canReviewMilestone,
-  canSubmitMilestone,
-  milestoneStatusVisual,
-  projectStatusVisual,
-} from '../../lib/projects';
-import type { Milestone } from '../../api/types';
+import { showAlert } from '../../lib/alert';
+import type { Milestone, ProjectDetailData } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type SheetKind = 'submit' | 'reject';
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-1">
-      <Text className="text-[10px] font-bold uppercase tracking-wider text-white/50">{label}</Text>
-      <Text className="mt-1 text-[15px] font-extrabold text-white" numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-/** Green action pill — icon over an uppercase label (Fund / Withdraw / …). */
-function ProjAction({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onPress();
-      }}
-      className="flex-1 items-center justify-center rounded bg-[#0B5D4B] py-4 active:opacity-90"
-    >
-      <Ionicons name={icon} size={22} color={colors.white} />
-      <Text numberOfLines={1} className="mt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-white">
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function MilestoneCard({
-  milestone,
-  isOwner,
-  isVendor,
-  onApprove,
-  onReject,
-  onRemove,
-  onSubmit,
-  onAddEvidence,
-  busy,
-  evidenceBusy,
-}: {
-  milestone: Milestone;
-  isOwner: boolean;
-  isVendor: boolean;
-  onApprove: (m: Milestone) => void;
-  onReject: (m: Milestone) => void;
-  onRemove: (m: Milestone) => void;
-  onSubmit: (m: Milestone) => void;
-  onAddEvidence: (m: Milestone) => void;
-  busy: boolean;
-  evidenceBusy: boolean;
-}) {
-  const status = milestoneStatusVisual(milestone.status);
-  const showApprove = isOwner && canReviewMilestone(milestone.status);
-  const showRemove = isOwner && canRemoveMilestone(milestone.status);
-  const showSubmit = isVendor && canSubmitMilestone(milestone.status);
-  // Members can attach evidence until the milestone is paid out.
-  const canAddEvidence = (isOwner || isVendor) && milestone.status !== 'released';
-
-  return (
-    <Card className="py-4">
-      <View className="flex-row items-center">
-        <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-lav-soft">
-          <Text className="text-xs font-bold text-navy">{milestone.sequence}</Text>
-        </View>
-        <View className="flex-1 pr-2">
-          <Text className="text-[15px] font-bold text-ink" numberOfLines={2}>
-            {milestone.title}
-          </Text>
-        </View>
-        <Text className="text-[15px] font-extrabold text-ink">{formatMoney(milestone.amount)}</Text>
-      </View>
-
-      <View className="mt-2 flex-row items-center" style={{ gap: 8 }}>
-        <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
-          <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
-          <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
-        </View>
-        {milestone.due_date ? (
-          <View className="flex-row items-center rounded bg-lav-faint px-2.5 py-1">
-            <Ionicons name="calendar-outline" size={11} color={colors.muted} style={{ marginRight: 4 }} />
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-              Due {dayLabel(milestone.due_date)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {milestone.description ? (
-        <Text className="mt-2.5 text-[13px] leading-5 text-muted">{milestone.description}</Text>
-      ) : null}
-
-      {milestone.proof ? (
-        <View className="mt-3 rounded bg-lav-faint p-3.5">
-          <Text className="text-[12px] font-bold text-muted">Vendor’s Proof of Work</Text>
-          <Text className="mt-1 text-[13px] leading-5 text-ink">{milestone.proof}</Text>
-        </View>
-      ) : null}
-
-      {/* Evidence (images / videos) */}
-      {milestone.evidence.length > 0 || canAddEvidence ? (
-        <View className="mt-3">
-          <Text className="text-[12px] font-bold text-muted">Evidence</Text>
-          <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
-            {milestone.evidence.map((ev) => (
-              <View key={ev.id} className="h-16 w-16 overflow-hidden rounded bg-lav-faint">
-                {ev.kind === 'image' ? (
-                  <Image source={{ uri: ev.url }} style={{ width: 64, height: 64 }} />
-                ) : (
-                  <View className="h-16 w-16 items-center justify-center">
-                    <Ionicons name="videocam" size={22} color={colors.navy} />
-                  </View>
-                )}
-              </View>
-            ))}
-            {canAddEvidence ? (
-              <Pressable
-                onPress={() => onAddEvidence(milestone)}
-                disabled={evidenceBusy}
-                className="h-16 w-16 items-center justify-center rounded border border-dashed active:opacity-70"
-                style={{ borderColor: colors.border }}
-              >
-                {evidenceBusy ? (
-                  <ActivityIndicator color={colors.navy} />
-                ) : (
-                  <Ionicons name="add" size={22} color={colors.muted} />
-                )}
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
-
-      {milestone.status === 'released' && milestone.released_transaction_reference ? (
-        <View className="mt-3 flex-row items-center">
-          <Ionicons name="checkmark-done-circle" size={14} color={colors.brand} style={{ marginRight: 5 }} />
-          <Text className="text-[12px] font-semibold text-brand">
-            Paid · Ref {milestone.released_transaction_reference}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Role-based actions */}
-      {showApprove ? (
-        <View className="mt-4 flex-row" style={{ gap: 8 }}>
-          <View className="flex-1">
-            <Button
-              title="Approve & pay"
-              icon="checkmark"
-              iconPosition="left"
-              onPress={() => onApprove(milestone)}
-              loading={busy}
-            />
-          </View>
-          <View className="flex-1">
-            <Button
-              title="Reject"
-              variant="danger"
-              icon="close"
-              iconPosition="left"
-              onPress={() => onReject(milestone)}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      {showRemove ? (
-        <Button
-          title="Remove milestone"
-          variant="ghost"
-          icon="trash-outline"
-          iconPosition="left"
-          onPress={() => onRemove(milestone)}
-          loading={busy}
-          className="mt-3"
-        />
-      ) : null}
-
-      {showSubmit ? (
-        <Button
-          title={milestone.status === 'rejected' ? 'Resubmit work' : 'Submit work'}
-          icon="cloud-upload-outline"
-          iconPosition="left"
-          onPress={() => onSubmit(milestone)}
-          className="mt-4"
-        />
-      ) : null}
-    </Card>
-  );
-}
-
+/**
+ * PRJ-03 Project detail: what's in the wallet and what's been paid, what needs
+ * the family now, the milestones, and Money · Chat · Budget · Documents. With
+ * no builder (they declined) it's PRJ-12.
+ */
 export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'ProjectDetail'>) {
   const { projectId } = route.params;
-  const insets = useSafeAreaInsets();
   const query = useProject(projectId);
-
-  const approve = useApproveMilestone(projectId);
-  const reject = useRejectMilestone(projectId);
-  const remove = useRemoveMilestone(projectId);
-  const submit = useSubmitMilestone(projectId);
-  const removeVendor = useRemoveVendor(projectId);
-  const cancelProject = useCancelProject(projectId);
-  const uploadEvidence = useUploadMilestoneEvidence(projectId);
-
-  const [copied, setCopied] = useState(false);
-  const [sheet, setSheet] = useState<{ kind: SheetKind; milestone: Milestone } | null>(null);
-  const [sheetText, setSheetText] = useState('');
-  const [sheetError, setSheetError] = useState<string | null>(null);
-  // Only the milestone being approved/removed should show a spinner, not all cards.
-  const [busyMilestoneId, setBusyMilestoneId] = useState<number | null>(null);
-  const [evidenceMilestoneId, setEvidenceMilestoneId] = useState<number | null>(null);
-
-  const addEvidence = async (milestone: Milestone) => {
-    selection();
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo/video access to attach evidence.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
-    setEvidenceMilestoneId(milestone.id);
-    uploadEvidence.mutate(
-      { milestoneId: milestone.id, asset: { uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType } },
-      {
-        onError: (e) => Alert.alert('Upload failed', e.message),
-        onSettled: () => setEvidenceMilestoneId(null),
-      },
-    );
-  };
-
   const data = query.data;
-  const project = data?.project;
-  const wallet = data?.wallet;
-  const milestones = data?.milestones ?? [];
-  const role = data?.my_role ?? project?.my_role ?? null;
-  const isOwner = role === 'owner';
-  const isVendor = role === 'vendor';
-  const vendorContact = data?.vendor;
-  const status = project ? projectStatusVisual(project.status) : null;
+  const vendorSide = isVendorSide(data?.my_role);
 
-  // The owner can cancel an active project only while nothing is in-flight
-  // (submitted/approved) or already released from escrow.
-  const hasBlockingMilestones = milestones.some(
-    (m) => m.status === 'submitted' || m.status === 'approved' || m.status === 'released',
-  );
-  const canCancel = isOwner && project?.status === 'active' && !hasBlockingMilestones;
+  // The builder and their team have their own view of a project (VDM-04, INV-V1).
+  useEffect(() => {
+    if (!data || !vendorSide) return;
+    const invited = data.project.vendor_status === 'invited' || data.project.vendor_status === 'changes_proposed';
+    navigation.replace(invited ? 'ProjectInvite' : 'VendorProject', { projectId });
+  }, [data, vendorSide, navigation, projectId]);
 
-  const copyAccount = async () => {
-    if (!wallet?.virtual_account) return;
-    selection();
-    await Clipboard.setStringAsync(wallet.virtual_account);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-
-  const confirmApprove = (m: Milestone) => {
-    Alert.alert(
-      'Approve milestone',
-      `This releases ${formatMoney(m.amount)} from escrow to the vendor. This can’t be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve & pay',
-          onPress: () => {
-            setBusyMilestoneId(m.id);
-            approve.mutate(m.id, {
-              onError: (e) => Alert.alert('Could not approve', e.message),
-              onSettled: () => setBusyMilestoneId(null),
-            });
-          },
-        },
-      ],
+  if (!data || vendorSide) {
+    return (
+      <PtPageScreen title="Project" onBack={() => navigation.goBack()}>
+        <LoadingBlock error={query.error ? (query.error as Error).message : null} onRetry={() => void query.refetch()} />
+      </PtPageScreen>
     );
+  }
+  if (!data.project.vendor && data.project.vendor_declined) {
+    return <BuilderDeclined data={data} navigation={navigation} />;
+  }
+  return <Detail data={data} navigation={navigation} refreshing={query.isRefetching} />;
+}
+
+type Nav = RootScreenProps<'ProjectDetail'>['navigation'];
+
+function Detail({ data, navigation }: { data: ProjectDetailData; navigation: Nav; refreshing: boolean }) {
+  const { project: p, milestones } = data;
+  const answer = useAnswerVendorChanges(p.id);
+  const cancel = useCancelProject(p.id);
+  const cancellable = data.can.invite_vendor && p.status === 'active' && !milestones.some((m) => ['submitted', 'approved', 'released'].includes(m.status));
+  const planned = milestones.filter((m) => m.status !== 'proposed' && m.status !== 'cancelled');
+  const proposed = milestones.filter((m) => m.status === 'proposed' && !m.proposal?.family_note);
+  const vendorChanges = milestones.filter((m) => m.change_request?.by === 'vendor');
+  const disputed = milestones.find((m) => m.dispute && m.status !== 'released');
+  const vendorName = p.vendor?.name ?? 'The builder';
+  const total = Number(p.plan_total) || Number(p.budget);
+  // The latest paid milestone not rated yet (VND-04 "After: Tiling and plaster").
+  const toRate = [...milestones].reverse().find((m) => m.status === 'released' && !data.reviewed_milestones.includes(m.id));
+
+  const openMilestone = (m: Milestone) => {
+    if (m.status === 'submitted' || m.status === 'approved') navigation.navigate('ReviewMilestone', { projectId: p.id, milestoneId: m.id });
+    else if (m.status === 'proposed') navigation.navigate('ApproveProposal', { projectId: p.id, milestoneId: m.id });
+    else navigation.navigate('Milestones', { projectId: p.id });
   };
 
-  const confirmRemove = (m: Milestone) => {
-    Alert.alert(
-      'Remove milestone',
-      `Remove “${m.title}”? The reserved ${formatMoney(m.amount)} returns to your available escrow.`,
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            setBusyMilestoneId(m.id);
-            remove.mutate(m.id, {
-              onError: (e) => Alert.alert('Could not remove', e.message),
-              onSettled: () => setBusyMilestoneId(null),
-            });
-          },
-        },
-      ],
-    );
+  const answerChanges = (agree: boolean) => {
+    answer.mutate(agree, {
+      onError: (e) => showAlert('Could not save', (e as Error).message),
+    });
   };
-
-  const confirmRemoveVendor = () => {
-    Alert.alert('Remove vendor', 'Unassign the vendor from this project?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () =>
-          removeVendor.mutate(undefined, {
-            onError: (e) => Alert.alert('Could not remove vendor', e.message),
-          }),
-      },
-    ]);
-  };
-
-  const confirmCancel = () => {
-    Alert.alert(
-      'Cancel project',
-      'Cancel this project? Any funds in escrow stay in the project wallet for you to withdraw. This can’t be undone.',
-      [
-        { text: 'Keep project', style: 'cancel' },
-        {
-          text: 'Cancel project',
-          style: 'destructive',
-          onPress: () =>
-            cancelProject.mutate(undefined, {
-              onSuccess: () => navigation.goBack(),
-              onError: (e) => Alert.alert('Could not cancel', e.message),
-            }),
-        },
-      ],
-    );
-  };
-
-  const openSheet = (kind: SheetKind, milestone: Milestone) => {
-    selection();
-    setSheetText('');
-    setSheetError(null);
-    setSheet({ kind, milestone });
-  };
-
-  const sheetBusy = submit.isPending || reject.isPending;
-
-  const confirmSheet = () => {
-    if (!sheet) return;
-    setSheetError(null);
-    if (sheet.kind === 'submit') {
-      if (!sheetText.trim()) {
-        setSheetError('Describe the work you’ve completed.');
-        return;
-      }
-      submit.mutate(
-        { milestoneId: sheet.milestone.id, proof: sheetText.trim() },
-        {
-          onSuccess: () => setSheet(null),
-          onError: (e) => setSheetError(e.message),
-        },
-      );
-    } else {
-      reject.mutate(
-        { milestoneId: sheet.milestone.id, note: sheetText.trim() || undefined },
-        {
-          onSuccess: () => setSheet(null),
-          onError: (e) => setSheetError(e.message),
-        },
-      );
-    }
-  };
-
-  const isSubmit = sheet?.kind === 'submit';
 
   return (
-    <Screen withBottomInset>
-      <Header title={project?.title ?? 'Project'} />
-
-      {query.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
+    <PtPageScreen
+      title={p.title}
+      subtitle={`Project${p.setup?.location ? ` · ${townOf(p.setup.location)}` : ''}`}
+      onBack={() => navigation.goBack()}
+      right={
+        <Pressable onPress={() => { selection(); navigation.navigate('WalletSettings', { walletId: p.wallet_id }); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Approval settings">
+          <Feather name="settings" size={22} color={pt.ink} />
+        </Pressable>
+      }
+      gap={14}
+    >
+      <MoneyTiles
+        left={{ label: 'In the wallet', value: formatNaira(p.in_wallet) }}
+        right={{ label: 'Paid so far', value: formatNaira(p.paid_so_far) }}
+        onPress={() => navigation.navigate('WalletDetail', { walletId: p.wallet_id })}
+      />
+      <View style={{ gap: 6 }}>
+        <ProgressLine value={Number(p.done_amount)} max={total} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>
+            {formatNaira(p.done_amount)} of {formatNaira(total)} done
+          </Text>
+          {Number(p.held_back) > 0 ? <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{formatNaira(p.held_back)} held back</Text> : null}
         </View>
-      ) : query.error ? (
-        <LoadError message={(query.error as Error).message} onRetry={() => query.refetch()} />
-      ) : project && status ? (
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.navy} />
-          }
-        >
-          {/* Escrow hero */}
-          <LinearGradient
-            colors={gradients.navy}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: radius, padding: 24 }}
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">Escrow balance</Text>
-              <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
-                <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
-                <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
-              </View>
-            </View>
-            <Text className="mt-2 text-[38px] font-extrabold leading-tight tracking-tight text-white">
-              {formatMoney(project.wallet_balance)}
-            </Text>
+      </View>
 
-            <View className="mt-5 flex-row" style={{ gap: 10 }}>
-              <Stat label="Available" value={formatMoney(project.available)} />
-              <Stat label="Reserved" value={formatMoney(project.reserved)} />
-              <Stat label="Released" value={formatMoney(project.released)} />
-            </View>
-
-            {wallet?.virtual_account ? (
-              <Pressable
-                onPress={() => void copyAccount()}
-                className="mt-5 flex-row items-center self-start rounded bg-white/10 px-3.5 py-2 active:opacity-80"
-              >
-                <Ionicons name="card-outline" size={15} color={colors.brandGlow} style={{ marginRight: 7 }} />
-                <Text className="text-[13px] font-semibold text-white">
-                  {wallet.virtual_account}
-                  {wallet.virtual_account_bank ? ` · ${wallet.virtual_account_bank}` : ''}
-                </Text>
-                <Ionicons
-                  name={copied ? 'checkmark-circle' : 'copy-outline'}
-                  size={15}
-                  color={copied ? colors.brandGlow : colors.white}
-                  style={{ marginLeft: 8 }}
-                />
-              </Pressable>
-            ) : null}
-          </LinearGradient>
-
-          {project.description ? (
-            <Text className="mt-4 text-[14px] leading-5 text-muted">{project.description}</Text>
-          ) : null}
-
-          {/* Core Project Wallet actions */}
-          {isOwner || ((isVendor) && project.status === 'active') ? (
-            <View className="mt-5 flex-row" style={{ gap: 10 }}>
-              {isOwner ? (
-                <>
-                  <ProjAction icon="add-circle" label="Fund" onPress={() => navigation.navigate('Fund', { walletId: project.wallet_id })} />
-                  <ProjAction icon="cash" label="Withdraw" onPress={() => navigation.navigate('Withdraw', { walletId: project.wallet_id })} />
-                  <ProjAction icon="swap-horizontal" label="Transfer" onPress={() => navigation.navigate('Transfer', { walletId: project.wallet_id })} />
-                </>
-              ) : null}
-              {(isOwner || isVendor) && project.status === 'active' ? (
-                <ProjAction icon="flag" label="Milestone" onPress={() => navigation.navigate('AddMilestone', { projectId })} />
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* Team & approvals (owner) — reuses the wallet member + governance screens */}
-          {isOwner ? (
-            <View className="mt-4 overflow-hidden rounded bg-white" style={{ borderWidth: 1, borderColor: colors.border }}>
-              <Pressable
-                onPress={() => {
-                  selection();
-                  navigation.navigate('InviteMember', { walletId: project.wallet_id });
-                }}
-                className="flex-row items-center p-4 active:opacity-70"
-              >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                  <Ionicons name="person-add-outline" size={19} color={colors.navy} />
-                </View>
-                <View className="flex-1 pr-2">
-                  <Text className="text-[15px] font-semibold text-ink">Add team member</Text>
-                  <Text className="mt-0.5 text-[13px] text-muted">Invite by @username — approver, contributor or viewer</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-              </Pressable>
-              <View style={{ height: 1, backgroundColor: colors.border }} />
-              <Pressable
-                onPress={() => {
-                  selection();
-                  navigation.navigate('AssignAccess', { walletId: project.wallet_id });
-                }}
-                className="flex-row items-center p-4 active:opacity-70"
-              >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                  <Ionicons name="people-outline" size={19} color={colors.navy} />
-                </View>
-                <View className="flex-1 pr-2">
-                  <Text className="text-[15px] font-semibold text-ink">Members & roles</Text>
-                  <Text className="mt-0.5 text-[13px] text-muted">Manage who can spend and approve</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-              </Pressable>
-              <View style={{ height: 1, backgroundColor: colors.border }} />
-              <Pressable
-                onPress={() => {
-                  selection();
-                  navigation.navigate('WalletSettings', { walletId: project.wallet_id });
-                }}
-                className="flex-row items-center p-4 active:opacity-70"
-              >
-                <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav-faint">
-                  <Ionicons name="shield-checkmark-outline" size={19} color={colors.navy} />
-                </View>
-                <View className="flex-1 pr-2">
-                  <Text className="text-[15px] font-semibold text-ink">Approval settings</Text>
-                  <Text className="mt-0.5 text-[13px] text-muted">
-                    Require approval, set a threshold & number of approvers
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.faded} />
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* Vendor */}
-          <Text className="mt-8 text-lg font-bold text-ink">Vendor</Text>
-          {vendorContact ? (
-            <Card className="mt-3 flex-row items-center py-4">
-              <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-lav-soft">
-                <Ionicons name="construct-outline" size={19} color={colors.navy} />
-              </View>
-              <View className="flex-1 pr-2">
-                <Text className="text-[15px] font-semibold text-ink" numberOfLines={1}>
-                  {vendorContact.name}
-                </Text>
-                <Text className="text-xs text-faded" numberOfLines={1}>
-                  {vendorContact.email}
-                </Text>
-              </View>
-              {isOwner ? (
-                <Pressable
-                  onPress={confirmRemoveVendor}
-                  hitSlop={8}
-                  className="h-9 w-9 items-center justify-center rounded-full bg-danger-soft active:opacity-70"
-                >
-                  <Ionicons name="person-remove-outline" size={17} color={colors.danger} />
-                </Pressable>
-              ) : null}
-            </Card>
-          ) : isOwner ? (
-            <Pressable
-              onPress={() => {
-                selection();
-                navigation.navigate('AssignVendor', { projectId });
-              }}
-              className="mt-3 flex-row items-center rounded border border-dashed border-border bg-white p-4 active:opacity-80"
-            >
-              <View className="mr-3 h-10 w-10 items-center justify-center rounded bg-lav">
-                <Ionicons name="person-add-outline" size={19} color={colors.navy} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[15px] font-bold text-ink">Assign vendor</Text>
-                <Text className="mt-0.5 text-[13px] text-muted">Add the person you’ll pay from escrow</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.faded} />
-            </Pressable>
-          ) : (
-            <Card className="mt-3">
-              <Text className="text-sm text-muted">No vendor has been assigned yet.</Text>
-            </Card>
-          )}
-
-          {/* Milestones */}
-          <View className="mt-8 flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-ink">
-              Milestones{milestones.length > 0 ? ` · ${milestones.length}` : ''}
-            </Text>
-            {(isOwner || isVendor) && project.status === 'active' ? (
-              <Pressable
-                onPress={() => {
-                  selection();
-                  navigation.navigate('AddMilestone', { projectId });
-                }}
-                hitSlop={6}
-                className="flex-row items-center rounded bg-lav px-3.5 py-1.5 active:opacity-80"
-              >
-                <Ionicons name="add" size={16} color={colors.navy} style={{ marginRight: 4 }} />
-                <Text className="text-[12px] font-bold text-navy">Add</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <View className="mt-3" style={{ gap: 12 }}>
-            {milestones.length === 0 ? (
-              <EmptyState
-                title="No milestones yet"
-                message={
-                  isOwner
-                    ? 'Add a milestone to reserve escrow and set up a payment for the vendor.'
-                    : 'The owner hasn’t added any milestones yet.'
-                }
-                icon="flag-outline"
-              />
-            ) : (
-              milestones.map((m) => (
-                <MilestoneCard
-                  key={m.id}
-                  milestone={m}
-                  isOwner={isOwner}
-                  isVendor={isVendor}
-                  onApprove={confirmApprove}
-                  onReject={(ms) => openSheet('reject', ms)}
-                  onRemove={confirmRemove}
-                  onSubmit={(ms) => openSheet('submit', ms)}
-                  onAddEvidence={addEvidence}
-                  busy={busyMilestoneId === m.id}
-                  evidenceBusy={evidenceMilestoneId === m.id}
-                />
-              ))
-            )}
-          </View>
-
-          {/* Cancel project (owner, active, nothing in-flight/released) */}
-          {canCancel ? (
-            <Button
-              title="Cancel project"
-              variant="danger"
-              icon="close-circle-outline"
-              iconPosition="left"
-              onPress={confirmCancel}
-              loading={cancelProject.isPending}
-              className="mt-8"
-            />
-          ) : null}
-        </ScrollView>
+      {p.attention ? (
+        <AttentionCard
+          title={`${vendorName} finished ${p.attention.title.toLowerCase()}`}
+          sub={p.attention.status === 'approved' ? 'Waiting for the other approvers' : `Check the photos and release ${formatNaira(p.attention.release_now)}`}
+          onPress={() => navigation.navigate('ReviewMilestone', { projectId: p.id, milestoneId: p.attention!.milestone_id })}
+        />
       ) : null}
 
-      {/* Submit-proof / reject-note sheet */}
-      <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* behavior="padding" on BOTH platforms — adjustResize is dead under RN edge-to-edge */}
-        <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="rounded-t bg-white px-6 pt-3" style={{ paddingBottom: insets.bottom + 16 }}>
-              <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-lav" />
-              <View className="mb-4 flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                  <Text className="text-xl font-extrabold text-ink">
-                    {isSubmit ? 'Submit your work' : 'Reject submission'}
-                  </Text>
-                  <Text className="mt-1 text-sm text-muted" numberOfLines={2}>
-                    {sheet?.milestone.title} · {sheet ? formatMoney(sheet.milestone.amount) : ''}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setSheet(null)}
-                  hitSlop={8}
-                  className="h-9 w-9 items-center justify-center rounded-full bg-lav-faint active:opacity-70"
-                >
-                  <Ionicons name="close" size={18} color={colors.muted} />
-                </Pressable>
-              </View>
+      {proposed.map((m) => (
+        <AttentionCard
+          key={m.id}
+          tone="info"
+          title={`New milestone from the builder: ${m.title}`}
+          sub={`${formatNaira(m.amount)} · approve it before work starts`}
+          onPress={() => navigation.navigate('ApproveProposal', { projectId: p.id, milestoneId: m.id })}
+        />
+      ))}
 
-              <Text className="mb-2 text-[13px] font-semibold text-muted">
-                {isSubmit ? 'Proof of work' : 'Reason (optional)'}
-              </Text>
-              <View className="rounded border border-border bg-lav-faint px-4 py-3">
-                <TextInput
-                  value={sheetText}
-                  onChangeText={setSheetText}
-                  placeholder={
-                    isSubmit
-                      ? 'Describe what you delivered, add links or references…'
-                      : 'Let the vendor know what needs fixing…'
-                  }
-                  placeholderTextColor={colors.faded}
-                  multiline
-                  className="min-h-[96px] text-[15px] text-ink"
-                  style={{ textAlignVertical: 'top' }}
-                  maxLength={500}
-                />
-              </View>
+      {disputed ? (
+        <AttentionCard
+          tone="danger"
+          title={`Dispute ${disputed.dispute?.number ?? ''} · ${disputed.title}`}
+          sub="The payment is on hold until it's sorted"
+          onPress={() => navigation.navigate('DisputeDetail', { disputeId: disputed.dispute!.id })}
+        />
+      ) : null}
 
-              <ErrorText message={sheetError} className="mt-3" />
-
-              <Button
-                title={isSubmit ? 'Submit work' : 'Reject & return to vendor'}
-                icon={isSubmit ? 'cloud-upload-outline' : 'close'}
-                iconPosition="left"
-                onPress={confirmSheet}
-                loading={sheetBusy}
-                className="mt-4"
-              />
-            </View>
+      {p.vendor_status === 'changes_proposed' && data.can.edit ? (
+        <View style={{ backgroundColor: '#FDEBC8', borderRadius: ptRadius.md, padding: 16, gap: 10 }}>
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>
+            {vendorName} asked for {vendorChanges.length === 1 ? 'a change' : `${vendorChanges.length} changes`}
+          </Text>
+          {vendorChanges.map((m) => (
+            <Text key={m.id} style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>
+              {m.title}: {m.change_request?.amount ? `${formatNaira(m.amount)} → ${formatNaira(m.change_request.amount)}` : 'new dates'}
+              {m.change_request?.why ? ` · "${m.change_request.why}"` : ''}
+            </Text>
+          ))}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <PtButton title="Keep original" variant="secondary" size="sm" onPress={() => answerChanges(false)} disabled={answer.isPending} style={{ flex: 1 }} />
+            <PtButton title="Agree" size="sm" onPress={() => answerChanges(true)} loading={answer.isPending} style={{ flex: 1 }} />
           </View>
-        </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
-    </Screen>
+        </View>
+      ) : p.vendor_status === 'invited' && p.vendor ? (
+        <PtNote>{`Waiting for ${vendorName} to accept the milestones. Nothing is paid until they do.`}</PtNote>
+      ) : !p.vendor ? (
+        <AttentionCard
+          tone="mint"
+          title={p.setup?.vendor_invite ? 'Your builder hasn\'t joined yet' : 'No builder yet'}
+          sub={p.setup?.vendor_invite ? `We texted ${p.setup.vendor_invite}. Or find a verified builder.` : 'Find a verified builder for this project'}
+          onPress={() => navigation.navigate('VendorDirectory', { projectId: p.id, near: townOf(p.setup?.location) })}
+        />
+      ) : null}
+
+      <PtSectionTitle title="Milestones" action={data.can.edit ? 'Add' : undefined} onAction={() => navigation.navigate('EditMilestone', { projectId: p.id })} />
+      <PtPanel>
+        {planned.length === 0 ? (
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted, paddingVertical: 14 }}>No milestones yet.</Text>
+        ) : (
+          planned.map((m, i) => {
+            const chip = milestoneChip(m);
+            return (
+              <Pressable key={m.id} onPress={() => { selection(); openMilestone(m); }} accessibilityRole="button" accessibilityLabel={`${m.title}, ${chip.label}`}>
+                <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: i === planned.length - 1 ? 0 : 1, borderBottomColor: pt.line }}>
+                  <Text style={{ width: 16, fontFamily: ptFont.semibold, fontSize: 15, color: pt.inkMuted }}>{i + 1}</Text>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }} numberOfLines={1}>
+                      {m.title}
+                    </Text>
+                    <PtChip label={chip.label} tone={chip.tone} icon={chip.icon} />
+                  </View>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{formatNaira(m.amount)}</Text>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </PtPanel>
+
+      <ActionTiles
+        items={[
+          { label: 'Money', icon: 'lock', onPress: () => navigation.navigate('WalletDetail', { walletId: p.wallet_id }) },
+          { label: 'Chat', icon: 'message-square', onPress: () => navigation.navigate('ProjectChat', { projectId: p.id }) },
+          { label: 'Budget', icon: 'trending-up', onPress: () => navigation.navigate('ProjectBudget', { projectId: p.id }) },
+          { label: 'Documents', icon: 'file', onPress: () => navigation.navigate('ProjectDocuments', { projectId: p.id }) },
+        ]}
+      />
+
+      {p.vendor && toRate && p.vendor.profile_id && data.can.edit ? (
+        <Pressable
+          onPress={() => {
+            selection();
+            navigation.navigate('RateVendor', { profileId: p.vendor!.profile_id!, name: p.vendor!.name, milestoneId: toRate.id, milestoneTitle: toRate.title, projectId: p.id, town: townOf(p.setup?.location) });
+          }}
+          accessibilityRole="button"
+          style={{ alignItems: 'center', paddingVertical: 6 }}
+        >
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.brand }}>Rate {p.vendor.name}</Text>
+        </Pressable>
+      ) : null}
+      {p.approvers.length > 1 ? <PtNote>{`Payments need ${namesList(p.approvers.map((a) => a.first_name))} to approve.`}</PtNote> : null}
+      {cancellable ? (
+        <Pressable
+          onPress={() => {
+            selection();
+            showAlert('Cancel this project?', 'Nothing has been paid. The money stays in the project wallet, and the builder is told.', [
+              { text: 'Keep it', style: 'cancel' },
+              {
+                text: 'Cancel project',
+                style: 'destructive',
+                onPress: () => cancel.mutate(undefined, { onSuccess: () => navigation.navigate('Projects'), onError: (e) => showAlert('Could not cancel', (e as Error).message) }),
+              },
+            ]);
+          }}
+          accessibilityRole="button"
+          style={{ alignItems: 'center', paddingVertical: 6 }}
+        >
+          <Text style={{ fontFamily: ptFont.semibold, fontSize: 14, color: pt.danger }}>Cancel project</Text>
+        </Pressable>
+      ) : null}
+    </PtPageScreen>
+  );
+}
+
+/** PRJ-12 "Builder needed": who declined and why, the money is safe, find another or re-invite. */
+function BuilderDeclined({ data, navigation }: { data: ProjectDetailData; navigation: Nav }) {
+  const p = data.project;
+  const d = p.vendor_declined!;
+  const remind = useRemindReinvite(p.id);
+  const [choice, setChoice] = useState<'find' | 'remind'>('find');
+  const reason = DECLINE_REASONS.find((r) => r.value === d.reason)?.label ?? 'Declined';
+  const month = monthName(d.start_month) || 'a month';
+  const town = data.suggestions?.near || townOf(p.setup?.location);
+  const firstWord = d.name.split(' ')[0];
+  const paid = Number(p.released);
+
+  const go = () => {
+    if (choice === 'find') {
+      navigation.navigate('VendorDirectory', { projectId: p.id, near: town });
+      return;
+    }
+    remind.mutate(undefined, {
+      onSuccess: (r) => showAlert('Reminder set', `We'll remind you on ${formatYmd(r.remind_on)}.`),
+      onError: (e) => showAlert('Could not set the reminder', (e as Error).message),
+    });
+  };
+
+  return (
+    <PtPageScreen
+      title={p.title}
+      subtitle="Builder needed"
+      onBack={() => navigation.goBack()}
+      footer={<PtButton title={choice === 'find' ? 'Find a builder' : `Remind me in ${month}`} onPress={go} loading={remind.isPending} />}
+      gap={14}
+    >
+      <View style={{ backgroundColor: '#FDEBC8', borderRadius: ptRadius.md, padding: 16, gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <PtAvatar initials={initials(d.name.split(/\s+/).slice(0, 2).join(' '))} tone="gold" size={36} />
+          <Text style={{ flex: 1, fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{d.name} declined</Text>
+          <PtChip label={reason} tone="warning" icon="clock" />
+        </View>
+        {d.message ? <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>"{d.message}"</Text> : null}
+      </View>
+      <PtPanel>
+        <PtReviewRow label="Your money" value={`${formatNaira(p.in_wallet)} stays in the project wallet`} sub={paid > 0 ? `${formatNaira(paid)} was paid for finished work` : 'Nothing was paid'} />
+        <PtReviewRow label="Milestones" value="Kept, ready for a new builder" last />
+      </PtPanel>
+      <PtChoiceCard
+        icon="search"
+        title="Find another verified builder"
+        subtitle={
+          data.suggestions?.count
+            ? `${data.suggestions.count} in ${town || 'your area'} with 4.5 stars or more`
+            : `Search the directory for verified builders${town ? ` near ${town}` : ''}`
+        }
+        selected={choice === 'find'}
+        onPress={() => setChoice('find')}
+      />
+      {d.start_month ? (
+        <PtChoiceCard
+          icon="clock"
+          title={p.reinvite_on ? `We'll remind you to re-invite ${firstWord}` : `Remind me to re-invite ${firstWord} in ${month}`}
+          selected={choice === 'remind'}
+          onPress={() => setChoice('remind')}
+        />
+      ) : null}
+    </PtPageScreen>
   );
 }

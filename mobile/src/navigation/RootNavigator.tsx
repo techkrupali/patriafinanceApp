@@ -3,15 +3,16 @@ import { Text, View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, type BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/auth';
 import { pt, ptFont } from '../theme';
 import { AppLock } from '../components/AppLock';
-import type { AuthStackParamList, MainTabParamList, RootStackParamList } from './types';
+import type { AuthStackParamList, MainTabParamList, RootStackParamList, VendorTabParamList } from './types';
 
 // Auth screens (client prototype onboarding + log in)
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
+import { AccountTypeScreen } from '../screens/auth/AccountTypeScreen';
 import { PhoneScreen } from '../screens/auth/PhoneScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { CodeScreen } from '../screens/auth/CodeScreen';
@@ -62,15 +63,32 @@ import { FamilyMemberScreen } from '../screens/family/FamilyMemberScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
 import { AutomationsScreen } from '../screens/automation/AutomationsScreen';
 import { CreateAutomationScreen } from '../screens/automation/CreateAutomationScreen';
-import { DisputesScreen } from '../screens/support/DisputesScreen';
-import { RaiseDisputeScreen } from '../screens/support/RaiseDisputeScreen';
+import { DisputesScreen } from '../screens/disputes/DisputesScreen';
+import { StartDisputeScreen } from '../screens/disputes/StartDisputeScreen';
+import { DisputeDetailScreen } from '../screens/disputes/DisputeDetailScreen';
+import { DisputeChatScreen } from '../screens/disputes/DisputeChatScreen';
+import { DisputeRespondScreen } from '../screens/disputes/DisputeRespondScreen';
+import { EscalateDisputeScreen } from '../screens/disputes/EscalateDisputeScreen';
 import { HelpFaqScreen } from '../screens/support/HelpFaqScreen';
 import { SecurityCenterScreen } from '../screens/support/SecurityCenterScreen';
 import { ReferralScreen } from '../screens/referral/ReferralScreen';
 import { GoalsScreen } from '../screens/goals/GoalsScreen';
 import { VendorDirectoryScreen } from '../screens/vendors/VendorDirectoryScreen';
 import { VendorProfileScreen } from '../screens/vendors/VendorProfileScreen';
-import { BecomeVendorScreen } from '../screens/vendors/BecomeVendorScreen';
+import { RateVendorScreen } from '../screens/vendors/RateVendorScreen';
+import { BusinessSetupScreen } from '../screens/business/BusinessSetupScreen';
+import { BusinessVerificationScreen } from '../screens/business/BusinessVerificationScreen';
+import { VendorHomeScreen } from '../screens/vendor/VendorHomeScreen';
+import { VendorPayoutsScreen } from '../screens/vendor/VendorPayoutsScreen';
+import { VendorDisputesScreen } from '../screens/vendor/VendorDisputesScreen';
+import { VendorPublicProfileScreen } from '../screens/vendor/VendorPublicProfileScreen';
+import { VendorProjectScreen } from '../screens/vendor/VendorProjectScreen';
+import { SubmitWorkScreen } from '../screens/vendor/SubmitWorkScreen';
+import { ProposeMilestoneScreen } from '../screens/vendor/ProposeMilestoneScreen';
+import { InviteTeamScreen, VendorTeamScreen } from '../screens/vendor/VendorTeamScreen';
+import { TeamInviteScreen } from '../screens/vendor/TeamInviteScreen';
+import { ProjectInviteScreen } from '../screens/vendor/ProjectInviteScreen';
+import { AskChangeScreen, ChangesSentScreen, InviteMilestonesScreen } from '../screens/vendor/InviteMilestonesScreen';
 import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
@@ -84,10 +102,15 @@ import { LoanApplyScreen } from '../screens/loans/LoanApplyScreen';
 import { LoanDetailScreen } from '../screens/loans/LoanDetailScreen';
 import { RepayScreen } from '../screens/loans/RepayScreen';
 import { ProjectsScreen } from '../screens/projects/ProjectsScreen';
-import { CreateProjectScreen } from '../screens/projects/CreateProjectScreen';
 import { ProjectDetailScreen } from '../screens/projects/ProjectDetailScreen';
-import { AssignVendorScreen } from '../screens/projects/AssignVendorScreen';
-import { AddMilestoneScreen } from '../screens/projects/AddMilestoneScreen';
+import { MilestonesScreen } from '../screens/projects/MilestonesScreen';
+import { EditMilestoneScreen } from '../screens/projects/EditMilestoneScreen';
+import { ReviewMilestoneScreen } from '../screens/projects/ReviewMilestoneScreen';
+import { ReleasePaymentScreen } from '../screens/projects/ReleasePaymentScreen';
+import { ProjectDocumentsScreen } from '../screens/projects/ProjectDocumentsScreen';
+import { ProjectBudgetScreen } from '../screens/projects/ProjectBudgetScreen';
+import { ApproveProposalScreen } from '../screens/projects/ApproveProposalScreen';
+import { ProjectChatScreen } from '../screens/projects/ProjectChatScreen';
 import { KycScreen } from '../screens/kyc/KycScreen';
 import { KycSubmitScreen } from '../screens/kyc/KycSubmitScreen';
 import { StewardScreen } from '../screens/steward/StewardScreen';
@@ -97,6 +120,7 @@ import { AllWalletsScreen } from '../screens/AllWalletsScreen';
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
+const VendorTabNav = createBottomTabNavigator<VendorTabParamList>();
 
 /**
  * Client footer (prototype tab bar): six tabs — Home · Family · Steward ·
@@ -121,6 +145,88 @@ const RulesTab = (props: Record<string, unknown>) => (
   <AutomationsScreen {...(props as unknown as React.ComponentProps<typeof AutomationsScreen>)} />
 );
 
+/**
+ * The client footer: white bar with 24pt top corners and a soft shadow; the
+ * active tab gets a brand-soft pill behind its icon and a bold brand label.
+ * Shared by the family tabs and vendor mode.
+ */
+function tabBarOptions(bottomInset: number, label: string, icon: (color: string) => React.ReactNode) {
+  return {
+    headerShown: false,
+    // Default tab button uses RN Pressable, which doesn't fire onPress inside
+    // native-stack on physical Android + New Arch. Use the RNGH Pressable.
+    tabBarButton: (props: BottomTabBarButtonProps) => (
+      <GHPressable
+        onPress={props.onPress as never}
+        onLongPress={(props.onLongPress ?? undefined) as never}
+        disabled={props.disabled ?? undefined}
+        accessibilityRole="button"
+        accessibilityState={props.accessibilityState}
+        android_ripple={{ color: 'transparent', borderless: false }}
+        style={props.style as object}
+      >
+        {props.children}
+      </GHPressable>
+    ),
+    // The Steward composer sits where the bar was while typing.
+    tabBarHideOnKeyboard: true,
+    tabBarActiveTintColor: pt.brand,
+    tabBarInactiveTintColor: pt.inkMuted,
+    tabBarLabel: ({ focused, color }: { focused: boolean; color: string }) => (
+      <Text style={{ fontFamily: focused ? ptFont.bold : ptFont.semibold, fontSize: 11, lineHeight: 14, color, marginTop: 3 }}>{label}</Text>
+    ),
+    tabBarItemStyle: { paddingTop: 8 },
+    tabBarStyle: {
+      backgroundColor: 'transparent',
+      borderTopWidth: 0,
+      elevation: 0,
+      height: 64 + Math.max(bottomInset, 12),
+      paddingBottom: Math.max(bottomInset, 12),
+      paddingHorizontal: 4,
+    },
+    tabBarBackground: () => (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: pt.raised,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          shadowColor: pt.emerald900,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 20,
+          elevation: 12,
+        }}
+      />
+    ),
+    tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => (
+      <View style={{ width: 52, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? pt.brandSoft : 'transparent' }}>
+        {icon(color)}
+      </View>
+    ),
+  };
+}
+
+const VENDOR_TABS: Record<keyof VendorTabParamList, { label: string; icon: (color: string) => React.ReactNode }> = {
+  VendorHome: { label: 'Projects', icon: (c) => <Feather name="home" size={21} color={c} /> },
+  VendorPayouts: { label: 'Payouts', icon: (c) => <MaterialCommunityIcons name="bank-outline" size={22} color={c} /> },
+  VendorDisputes: { label: 'Disputes', icon: (c) => <Feather name="alert-triangle" size={21} color={c} /> },
+  VendorProfileTab: { label: 'Profile', icon: (c) => <Feather name="user" size={21} color={c} /> },
+};
+
+/** VDM-03…08 vendor mode: Projects · Payouts · Disputes · Profile. */
+function VendorTabs() {
+  const insets = useSafeAreaInsets();
+  return (
+    <VendorTabNav.Navigator screenOptions={({ route }) => tabBarOptions(insets.bottom, VENDOR_TABS[route.name].label, VENDOR_TABS[route.name].icon)}>
+      <VendorTabNav.Screen name="VendorHome" component={VendorHomeScreen} />
+      <VendorTabNav.Screen name="VendorPayouts" component={VendorPayoutsScreen} />
+      <VendorTabNav.Screen name="VendorDisputes" component={VendorDisputesScreen} />
+      <VendorTabNav.Screen name="VendorProfileTab" component={VendorPublicProfileScreen} />
+    </VendorTabNav.Navigator>
+  );
+}
+
 function MainTabs({ navigation }: NativeStackScreenProps<RootStackParamList, 'Tabs'>) {
   const insets = useSafeAreaInsets();
   const postAuthRoute = useAuth((s) => s.postAuthRoute);
@@ -134,73 +240,7 @@ function MainTabs({ navigation }: NativeStackScreenProps<RootStackParamList, 'Ta
   }, [postAuthRoute, clearPostAuthRoute, navigation]);
 
   return (
-    <Tabs.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        // Default tab button uses RN Pressable, which doesn't fire onPress inside
-        // native-stack on physical Android + New Arch. Use the RNGH Pressable.
-        tabBarButton: (props) => (
-          <GHPressable
-            onPress={props.onPress as never}
-            onLongPress={(props.onLongPress ?? undefined) as never}
-            disabled={props.disabled ?? undefined}
-            accessibilityRole="button"
-            accessibilityState={props.accessibilityState}
-            android_ripple={{ color: 'transparent', borderless: false }}
-            style={props.style as object}
-          >
-            {props.children}
-          </GHPressable>
-        ),
-        // The Steward composer sits where the bar was while typing.
-        tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: pt.brand,
-        tabBarInactiveTintColor: pt.inkMuted,
-        tabBarLabel: ({ focused, color }) => (
-          <Text style={{ fontFamily: focused ? ptFont.bold : ptFont.semibold, fontSize: 11, lineHeight: 14, color, marginTop: 3 }}>
-            {route.name}
-          </Text>
-        ),
-        tabBarItemStyle: { paddingTop: 8 },
-        tabBarStyle: {
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 64 + Math.max(insets.bottom, 12),
-          paddingBottom: Math.max(insets.bottom, 12),
-          paddingHorizontal: 4,
-        },
-        tabBarBackground: () => (
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: pt.raised,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              shadowColor: pt.emerald900,
-              shadowOffset: { width: 0, height: -4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 20,
-              elevation: 12,
-            }}
-          />
-        ),
-        tabBarIcon: ({ focused, color }) => (
-          <View
-            style={{
-              width: 52,
-              height: 32,
-              borderRadius: 16,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: focused ? pt.brandSoft : 'transparent',
-            }}
-          >
-            {TAB_ICONS[route.name](color)}
-          </View>
-        ),
-      })}
-    >
+    <Tabs.Navigator screenOptions={({ route }) => tabBarOptions(insets.bottom, route.name, TAB_ICONS[route.name])}>
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Family" component={FamilyTab} />
       <Tabs.Screen name="Steward" component={StewardScreen} />
@@ -215,6 +255,7 @@ export function RootNavigator() {
   const status = useAuth((s) => s.status);
   const hasStoredSession = useAuth((s) => s.hasStoredSession);
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
+  const mode = useAuth((s) => s.mode);
   const [bypassLock, setBypassLock] = useState(false);
 
   if (status !== 'authed') {
@@ -225,6 +266,7 @@ export function RootNavigator() {
     return (
       <AuthStack.Navigator screenOptions={{ headerShown: false }}>
         <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+        <AuthStack.Screen name="AccountType" component={AccountTypeScreen} />
         <AuthStack.Screen name="Phone" component={PhoneScreen} />
         <AuthStack.Screen name="Login" component={LoginScreen} />
         <AuthStack.Screen name="Code" component={CodeScreen} />
@@ -239,8 +281,10 @@ export function RootNavigator() {
   }
 
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+    // The app opens in the mode last used on this phone (VDM-03 vendor mode, or the family app).
+    <RootStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={mode === 'business' ? 'VendorTabs' : 'Tabs'}>
       <RootStack.Screen name="Tabs" component={MainTabs} />
+      <RootStack.Screen name="VendorTabs" component={VendorTabs} />
       <RootStack.Screen name="CustomiseHome" component={CustomiseHomeScreen} />
       <RootStack.Screen name="AllWallets" component={AllWalletsScreen} />
       <RootStack.Screen name="Activity" component={ActivityScreen} />
@@ -278,14 +322,30 @@ export function RootNavigator() {
       <RootStack.Screen name="Automations" component={AutomationsScreen} />
       <RootStack.Screen name="CreateAutomation" component={CreateAutomationScreen} />
       <RootStack.Screen name="Disputes" component={DisputesScreen} />
-      <RootStack.Screen name="RaiseDispute" component={RaiseDisputeScreen} />
+      <RootStack.Screen name="StartDispute" component={StartDisputeScreen} />
+      <RootStack.Screen name="DisputeDetail" component={DisputeDetailScreen} />
+      <RootStack.Screen name="DisputeChat" component={DisputeChatScreen} />
+      <RootStack.Screen name="DisputeRespond" component={DisputeRespondScreen} />
+      <RootStack.Screen name="EscalateDispute" component={EscalateDisputeScreen} />
       <RootStack.Screen name="HelpFaq" component={HelpFaqScreen} />
       <RootStack.Screen name="SecurityCenter" component={SecurityCenterScreen} />
       <RootStack.Screen name="Referral" component={ReferralScreen} />
       <RootStack.Screen name="Goals" component={GoalsScreen} />
       <RootStack.Screen name="VendorDirectory" component={VendorDirectoryScreen} />
       <RootStack.Screen name="VendorProfile" component={VendorProfileScreen} />
-      <RootStack.Screen name="BecomeVendor" component={BecomeVendorScreen} />
+      <RootStack.Screen name="RateVendor" component={RateVendorScreen} />
+      <RootStack.Screen name="BusinessSetup" component={BusinessSetupScreen} />
+      <RootStack.Screen name="BusinessVerification" component={BusinessVerificationScreen} />
+      <RootStack.Screen name="VendorProject" component={VendorProjectScreen} />
+      <RootStack.Screen name="SubmitWork" component={SubmitWorkScreen} />
+      <RootStack.Screen name="ProposeMilestone" component={ProposeMilestoneScreen} />
+      <RootStack.Screen name="VendorTeam" component={VendorTeamScreen} />
+      <RootStack.Screen name="InviteTeam" component={InviteTeamScreen} />
+      <RootStack.Screen name="TeamInvite" component={TeamInviteScreen} />
+      <RootStack.Screen name="ProjectInvite" component={ProjectInviteScreen} />
+      <RootStack.Screen name="InviteMilestones" component={InviteMilestonesScreen} />
+      <RootStack.Screen name="AskChange" component={AskChangeScreen} />
+      <RootStack.Screen name="ChangesSent" component={ChangesSentScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
@@ -299,10 +359,15 @@ export function RootNavigator() {
       <RootStack.Screen name="LoanDetail" component={LoanDetailScreen} />
       <RootStack.Screen name="Repay" component={RepayScreen} />
       <RootStack.Screen name="Projects" component={ProjectsScreen} />
-      <RootStack.Screen name="CreateProject" component={CreateProjectScreen} />
       <RootStack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
-      <RootStack.Screen name="AssignVendor" component={AssignVendorScreen} />
-      <RootStack.Screen name="AddMilestone" component={AddMilestoneScreen} />
+      <RootStack.Screen name="Milestones" component={MilestonesScreen} />
+      <RootStack.Screen name="EditMilestone" component={EditMilestoneScreen} />
+      <RootStack.Screen name="ReviewMilestone" component={ReviewMilestoneScreen} />
+      <RootStack.Screen name="ReleasePayment" component={ReleasePaymentScreen} />
+      <RootStack.Screen name="ProjectDocuments" component={ProjectDocumentsScreen} />
+      <RootStack.Screen name="ProjectBudget" component={ProjectBudgetScreen} />
+      <RootStack.Screen name="ApproveProposal" component={ApproveProposalScreen} />
+      <RootStack.Screen name="ProjectChat" component={ProjectChatScreen} />
       <RootStack.Screen name="Kyc" component={KycScreen} />
       <RootStack.Screen name="KycSubmit" component={KycSubmitScreen} />
     </RootStack.Navigator>

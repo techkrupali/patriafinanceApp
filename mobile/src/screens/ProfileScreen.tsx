@@ -5,12 +5,13 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { pt, ptFont, ptRadius } from '../theme';
 import { PtTabScreen } from '../components/pt/PtTabScreen';
-import { PtCard, PtRow, PtSectionTitle } from '../components/pt/PtList';
+import { PtCard, PtIconTile, PtRow, PtSectionTitle } from '../components/pt/PtList';
 import { PtAvatar } from '../components/pt/PtAvatar';
 import { PtChip } from '../components/pt/PtChip';
 import { PtButton } from '../components/pt/PtButton';
 import { LanguageSheet } from '../components/LanguageSheet';
-import { useDevices, useHome, useLogoutApi, useUpdateProfile } from '../api/hooks';
+import { useDevices, useHome, useLogoutApi, useMyVendorProfile, useUpdateProfile } from '../api/hooks';
+import { useTeamInvites, useVendorHome } from '../api/projectFlow';
 import { useAuth } from '../store/auth';
 import { useLanguage } from '../store/language';
 import { initials } from '../lib/format';
@@ -105,6 +106,9 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         <PtChip label={`Tier ${tier}`} tone="success" icon="check" />
       </Pressable>
 
+      {/* VON-01 "You can add the other later from the same phone number": the business side. */}
+      <BusinessEntry navigation={navigation} />
+
       {/* Records */}
       <View style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -172,5 +176,55 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         }}
       />
     </PtTabScreen>
+  );
+}
+
+/** Switch to vendor mode, join a team you were invited to, or set up a business account. */
+function BusinessEntry({ navigation }: { navigation: TabScreenProps<'More'>['navigation'] }) {
+  const mine = useMyVendorProfile();
+  const home = useVendorHome();
+  const invites = useTeamInvites();
+  const setMode = useAuth((s) => s.setMode);
+  const business = mine.data?.profile;
+  const team = !business ? home.data?.business : null;
+  const invite = invites.data?.[0];
+
+  const toBusiness = () => {
+    void setMode('business');
+    // The tabs live inside the root stack; vendor mode replaces them there.
+    navigation.getParent()?.reset({ index: 0, routes: [{ name: 'VendorTabs' }] });
+  };
+
+  return (
+    <PtCard>
+      {invite ? (
+        <PtRow
+          title={`Join the ${invite.business?.name ?? ''} team`}
+          subtitle={`${invite.business?.owner ?? 'The owner'} added you as ${invite.role_label.toLowerCase()}`}
+          left={<PtAvatar initials={initials(invite.business?.name)} tone="gold" size={40} />}
+          chevron
+          onPress={() => navigation.navigate('TeamInvite', { memberId: invite.id })}
+        />
+      ) : null}
+      {business || team ? (
+        <PtRow
+          title={business?.business_name ?? team?.name ?? 'Business'}
+          subtitle={business && business.status !== 'verified' ? 'Switch to business · not verified yet' : 'Switch to business'}
+          left={<PtAvatar initials={business?.initials ?? team?.initials ?? 'B'} uri={business?.logo_url ?? team?.logo_url} tone="gold" size={40} />}
+          chevron
+          onPress={toBusiness}
+          last
+        />
+      ) : (
+        <PtRow
+          title="Get paid as a business"
+          subtitle="Builders, schools, caterers: families pay you by milestone"
+          left={<PtIconTile><Feather name="briefcase" size={18} color={pt.brand} /></PtIconTile>}
+          chevron
+          onPress={() => navigation.navigate('BusinessSetup', {})}
+          last
+        />
+      )}
+    </PtCard>
   );
 }

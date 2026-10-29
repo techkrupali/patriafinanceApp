@@ -560,6 +560,9 @@ export interface ProjectMilestone {
   retention?: string;
   retention_due_at?: string | null;
   retention_released_at?: string | null;
+  /** An open dispute holding this milestone's payment. */
+  dispute?: { id: number; number: string | null; status: string } | null;
+  submitted_by?: string | null;
   created_at: string | null;
 }
 
@@ -574,7 +577,11 @@ export interface ProjectDetail {
   available: string; // naira string
   released: string; // naira string
   status: ProjectStatus;
-  vendor: { id: number; name: string } | null;
+  /** The builder's business (name), its owner (person) and whether Patriai verified it. */
+  vendor: { id: number; name: string; person?: string; profile_id?: number | null; verified?: boolean } | null;
+  /** INV-V1…V5: invited, changes_proposed, accepted, declined. */
+  vendor_status?: string | null;
+  vendor_declined?: { name: string; reason: string; message?: string } | null;
   owner: { id: number; name: string } | null;
   milestones_total: number;
   milestones_released: number;
@@ -893,4 +900,129 @@ export interface EmergencyRequestDetailData {
 /** POST /admin/wallets/{id}/emergency/crisis-unlock (EmergencyService::summary). */
 export interface CrisisUnlockResult {
   emergency: Pick<WalletEmergency, "purpose" | "locked" | "unlocked_at" | "unlocked_via">;
+}
+
+// ---------------------------------------------------------------- Vendors (VON-09 review)
+
+export type VendorStatus = "draft" | "submitted" | "needs_changes" | "verified";
+export type CheckStatus = "todo" | "pending" | "approved" | "redo" | "waiting";
+export type VendorCheck = "owner" | "id_document" | "cac" | "directors" | "address" | "bank";
+
+export interface VendorRow {
+  id: number;
+  business_name: string;
+  category: string;
+  location: string | null;
+  status: VendorStatus;
+  verified: boolean;
+  owner_name: string | null;
+  rating: number | null;
+  reviews: number;
+  checks: Record<VendorCheck, { status: CheckStatus; note: string | null }> | null;
+  submitted_at: string | null;
+  verified_at: string | null;
+  created_at: string | null;
+}
+
+export interface VendorsData {
+  vendors: VendorRow[];
+  counts: Partial<Record<VendorStatus, number>>;
+  pagination: Pagination;
+}
+
+export interface VendorVerification {
+  status: VendorStatus;
+  items: { item: VendorCheck; label: string; sub: string; status: CheckStatus; note: string | null }[];
+  needs_you: number;
+  ready: boolean;
+}
+
+export interface VendorDetailData {
+  vendor: VendorRow & {
+    rc_number: string | null;
+    since_year: number | null;
+    services: string[];
+    bio: string | null;
+    areas: string | null;
+    team_size: string | null;
+    address: string | null;
+    tin: string | null;
+    id_type: string | null;
+    owner_bvn: string | null;
+    owner_nin: string | null;
+    bank: { account_name: string | null; account_number: string; bank_name: string | null } | null;
+    logo_url: string | null;
+    past_work: { url: string; caption: string | null }[];
+    owner: { id: number; name: string; phone: string | null; email: string | null; kyc_tier: number } | null;
+  };
+  verification: VendorVerification;
+  documents: { id: number; item: string; name: string; url: string; is_pdf: boolean; created_at: string | null }[];
+  directors: { id: number; name: string; phone: string | null; share_percent: number | null; status: string; is_owner: boolean; bvn: string | null; selfie_url: string | null }[];
+  stats: { projects: number; milestones_paid: number; open_disputes: number };
+  labels: Record<VendorCheck, [string, string]>;
+}
+
+// ---------------------------------------------------------------- Disputes (DSP-08/09 decisions)
+
+export type DisputeStatus = "open" | "responded" | "fixing" | "escalated" | "resolved" | "under_review" | "rejected";
+
+export interface DisputeRow {
+  id: number;
+  number: string | null;
+  subject: string;
+  kind: "milestone" | "payment_made" | "payment_received" | "other";
+  category: string;
+  status: DisputeStatus;
+  status_label: string;
+  active: boolean;
+  against: string | null;
+  raised_by: string | null;
+  raised_by_name: string | null;
+  project: { id: number; title: string } | null;
+  milestone: { id: number; title: string } | null;
+  amount_on_hold: string | null;
+  reply_by: string | null;
+  decision_due: string | null;
+  outcome: string | null;
+  released_amount: string | null;
+  refund_amount: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+}
+
+export interface DisputesData {
+  disputes: DisputeRow[];
+  counts: Partial<Record<DisputeStatus, number>>;
+  pagination: Pagination;
+}
+
+export interface DisputeDetail {
+  id: number;
+  number: string | null;
+  subject: string;
+  kind: DisputeRow["kind"];
+  category: string;
+  status: DisputeStatus;
+  reason_label: string | null;
+  remedy_label: string | null;
+  description: string;
+  reference: string | null;
+  amount_on_hold: string | null;
+  raised_by: { id: number; name: string } | null;
+  against: { id: number; name: string; profile_id: number | null } | null;
+  project: { id: number; title: string } | null;
+  milestone: { id: number; title: string; amount: string; status: string } | null;
+  reply_by: string | null;
+  escalated_at: string | null;
+  escalation_note: string | null;
+  decision_due: string | null;
+  evidence_until: string | null;
+  outcome: string | null;
+  resolution: string | null;
+  released_amount: string | null;
+  refund_amount: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+  messages: { id: number; kind: "message" | "offer" | "system" | "decision"; body: string | null; offer: { type: string; status: string; fix_by?: string; amount?: string } | null; from: "family" | "vendor" | "patriai"; name: string; created_at: string | null }[];
+  files: { id: number; kind: "image" | "video" | "document"; url: string; name: string; from: "family" | "vendor" }[];
 }

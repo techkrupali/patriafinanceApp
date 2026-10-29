@@ -16,4 +16,6 @@ export const STORAGE_KEYS = {
   language: 'patriai.language',
   /** Home tab preferences: hide balances on open, which sections show. */
   homePrefs: 'patriai.home_prefs',
+  /** VDM-03: the app opens in family mode or business (vendor) mode. */
+  mode: 'patriai.mode',
 } as const;

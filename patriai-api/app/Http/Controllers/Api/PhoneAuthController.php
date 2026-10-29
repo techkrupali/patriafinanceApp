@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use App\Services\AccountSetupService;
+use App\Services\VendorAccountService;
 use App\Services\OtpService;
 use App\Services\PinService;
 use Illuminate\Http\JsonResponse;
@@ -132,6 +133,8 @@ class PhoneAuthController extends ApiController
         $user->forceFill(['phone_verified_at' => now(), 'last_login_at' => now()])->save();
 
         AccountSetupService::make()->setUp($user, $data['referral_code'] ?? null);
+        // INV-V1: a family invited this number to build their project before it had an account.
+        VendorAccountService::make()->linkInvites($user);
         $this->recordDevice($request, $user);
         Cache::forget($this->tokenKey($data['phone_token']));
 

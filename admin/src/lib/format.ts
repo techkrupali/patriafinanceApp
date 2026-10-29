@@ -23,6 +23,12 @@ export function formatDate(iso: string | null | undefined): string {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/** A deadline (reply by, decide by): the day as Patriai set it in Lagos, not moved into this browser's timezone. */
+export function formatDeadline(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -95,10 +101,31 @@ const LABELS: Record<string, string> = {
   // KYC applicant types
   individual: "Individual",
   business: "Business",
+  // Business verification (VON-02…09)
+  needs_changes: "Sent back",
+  selfie: "Selfie",
+  id_front: "ID front",
+  id_back: "ID back",
+  cac_certificate: "CAC certificate",
+  cac_status_report: "CAC status report",
+  memorandum: "Memorandum and articles",
+  address_proof: "Proof of address",
+  office_photo: "Office or yard",
+  tin_certificate: "TIN certificate",
+  passport: "International passport",
+  drivers_licence: "Driver's licence",
+  voters_card: "Voter's card",
+  national_id: "National ID",
+  // Disputes
+  responded: "Builder replied",
+  fixing: "Being fixed",
+  escalated: "With Patriai",
+  changes_proposed: "Changes asked",
 };
 
+/** A known label, or the key in words ("under_review" → "Under review"). */
 export function label(value: string): string {
-  return LABELS[value] ?? value;
+  return LABELS[value] ?? (value.charAt(0).toUpperCase() + value.slice(1)).replace(/_/g, " ");
 }
 
 // Loan category labels are kept separate from `label()` so their human

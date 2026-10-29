@@ -1,255 +1,143 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Input } from '../../components/Input';
-import { EmptyState } from '../../components/EmptyState';
-import { LoadError } from '../../components/LoadError';
-import { colors, gradients, outline } from '../../theme';
-import { useVendors } from '../../api/hooks';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { useDirectory } from '../../api/projectFlow';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtAvatar } from '../../components/pt/PtAvatar';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtField } from '../../components/pt/PtField';
+import { PtPills, PtSwitchRow } from '../../components/pt/PtForm';
+import { PtSheet } from '../../components/pt/PtSheet';
+import { LoadingBlock } from '../../components/project/ProjectUi';
+import { TRADES, tradeLabel } from '../../lib/projects';
 import { selection } from '../../lib/haptics';
 import type { VendorListing } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
+const FILTERS = TRADES.filter((t) => t.value !== 'other').map((t) => ({ value: t.value, label: t.plural }));
 
-const CATEGORIES: { value: string; label: string; icon: IconName }[] = [
-  { value: 'all', label: 'All', icon: 'grid-outline' },
-  { value: 'construction', label: 'Construction', icon: 'hammer-outline' },
-  { value: 'events', label: 'Events', icon: 'balloon-outline' },
-  { value: 'catering', label: 'Catering', icon: 'restaurant-outline' },
-  { value: 'education', label: 'Education', icon: 'school-outline' },
-  { value: 'tech', label: 'Tech', icon: 'laptop-outline' },
-  { value: 'logistics', label: 'Logistics', icon: 'car-outline' },
-  { value: 'fashion', label: 'Fashion', icon: 'shirt-outline' },
-  { value: 'health', label: 'Health', icon: 'medkit-outline' },
-  { value: 'other', label: 'Other', icon: 'ellipsis-horizontal-circle-outline' },
-];
-
-function categoryLabel(value: string): string {
-  return CATEGORIES.find((c) => c.value === value)?.label ?? value;
-}
-
-function VendorCard({ vendor, onPress }: { vendor: VendorListing; onPress: () => void }) {
+/** One directory row: monogram, name with a tick when verified, trade and town, stars. */
+function VendorRow({ v, onPress, last }: { v: VendorListing; onPress: () => void; last: boolean }) {
   return (
-    <Card className="mt-3" onPress={onPress}>
-      <View className="flex-row items-center">
-        <LinearGradient
-          colors={gradients.avatar}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            height: 46,
-            width: 46,
-            borderRadius: 23,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: 12,
-          }}
-        >
-          <Text className="text-sm font-bold text-white">{vendor.initials}</Text>
-        </LinearGradient>
-
-        <View className="flex-1 pr-2">
-          <View className="flex-row items-center">
-            <Text className="shrink text-[15px] font-bold text-ink" numberOfLines={1}>
-              {vendor.business_name}
+    <Pressable onPress={() => { selection(); onPress(); }} accessibilityRole="button" accessibilityLabel={v.business_name}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: last ? 0 : 1, borderBottomColor: pt.line }}>
+        <PtAvatar initials={v.initials} uri={v.logo_url} size={48} tone="gold" />
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ flexShrink: 1, fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }} numberOfLines={1}>
+              {v.business_name}
             </Text>
-            {vendor.verified ? (
-              <Ionicons
-                name="shield-checkmark"
-                size={14}
-                color={colors.brand}
-                style={{ marginLeft: 5 }}
-              />
-            ) : null}
+            {v.verified ? <Feather name="check" size={15} color={pt.brand} accessibilityLabel="Verified" /> : null}
           </View>
-          <Text className="mt-0.5 text-xs text-faded" numberOfLines={1}>
-            {vendor.name}
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>
+            {tradeLabel(v.category)}{v.location ? ` · ${v.location}` : ''}
           </Text>
-        </View>
-
-        <View className="rounded bg-lav-faint px-2.5 py-1">
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">
-            {categoryLabel(vendor.category)}
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>
+            {v.rating ? (
+              <>
+                <Text style={{ color: pt.gold500 }}>★ </Text>
+                <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>{v.rating.toFixed(1)}</Text> ({v.reviews} review{v.reviews === 1 ? '' : 's'})
+              </>
+            ) : v.verified ? (
+              'New on Patriai · verified'
+            ) : (
+              'Not verified yet'
+            )}
           </Text>
         </View>
       </View>
-
-      {vendor.bio ? (
-        <Text className="mt-3 text-[13px] leading-5 text-muted" numberOfLines={2}>
-          {vendor.bio}
-        </Text>
-      ) : null}
-
-      {vendor.location || vendor.projects_completed > 0 ? (
-        <View className="mt-3 flex-row items-center">
-          {vendor.location ? (
-            <View className="flex-row items-center" style={{ marginRight: 6 }}>
-              <Ionicons
-                name="location-outline"
-                size={13}
-                color={colors.faded}
-                style={{ marginRight: 3 }}
-              />
-              <Text className="text-xs text-faded" numberOfLines={1}>
-                {vendor.location}
-              </Text>
-            </View>
-          ) : null}
-          {vendor.projects_completed > 0 ? (
-            <Text className="text-xs text-faded">
-              {vendor.location ? '· ' : ''}
-              {vendor.projects_completed} project{vendor.projects_completed === 1 ? '' : 's'} done
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </Card>
+    </Pressable>
   );
 }
 
-export function VendorDirectoryScreen({ navigation }: RootScreenProps<'VendorDirectory'>) {
+/**
+ * VND-01 "Find a vendor": search, trade, near a town, verified only. Opened
+ * from a project it carries that project, so a profile can be added to it.
+ */
+export function VendorDirectoryScreen({ navigation, route }: RootScreenProps<'VendorDirectory'>) {
+  const projectId = route.params?.projectId;
   const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
-  const [category, setCategory] = useState('all');
+  const [debounced, setDebounced] = useState('');
+  const [category, setCategory] = useState(route.params?.category ?? 'building');
+  const [near, setNear] = useState(route.params?.near ?? '');
+  const [verified, setVerified] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [nearDraft, setNearDraft] = useState(near);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 350);
+    const t = setTimeout(() => setDebounced(q), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const query = useVendors(debouncedQ, category);
+  const query = useDirectory(debounced, category, near, verified);
   const vendors = query.data?.pages.flatMap((p) => p.vendors) ?? [];
-
-  const openMyProfile = () => {
-    selection();
-    navigation.navigate('BecomeVendor');
-  };
-
-  const right = (
-    <Pressable
-      onPress={openMyProfile}
-      hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
-      style={outline.card}
-    >
-      <Ionicons name="person-circle-outline" size={24} color={colors.navy} />
-    </Pressable>
-  );
+  const trade = TRADES.find((t) => t.value === category)?.label.toLowerCase() ?? 'vendor';
 
   return (
-    <Screen withBottomInset>
-      <Header title="Vendor directory" right={right} />
-
-      <View className="px-5 pt-2">
-        <Input
-          icon="search-outline"
+    <PtPageScreen
+      title="Find a vendor"
+      subtitle={verified ? 'Verified businesses' : 'All businesses'}
+      onBack={() => navigation.goBack()}
+      right={
+        <Pressable
+          onPress={() => { selection(); navigation.navigate('Tabs', { screen: 'Steward', params: { ask: `Find a ${trade === 'building' ? 'builder' : trade} near ${near || 'me'}` } }); }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Ask Steward"
+        >
+          <Feather name="shield" size={22} color={pt.ink} />
+        </Pressable>
+      }
+      gap={14}
+    >
+      <View style={{ height: 52, borderRadius: ptRadius.sm, borderWidth: 1.5, borderColor: pt.lineStrong, backgroundColor: pt.raised, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 }}>
+        <Feather name="search" size={18} color={pt.inkMuted} />
+        <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder="Search vendors…"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
+          placeholder="Tilers, caterers, schools…"
+          placeholderTextColor={pt.inkSubtle}
+          accessibilityLabel="Search vendors"
+          style={{ flex: 1, minWidth: 0, fontFamily: ptFont.medium, fontSize: 16, color: pt.ink }}
         />
       </View>
+      <PtPills options={FILTERS} value={category} onChange={(v) => setCategory(category === v ? '' : v)} />
+      <Pressable onPress={() => { selection(); setNearDraft(near); setFiltersOpen(true); }} accessibilityRole="button" accessibilityLabel="Filters">
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>
+          <Text style={{ fontFamily: ptFont.bold, color: pt.ink }}>{near ? `Near ${near}` : 'Anywhere'}</Text>
+          {` · ${verified ? 'Verified only' : 'Everyone'} · Any price`}
+        </Text>
+      </Pressable>
 
-      <View className="mt-3">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
-        >
-          {CATEGORIES.map((c) => {
-            const active = category === c.value;
-            return (
-              <Pressable
-                key={c.value}
-                onPress={() => {
-                  selection();
-                  setCategory(c.value);
-                }}
-                className={`flex-row items-center rounded px-4 py-2.5 active:opacity-90 ${
-                  active ? 'bg-navy' : 'bg-lav'
-                }`}
-              >
-                <Ionicons
-                  name={c.icon}
-                  size={14}
-                  color={active ? colors.white : colors.ink}
-                  style={{ marginRight: 6 }}
-                />
-                <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink'}`}>
-                  {c.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {query.isLoading || query.error ? (
+        <LoadingBlock error={query.error ? (query.error as Error).message : null} onRetry={() => void query.refetch()} />
+      ) : vendors.length === 0 ? (
+        <View style={{ paddingVertical: 32, alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }}>No one found</Text>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted, textAlign: 'center' }}>
+            Try another trade, or search further than {near || 'here'}.
+          </Text>
+        </View>
+      ) : (
+        <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: 16 }}>
+          {vendors.map((v, i) => (
+            <VendorRow key={v.id} v={v} last={i === vendors.length - 1} onPress={() => navigation.navigate('VendorProfile', { profileId: v.id, projectId })} />
+          ))}
+        </View>
+      )}
+      {query.hasNextPage ? <PtButton title="Show more" variant="ghost" onPress={() => void query.fetchNextPage()} loading={query.isFetchingNextPage} /> : null}
 
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={query.isRefetching}
-            onRefresh={() => void query.refetch()}
-            tintColor={colors.navy}
-          />
-        }
+      <PtSheet
+        visible={filtersOpen}
+        title="Filters"
+        onClose={() => setFiltersOpen(false)}
+        footer={<PtButton title="Show vendors" onPress={() => { setNear(nearDraft.trim()); setFiltersOpen(false); }} />}
       >
-        {query.isLoading ? (
-          <View className="items-center py-24">
-            <ActivityIndicator size="large" color={colors.navy} />
-          </View>
-        ) : query.error ? (
-          <LoadError
-            message={(query.error as Error).message}
-            onRetry={() => query.refetch()}
-            className="mt-6"
-          />
-        ) : vendors.length === 0 ? (
-          <EmptyState
-            className="mt-6"
-            icon="storefront-outline"
-            title="No vendors found"
-            message="Try a different search or category."
-          />
-        ) : (
-          <View>
-            {vendors.map((v) => (
-              <VendorCard
-                key={v.id}
-                vendor={v}
-                onPress={() => {
-                  selection();
-                  navigation.navigate('VendorProfile', { profileId: v.id });
-                }}
-              />
-            ))}
-
-            {query.hasNextPage ? (
-              <Pressable
-                onPress={() => void query.fetchNextPage()}
-                disabled={query.isFetchingNextPage}
-                className="mt-3 items-center rounded bg-lav-soft py-3.5 active:opacity-80"
-              >
-                {query.isFetchingNextPage ? (
-                  <ActivityIndicator color={colors.navy} />
-                ) : (
-                  <Text className="text-sm font-semibold text-navy">Load more</Text>
-                )}
-              </Pressable>
-            ) : null}
-          </View>
-        )}
-      </ScrollView>
-    </Screen>
+        <PtField label="Near" value={nearDraft} onChangeText={setNearDraft} placeholder="Nsukka" maxLength={60} />
+        <PtSwitchRow title="Verified only" subtitle="Families can only pay verified businesses." value={verified} onChange={setVerified} />
+      </PtSheet>
+    </PtPageScreen>
   );
 }

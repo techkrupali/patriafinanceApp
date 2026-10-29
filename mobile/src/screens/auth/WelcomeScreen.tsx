@@ -45,7 +45,8 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   const start = (invite: boolean) => {
     // An invite is matched to the phone number at sign-up; open it once inside.
     setPostAuthRoute(invite ? 'Invitations' : null);
-    navigation.navigate('Phone');
+    // VON-01: a new account says first whether it's for a family or a business.
+    navigation.navigate(invite ? 'Phone' : 'AccountType');
   };
 
   return (

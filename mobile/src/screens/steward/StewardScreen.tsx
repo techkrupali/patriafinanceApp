@@ -96,7 +96,7 @@ function StewardCard({ children, tone = 'raised' }: { children: React.ReactNode;
  * own reading of the family's live numbers. Steward never moves money itself:
  * transfers it prepares still need your PIN.
  */
-export function StewardScreen({ navigation }: TabScreenProps<'Steward'>) {
+export function StewardScreen({ navigation, route }: TabScreenProps<'Steward'>) {
   const insets = useSafeAreaInsets();
   const home = useHome();
   const wallets = useWallets();
@@ -159,6 +159,15 @@ export function StewardScreen({ navigation }: TabScreenProps<'Steward'>) {
 
   const reply = (text: string, action: AssistantAction | null = null) =>
     setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', text, action }]);
+
+  // VND-03 "Ask Steward" from the vendor directory arrives with its question.
+  const asked = route.params?.ask;
+  useEffect(() => {
+    if (!asked) return;
+    navigation.setParams({ ask: undefined });
+    ask(asked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
 
   const ask = (raw: string) => {
     const text = raw.trim();

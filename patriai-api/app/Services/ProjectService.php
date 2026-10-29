@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\ApprovalRequest;
 use App\Models\Milestone;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\VendorProfile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -37,13 +39,6 @@ class ProjectService
     {
         if ($project->owner_id !== $owner->id) {
             throw ValidationException::withMessages(['project' => 'Only the project owner can perform this action']);
-        }
-    }
-
-    private function assertOwnerOrVendor(Project $project, User $user): void
-    {
-        if ($project->owner_id !== $user->id && $project->vendor_id !== $user->id) {
-            throw ValidationException::withMessages(['project' => 'Only the project owner or vendor can perform this action']);
         }
     }
 
@@ -103,13 +98,18 @@ class ProjectService
             }
         }
 
-        $project->update(['vendor_id' => $vendor->id]);
+        // INV-V1: the builder is invited, and accepts (or asks for changes, or declines).
+        $meta = $project->meta ?? [];
+        unset($meta['vendor_declined'], $meta['reinvite_on'], $meta['vendor_invite']);
+        $project->update(['vendor_id' => $vendor->id, 'vendor_status' => 'invited', 'vendor_responded_at' => null, 'meta' => $meta]);
+        $business = \App\Models\VendorProfile::where('user_id', $vendor->id)->value('business_name') ?? $vendor->fullName();
+        $family = $owner->last_name ? "The {$owner->last_name} family" : $owner->fullName();
 
         $this->notifications->push(
             $vendor,
-            'project_vendor_assigned',
-            'You were assigned to a project',
-            "{$owner->fullName()} assigned you as the vendor on \"{$project->title}\".",
+            'project_vendor_invited',
+            "{$family} invited {$business}",
+            "Review the milestones for \"{$project->title}\", then accept, ask for a change, or decline.",
             ['project_id' => $project->id, 'title' => $project->title],
         );
 
@@ -139,8 +139,10 @@ class ProjectService
      */
     public function addMilestone(Project $project, User $actor, string $title, ?string $description, int $amountKobo, ?string $dueDate = null): Milestone
     {
-        // Both the project owner and the assigned vendor may add milestones.
-        $this->assertOwnerOrVendor($project, $actor);
+        // The family (the owner or a co-owner); the builder proposes instead (VDM-09).
+        if (!$project->isFamilyApprover($actor)) {
+            throw ValidationException::withMessages(['project' => 'Only the family can add a milestone']);
+        }
 
         if ($project->status !== 'active') {
             throw ValidationException::withMessages(['project' => 'Project is not active']);
@@ -148,15 +150,9 @@ class ProjectService
         if ($amountKobo <= 0) {
             throw ValidationException::withMessages(['amount' => 'Amount must be greater than zero']);
         }
-        if ($amountKobo > $project->availableToAllocate()) {
-            throw ValidationException::withMessages([
-                'amount' => 'Insufficient available funds in this Project Wallet. Fund the escrow first — only ₦'
-                    . $this->naira($project->availableToAllocate()) . ' is available to allocate to milestones.',
-            ]);
-        }
-
         $sequence = ((int) $project->milestones()->max('sequence')) + 1;
 
+        // Funded when the wallet covers it; otherwise planned until the money is in (PRW-03).
         $milestone = Milestone::create([
             'project_id' => $project->id,
             'sequence' => $sequence,
@@ -164,7 +160,7 @@ class ProjectService
             'description' => $description,
             'amount' => $amountKobo,
             'due_date' => $dueDate,
-            'status' => 'funded',
+            'status' => $amountKobo <= $project->availableToAllocate() ? 'funded' : 'planned',
         ]);
 
         // Notify the counterparty (owner adds -> tell vendor; vendor adds -> tell owner).
@@ -186,8 +182,11 @@ class ProjectService
     public function submitMilestone(Milestone $milestone, User $vendor, string $proof): Milestone
     {
         $project = $milestone->project;
-        if (!$project || $project->vendor_id !== $vendor->id) {
+        if (!$project || !$project->actsForVendor($vendor, 'submit')) {
             throw ValidationException::withMessages(['milestone' => 'Only the assigned vendor can submit this milestone']);
+        }
+        if (!in_array($project->vendor_status, ['accepted', null], true)) {
+            throw ValidationException::withMessages(['milestone' => 'Accept the project before submitting work.']);
         }
         if ($project->status !== 'active') {
             throw ValidationException::withMessages(['project' => 'Project is not active.']);
@@ -200,10 +199,14 @@ class ProjectService
             throw ValidationException::withMessages(['milestone' => "The money for \"{$milestone->title}\" isn't in the project wallet yet. Only ₦" . $this->naira(max(0, $project->availableToAllocate())) . ' is free.']);
         }
 
+        $meta = $milestone->meta ?? [];
+        unset($meta['rejection']);
         $milestone->update([
             'status' => 'submitted',
             'proof' => $proof,
             'submitted_at' => now(),
+            'submitted_by' => $vendor->id,
+            'meta' => $meta,
         ]);
 
         if ($owner = $project->owner) {
@@ -220,37 +223,55 @@ class ProjectService
     }
 
     /**
-     * Approve a submitted milestone and RELEASE its amount to the vendor's main wallet.
-     * Owner only. The escrow transfer is atomic + overdraft-guarded inside WalletService;
-     * on any money failure the ValidationException rolls the whole thing back so the
-     * milestone is NOT marked released.
+     * The family approves a submitted milestone (the owner or a co-owner, PRJ-07).
+     * If the escrow wallet's governance requires approval for this amount, this
+     * routes the payout through the multi-approver ApprovalService (milestone
+     * moves to 'approved' = awaiting approvers, escrow stays reserved) and a later
+     * approver's yes is recorded on that request; otherwise it releases straight
+     * away. Nothing is paid while a dispute holds it or to an unverified business.
      *
-     * @return array{milestone: Milestone, reference: string}
+     * @return array{status: string, milestone: Milestone, reference?: string, approval_request_id?: int}
      */
-    /**
-     * Owner approves a submitted milestone. If the escrow wallet's governance
-     * requires approval for this amount, this routes the payout through the
-     * multi-approver ApprovalService (milestone moves to 'approved' = awaiting
-     * approvers, escrow stays reserved) instead of releasing immediately.
-     * Otherwise it releases straight away.
-     */
-    public function approveMilestone(Milestone $milestone, User $owner): array
+    public function approveMilestone(Milestone $milestone, User $approver): array
     {
         $project = $milestone->project;
-        if (!$project || $project->owner_id !== $owner->id) {
+        if (!$project || !$project->isFamilyApprover($approver)) {
             throw ValidationException::withMessages(['milestone' => 'Only the project owner can approve this milestone']);
         }
         if ($project->status !== 'active') {
             throw ValidationException::withMessages(['project' => 'Project is not active.']);
         }
+
+        // PRJ-07 "Chidi · Waiting": the next approver says yes to the request the first one started.
+        $requestId = $milestone->meta['approval_request_id'] ?? null;
+        if ($milestone->status === 'approved' && $requestId && ($pending = ApprovalRequest::find($requestId)) && $pending->status === 'pending') {
+            ApprovalService::make()->respond($pending, $approver, 'approve', null);
+            $milestone->refresh();
+
+            return $milestone->status === 'released'
+                ? ['status' => 'released', 'milestone' => $milestone, 'reference' => $milestone->released_transaction_reference]
+                : ['status' => 'pending_approval', 'milestone' => $milestone, 'approval_request_id' => $pending->id];
+        }
+
         if ($milestone->status !== 'submitted') {
             throw ValidationException::withMessages(['milestone' => 'Only a submitted milestone can be approved']);
+        }
+        // DSP-02 "Opening a dispute puts the milestone payment on hold until it is sorted."
+        $dispute = $milestone->activeDispute();
+        if ($dispute && $dispute->status !== 'fixing') {
+            throw ValidationException::withMessages(['milestone' => 'This payment is on hold while the dispute is open.']);
         }
         if (!$project->vendor_id || !$project->vendor) {
             throw ValidationException::withMessages(['milestone' => 'No vendor is assigned to receive this payout']);
         }
         if (!$project->vendor->mainWallet()) {
             throw ValidationException::withMessages(['milestone' => 'Vendor has no active wallet to receive payment']);
+        }
+        // VON-09 "Until you're approved … families can't pay you yet."
+        $profile = VendorProfile::where('user_id', $project->vendor_id)->first();
+        if (!$profile?->canBePaid()) {
+            $name = $profile?->business_name ?? $project->vendor->fullName();
+            throw ValidationException::withMessages(['milestone' => "{$name} isn't verified yet. Families can only pay verified businesses."]);
         }
 
         $projectWallet = $project->wallet;
@@ -261,7 +282,7 @@ class ProjectService
         if ($projectWallet->approvalRequiredFor($milestone->amount)) {
             $request = ApprovalService::make()->create(
                 $projectWallet,
-                $owner,
+                $approver,
                 'milestone_release',
                 $milestone->amount,
                 0,
@@ -281,7 +302,7 @@ class ProjectService
             ];
         }
 
-        $result = $this->releaseMilestone($milestone, $owner);
+        $result = $this->releaseMilestone($milestone, $approver);
 
         return ['status' => 'released', 'milestone' => $result['milestone'], 'reference' => $result['reference']];
     }
@@ -292,7 +313,7 @@ class ProjectService
      * a milestone_release request reaches its approval count. Row-locked and
      * idempotent: releases only a 'submitted' or 'approved' (pending) milestone.
      */
-    public function releaseMilestone(Milestone $milestone, User $actor): array
+    public function releaseMilestone(Milestone $milestone, User $actor, int $refund = 0): array
     {
         $project = $milestone->project;
         $vendor = $project?->vendor;
@@ -302,7 +323,7 @@ class ProjectService
             throw ValidationException::withMessages(['milestone' => 'Cannot release: vendor or wallet is missing.']);
         }
 
-        return DB::transaction(function () use ($milestone, $project, $actor, $vendor, $vendorWallet, $projectWallet) {
+        $released = DB::transaction(function () use ($milestone, $project, $actor, $vendor, $vendorWallet, $projectWallet, $refund) {
             // Row lock so two concurrent releases cannot both pay out. The second
             // finds a non-releasable status and aborts before any transfer.
             $fresh = Milestone::whereKey($milestone->id)->lockForUpdate()->first();
@@ -310,15 +331,18 @@ class ProjectService
                 throw ValidationException::withMessages(['milestone' => 'This milestone has already been processed']);
             }
 
+            // A dispute's partial refund (DSP-07) stays in the project wallet; the rest is paid.
+            $refund = max(0, min($refund, $fresh->amount));
+            $paid = $fresh->amount - $refund;
             // PRW-06 "Held back: 10% until 3 months after handover" stays in escrow.
-            $retention = intdiv($fresh->amount * (int) ($project->meta['release']['retention_percent'] ?? 0), 100);
+            $retention = intdiv($paid * (int) ($project->meta['release']['retention_percent'] ?? 0), 100);
 
             // Overdraft-guarded, row-locked escrow payout. Throws (and rolls back
             // this transaction) if the escrow was drained below the amount.
             $result = $this->wallets->transferBetweenWallets(
                 $projectWallet,
                 $vendorWallet,
-                $fresh->amount - $retention,
+                $paid - $retention,
                 $actor,
                 "Milestone payout: {$fresh->title}",
             );
@@ -328,6 +352,7 @@ class ProjectService
                 'released_at' => now(),
                 'released_transaction_reference' => $result['reference'],
                 'retention' => $retention,
+                'meta' => array_merge($fresh->meta ?? [], array_filter(['refunded' => $refund ?: null, 'paid_now' => $paid - $retention])),
             ]);
 
             // Auto-complete the project once every milestone is released — only from
@@ -335,7 +360,7 @@ class ProjectService
             // handover: what was held back is paid some months on.
             if ($project->status === 'active'
                 && $project->milestones()->count() > 0
-                && !$project->milestones()->where('status', '!=', 'released')->exists()) {
+                && !$project->milestones()->whereNotIn('status', ['released', 'cancelled'])->exists()) {
                 $project->update(['status' => 'completed']);
                 $project->milestones()->where('retention', '>', 0)->whereNull('retention_released_at')
                     ->update(['retention_due_at' => now()->addMonthsNoOverflow((int) ($project->meta['release']['retention_months'] ?? 3))]);
@@ -345,7 +370,7 @@ class ProjectService
                 $vendor,
                 'milestone_released',
                 'Milestone payment released',
-                '₦' . $this->naira($fresh->amount - $retention) . " was released to your wallet for \"{$fresh->title}\"." . ($retention ? ' ₦' . $this->naira($retention) . ' is held back until after handover.' : ''),
+                '₦' . $this->naira($paid - $retention) . " was released to your wallet for \"{$fresh->title}\"." . ($retention ? ' ₦' . $this->naira($retention) . ' is held back until after handover.' : ''),
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
@@ -358,7 +383,7 @@ class ProjectService
                 $project->owner,
                 'milestone_released',
                 'Milestone paid',
-                "\"{$fresh->title}\" — ₦" . $this->naira($fresh->amount) . " released to {$vendor->fullName()}.",
+                "\"{$fresh->title}\" — ₦" . $this->naira($paid - $retention) . " released to {$vendor->fullName()}.",
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
@@ -366,23 +391,40 @@ class ProjectService
                 ],
             );
 
-            return ['milestone' => $fresh->refresh(), 'reference' => $result['reference']];
+            // DSP-09: the fix the family accepted is done and paid, so the dispute closes.
+            if (($dispute = $fresh->activeDispute()) && $dispute->status === 'fixing') {
+                DisputeService::make()->resolveFixed($dispute, $paid - $retention, $retention);
+            }
+
+            return ['milestone' => $fresh->refresh(), 'reference' => $result['reference'], 'paid' => $paid - $retention];
         });
+
+        // After the money is safely in: "Automatic withdrawal — every payout, straight away"
+        // (VDM-06), and the next milestone's money is set aside.
+        VendorPayoutService::make()->autoWithdraw($vendor, $released['paid'], $milestone->title);
+        VendorProjectService::make()->fundPlanned($project->refresh());
+
+        return $released;
     }
 
-    /** Reject a submitted milestone back to 'funded' for revision. Owner only. */
+    /** PRJ-06 "Ask for changes": a submitted milestone goes back to the builder. The owner or a co-owner. */
     public function rejectMilestone(Milestone $milestone, User $owner, ?string $note): Milestone
     {
         $project = $milestone->project;
-        if (!$project || $project->owner_id !== $owner->id) {
+        if (!$project || !$project->isFamilyApprover($owner)) {
             throw ValidationException::withMessages(['milestone' => 'Only the project owner can reject this milestone']);
         }
-        if ($milestone->status !== 'submitted') {
+        if (!in_array($milestone->status, ['submitted', 'approved'], true)) {
             throw ValidationException::withMessages(['milestone' => 'Only a submitted milestone can be rejected']);
         }
 
         $meta = $milestone->meta ?? [];
-        $meta['rejection'] = $note;
+        // A co-owner's "not yet" stops the approval the first one started.
+        if (!empty($meta['approval_request_id'])) {
+            ApprovalRequest::whereKey($meta['approval_request_id'])->where('status', 'pending')->update(['status' => 'cancelled']);
+            unset($meta['approval_request_id']);
+        }
+        $meta['rejection'] = $note ?: 'The family asked for changes.';
 
         $milestone->update([
             'status' => 'funded',

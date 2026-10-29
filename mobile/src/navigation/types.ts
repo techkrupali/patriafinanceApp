@@ -20,6 +20,8 @@ export interface SignupDetails {
  */
 export type AuthStackParamList = {
   Welcome: undefined;
+  /** VON-01 "How will you use Patriai?" — a family or a business. */
+  AccountType: undefined;
   /** ONB-03 */
   Phone: undefined;
   /** ACC-01 */
@@ -55,14 +57,25 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Family: undefined;
-  Steward: undefined;
+  /** `ask`: a question to put to Steward straight away (VND-03 "Find a tiler near Nsukka"). */
+  Steward: { ask?: string } | undefined;
   Treasury: undefined;
   Rules: undefined;
   More: undefined;
 };
 
+/** VDM-03…08 vendor mode: Projects · Payouts · Disputes · Profile. */
+export type VendorTabParamList = {
+  VendorHome: undefined;
+  VendorPayouts: undefined;
+  VendorDisputes: undefined;
+  VendorProfileTab: undefined;
+};
+
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  /** Vendor mode, for a business and its team. */
+  VendorTabs: NavigatorScreenParams<VendorTabParamList> | undefined;
   /** HOM-08: which Home sections show, hide balances on open. */
   CustomiseHome: undefined;
   /** TRS-02: every wallet, grouped, with drafts. */
@@ -150,8 +163,18 @@ export type RootStackParamList = {
   Automations: undefined;
   CreateAutomation: { fromWalletId?: number; toWalletId?: number } | undefined;
   // ---- Support & compliance ----
+  /** DSP-01 */
   Disputes: undefined;
-  RaiseDispute: { reference?: string; category?: string } | undefined;
+  /** DSP-02…04, from a milestone ("Something isn't right") or from scratch. */
+  StartDispute: { milestoneId?: number } | undefined;
+  /** DSP-05, or DSP-09 once closed. */
+  DisputeDetail: { disputeId: number };
+  /** DSP-06 */
+  DisputeChat: { disputeId: number };
+  /** DSP-07 the builder's answer. */
+  DisputeRespond: { disputeId: number };
+  /** DSP-08 */
+  EscalateDispute: { disputeId: number };
   HelpFaq: undefined;
   SecurityCenter: undefined;
   // ---- Referral & rewards ----
@@ -159,9 +182,26 @@ export type RootStackParamList = {
   // ---- Savings goals ----
   Goals: undefined;
   // ---- Vendor discovery ----
-  VendorDirectory: undefined;
-  VendorProfile: { profileId: number };
-  BecomeVendor: undefined;
+  /** VND-01; from a project it can add the vendor to it. */
+  VendorDirectory: { projectId?: number; near?: string; category?: string } | undefined;
+  /** VND-02 */
+  VendorProfile: { profileId: number; projectId?: number };
+  /** VND-04 */
+  RateVendor: { profileId: number; name: string; milestoneId?: number; milestoneTitle?: string; projectId?: number; town?: string };
+  // ---- Business account (VDM-01, VON-02…10) ----
+  BusinessSetup: { step?: number } | undefined;
+  BusinessVerification: undefined;
+  // ---- Vendor mode (VDM-04…11, INV-V1…V5, INV-VT1) ----
+  VendorProject: { projectId: number };
+  SubmitWork: { projectId: number; milestoneId: number };
+  ProposeMilestone: { projectId: number; milestoneId?: number };
+  VendorTeam: undefined;
+  InviteTeam: undefined;
+  TeamInvite: { memberId: number };
+  ProjectInvite: { projectId: number };
+  InviteMilestones: { projectId: number };
+  AskChange: { projectId: number; milestoneId: number };
+  ChangesSent: { projectId: number };
   Approvals: { scope?: 'to_me' | 'mine' } | undefined;
   ApprovalDetail: { approvalId: number };
   Notifications: undefined;
@@ -172,11 +212,26 @@ export type RootStackParamList = {
   LoanDetail: { loanId: number };
   Repay: { loanId: number };
   // ---- Projects & vendors (Milestone 5) ----
+  /** PRJ-01 */
   Projects: undefined;
-  CreateProject: { name?: string; draftId?: number } | undefined;
+  /** PRJ-03 (PRJ-12 when the builder declined). */
   ProjectDetail: { projectId: number };
-  AssignVendor: { projectId: number };
-  AddMilestone: { projectId: number };
+  /** PRJ-04 */
+  Milestones: { projectId: number };
+  /** PRJ-05; without a milestone it adds one. */
+  EditMilestone: { projectId: number; milestoneId?: number };
+  /** PRJ-06 */
+  ReviewMilestone: { projectId: number; milestoneId: number };
+  /** PRJ-07 */
+  ReleasePayment: { projectId: number; milestoneId: number };
+  /** PRJ-09 */
+  ProjectDocuments: { projectId: number };
+  /** PRJ-10 */
+  ProjectBudget: { projectId: number };
+  /** PRJ-11 */
+  ApproveProposal: { projectId: number; milestoneId: number };
+  /** The project chat. */
+  ProjectChat: { projectId: number };
   // ---- KYC & compliance (Milestone 6) ----
   Kyc: undefined;
   KycSubmit: { targetTier: number };
@@ -194,5 +249,10 @@ export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScr
 
 export type TabScreenProps<T extends keyof MainTabParamList> = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, T>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export type VendorTabScreenProps<T extends keyof VendorTabParamList> = CompositeScreenProps<
+  BottomTabScreenProps<VendorTabParamList, T>,
   NativeStackScreenProps<RootStackParamList>
 >;

@@ -60,6 +60,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Projects: retention held back after handover goes to the builder when it's due.
         $schedule->command('projects:release-retention')->dailyAt('09:00')->timezone('Africa/Lagos');
+        // A builder who declined said when they could start; the family is reminded that month.
+        $schedule->command('projects:reinvite-reminders')->dailyAt('09:00')->timezone('Africa/Lagos');
+        // Disputes the builder didn't answer within 3 days go to Patriai.
+        $schedule->command('disputes:escalate-overdue')->hourly();
 
         // Monthly "time to save" reminders on each wallet's chosen day (WCR-11).
         $schedule->command('wallets:remind-savers')->dailyAt('09:00');

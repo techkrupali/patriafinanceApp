@@ -128,6 +128,23 @@ export default function ProjectDetailPage({
                   )}
                 </Field>
                 <Field name="Created">{formatDate(project!.created_at)}</Field>
+                <Field name="Builder">
+                  {project!.vendor ? (
+                    project!.vendor.profile_id ? (
+                      <Link href={`/vendors/${project!.vendor.profile_id}`} className="text-brand hover:underline">
+                        {project!.vendor.name}
+                      </Link>
+                    ) : (
+                      project!.vendor.name
+                    )
+                  ) : project!.vendor_declined ? (
+                    `${project!.vendor_declined.name} declined (${project!.vendor_declined.reason.replace(/_/g, " ")})`
+                  ) : (
+                    "None yet"
+                  )}
+                  {project!.vendor_status ? <span className="mt-1 block"><StatusBadge status={project!.vendor_status} /></span> : null}
+                  {project!.vendor && project!.vendor.verified === false ? <span className="block text-xs font-normal text-danger">{"Not verified — can't be paid yet"}</span> : null}
+                </Field>
                 {project!.description ? (
                   <div className="col-span-2 sm:col-span-3">
                     <Field name="Description">{project!.description}</Field>
@@ -244,6 +261,11 @@ export default function ProjectDetailPage({
                     <TD className="text-right font-semibold">{naira(m.amount)}</TD>
                     <TD>
                       <StatusBadge status={m.status} />
+                      {m.dispute ? (
+                        <Link href={`/disputes/${m.dispute.id}`} className="mt-1 block text-xs font-semibold text-danger hover:underline">
+                          Dispute {m.dispute.number ?? ""} · {m.dispute.status}
+                        </Link>
+                      ) : null}
                     </TD>
                     <TD className="max-w-xs truncate text-muted">{m.proof ?? "—"}</TD>
                     <TD className="text-muted">{formatDateTime(m.submitted_at)}</TD>

@@ -21,6 +21,8 @@ class Project extends Model
         'wallet_id',
         'owner_id',
         'vendor_id',
+        'vendor_status',
+        'vendor_responded_at',
         'title',
         'description',
         'budget',
@@ -33,6 +35,7 @@ class Project extends Model
         return [
             'budget' => 'integer',
             'meta' => 'array',
+            'vendor_responded_at' => 'datetime',
         ];
     }
 
@@ -74,12 +77,11 @@ class Project extends Model
         return (int) $this->milestones()->where('status', 'released')->whereNull('retention_released_at')->sum('retention');
     }
 
-    /** Sum of milestone amounts that have been released to the vendor. */
+    /** Sum of milestone amounts released to the vendor (less any refund a dispute kept back). */
     public function releasedAmount(): int
     {
-        return (int) $this->milestones()
-            ->where('status', 'released')
-            ->sum('amount');
+        return (int) $this->milestones()->where('status', 'released')->get()
+            ->sum(fn (Milestone $m) => $m->amount - (int) ($m->meta['refunded'] ?? 0));
     }
 
     /** Escrow wallet balance not yet reserved by milestones (kobo). */
@@ -88,7 +90,11 @@ class Project extends Model
         return $this->wallet->balance - $this->reservedAmount();
     }
 
-    /** 'owner', 'vendor', a funder's role on the project wallet (PRW-05), or null. */
+    /**
+     * 'owner', 'vendor', a funder's role on the project wallet (PRW-05), the
+     * builder's team role on a project they were given (VDM-11: site_manager,
+     * foreman, accounts), or null.
+     */
     public function roleOf(User $user): ?string
     {
         if ($this->owner_id === $user->id) {
@@ -97,14 +103,53 @@ class Project extends Model
         if ($this->vendor_id === $user->id) {
             return 'vendor';
         }
+        $walletRole = $this->wallet?->members()->where('user_id', $user->id)->where('status', 'active')->value('role');
+        if ($walletRole) {
+            return $walletRole;
+        }
 
-        return $this->wallet?->members()->where('user_id', $user->id)->where('status', 'active')->value('role');
+        return $this->teamMemberFor($user)?->role;
     }
 
-    /** Can the given user VIEW this project (owner, assigned vendor, or a funder who joined)? */
+    /** The builder's team member this user is, on this project (VDM-10/11). */
+    public function teamMemberFor(User $user): ?VendorTeamMember
+    {
+        if (!$this->vendor_id || !in_array($this->vendor_status, ['accepted', null], true)) {
+            return null;
+        }
+        $profileId = VendorProfile::where('user_id', $this->vendor_id)->value('id');
+        if (!$profileId) {
+            return null;
+        }
+
+        return VendorTeamMember::where('vendor_profile_id', $profileId)->where('user_id', $user->id)->where('status', 'active')->get()
+            ->first(fn (VendorTeamMember $m) => $m->covers($this->id));
+    }
+
+    /** Can the given user VIEW this project (owner, the builder, a funder who joined, or the builder's team on it)? */
     public function isAccessibleBy(User $user): bool
     {
-        return $this->owner_id === $user->id || $this->vendor_id === $user->id
-            || ($this->wallet && $this->wallet->members()->where('user_id', $user->id)->where('status', 'active')->exists());
+        return $this->roleOf($user) !== null;
+    }
+
+    /** The builder's side: the vendor or a team member who may act for them ($can: submit | upload). */
+    public function actsForVendor(User $user, string $can = 'submit'): bool
+    {
+        if ($this->vendor_id === $user->id) {
+            return true;
+        }
+        $role = $this->teamMemberFor($user)?->role;
+
+        return match ($can) {
+            'submit' => $role === 'site_manager',
+            'upload' => in_array($role, ['site_manager', 'foreman'], true),
+            default => false,
+        };
+    }
+
+    /** The family's side: the owner, or a co-owner on the project wallet. */
+    public function isFamilyApprover(User $user): bool
+    {
+        return $this->owner_id === $user->id || in_array($this->wallet?->roleOf($user), ['owner', 'co_owner'], true);
     }
 }

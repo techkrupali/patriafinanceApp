@@ -1,185 +1,129 @@
-import React, { useMemo } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
-import { LoadError } from '../../components/LoadError';
-import { colors, gradients, outline, radius } from '../../theme';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
 import { useProjects } from '../../api/hooks';
-import { formatMoney } from '../../lib/format';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtPills } from '../../components/pt/PtForm';
+import { PtText } from '../../components/pt/PtText';
+import { LoadingBlock, ProgressLine } from '../../components/project/ProjectUi';
+import { formatNaira } from '../../lib/format';
+import { isVendorSide, projectChip, townOf } from '../../lib/projects';
 import { selection } from '../../lib/haptics';
-import { statusIconColor } from '../../lib/governance';
-import { projectRoleLabel, projectStatusVisual } from '../../lib/projects';
-import type { Project, ProjectRole } from '../../api/types';
+import type { Project } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-function RoleBadge({ role }: { role: ProjectRole }) {
-  // Funders who joined (co-owners, contributors) wear the owner's badge.
-  const owner = role !== 'vendor';
-  return (
-    <View className={`flex-row items-center rounded px-2.5 py-1 ${owner ? 'bg-navy' : 'bg-lav'}`}>
-      <Ionicons
-        name={owner ? 'person-circle-outline' : 'construct-outline'}
-        size={12}
-        color={owner ? colors.brandGlow : colors.navy}
-        style={{ marginRight: 4 }}
-      />
-      <Text className={`text-[10px] font-bold uppercase tracking-wider ${owner ? 'text-white' : 'text-navy'}`}>
-        {projectRoleLabel(role)}
-      </Text>
-    </View>
-  );
+type Filter = 'all' | 'in_progress' | 'saving' | 'done';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function matches(p: Project, f: Filter): boolean {
+  if (f === 'all') return true;
+  if (f === 'done') return p.phase === 'done';
+  if (f === 'saving') return p.phase === 'saving' || p.phase === 'planning';
+  return p.phase === 'in_progress' || p.phase === 'to_review';
 }
 
-function ProjectCard({ project, onPress }: { project: Project; onPress: () => void }) {
-  const status = projectStatusVisual(project.status);
-  const total = project.milestones_total;
-  const released = project.milestones_released;
-  const pct = total > 0 ? (released / total) * 100 : 0;
-
-  const subtitle =
-    project.my_role === 'owner'
-      ? project.vendor
-        ? `Vendor · ${project.vendor.name}`
-        : 'No vendor assigned yet'
-      : project.owner
-        ? `Owner · ${project.owner.name}`
-        : 'Project';
-
-  return (
-    <Pressable
-      onPress={() => {
-        selection();
-        onPress();
-      }}
-      className="rounded bg-white p-4 active:opacity-90"
-      style={outline.card}
-    >
-      <View className="flex-row items-center">
-        <View className="mr-3.5 h-11 w-11 items-center justify-center rounded bg-lav">
-          <Ionicons name="briefcase-outline" size={22} color={colors.navy} />
-        </View>
-        <View className="flex-1 pr-2">
-          <Text className="text-[15px] font-bold text-ink" numberOfLines={1}>
-            {project.title}
-          </Text>
-          <Text className="mt-0.5 text-xs text-faded" numberOfLines={1}>
-            {subtitle}
-          </Text>
-        </View>
-        <View className="items-end">
-          <Text className="text-[15px] font-extrabold text-ink">{formatMoney(project.wallet_balance)}</Text>
-          <Text className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-faded">In escrow</Text>
-        </View>
-      </View>
-
-      <View className="mt-3 flex-row items-center justify-between">
-        <View className="flex-row items-center" style={{ gap: 6 }}>
-          {project.my_role ? <RoleBadge role={project.my_role} /> : null}
-          <View className={`flex-row items-center rounded px-2.5 py-1 ${status.bg}`}>
-            <Ionicons name={status.icon} size={12} color={statusIconColor(status)} style={{ marginRight: 4 }} />
-            <Text className={`text-[10px] font-bold uppercase tracking-wider ${status.text}`}>{status.label}</Text>
-          </View>
-        </View>
-        <Text className="text-xs font-semibold text-muted">
-          {released}/{total} released
-        </Text>
-      </View>
-
-      {total > 0 ? (
-        <View className="mt-3 h-2 overflow-hidden rounded-full bg-lav-faint">
-          <View className="h-2 rounded-full bg-brand" style={{ width: `${Math.max(pct, 2)}%` }} />
-        </View>
-      ) : null}
-    </Pressable>
-  );
+/** "Nsukka · Adeyemi Builders", "Starts Nov · Adeyemi Builders". */
+function subline(p: Project): string {
+  const start = p.setup?.starts_on ? new Date(p.setup.starts_on) : null;
+  const future = start && start.getTime() > Date.now();
+  const where = future ? `Starts ${MONTHS[start.getMonth()]}` : townOf(p.setup?.location) || (p.setup?.kind ? p.setup.kind[0].toUpperCase() + p.setup.kind.slice(1) : 'Project');
+  const who = p.vendor?.name ?? (p.vendor_status === 'declined' ? 'Builder needed' : p.setup?.vendor_invite ? 'Builder invited' : 'No builder yet');
+  return `${where} · ${who}`;
 }
 
+/** "₦3,000,000 of ₦6,800,000 paid" once work has been paid, "₦1,200,000 saved of ₦19,425,000" before. */
+function moneyLine(p: Project): { value: number; max: number; text: string } {
+  const done = Number(p.done_amount);
+  const total = Number(p.plan_total) || Number(p.budget);
+  if (done > 0 || p.phase === 'in_progress' || p.phase === 'to_review' || p.phase === 'done') {
+    return { value: done, max: total, text: `${formatNaira(done)} of ${formatNaira(total)} paid` };
+  }
+  const target = Number(p.target) || total;
+  return { value: Number(p.in_wallet), max: target, text: `${formatNaira(p.in_wallet)} saved of ${formatNaira(target)}` };
+}
+
+/** PRJ-01 Projects: each project's chip, progress and money; a builder's projects open their own view. */
 export function ProjectsScreen({ navigation }: RootScreenProps<'Projects'>) {
   const query = useProjects();
+  const [filter, setFilter] = useState<Filter>('all');
   const projects = query.data ?? [];
+  const shown = projects.filter((p) => matches(p, filter));
 
-  const escrowTotal = useMemo(
-    () => projects.reduce((sum, p) => sum + parseFloat(p.wallet_balance || '0'), 0),
-    [projects],
-  );
+  const open = (p: Project) => {
+    if (isVendorSide(p.my_role)) {
+      navigation.navigate(p.vendor_status === 'invited' || p.vendor_status === 'changes_proposed' ? 'ProjectInvite' : 'VendorProject', { projectId: p.id });
+      return;
+    }
+    navigation.navigate('ProjectDetail', { projectId: p.id });
+  };
 
   return (
-    <Screen withBottomInset>
-      <Header title="Projects" />
-
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.navy} />
-        }
-      >
-        {query.isLoading ? (
-          <View className="items-center py-24">
-            <ActivityIndicator size="large" color={colors.navy} />
-          </View>
-        ) : query.error ? (
-          <LoadError message={(query.error as Error).message} onRetry={() => query.refetch()} />
-        ) : (
-          <>
-            {/* Escrow summary hero */}
-            <LinearGradient
-              colors={gradients.navy}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ borderRadius: radius, padding: 24 }}
+    <PtPageScreen
+      title="Projects"
+      subtitle={query.data ? `${projects.length} project${projects.length === 1 ? '' : 's'}` : null}
+      onBack={() => navigation.goBack()}
+      right={
+        <Pressable onPress={() => { selection(); navigation.navigate('ProjectWalletSetup'); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="New project">
+          <Feather name="plus" size={24} color={pt.ink} />
+        </Pressable>
+      }
+      footer={<PtButton title="Start a project" onPress={() => navigation.navigate('ProjectWalletSetup')} />}
+      gap={12}
+    >
+      <PtPills
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'in_progress', label: 'In progress' },
+          { value: 'saving', label: 'Saving' },
+          { value: 'done', label: 'Done' },
+        ]}
+        value={filter}
+        onChange={(v) => setFilter(v as Filter)}
+        compact
+      />
+      {query.isLoading || query.error ? (
+        <LoadingBlock error={query.error ? (query.error as Error).message : null} onRetry={() => void query.refetch()} />
+      ) : shown.length === 0 ? (
+        <View style={{ paddingVertical: 40, alignItems: 'center', gap: 6 }}>
+          <PtText variant="subtitle">{projects.length === 0 ? 'No projects yet' : 'Nothing here'}</PtText>
+          <PtText color={pt.inkMuted} style={{ textAlign: 'center' }}>
+            {projects.length === 0 ? 'Save for a build or an event, and pay the builder by milestone.' : 'Try another filter.'}
+          </PtText>
+        </View>
+      ) : (
+        shown.map((p) => {
+          const chip = projectChip(p);
+          const money = moneyLine(p);
+          return (
+            <Pressable
+              key={p.id}
+              onPress={() => { selection(); open(p); }}
+              accessibilityRole="button"
+              accessibilityLabel={p.title}
+              style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 10 }}
             >
-              <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                Held in escrow
-              </Text>
-              <Text className="mt-2 text-[38px] font-extrabold leading-tight tracking-tight text-white">
-                {formatMoney(escrowTotal)}
-              </Text>
-              <View className="mt-4 flex-row items-center">
-                <Ionicons name="briefcase-outline" size={15} color={colors.brandGlow} style={{ marginRight: 6 }} />
-                <Text className="text-[13px] text-white/70">
-                  {projects.length} project{projects.length === 1 ? '' : 's'} · milestone-backed payments
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 16, color: pt.ink }} numberOfLines={1}>
+                    {p.title}
+                  </Text>
+                  <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>
+                    {isVendorSide(p.my_role) ? `${p.family ?? 'Family'} · you're the builder` : subline(p)}
+                  </Text>
+                </View>
+                <PtChip label={chip.label} tone={chip.tone} icon={chip.icon} />
               </View>
-            </LinearGradient>
-
-            {/* New project CTA */}
-            <View className="mt-5">
-              <Button
-                title="New project"
-                icon="add"
-                iconPosition="left"
-                onPress={() => navigation.navigate('ProjectWalletSetup')}
-              />
-            </View>
-
-            {/* Projects list */}
-            <Text className="mt-8 text-lg font-bold text-ink">Your projects</Text>
-            <View className="mt-3" style={{ gap: 12 }}>
-              {projects.length === 0 ? (
-                <EmptyState
-                  title="No projects yet"
-                  message="Create a project to fund an escrow wallet and pay a vendor as they hit milestones."
-                  icon="briefcase-outline"
-                />
-              ) : (
-                projects.map((p) => (
-                  <ProjectCard
-                    key={p.id}
-                    project={p}
-                    onPress={() => navigation.navigate('ProjectDetail', { projectId: p.id })}
-                  />
-                ))
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </Screen>
+              <ProgressLine value={money.value} max={money.max} />
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{money.text}</Text>
+            </Pressable>
+          );
+        })
+      )}
+    </PtPageScreen>
   );
 }

@@ -56,6 +56,35 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('Tabs', { screen: 'Treasury' });
       return;
     }
+    // Projects, vendors and disputes (client sheet "Projects, vendors, disputes").
+    const projectId = numFromData(n.data, ['project_id']);
+    const disputeId = numFromData(n.data, ['dispute_id']);
+    if (type.startsWith('dispute') && disputeId) {
+      navigation.navigate('DisputeDetail', { disputeId });
+      return;
+    }
+    if (type === 'project_vendor_invited' && projectId) {
+      navigation.navigate('ProjectInvite', { projectId });
+      return;
+    }
+    if (type === 'vendor_team_invite') {
+      const memberId = numFromData(n.data, ['vendor_team_member_id']);
+      if (memberId) navigation.navigate('TeamInvite', { memberId });
+      return;
+    }
+    if (type === 'vendor_team_answered') {
+      navigation.navigate('VendorTeam');
+      return;
+    }
+    if (type.startsWith('vendor_') && type !== 'vendor_team_removed') {
+      navigation.navigate('BusinessVerification');
+      return;
+    }
+    if (projectId && (type.startsWith('project') || type.startsWith('milestone') || type.startsWith('retention'))) {
+      // The project screen sends the builder's side to their own view.
+      navigation.navigate('ProjectDetail', { projectId });
+      return;
+    }
     // A transfer landed: open the receiving wallet if we know it, else Activity.
     if (type === 'transfer_received') {
       if (walletId) navigation.navigate('WalletDetail', { walletId });

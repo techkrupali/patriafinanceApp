@@ -6,7 +6,10 @@ import type { User } from '../api/types';
 export type AuthStatus = 'loading' | 'authed' | 'guest';
 
 /** Where "Next steps" on the wallet-ready screen sends a brand-new user. */
-export type PostOnboardingRoute = 'Kyc' | 'FamilyHub' | 'CreateWallet' | 'Invitations';
+export type PostOnboardingRoute = 'Kyc' | 'FamilyHub' | 'CreateWallet' | 'Invitations' | 'BusinessSetup';
+
+/** VON-01 "For my family" or "For my business": which home the app opens on. */
+export type AppMode = 'family' | 'business';
 
 interface AuthState {
   user: User | null;
@@ -29,6 +32,9 @@ interface AuthState {
   /** Set before signing in (e.g. "I have an invite") to open that screen once inside. */
   setPostAuthRoute: (route: PostOnboardingRoute | null) => void;
   clearPostAuthRoute: () => void;
+  mode: AppMode;
+  /** Switch between the family app and vendor mode (remembered on this phone). */
+  setMode: (mode: AppMode) => Promise<void>;
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
   /** Restore the persisted session after a successful biometric prompt. */
   unlockStoredSession: () => Promise<boolean>;
@@ -47,6 +53,7 @@ async function clearPersisted(): Promise<void> {
     SecureStore.deleteItemAsync(STORAGE_KEYS.biometric),
     // Also drop the biometric-cached transaction PIN when a session ends.
     SecureStore.deleteItemAsync(STORAGE_KEYS.txnPin),
+    SecureStore.deleteItemAsync(STORAGE_KEYS.mode),
   ]);
 }
 
@@ -57,15 +64,18 @@ export const useAuth = create<AuthState>((set, get) => ({
   biometricEnabled: false,
   hasStoredSession: false,
   postAuthRoute: null,
+  mode: 'family',
 
   hydrate: async () => {
     try {
-      const [token, userJson, bio] = await Promise.all([
+      const [token, userJson, bio, mode] = await Promise.all([
         SecureStore.getItemAsync(STORAGE_KEYS.token),
         SecureStore.getItemAsync(STORAGE_KEYS.user),
         SecureStore.getItemAsync(STORAGE_KEYS.biometric),
+        SecureStore.getItemAsync(STORAGE_KEYS.mode),
       ]);
       const biometricEnabled = bio === '1';
+      set({ mode: mode === 'business' ? 'business' : 'family' });
       const user: User | null = userJson ? JSON.parse(userJson) : null;
 
       if (token && user && !biometricEnabled) {
@@ -105,6 +115,11 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   setPostAuthRoute: (route) => set({ postAuthRoute: route }),
+
+  setMode: async (mode) => {
+    await SecureStore.setItemAsync(STORAGE_KEYS.mode, mode);
+    set({ mode });
+  },
   clearPostAuthRoute: () => set({ postAuthRoute: null }),
 
   setBiometricEnabled: async (enabled) => {
@@ -137,7 +152,7 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await clearPersisted();
-    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false });
+    set({ user: null, token: null, status: 'guest', biometricEnabled: false, hasStoredSession: false, mode: 'family' });
   },
 
   sessionExpired: async () => {

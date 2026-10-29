@@ -14,6 +14,7 @@ class MilestoneEvidence extends Model
         'user_id',
         'kind',
         'url',
+        'caption',
     ];
 
     public function milestone(): BelongsTo

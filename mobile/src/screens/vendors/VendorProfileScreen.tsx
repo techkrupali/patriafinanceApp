@@ -1,188 +1,142 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Clipboard from 'expo-clipboard';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { LoadError } from '../../components/LoadError';
-import { colors, gradients, outline, radius } from '../../theme';
-import { useVendor } from '../../api/hooks';
-import { selection } from '../../lib/haptics';
+import { Text, View } from 'react-native';
+import { pt, ptFont, ptRadius } from '../../theme';
+import { useProjects } from '../../api/hooks';
+import { useInviteVendor, useVendorProfile } from '../../api/projectFlow';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtAvatar } from '../../components/pt/PtAvatar';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtChip } from '../../components/pt/PtChip';
+import { PtNote } from '../../components/pt/PtForm';
+import { PtSectionTitle, PtRow } from '../../components/pt/PtList';
+import { PtSheet } from '../../components/pt/PtSheet';
+import { LoadingBlock, PhotoGrid, Stars } from '../../components/project/ProjectUi';
+import { tradeLabel } from '../../lib/projects';
 import type { RootScreenProps } from '../../navigation/types';
+import { showAlert } from '../../lib/alert';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-const CATEGORY_META: Record<string, { label: string; icon: IconName }> = {
-  construction: { label: 'Construction', icon: 'hammer-outline' },
-  events: { label: 'Events', icon: 'balloon-outline' },
-  catering: { label: 'Catering', icon: 'restaurant-outline' },
-  education: { label: 'Education', icon: 'school-outline' },
-  tech: { label: 'Tech', icon: 'laptop-outline' },
-  logistics: { label: 'Logistics', icon: 'car-outline' },
-  fashion: { label: 'Fashion', icon: 'shirt-outline' },
-  health: { label: 'Health', icon: 'medkit-outline' },
-  other: { label: 'Other', icon: 'ellipsis-horizontal-circle-outline' },
-};
-
-function HeroPill({ icon, label }: { icon: IconName; label: string }) {
+function Stat({ n, label }: { n: number | undefined; label: string }) {
   return (
-    <View className="flex-row items-center rounded bg-white/15 px-3 py-1.5">
-      <Ionicons name={icon} size={13} color={colors.white} style={{ marginRight: 5 }} />
-      <Text className="text-[12px] font-semibold text-white" numberOfLines={1}>
-        {label}
-      </Text>
+    <View style={{ flex: 1, backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 12, alignItems: 'center', gap: 2 }}>
+      <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, color: pt.ink }}>{n ?? 0}</Text>
+      <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{label}</Text>
     </View>
   );
 }
 
-function StatTile({ value, label }: { value: string | number; label: string }) {
-  return (
-    <View className="flex-1 rounded bg-white p-4" style={outline.card}>
-      <Text className="text-[22px] font-extrabold leading-tight text-ink" numberOfLines={1}>
-        {value}
-      </Text>
-      <Text className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">{label}</Text>
-    </View>
-  );
-}
+/** VND-02 a vendor's profile: badge, stars, record, services, past work, the latest review — "Add to a project". */
+export function VendorProfileScreen({ navigation, route }: RootScreenProps<'VendorProfile'>) {
+  const { profileId, projectId } = route.params;
+  const query = useVendorProfile(profileId);
+  const projects = useProjects();
+  const invite = useInviteVendor();
+  const [pickOpen, setPickOpen] = useState(false);
+  const v = query.data?.vendor;
 
-export function VendorProfileScreen({ route, navigation }: RootScreenProps<'VendorProfile'>) {
-  const { profileId } = route.params;
-  const q = useVendor(profileId);
-  const [copied, setCopied] = useState(false);
+  if (!v) {
+    return (
+      <PtPageScreen title="Vendor" onBack={() => navigation.goBack()}>
+        <LoadingBlock error={query.error ? (query.error as Error).message : null} onRetry={() => void query.refetch()} />
+      </PtPageScreen>
+    );
+  }
 
-  const v = q.data;
+  // Projects this family owns that still need a builder (or haven't got one to agree yet).
+  const open = (projects.data ?? []).filter((p) => p.my_role === 'owner' && p.status === 'active' && (!p.vendor || p.vendor_status !== 'accepted') && p.vendor?.id !== v.user_id);
 
-  const copyEmail = async () => {
-    if (!v?.email) return;
-    selection();
-    await Clipboard.setStringAsync(v.email);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+  const addTo = (id: number, title: string) => {
+    showAlert(`Invite ${v.business_name}?`, `They'll see the milestones for ${title} and accept, ask for a change, or decline.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Invite',
+        onPress: () =>
+          invite.mutate(
+            { projectId: id, vendorProfileId: v.id },
+            {
+              onSuccess: () => {
+                setPickOpen(false);
+                navigation.navigate('ProjectDetail', { projectId: id });
+              },
+              onError: (e) => showAlert('Could not invite', (e as Error).message),
+            },
+          ),
+      },
+    ]);
   };
 
-  const memberSinceYear = (() => {
-    if (!v?.member_since) return '—';
-    const d = new Date(v.member_since);
-    return Number.isNaN(d.getTime()) ? '—' : String(d.getFullYear());
-  })();
+  const onAdd = () => {
+    const target = projectId ? (projects.data ?? []).find((p) => p.id === projectId) : undefined;
+    if (target) addTo(target.id, target.title);
+    else if (open.length) setPickOpen(true);
+    else navigation.navigate('ProjectWalletSetup');
+  };
 
-  const category = v ? CATEGORY_META[v.category] ?? CATEGORY_META.other : CATEGORY_META.other;
-
+  const since = v.since_year ? ` · since ${v.since_year}` : '';
   return (
-    <Screen withBottomInset>
-      <Header title="Vendor" />
-
-      {q.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
-      ) : q.error || !v ? (
-        <LoadError message={(q.error as Error)?.message} onRetry={q.refetch} />
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={colors.navy} />
-          }
-        >
-          {/* Hero */}
-          <LinearGradient
-            colors={gradients.navy}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: radius, padding: 24 }}
-          >
-            <View className="items-center">
-              <View className="h-20 w-20 items-center justify-center rounded-full bg-white/15">
-                <Text className="text-[26px] font-extrabold text-white">{v.initials}</Text>
-              </View>
-              <View className="mt-4 flex-row items-center px-2">
-                <Text
-                  className="text-center text-[24px] font-extrabold leading-tight tracking-tight text-white"
-                  numberOfLines={2}
-                >
-                  {v.business_name}
-                </Text>
-                {v.verified ? (
-                  <Ionicons name="shield-checkmark" size={19} color={colors.brandMint} style={{ marginLeft: 7 }} />
-                ) : null}
-              </View>
-              <Text className="mt-1 text-[13px] text-white/60" numberOfLines={1}>
-                {v.name}
-              </Text>
-              <View className="mt-4 flex-row flex-wrap justify-center" style={{ gap: 8 }}>
-                <HeroPill icon={category.icon} label={category.label} />
-                {v.location ? <HeroPill icon="location-outline" label={v.location} /> : null}
-              </View>
-            </View>
-          </LinearGradient>
-
-          {/* Stats strip */}
-          <View className="mt-4 flex-row" style={{ gap: 10 }}>
-            <StatTile value={v.projects_completed} label="Projects done" />
-            <StatTile value={memberSinceYear} label="Member since" />
-            <StatTile value={v.verified ? 'Yes' : 'No'} label="Verified" />
+    <PtPageScreen
+      title={v.business_name}
+      subtitle={`${tradeLabel(v.category)}${since}`}
+      onBack={() => navigation.goBack()}
+      footer={<PtButton title="Add to a project" onPress={onAdd} loading={invite.isPending} />}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <PtAvatar initials={v.initials} uri={v.logo_url} tone="gold" size={64} />
+        <View style={{ flex: 1, gap: 4 }}>
+          {v.verified ? <PtChip label="Verified business" tone="success" icon="check" /> : <PtChip label="Not verified yet" tone="warning" icon="clock" />}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Stars value={v.rating ?? 0} />
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }}>{v.rating ? v.rating.toFixed(1) : 'New'}</Text>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>· {v.reviews} review{v.reviews === 1 ? '' : 's'}</Text>
           </View>
-
-          {/* About */}
-          <Text className="mt-7 text-[13px] font-bold text-muted">About</Text>
-          <Card className="mt-3">
-            {v.bio ? (
-              <Text className="text-[14px] leading-[21px] text-ink">{v.bio}</Text>
-            ) : (
-              <Text className="text-[14px] leading-[21px] text-muted">
-                This vendor hasn't written a bio yet.
-              </Text>
-            )}
-          </Card>
-
-          {/* Contact & hire */}
-          <Text className="mt-7 text-[13px] font-bold text-muted">
-            Work With This Vendor
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>
+            {[v.rc_number, v.areas || v.location].filter(Boolean).join(' · ')}
           </Text>
-          <Card className="mt-3">
-            <View className="flex-row items-start">
-              <View className="mr-3 h-11 w-11 items-center justify-center rounded bg-lav-soft">
-                <Ionicons name="shield-outline" size={20} color={colors.navy} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Stat n={v.stats?.projects} label="projects" />
+        <Stat n={v.stats?.milestones_paid} label="milestones paid" />
+        <Stat n={v.stats?.open_disputes} label="open disputes" />
+      </View>
+      {!v.verified ? <PtNote tone="attention">Patriai hasn't finished checking this business, so families can't pay it yet. You can still invite them.</PtNote> : null}
+      {v.bio ? <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>{v.bio}</Text> : null}
+      {v.services.length ? (
+        <>
+          <PtSectionTitle title="Services" />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {v.services.map((s) => (
+              <View key={s} style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1.5, borderColor: pt.lineStrong, backgroundColor: pt.raised, justifyContent: 'center' }}>
+                <Text style={{ fontFamily: ptFont.medium, fontSize: 14, color: pt.ink }}>{s}</Text>
               </View>
-              <Text className="flex-1 text-[13px] leading-[19px] text-muted">
-                Assign this vendor to one of your projects to pay them safely through milestone escrow.
-              </Text>
-            </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+      {v.past_work.length ? (
+        <>
+          <PtSectionTitle title="Past work" />
+          <PhotoGrid photos={v.past_work.map((w, i) => ({ key: i, url: w.url, caption: w.caption }))} />
+        </>
+      ) : null}
+      {v.latest_review ? (
+        <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Stars value={v.latest_review.rating} />
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 14, color: pt.ink }}>{v.latest_review.by}</Text>
+          </View>
+          {v.latest_review.body ? <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.ink }}>"{v.latest_review.body}"</Text> : null}
+        </View>
+      ) : null}
 
-            <View className="mt-4 flex-row items-center rounded bg-lav-faint px-4 py-3">
-              <Ionicons name="mail-outline" size={16} color={colors.muted} style={{ marginRight: 10 }} />
-              <Text className="flex-1 text-[14px] font-semibold text-ink" numberOfLines={1}>
-                {v.email}
-              </Text>
-              <Pressable
-                onPress={() => void copyEmail()}
-                hitSlop={8}
-                className="h-9 w-9 items-center justify-center rounded-full bg-lav active:opacity-80"
-              >
-                <Ionicons
-                  name={copied ? 'checkmark-circle' : 'copy-outline'}
-                  size={17}
-                  color={copied ? colors.brand : colors.navy}
-                />
-              </Pressable>
-            </View>
-
-            <Button
-              title="Open my projects"
-              icon="briefcase-outline"
-              onPress={() => navigation.navigate('Projects')}
-              className="mt-4"
-            />
-          </Card>
-        </ScrollView>
-      )}
-    </Screen>
+      <PtSheet visible={pickOpen} title="Add to which project?" subtitle={`${v.business_name} will be asked to accept the milestones.`} onClose={() => setPickOpen(false)}
+        footer={<PtButton title="Start a new project" variant="ghost" onPress={() => { setPickOpen(false); navigation.navigate('ProjectWalletSetup'); }} />}
+      >
+        <View>
+          {open.map((p, i) => (
+            <PtRow key={p.id} title={p.title} subtitle={p.vendor ? `${p.vendor.name} hasn't accepted yet` : 'No builder yet'} chevron onPress={() => addTo(p.id, p.title)} last={i === open.length - 1} />
+          ))}
+        </View>
+      </PtSheet>
+    </PtPageScreen>
   );
 }

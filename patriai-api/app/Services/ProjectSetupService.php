@@ -203,16 +203,20 @@ class ProjectSetupService
                 if (!$project || !$to || !$project->owner) {
                     return;
                 }
-                DB::transaction(function () use ($m, $project, $to, &$paid) {
+                $sent = DB::transaction(function () use ($m, $project, $to, &$paid) {
                     $fresh = Milestone::whereKey($m->id)->lockForUpdate()->first();
                     if ($fresh->retention_released_at) {
-                        return;
+                        return 0;
                     }
                     $this->wallets->transferBetweenWallets($project->wallet, $to, $fresh->retention, $project->owner, "Retention released: {$fresh->title}");
                     $fresh->update(['retention_released_at' => now()]);
                     $this->notifications->push($project->vendor, 'retention_released', 'Retention released', '₦' . number_format($fresh->retention / 100) . " held back on \"{$fresh->title}\" is now in your wallet.", ['project_id' => $project->id, 'milestone_id' => $fresh->id]);
                     $paid++;
+
+                    return $fresh->retention;
                 });
+                // VDM-06 "every payout, straight away" includes what was held back.
+                VendorPayoutService::make()->autoWithdraw($project->vendor, (int) $sent, $m->title);
             });
 
         return $paid;
