@@ -8,6 +8,7 @@ import { LoadingBlock } from '../../components/project/ProjectUi';
 import { ChatBubble, ChatComposer } from '../projects/ProjectChatScreen';
 import { useSendSupport, useSupportChat } from '../../api/account';
 import { useAuth } from '../../store/auth';
+import { useSystem } from '../../store/system';
 import { clockTime } from '../../lib/projects';
 import { showAlert } from '../../lib/alert';
 import type { RootScreenProps } from '../../navigation/types';
@@ -36,7 +37,7 @@ export function SupportChatScreen({ navigation, route }: RootScreenProps<'Suppor
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: pt.surface }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style="dark" />
       <View style={{ paddingTop: insets.top + 4, minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12 }}>
-        <PtBackButton onPress={() => navigation.goBack()} />
+        <PtBackButton onPress={() => (navigation.canGoBack() ? navigation.goBack() : useSystem.getState().leaveSupportOnly())} />
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, color: pt.ink }}>Patriai support</Text>
           <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{agent ? `${agent} · ` : ''}replies in about {q.data?.replies_in ?? '5 min'}</Text>

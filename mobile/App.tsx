@@ -17,11 +17,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/ref';
+import { useSystem } from './src/store/system';
 import { useAuth } from './src/store/auth';
 import { useLanguage } from './src/store/language';
 import { useHomePrefs } from './src/store/homePrefs';
 import { useAppLock } from './src/store/appLock';
-import { AppStatusGate, ErrorBoundary, SessionLock } from './src/components/system/SystemStates';
+import { useNetwork } from './src/store/network';
+import { AppStatusGate, DeepLinkHandler, ErrorBoundary, SessionLock } from './src/components/system/SystemStates';
 import { LogoMark, markOnDark, PtLogo } from './src/components/pt/PtLogo';
 import { pt } from './src/theme';
 
@@ -55,6 +58,7 @@ function Gate() {
   const hydrateLanguage = useLanguage((s) => s.hydrate);
   const hydrateHomePrefs = useHomePrefs((s) => s.hydrate);
   const hydrateAppLock = useAppLock((s) => s.hydrate);
+  const hydrateNetwork = useNetwork((s) => s.hydrate);
   // ME-13 "Bigger text — follows your phone's text size".
   const biggerText = useAppLock((s) => s.biggerText);
   (Text as unknown as { defaultProps?: Record<string, unknown> }).defaultProps = {
@@ -73,8 +77,9 @@ function Gate() {
     void hydrateLanguage();
     void hydrateHomePrefs();
     void hydrateAppLock();
+    void hydrateNetwork();
     void hydrate();
-  }, [hydrate, hydrateLanguage, hydrateHomePrefs, hydrateAppLock]);
+  }, [hydrate, hydrateLanguage, hydrateHomePrefs, hydrateAppLock, hydrateNetwork]);
 
   // A font that fails to load falls back to the system font rather than blocking.
   const fontsReady = fontsLoaded || Boolean(fontError);
@@ -84,8 +89,20 @@ function Gate() {
     <AppStatusGate>
       <RootNavigator />
       {status === 'authed' ? <SessionLock /> : null}
+      <DeepLinkHandler />
     </AppStatusGate>
   );
+}
+
+/** SYS-06: start the failed screens again from fresh data. */
+function retryAfterError() {
+  queryClient.clear();
+}
+
+/** SYS-06 "Contact support": the support chat on its own (signed in only). */
+function openSupport() {
+  queryClient.clear();
+  if (useAuth.getState().status === 'authed') useSystem.getState().setSupportOnly(true);
 }
 
 export default function App() {
@@ -93,9 +110,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <StatusBar style="dark" />
-            <ErrorBoundary>
+            <ErrorBoundary onRetry={retryAfterError} onSupport={openSupport}>
               <Gate />
             </ErrorBoundary>
           </NavigationContainer>

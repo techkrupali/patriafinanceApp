@@ -431,4 +431,21 @@ class AccountSecurityTest extends TestCase
             $this->assertStringContainsString('Too many wrong codes', $e->errors()['two_factor_code'][0]);
         }
     }
+
+    public function test_link_pages_hand_over_to_the_app(): void
+    {
+        $ngozi = User::factory()->create(['first_name' => 'Ngozi', 'referral_code' => 'NGOZI500']);
+
+        // SYS-08: the referral link that the app shares now opens a page, not a 404.
+        $this->get('/r/ngozi500')->assertOk()
+            ->assertSee('Ngozi invited you to Patriai')
+            ->assertSee('patriai://ref/NGOZI500', false)
+            ->assertSee('intent://ref/NGOZI500#Intent;scheme=patriai;package=com.patriai.app;end', false);
+        $this->get('/r/UNKNOWN1')->assertOk()->assertSee('You were invited to Patriai');
+        $this->get('/i')->assertOk()->assertSee('patriai://invite', false);
+        // A request page names no one and shows no amount.
+        $this->get('/a/42')->assertOk()->assertSee('patriai://request/42', false)->assertSee('Someone needs your yes')->assertDontSee($ngozi->last_name);
+        $this->get('/a/abc')->assertNotFound();
+        $this->get('/r/<x>')->assertNotFound();
+    }
 }

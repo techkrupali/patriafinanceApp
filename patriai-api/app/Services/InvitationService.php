@@ -148,7 +148,7 @@ class InvitationService
 
         $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai." . $this->pledgeLine($invitation) . ' '
             . 'Get the Patriai app and sign up with this ' . (str_contains($invitation->invitee_identifier, '@') ? 'email' : 'number')
-            . ' to accept. The invite lasts 7 days.';
+            . ' to accept. The invite lasts 7 days. ' . rtrim((string) config('app.url'), '/') . '/i';
 
         if (str_contains($invitation->invitee_identifier, '@')) {
             try {

@@ -58,6 +58,8 @@ async function clearPersisted(): Promise<void> {
     // Also drop the biometric-cached transaction PIN when a session ends.
     SecureStore.deleteItemAsync(STORAGE_KEYS.txnPin),
     SecureStore.deleteItemAsync(STORAGE_KEYS.mode),
+    // SYS-04: the last balance seen belongs to this session.
+    SecureStore.deleteItemAsync(STORAGE_KEYS.lastBalance),
   ]);
 }
 

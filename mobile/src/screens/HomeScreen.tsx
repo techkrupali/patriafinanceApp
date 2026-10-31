@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,12 +10,17 @@ import { PtAvatar } from '../components/pt/PtAvatar';
 import { PtChip } from '../components/pt/PtChip';
 import { PtRing } from '../components/pt/PtRing';
 import { PtQuickAction } from '../components/pt/PtTabScreen';
-import { OfflineBanner } from '../components/system/SystemStates';
+import { OfflineBanner, offlineClock } from '../components/system/SystemStates';
+import { PtButton } from '../components/pt/PtButton';
+import { PtNote } from '../components/pt/PtForm';
 import { LoadError } from '../components/LoadError';
 import { QuickActionsSheet, type QuickAction } from '../components/QuickActionsSheet';
 import { useHome, useWallets } from '../api/hooks';
 import { useAuth } from '../store/auth';
 import { useHomePrefs } from '../store/homePrefs';
+import { useNetwork } from '../store/network';
+import { useDeepLink } from '../store/deepLink';
+import { permissionsAsked } from './system/PermissionsScreen';
 import { useHomeCopy } from '../lib/homeCopy';
 import { formatMoney, formatNaira, initials, shortDay } from '../lib/format';
 import { inviteTarget } from '../lib/invite';
@@ -73,6 +78,22 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
   const data = home.data;
   const main = (wallets.data ?? []).find((w) => w.type === 'main');
+  const offline = useNetwork((n) => n.offline);
+  const snapshot = useNetwork((n) => n.snapshot);
+  const remember = useNetwork((n) => n.remember);
+
+  // SYS-07: the notifications primer, once per phone (not over a link being opened).
+  useEffect(() => {
+    void permissionsAsked().then((asked) => {
+      if (!asked && !useDeepLink.getState().pending) navigation.navigate('Permissions');
+    });
+  }, [navigation]);
+
+  // SYS-04: keep the last total so it can show offline, even after a restart.
+  const total = data?.totals.total;
+  useEffect(() => {
+    if (user && total !== undefined && home.isSuccess) remember(user.id, String(total));
+  }, [user, total, home.isSuccess, home.dataUpdatedAt, remember]);
   const mask = (s: string) => (hidden ? '₦ ••••' : s);
 
   const addMoney = () => (main ? navigation.navigate('Fund', { walletId: main.id }) : navigation.navigate('Treasury'));
@@ -144,6 +165,45 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
     </View>
   );
 
+  // SYS-04 Offline: the last balance we saw, what still works, and Try again.
+  if (offline && !home.isLoading) {
+    const seen = data ? { total: String(data.totals.total), at: home.dataUpdatedAt } : snapshot && snapshot.userId === user?.id ? snapshot : null;
+    return (
+      <View style={{ flex: 1, backgroundColor: pt.surface }}>
+        <StatusBar style="dark" />
+        <OfflineBanner edge />
+        <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 28, gap: 16 }} showsVerticalScrollIndicator={false}>
+          <View>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>{copy.greeting(new Date().getHours())}</Text>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 20, color: pt.ink }} numberOfLines={1}>
+              {data?.first_name ?? user?.first_name ?? ''}
+            </Text>
+          </View>
+          {/* Dimmed: the figure may be out of date. */}
+          <View style={{ backgroundColor: pt.emerald900, opacity: 0.85, borderRadius: ptRadius.lg, paddingVertical: 18, paddingHorizontal: 18, gap: 6 }}>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.85 }}>
+              {seen ? `TOTAL BALANCE · LAST UPDATED ${offlineClock(seen.at).toUpperCase()}` : 'TOTAL BALANCE'}
+            </Text>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: pt.emerald50, fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>
+              {!seen ? '₦ —' : hidden ? '₦ ••••••' : formatMoney(seen.total)}
+            </Text>
+          </View>
+          <PtNote tone="info" icon="info">Sending and approving need a connection. Anything you start will wait and ask again when you're back online.</PtNote>
+        </ScrollView>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <PtButton
+            title="Try again"
+            loading={home.isFetching}
+            onPress={() => {
+              void home.refetch();
+              void wallets.refetch();
+            }}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: pt.surface }}>
       <StatusBar style="dark" />
@@ -161,7 +221,6 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           />
         }
       >
-        <OfflineBanner />
         {header}
 
         {home.isLoading ? (

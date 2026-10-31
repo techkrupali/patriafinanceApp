@@ -712,6 +712,7 @@ export function useApproval(id: number) {
     queryKey: keys.approval(id),
     queryFn: () => api<ApprovalDetailData>(`/approvals/${id}`),
     select: (d) => d.approval,
+    enabled: id > 0,
   });
 }
 

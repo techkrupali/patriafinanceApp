@@ -1,3 +1,4 @@
+import type { DeepLink } from '../lib/deepLinks';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -198,6 +199,10 @@ export type RootStackParamList = {
   ConnectedApps: undefined;
   /** ME-17; `topic: 'fraud'` from ME-18 */
   SupportChat: { topic?: 'fraud' } | undefined;
+  /** SYS-07 notifications primer, once per phone. */
+  Permissions: undefined;
+  /** SYS-08 "Opening Ngozi's request…" */
+  DeepLink: { link: DeepLink };
   /** ME-18 */
   FreezeAccount: undefined;
   /** ME-19 */
@@ -250,7 +255,8 @@ export type RootStackParamList = {
   HelpFaq: undefined;
   SecurityCenter: undefined;
   // ---- Referral & rewards ----
-  Referral: undefined;
+  /** A code from a referral link (SYS-08) is filled in. */
+  Referral: { code?: string } | undefined;
   // ---- Savings goals ----
   Goals: undefined;
   // ---- Vendor discovery ----

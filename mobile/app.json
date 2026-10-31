@@ -8,6 +8,11 @@
     "icon": "./assets/icon.png",
     "scheme": "patriai",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#08392F"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.patriai.app"
@@ -15,11 +20,12 @@
     "android": {
       "package": "com.patriai.app",
       "adaptiveIcon": {
-        "backgroundColor": "#001736",
+        "backgroundColor": "#08392F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": ["android.permission.POST_NOTIFICATIONS"],
       "predictiveBackGestureEnabled": false
     },
     "web": {

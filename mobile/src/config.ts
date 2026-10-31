@@ -29,4 +29,8 @@ export const STORAGE_KEYS = {
   appLock: 'patriai.app_lock',
   /** SYS-05: when the app was last left (ms), so a cold start after the lock time asks for the PIN. */
   lastSeen: 'patriai.last_seen',
+  /** SYS-04: the last total balance seen and when, shown while offline. Cleared on log out. */
+  lastBalance: 'patriai.last_balance',
+  /** SYS-07: the notifications primer was shown on this phone. */
+  permissionsAsked: 'patriai.permissions_asked',
 } as const;

@@ -24,6 +24,9 @@ import { WalletReadyScreen } from '../screens/auth/WalletReadyScreen';
 import { UnlockScreen } from '../screens/auth/UnlockScreen';
 import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
 import { GetStartedScreen } from '../screens/auth/GetStartedScreen';
+import { PermissionsScreen } from '../screens/system/PermissionsScreen';
+import { DeepLinkScreen } from '../screens/system/DeepLinkScreen';
+import { useSystem } from '../store/system';
 import { TermsScreen } from '../screens/auth/TermsScreen';
 import { ReferralCodeScreen } from '../screens/auth/ReferralCodeScreen';
 import { NextStepsScreen } from '../screens/auth/NextStepsScreen';
@@ -289,6 +292,7 @@ export function RootNavigator() {
   const biometricEnabled = useAuth((s) => s.biometricEnabled);
   const mode = useAuth((s) => s.mode);
   const returning = useAuth((s) => s.returning);
+  const supportOnly = useSystem((s) => s.supportOnly);
   // ME-13 "Reduce motion": screens change without sliding.
   const reduceMotion = useAppLock((s) => s.reduceMotion);
   const [bypassLock, setBypassLock] = useState(false);
@@ -321,6 +325,15 @@ export function RootNavigator() {
         <AuthStack.Screen name="NewDevice" component={NewDeviceScreen} />
         <AuthStack.Screen name="Locked" component={LockedScreen} options={{ gestureEnabled: false }} />
       </AuthStack.Navigator>
+    );
+  }
+
+  // SYS-06 "Contact support": just the chat, away from the screen that failed.
+  if (supportOnly) {
+    return (
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="SupportChat" component={SupportChatScreen} initialParams={{}} />
+      </RootStack.Navigator>
     );
   }
 
@@ -380,6 +393,8 @@ export function RootNavigator() {
       <RootStack.Screen name="Appearance" component={AppearanceScreen} />
       <RootStack.Screen name="Language" component={LanguageScreen} />
       <RootStack.Screen name="ConnectedApps" component={ConnectedAppsScreen} />
+      <RootStack.Screen name="Permissions" component={PermissionsScreen} options={{ gestureEnabled: false }} />
+      <RootStack.Screen name="DeepLink" component={DeepLinkScreen} />
       <RootStack.Screen name="SupportChat" component={SupportChatScreen} />
       <RootStack.Screen name="FreezeAccount" component={FreezeAccountScreen} />
       <RootStack.Screen name="Legal" component={LegalScreen} />

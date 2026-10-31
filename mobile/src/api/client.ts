@@ -89,10 +89,11 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
   }
 
   if (!res.ok || !json || json.status === false) {
+    // SYS-06: a server fault isn't the person's doing, and nothing went through.
     const message =
-      firstValidationError(json?.errors) ??
-      json?.message ??
-      `Request failed (${res.status})`;
+      res.status >= 500 && res.status !== 503
+        ? "That's on us, not you. Nothing was sent or changed. Try again in a moment."
+        : firstValidationError(json?.errors) ?? json?.message ?? `Request failed (${res.status})`;
     throw new ApiError(message, res.status, json?.errors, json?.data);
   }
 

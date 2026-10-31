@@ -29,11 +29,12 @@ function Stat({ value, label }: { value: string | number; label: string }) {
   );
 }
 
-export function ReferralScreen(_props: RootScreenProps<'Referral'>) {
+export function ReferralScreen({ route }: RootScreenProps<'Referral'>) {
   const q = useReferrals();
   const apply = useApplyReferral();
   const [copied, setCopied] = useState(false);
-  const [code, setCode] = useState('');
+  // SYS-08: a referral link opens here with its code filled in.
+  const [code, setCode] = useState(route.params?.code ?? '');
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
 

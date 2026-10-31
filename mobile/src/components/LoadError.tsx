@@ -1,9 +1,8 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
-import { selection } from '../lib/haptics';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont } from '../theme';
+import { PtButton } from './pt/PtButton';
 
 interface LoadErrorProps {
   message?: string;
@@ -11,29 +10,20 @@ interface LoadErrorProps {
   className?: string;
 }
 
-/** Graceful error state with a retry action. */
+/** SYS-06 in a screen: the warning sign, "Something went wrong", why, and Try again. */
 export function LoadError({ message, onRetry, className = '' }: LoadErrorProps) {
   return (
-    <View className={`items-center px-8 py-12 ${className}`}>
-      <View className="mb-4 h-16 w-16 items-center justify-center rounded bg-danger-soft">
-        <Ionicons name="cloud-offline-outline" size={26} color={colors.danger} />
+    <View className={className} style={{ alignItems: 'center', paddingHorizontal: 24, paddingVertical: 40, gap: 12 }}>
+      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: pt.dangerSoft, alignItems: 'center', justifyContent: 'center' }}>
+        <Feather name="alert-triangle" size={26} color={pt.danger} />
       </View>
-      <Text className="text-base font-bold text-ink">Something went wrong</Text>
-      <Text className="mt-1.5 text-center text-sm text-muted">
-        {message ?? 'We could not load this right now.'}
+      <Text style={{ fontFamily: ptFont.extrabold, fontSize: 18, color: pt.ink, textAlign: 'center' }} accessibilityRole="header">
+        Something went wrong
       </Text>
-      {onRetry ? (
-        <Pressable
-          onPress={() => {
-            selection();
-            onRetry();
-          }}
-          className="mt-5 flex-row items-center rounded bg-lav px-6 py-2.5 active:opacity-80"
-        >
-          <Ionicons name="refresh" size={16} color={colors.navy} style={{ marginRight: 6 }} />
-          <Text className="text-sm font-semibold text-navy">Try again</Text>
-        </Pressable>
-      ) : null}
+      <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted, textAlign: 'center', maxWidth: 300 }}>
+        {message ?? "That's on us, not you. Nothing was sent or changed. Try again in a moment."}
+      </Text>
+      {onRetry ? <PtButton title="Try again" variant="secondary" onPress={onRetry} style={{ alignSelf: 'stretch', marginTop: 4 }} /> : null}
     </View>
   );
 }

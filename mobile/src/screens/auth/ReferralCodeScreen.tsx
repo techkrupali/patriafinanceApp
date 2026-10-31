@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptRadius } from '../../theme';
@@ -10,6 +10,7 @@ import { usePhoneRegister, useReferralLookup } from '../../api/hooks';
 import { ApiError } from '../../api/client';
 import { useAuth } from '../../store/auth';
 import { useLanguage } from '../../store/language';
+import { useDeepLink } from '../../store/deepLink';
 import { saveTxnPin } from '../../lib/biometrics';
 import { notifyError } from '../../lib/haptics';
 import type { AuthScreenProps } from '../../navigation/types';
@@ -29,6 +30,15 @@ export function ReferralCodeScreen({ route, navigation }: AuthScreenProps<'Refer
   const [code, setCode] = useState('');
   const [from, setFrom] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // SYS-08: a referral link fills in its code.
+  useEffect(() => {
+    const linked = useDeepLink.getState().takeReferral();
+    if (linked) {
+      setCode(linked);
+      check(linked);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const check = (value: string) => {
     setFrom(null);

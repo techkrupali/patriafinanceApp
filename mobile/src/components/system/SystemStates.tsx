@@ -14,6 +14,9 @@ import { APP_VERSION, STORAGE_KEYS } from '../../config';
 import { useAppLock } from '../../store/appLock';
 import { useAuth } from '../../store/auth';
 import { useNetwork } from '../../store/network';
+import { useDeepLink } from '../../store/deepLink';
+import { parseDeepLink } from '../../lib/deepLinks';
+import { navigationRef } from '../../navigation/ref';
 import { runBiometricPrompt } from '../../lib/biometrics';
 
 /** One full-screen state: an icon in a tinted circle, a title, a line, and buttons. */
@@ -116,26 +119,44 @@ function clock(ms: number): string {
   return `${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
 }
 
-/** SYS-04 "You're offline. Showing balances from 11:02 pm." with Try again. */
-export function OfflineBanner() {
+/**
+ * SYS-04 "You're offline. Showing balances from 11:02 pm." An edge-to-edge strip
+ * at the very top of Home (`edge`); elsewhere a rounded strip with Try again.
+ */
+export function OfflineBanner({ edge = false }: { edge?: boolean }) {
   const offline = useNetwork((s) => s.offline);
-  const lastOnline = useNetwork((s) => s.lastOnline);
+  const since = useNetwork((s) => s.snapshot?.at ?? s.lastOnline);
   const qc = useQueryClient();
+  const insets = useSafeAreaInsets();
   if (!offline) return null;
   return (
-    <View style={{ backgroundColor: '#FDEBC8', borderRadius: ptRadius.sm, paddingHorizontal: 14, paddingVertical: 10, gap: 6 }} accessibilityRole="alert">
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Feather name="wifi-off" size={15} color="#8F5400" />
-        <Text style={{ flex: 1, fontFamily: ptFont.semibold, fontSize: 13, color: pt.ink }}>You're offline. Showing balances from {clock(lastOnline)}.</Text>
+    <View
+      accessibilityRole="alert"
+      style={{
+        backgroundColor: '#FDEBC8',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: edge ? 20 : 14,
+        paddingTop: edge ? insets.top + 10 : 10,
+        paddingBottom: 10,
+        borderRadius: edge ? 0 : ptRadius.sm,
+      }}
+    >
+      <Feather name="wifi-off" size={15} color="#8F5400" />
+      <Text style={{ flex: 1, fontFamily: ptFont.semibold, fontSize: 13, lineHeight: 18, color: pt.ink }}>You're offline. Showing balances from {clock(since)}.</Text>
+      {edge ? null : (
         <Text onPress={() => void qc.refetchQueries({ type: 'active' })} accessibilityRole="button" style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.brand }}>
           Try again
         </Text>
-      </View>
-      <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 17, color: pt.inkMuted }}>
-        Sending and approving need a connection. Anything you start will wait and ask again when you're back online.
-      </Text>
+      )}
     </View>
   );
+}
+
+/** SYS-04: when the strip time reads. */
+export function offlineClock(ms: number): string {
+  return clock(ms);
 }
 
 /**
@@ -222,7 +243,7 @@ export function SessionLock() {
 }
 
 /** SYS-06 Something went wrong: "That's on us, not you. Nothing was sent or changed." */
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode; onSupport?: () => void }, { error: Error | null; at: Date | null }> {
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode; onRetry?: () => void; onSupport?: () => void }, { error: Error | null; at: Date | null }> {
   state = { error: null as Error | null, at: null as Date | null };
 
   static getDerivedStateFromError(error: Error) {
@@ -239,10 +260,72 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode; 
         tone={{ bg: pt.dangerSoft, fg: pt.danger }}
         title="Something went wrong"
         body="That's on us, not you. Nothing was sent or changed. Try again in a moment."
-        footer={<PtButton title="Try again" onPress={() => this.setState({ error: null, at: null })} />}
+        footer={
+          <>
+            <PtButton
+              title="Try again"
+              onPress={() => {
+                this.props.onRetry?.();
+                this.setState({ error: null, at: null });
+              }}
+            />
+            {this.props.onSupport && useAuth.getState().status === 'authed' ? (
+              <PtButton
+                title="Contact support"
+                variant="ghost"
+                onPress={() => {
+                  this.props.onSupport?.();
+                  this.setState({ error: null, at: null });
+                }}
+              />
+            ) : null}
+          </>
+        }
       >
         <Text style={{ fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: 12, color: pt.inkSubtle }}>Error PT-500 · {stamp}</Text>
       </StateScreen>
     );
   }
+}
+
+/**
+ * SYS-08: a link the app was opened with (or got while open) waits here until
+ * the person is signed in and past the PIN, then opens on "Opening …".
+ * Referral codes wait for sign-up instead when nobody is signed in.
+ */
+export function DeepLinkHandler() {
+  const status = useAuth((s) => s.status);
+  const locked = useAppLock((s) => s.locked);
+  const pending = useDeepLink((s) => s.pending);
+  const setPending = useDeepLink((s) => s.setPending);
+
+  useEffect(() => {
+    void Linking.getInitialURL().then((url) => {
+      const link = parseDeepLink(url);
+      if (link) setPending(link);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      const link = parseDeepLink(url);
+      if (link) setPending(link);
+    });
+    return () => sub.remove();
+  }, [setPending]);
+
+  useEffect(() => {
+    if (!pending || status !== 'authed' || locked) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      if (!navigationRef.isReady()) {
+        if (tries > 20) clearInterval(timer);
+        return;
+      }
+      clearInterval(timer);
+      setPending(null);
+      navigationRef.navigate('DeepLink', { link: pending });
+    }, 250);
+    return () => clearInterval(timer);
+  }, [pending, status, locked, setPending]);
+
+  return null;
 }
