@@ -154,7 +154,7 @@ export function ChildWalletSetupScreen(props: RootScreenProps<'ChildWalletSetup'
 
 function ChildSetup({ navigation, draft }: RootScreenProps<'ChildWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const create = useCreateWallet();
   const linkCode = useChildLinkCode();

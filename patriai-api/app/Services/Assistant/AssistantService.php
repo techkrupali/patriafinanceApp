@@ -100,6 +100,12 @@ class AssistantService
                     $action = $this->transactionGroupAction($run['raw']);
                 }
 
+                // VND-03: the vendors it found, as cards the app opens.
+                if (($block['name'] ?? null) === 'find_vendors'
+                    && is_array($run['raw']['vendors'] ?? null)) {
+                    $action = ['type' => 'vendor_list', 'vendors' => array_slice($run['raw']['vendors'], 0, 5)];
+                }
+
                 // Surface a created support escalation so the app can show a card.
                 if (($block['name'] ?? null) === 'create_support_request'
                     && ($run['raw']['created'] ?? false) === true) {

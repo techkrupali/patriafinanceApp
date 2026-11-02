@@ -238,7 +238,7 @@ class AutomationService
             $plan = $savings?->savingsPlan;
             // Compare values, not keys: the automations endpoint always sends the day
             // fields (often unchanged nulls), even when only pausing.
-            $changesTerms = collect(['amount', 'frequency', 'day_of_week', 'day_of_month'])
+            $changesTerms = collect(['amount', 'frequency', 'day_of_week', 'day_of_month', 'percent'])
                 ->contains(fn ($key) => array_key_exists($key, $data) && $data[$key] != $rule->{$key});
             if ($changesTerms && $plan && !$plan->allow_contributor_edit && $savings->user_id !== $user->id) {
                 throw ValidationException::withMessages(['rule' => "The owner of {$savings->name} sets the savings amount and frequency."]);
@@ -247,6 +247,15 @@ class AutomationService
         }
 
         $update = [];
+
+        // WPV-02 "Change my %": a share of salary or of every deposit.
+        if (array_key_exists('percent', $data) && in_array($rule->trigger, ['salary', 'deposit'], true)) {
+            $percent = (int) $data['percent'];
+            if ($percent < 1 || $percent > 50) {
+                throw ValidationException::withMessages(['percent' => 'Choose between 1% and 50%.']);
+            }
+            $update['percent'] = $percent;
+        }
 
         if (array_key_exists('name', $data)) {
             $update['name'] = $data['name'];

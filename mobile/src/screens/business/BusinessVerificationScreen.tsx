@@ -26,6 +26,7 @@ const CHIPS: Record<VerificationItemStatus, { label: string; tone: PtChipTone; i
   waiting: { label: 'Waiting', tone: 'warning', icon: 'clock' },
   redo: { label: 'Redo', tone: 'danger', icon: 'x' },
   todo: { label: 'To do', tone: 'neutral', icon: 'circle' },
+  done: { label: 'Done', tone: 'success', icon: 'check' },
 };
 
 /** VON-09 Verification (and VDM-02), or VON-10 once the business is verified. */
@@ -73,7 +74,11 @@ function UnderReview({ profile, navigation }: { profile: MyVendorProfile; naviga
     : draft && v.ready
       ? {
           title: 'Submit for review',
-          go: () => submit.mutate(undefined, { onError: (e) => showAlert('Not ready yet', (e as Error).message) }),
+          // VON-08 "What families will see" comes first if it was skipped.
+          go: () =>
+            profile.services.length && (profile.areas || profile.location)
+              ? submit.mutate(undefined, { onError: (e) => showAlert('Not ready yet', (e as Error).message) })
+              : navigation.navigate('BusinessSetup', { step: 8 }),
         }
       : draft && todo
         ? { title: 'Continue setup', go: () => navigation.navigate('BusinessSetup', { step: STEP_OF[todo.item] }) }
@@ -104,10 +109,17 @@ function UnderReview({ profile, navigation }: { profile: MyVendorProfile; naviga
               subtitleColor={it.status === 'redo' ? pt.danger : pt.inkMuted}
               right={<PtChip label={chip.label} tone={chip.tone} icon={chip.icon} />}
               onPress={it.status === 'approved' ? undefined : () => navigation.navigate('BusinessSetup', { step: STEP_OF[it.item] })}
-              last={i === v.items.length - 1}
             />
           );
         })}
+        {/* VDM-02 "Tax ID (TIN) · Optional, shows on your profile". */}
+        <PtRow
+          title="Tax ID (TIN)"
+          subtitle={profile.tin ? `Added · ${profile.tin}` : 'Optional, shows on your profile'}
+          right={<PtChip label={profile.tin ? 'Done' : 'Optional'} tone={profile.tin ? 'success' : 'neutral'} icon={profile.tin ? 'check' : 'circle'} />}
+          onPress={() => navigation.navigate('BusinessSetup', { step: STEP_OF.bank })}
+          last
+        />
       </PtPanel>
       <PtNote icon="lock">Until you're approved you can accept invites and chat, but families can't pay you yet. Your details stay private; families see your name, badge and reviews.</PtNote>
     </PtPageScreen>

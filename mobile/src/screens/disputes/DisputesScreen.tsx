@@ -39,13 +39,13 @@ export function OpenDisputeCard({ d, onPress }: { d: DisputeSummary; onPress: ()
         </View>
         <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>
           {d.viewer === 'vendor'
-            ? [d.project?.title, d.milestone?.title, d.amount_on_hold ? `${formatNaira(d.amount_on_hold)} on hold` : null].filter(Boolean).join(' · ')
-            : [d.against, d.amount_on_hold ? `${formatNaira(d.amount_on_hold)} on hold` : null].filter(Boolean).join(' · ')}
+            ? [d.project?.title, d.milestone?.title, Number(d.amount_on_hold) > 0 ? `${formatNaira(d.amount_on_hold)} on hold` : null].filter(Boolean).join(' · ')
+            : [d.against, Number(d.amount_on_hold) > 0 ? `${formatNaira(d.amount_on_hold)} on hold` : d.payment_amount ? `Payment of ${formatNaira(d.payment_amount)}` : null].filter(Boolean).join(' · ')}
         </Text>
         <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkSubtle }}>
           {`Opened ${relativeDay(d.created_at)}`}
           {d.status === 'open' && d.reply_by && d.viewer === 'family' ? ` · they reply by ${deadlineDay(d.reply_by)}` : ''}
-          {d.status === 'escalated' && d.decision_due ? ` · decision by ${deadlineDay(d.decision_due)}` : ''}
+          {(d.status === 'escalated' || d.status === 'under_review' || (d.status === 'open' && d.kind !== 'milestone')) && d.decision_due ? ` · decision by ${deadlineDay(d.decision_due)}` : ''}
         </Text>
       </View>
     </Pressable>

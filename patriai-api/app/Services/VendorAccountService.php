@@ -234,11 +234,20 @@ class VendorAccountService
         $docs = $profile->documents->groupBy('item');
         $waitingDirectors = $profile->directors->where('user_id', '!=', $profile->user_id)->where('status', 'waiting')->pluck('name')->values();
         $items = [];
+        $ready = $this->readiness($profile);
         foreach (VendorProfile::CHECKS as $check) {
             [$label, $sub] = $this->labels()[$check];
             $state = $profile->checks[$check] ?? ['status' => 'todo', 'note' => null];
+            // VDM-02 "Done": added, not sent for checking yet.
+            if ($state['status'] === 'todo' && $ready[$check]) {
+                $state = ['status' => 'done', 'note' => null];
+            }
             if ($check === 'id_document' && $profile->id_type) {
                 $label = ucfirst(str_replace(['_', 'drivers'], [' ', "driver's"], $profile->id_type));
+                // A passport has one photo page; the cards have two sides.
+                if (!in_array($profile->id_type, ['drivers_licence', 'national_id', 'voters_card'], true)) {
+                    $sub = 'Photo page';
+                }
             }
             if ($check === 'directors' && $waitingDirectors->isNotEmpty() && $state['status'] !== 'approved') {
                 $state = ['status' => 'waiting', 'note' => $waitingDirectors->join(', ', ' and ') . ' still to verify'];

@@ -62,7 +62,7 @@ class AccountSetupService
                 $user,
                 'invitation_received',
                 'Invitation to join ' . ($invite->wallet?->name ?? 'a wallet'),
-                ($invite->inviter?->fullName() ?: 'Someone') . ' invited you to join ' . ($invite->wallet?->name ?? 'a wallet') . " as {$invite->role}.",
+                ($invite->inviter?->fullName() ?: 'Someone') . ' invited you to join ' . ($invite->wallet?->name ?? 'a wallet') . " as {$invite->roleName()}.",
                 [
                     'invitation_id' => $invite->id,
                     'wallet_id' => $invite->wallet_id,

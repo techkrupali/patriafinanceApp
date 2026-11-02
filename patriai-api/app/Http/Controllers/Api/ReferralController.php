@@ -67,7 +67,7 @@ class ReferralController extends ApiController
     private function referralSummary(User $user): array
     {
         $code = $user->ensureReferralCode();
-        $shareUrl = rtrim(config('app.url'), '/') . '/r/' . $code;
+        $shareUrl = rtrim(config('app.url'), '/') . '/join/' . $code;
 
         $referrals = $user->referrals()
             ->select(['id', 'first_name', 'last_name', 'name', 'kyc_tier', 'created_at'])

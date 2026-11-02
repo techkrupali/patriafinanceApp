@@ -655,6 +655,43 @@ export default function WalletDetailPage({
               </dl>
             </CardContent>
           </Card>
+          {data!.child_tasks ? (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Tasks and rewards</CardTitle>
+                <span className="text-xs text-muted">{data!.child_tasks.streak} week{data!.child_tasks.streak === 1 ? "" : "s"} in a row</span>
+              </CardHeader>
+              {data!.child_tasks.tasks.length === 0 ? (
+                <EmptyState message="No tasks." />
+              ) : (
+                <Table containerClassName="pb-2">
+                  <THead>
+                    <tr>
+                      <TH>Task</TH>
+                      <TH className="text-right">Reward</TH>
+                      <TH>Status</TH>
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {data!.child_tasks.tasks.map((t) => (
+                      <TR key={t.id}>
+                        <TD>
+                          <p className="font-semibold">{t.title}</p>
+                          <p className="text-xs text-muted">
+                            {[t.by ? `Set by ${t.by}` : null, t.due_on ? `due ${formatDate(t.due_on)}` : null, t.repeat_weekly ? "weekly" : null, t.needs_photo ? "photo" : null].filter(Boolean).join(" · ")}
+                          </p>
+                        </TD>
+                        <TD className="text-right font-semibold">{naira(t.reward)}</TD>
+                        <TD>
+                          <Badge tone={t.status === "paid" ? "green" : t.status === "submitted" ? "amber" : "gray"}>{t.status === "submitted" ? "To check" : t.status === "todo" ? "To do" : "Paid"}</Badge>
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+            </Card>
+          ) : null}
         </div>
       ) : null}
 

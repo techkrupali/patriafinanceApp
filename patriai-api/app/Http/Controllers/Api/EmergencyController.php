@@ -190,6 +190,8 @@ class EmergencyController extends ApiController
             $decided->status === 'pending' => 'Your yes is counted',
             $decided->method === 'rule_change' && $decided->status === 'approved' => 'New rules applied',
             $decided->method === 'rule_change' => $decided->review_note ?: 'The new rules could not be applied',
+            $decided->status === 'released' => 'Released — the money is on its way',
+            $decided->status === 'rejected' => $decided->review_note ?: 'The release could not be paid',
             default => 'Unlock approved',
         };
 
@@ -247,6 +249,43 @@ class EmergencyController extends ApiController
         return $this->ok($to, [
             'emergency' => $service->detail($wallet->refresh(), $request->user()),
             'reference' => $released->reference,
+        ], 201);
+    }
+
+    /**
+     * POST /wallets/{wallet}/emergency/releases  multipart { amount, pin, note?, proof?, payee? } (WAL-17).
+     * Within the fast-release limit with proof it goes at once; otherwise the
+     * keyholders are asked and the last yes pays it.
+     */
+    public function release(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$this->visible($request, $wallet)) {
+            return $this->fail('Wallet not found', 404);
+        }
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'pin' => ['required', self::TXN_PIN],
+            'note' => ['nullable', 'string', 'max:500'],
+            'proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'payee' => ['nullable', 'array'],
+            'payee.bank_code' => ['required_with:payee', 'string'],
+            'payee.account_number' => ['required_with:payee', 'digits:10'],
+            'payee.account_name' => ['required_with:payee', 'string', 'max:120'],
+            'payee.bank_name' => ['required_with:payee', 'string', 'max:120'],
+        ]);
+
+        $service = EmergencyService::make();
+        $made = $service->requestRelease($wallet, $request->user(), $this->toKobo((string) $data['amount']), $data['pin'], $data['note'] ?? null, $request->file('proof'), $data['payee'] ?? null);
+        $wallet->unsetRelation('emergencySetting');
+        $message = match ($made->status) {
+            'released' => $made->payee ? "Money sent to {$made->payee['account_name']}" : 'Money sent to your main wallet',
+            'rejected' => $made->review_note ?: 'The release could not be paid',
+            default => 'Sent to the keyholders',
+        };
+
+        return $this->ok($message, [
+            'emergency' => $service->detail($wallet->refresh(), $request->user()),
+            'request' => $service->serializeRequest($made->load(['requester', 'approver']), $request->user()),
         ], 201);
     }
 

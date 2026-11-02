@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +18,7 @@ import { colors, outline } from '../../../theme';
 import { useEmergency, useEmergencyActions, useVerifyAccount } from '../../../api/hooks';
 import { dayLabel, formatMoney, groupAmountInput, sanitizeAmountInput, timeLabel } from '../../../lib/format';
 import { notifySuccess, selection } from '../../../lib/haptics';
+import { showAlert } from '../../../lib/alert';
 import { purposeLabel } from '../../../lib/walletGuides';
 import { beneficiaryRank } from '../../../lib/emergencyRules';
 import type { Bank, EmergencyDocumentType, EmergencyRequest, EmergencyUnlockVia } from '../../../api/types';
@@ -176,7 +177,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     setError(null);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to attach the bill.');
+      showAlert('Permission needed', 'Allow photo access to attach the bill.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -207,7 +208,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
   };
 
   const confirmLock = () => {
-    Alert.alert('Lock this wallet again?', 'Money will only leave once one of your access rules is met again.', [
+    showAlert('Lock this wallet again?', 'Money will only leave once one of your access rules is met again.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Lock',
@@ -231,7 +232,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     setError(null);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to attach the document.');
+      showAlert('Permission needed', 'Allow photo access to attach the document.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -263,7 +264,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
             : ['Decline this release?', 'The fund stays locked.'],
       cancel: rules ? ['Withdraw your rule change?', 'The current rules stay.'] : ['Cancel your request?', 'You can ask again later.'],
     } as const;
-    Alert.alert(titles[action][0], titles[action][1], [
+    showAlert(titles[action][0], titles[action][1], [
       { text: 'Back', style: 'cancel' },
       {
         text:

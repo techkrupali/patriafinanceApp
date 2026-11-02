@@ -86,7 +86,7 @@ class VendorTeamService
     }
 
     /** INV-VT1 "Join the team" / "Decline". */
-    public function answer(VendorTeamMember $member, User $user, bool $join): VendorTeamMember
+    public function answer(VendorTeamMember $member, User $user, bool $join, ?string $reason = null): VendorTeamMember
     {
         $mine = $member->user_id === $user->id || ($member->user_id === null && $member->phone && $member->phone === $user->phone);
         if (!$mine || $member->status !== 'pending') {
@@ -94,7 +94,7 @@ class VendorTeamService
         }
         $member->update(['user_id' => $user->id, 'status' => $join ? 'active' : 'declined', 'accepted_at' => $join ? now() : null]);
         $owner = $member->vendorProfile->user;
-        $this->notifications->push($owner, 'vendor_team_answered', $join ? "{$user->fullName()} joined your team" : "{$user->fullName()} declined your team invite", $join ? "As {$this->roleLabel($member->role)}." : '', ['vendor_team_member_id' => $member->id]);
+        $this->notifications->push($owner, 'vendor_team_answered', $join ? "{$user->fullName()} joined your team" : "{$user->fullName()} declined your team invite", $join ? "As {$this->roleLabel($member->role)}." : ($reason ? "\"{$reason}\"" : ''), ['vendor_team_member_id' => $member->id]);
 
         return $member->refresh();
     }

@@ -182,6 +182,10 @@ class SavingsService
             $out[$key] = array_key_exists($key, $permissions) ? (bool) $permissions[$key] : $default;
         }
         $out['can_spend'] = $out['withdraw'];
+        // CTB-01 "Join the project chat" (projects only; absent = yes).
+        if (array_key_exists('chat', $permissions)) {
+            $out['chat'] = (bool) $permissions['chat'];
+        }
         // SPD-05 spenders: which budget categories (ids; absent = all) and a daily limit (kobo).
         if (array_key_exists('categories', $permissions)) {
             $out['categories'] = $permissions['categories'] === null ? null : array_values(array_map('intval', (array) $permissions['categories']));
@@ -309,6 +313,14 @@ class SavingsService
             throw ValidationException::withMessages(['amount' => 'This plan saves from salary or round-ups, not a set amount.']);
         }
 
+        if (array_key_exists('salary_percent', $data)) {
+            $salary = $rules->firstWhere('trigger', 'salary');
+            if (!$salary) {
+                throw ValidationException::withMessages(['salary_percent' => 'You save a set amount here, not a share of salary.']);
+            }
+            $this->automations->updateRule($salary, $user, ['percent' => (int) $data['salary_percent']]);
+        }
+
         foreach ($rules as $rule) {
             $update = [];
             // Salary and round-ups always come from Main; the source applies to the scheduled save.
@@ -402,7 +414,7 @@ class SavingsService
 
         return match ($terms->frequency) {
             'weekly' => 'every ' . ($days[$terms->day_of_week] ?? 'week'),
-            'monthly' => 'monthly on day ' . $terms->day_of_month,
+            'monthly' => 'monthly on the ' . \Illuminate\Support\Carbon::create(2000, 1, max(1, min(31, (int) $terms->day_of_month)))->format('jS'),
             default => 'every day',
         };
     }
@@ -414,7 +426,7 @@ class SavingsService
             'frequency' => $t->frequency,
             'day_of_week' => $t->day_of_week,
             'day_of_month' => $t->day_of_month,
-            'label' => '₦' . $this->naira($t->amount) . ' ' . $this->frequencyLabel($t),
+            'label' => '₦' . number_format($t->amount / 100) . ' ' . $this->frequencyLabel($t),
         ];
     }
 
@@ -424,7 +436,7 @@ class SavingsService
         $parts = array_filter([
             $salaryPercent ? "{$salaryPercent}% of each salary" : null,
             $roundupTo ? 'round-ups to ₦' . number_format($roundupTo / 100) : null,
-            $scheduled && $scheduled->amount > 0 ? '₦' . $this->naira($scheduled->amount) . ' ' . $this->frequencyLabel($scheduled) : null,
+            $scheduled && $scheduled->amount > 0 ? '₦' . number_format($scheduled->amount / 100) . ' ' . $this->frequencyLabel($scheduled) : null,
         ]);
 
         return $parts ? implode(' + ', $parts) : 'When you add money';
@@ -457,10 +469,28 @@ class SavingsService
         $roundup = $rules->firstWhere('trigger', 'roundup');
         $source = ($scheduled ?? $rules->first())->fromWallet;
 
+        // WPV-02 "Next save 25 Nov" · "Your first ₦60,000 moves when your salary lands": only for the saver themselves.
+        $next = null;
+        if ($withSource) {
+            $next = $scheduled?->enabled ? $scheduled->nextRunOn(now()) : null;
+            $day = $salary?->enabled ? (SavingsInsights::make()->forUser($salary->user)['salary']['day'] ?? null) : null;
+            if ($day) {
+                $payday = now()->startOfDay()->setDay(min($day, now()->daysInMonth));
+                if ($payday->lt(now()->startOfDay())) {
+                    $month = now()->startOfMonth()->addMonthNoOverflow();
+                    $payday = $month->setDay(min($day, $month->daysInMonth));
+                }
+                $next = !$next || $payday->lt($next) ? $payday : $next;
+            }
+        }
+
         return array_merge($scheduled ? $this->terms($scheduled) : ['amount' => '0.00', 'frequency' => null, 'day_of_week' => null, 'day_of_month' => null], [
             'label' => $this->methodsLabel($salary?->percent, $roundup?->roundup_to, $scheduled),
             'enabled' => $rules->contains(fn ($r) => $r->enabled),
             'source_wallet' => $withSource && $source ? ['id' => $source->id, 'name' => $source->name] : null,
+            'salary_percent' => $salary?->percent,
+            'next_on' => $next?->toDateString(),
+            'per_month' => $withSource ? $this->naira((int) round($rules->filter->enabled->sum(fn (AutomationRule $r) => $this->monthlyEstimate($r)))) : null,
         ]);
     }
 

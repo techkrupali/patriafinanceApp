@@ -195,10 +195,12 @@ function templateMilestones(kind: ProjectKind, budget: number, start: string, fi
   const parts = KINDS.find((k) => k.value === kind)?.milestones ?? [];
   const total = parts.reduce((sum, p) => sum + p.share, 0);
   const months = Math.max(1, monthsBetween(start, finish));
+  // Round to ₦100,000 on a house, ₦1,000 on a small job, so no phase comes out at ₦0.
+  const unit = Math.max(1_000, 10 ** Math.floor(Math.log10(Math.max(1, budget / Math.max(1, parts.length) / 10))));
   let given = 0;
   return parts.map((p, i) => {
     const last = i === parts.length - 1;
-    const amount = last ? budget - given : Math.round((budget * p.share) / total / 100_000) * 100_000;
+    const amount = last ? budget - given : Math.round((budget * p.share) / total / unit) * unit;
     given += amount;
     const a = Math.floor((i * months) / parts.length);
     const b = Math.max(a, Math.floor(((i + 1) * months) / parts.length) - 1);
@@ -266,12 +268,17 @@ export function ProjectWalletSetupScreen(props: RootScreenProps<'ProjectWalletSe
 
 function ProjectSetup({ navigation, route, draft }: RootScreenProps<'ProjectWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const create = useCreateProject();
 
   const [name, setName] = useState(draft?.name ?? route.params?.name ?? '');
-  const [form, setForm] = useState<ProjectForm>(() => ({ ...EMPTY, ...((draft?.data ?? {}) as Partial<ProjectForm>) }));
+  const [form, setForm] = useState<ProjectForm>(() => ({
+    ...EMPTY,
+    ...((draft?.data ?? {}) as Partial<ProjectForm>),
+    // VND-02 "Add to a project": the builder the family was looking at.
+    ...(route.params?.vendor ? { vendorMode: 'directory' as const, vendor: route.params.vendor } : {}),
+  }));
   const set = (patch: Partial<ProjectForm>) => setForm((f) => ({ ...f, ...patch }));
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const flow = useSetupFlow(navigation, STEPS, (draft?.step ?? 1) - 1);
@@ -307,9 +314,10 @@ function ProjectSetup({ navigation, route, draft }: RootScreenProps<'ProjectWall
   const members = (family.data?.members ?? []).filter((m) => !['vendor', 'child'].includes(m.role));
   const own = (wallets.data ?? []).filter((w) => w.my_role === 'owner' && w.status === 'active');
   const main = own.find((w) => w.type === 'main');
-  // PRW-02 "Already saved ₦1,200,000 in House Project": the biggest unlocked savings or project pot.
+  // PRW-02 "Already saved ₦1,200,000 in House Project": the biggest unlocked savings pot.
+  // Another project's wallet isn't offered: its money is for that project's phases.
   const free = (w: Wallet) => parseFloat(w.available ?? '0');
-  const saved = own.filter((w) => (w.type === 'savings' || w.type === 'project') && !w.lock && free(w) > 0).sort((a, b) => free(b) - free(a))[0] ?? null;
+  const saved = own.filter((w) => w.type === 'savings' && !w.lock && free(w) > 0).sort((a, b) => free(b) - free(a))[0] ?? null;
   const myName = firstName(me?.full_name ?? 'You');
 
   const budget = Number(form.budget) || 0;
@@ -413,6 +421,7 @@ function ProjectSetup({ navigation, route, draft }: RootScreenProps<'ProjectWall
                 ...(first ? [{ label: 'Next milestone', title: `${first.title} · ${formatNaira(first.amount)}`, sub: `Starts ${FULL_MONTHS[ym(first.from).m]}` }] : []),
               ],
               openLabel: 'Open project',
+              projectId: res.project?.id,
             });
           });
         },
@@ -931,7 +940,8 @@ function VendorCard({ profileId, onPress }: { profileId: number; onPress: () => 
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ fontFamily: ptFont.bold, fontSize: 17, color: pt.ink }}>{v.business_name}</Text>
               <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }} numberOfLines={2}>
-                {v.location || v.name}
+                {/* "RC 1234567 · Enugu and Lagos" */}
+                {[v.rc_number ? (/^(RC|BN)/i.test(v.rc_number) ? v.rc_number : `RC ${v.rc_number}`) : null, v.areas || v.location].filter(Boolean).join(' · ') || v.name}
               </Text>
             </View>
             {v.verified ? <PtChip label="Verified" tone="success" icon="check" /> : null}

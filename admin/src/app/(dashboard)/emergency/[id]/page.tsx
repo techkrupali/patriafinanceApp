@@ -236,6 +236,16 @@ export default function EmergencyRequestDetailPage({
                     </>
                   ) : (
                     <>
+                      {request!.amount ? (
+                        <Field name={request!.status === "released" ? "Amount released" : "Amount asked"}>
+                          {naira(request!.amount)}
+                          <span className="block text-xs font-normal text-muted">
+                            {request!.payee
+                              ? `To ${request!.payee.account_name}${request!.payee.bank_name ? ` · ${request!.payee.bank_name}` : ""} ${request!.payee.account_number}`
+                              : "To the asker's Main wallet"}
+                          </span>
+                        </Field>
+                      ) : null}
                       <Field name="Keyholders' yeses">
                         {request!.approvals ?? 0} of {request!.required_approvals ?? 2}
                       </Field>

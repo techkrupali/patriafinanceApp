@@ -32,7 +32,7 @@ function Done() {
  * shows their initials and a new code for their phone.
  */
 export function SetupDoneScreen({ navigation, route }: RootScreenProps<'SetupDone'>) {
-  const { walletId, title, subtitle, caption, events, openLabel, budget, payments, note, share, waiting, child } = route.params;
+  const { walletId, title, subtitle, caption, events, openLabel, budget, payments, note, share, waiting, child, projectId } = route.params;
   const insets = useSafeAreaInsets();
   const resend = useResendInvitation();
   const [reminded, setReminded] = useState<string | null>(null);
@@ -197,7 +197,7 @@ export function SetupDoneScreen({ navigation, route }: RootScreenProps<'SetupDon
           </>
         ) : (
           <>
-            <PtButton title={openLabel} onPress={() => navigation.replace('WalletDetail', { walletId })} />
+            <PtButton title={openLabel} onPress={() => (projectId ? navigation.replace('ProjectDetail', { projectId }) : navigation.replace('WalletDetail', { walletId }))} />
             <PtButton title="Back to Treasury" variant="ghost" onPress={toTreasury} />
           </>
         )}

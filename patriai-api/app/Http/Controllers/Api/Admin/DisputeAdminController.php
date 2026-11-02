@@ -22,11 +22,11 @@ class DisputeAdminController extends ApiController
         $service = DisputeService::make();
         $page = Dispute::with(['user', 'against', 'project', 'milestone'])
             ->when($request->query('status'), fn ($q, $s) => $s === 'active'
-                ? $q->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review'])
+                ? $q->whereIn('status', Dispute::ACTIVE)
                 : $q->where('status', $s))
             ->when($request->query('kind'), fn ($q, $k) => $q->where('kind', $k))
             // Escalated first, the nearest decision date on top.
-            ->orderByRaw("CASE status WHEN 'escalated' THEN 0 WHEN 'under_review' THEN 1 WHEN 'open' THEN 2 WHEN 'responded' THEN 3 WHEN 'fixing' THEN 4 ELSE 5 END")
+            ->orderByRaw("CASE status WHEN 'escalated' THEN 0 WHEN 'under_review' THEN 1 WHEN 'open' THEN 2 WHEN 'responded' THEN 3 WHEN 'fixing' THEN 4 WHEN 'agreed' THEN 5 ELSE 6 END")
             ->orderBy('decision_due')
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
@@ -35,8 +35,16 @@ class DisputeAdminController extends ApiController
             'disputes' => collect($page->items())->map(fn (Dispute $d) => $service->summary($d, $request->user()) + [
                 'raised_by_name' => $d->user?->fullName(),
                 'status_label' => $service->statusLabel($d, false),
+                // Past the decision date and still with Patriai: shown in red.
+                'overdue' => in_array($d->status, ['escalated', 'under_review', 'open'], true) && $d->decision_due && $d->decision_due->isPast(),
+                'officer' => $d->officer_id ? \App\Models\User::find($d->officer_id)?->first_name : null,
             ])->values(),
             'counts' => Dispute::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
+            // A payment dispute goes straight to Patriai; only a milestone dispute waits for a builder.
+            'waiting' => [
+                'decision' => Dispute::whereIn('status', ['escalated', 'under_review'])->orWhere(fn ($q) => $q->where('status', 'open')->where(fn ($k) => $k->whereNull('kind')->orWhere('kind', '!=', 'milestone')))->count(),
+                'builder' => Dispute::where('status', 'open')->where('kind', 'milestone')->count(),
+            ],
             'pagination' => [
                 'page' => $page->currentPage(),
                 'per_page' => $page->perPage(),
@@ -52,17 +60,26 @@ class DisputeAdminController extends ApiController
         return $this->ok('Dispute fetched', ['dispute' => DisputeService::make()->present($dispute, $request->user(), admin: true)]);
     }
 
-    // POST /admin/disputes/{dispute}/decide  {outcome, refund?, note}
+    // POST /admin/disputes/{dispute}/take — "Take case"
+    public function take(Request $request, Dispute $dispute): JsonResponse
+    {
+        $dispute = DisputeService::make()->take($dispute, $request->user());
+
+        return $this->ok('Case taken', ['dispute' => DisputeService::make()->present($dispute, $request->user(), admin: true)]);
+    }
+
+    // POST /admin/disputes/{dispute}/decide  {outcome, refund?, fix_by?, note}
     public function decide(Request $request, Dispute $dispute): JsonResponse
     {
-        $outcomes = $dispute->kind === 'milestone' ? 'release_full,partial_refund,full_refund' : 'resolved,rejected';
+        $outcomes = $dispute->kind === 'milestone' ? 'release_full,partial_refund,full_refund,fix' : 'refund,resolved,rejected';
         $data = $request->validate([
             'outcome' => ['required', 'in:' . $outcomes],
-            'refund' => ['required_if:outcome,partial_refund', 'nullable', 'numeric', 'min:1'],
+            'refund' => ['required_if:outcome,partial_refund', 'required_if:outcome,refund', 'nullable', 'numeric', 'min:1'],
+            'fix_by' => ['required_if:outcome,fix', 'nullable', 'date'],
             'note' => ['required', 'string', 'max:2000'],
         ]);
         $refund = isset($data['refund']) ? $this->toKobo($data['refund']) : null;
-        $dispute = DisputeService::make()->decide($dispute, $request->user(), $data['outcome'], $refund, trim($data['note']));
+        $dispute = DisputeService::make()->decide($dispute, $request->user(), $data['outcome'], $refund, trim($data['note']), $data['fix_by'] ?? null);
 
         return $this->ok('Decision recorded', ['dispute' => DisputeService::make()->present($dispute, $request->user(), admin: true)]);
     }

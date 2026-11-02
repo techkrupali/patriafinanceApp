@@ -23,7 +23,7 @@ const ICONS: Record<QuickAction, React.ReactNode> = {
 const ORDER: QuickAction[] = ['send', 'bills', 'add', 'request', 'wallet', 'goal', 'scan', 'invite'];
 
 /** Not built yet: shown greyed with "soon", as the prototype does for bills. */
-const SOON: QuickAction[] = ['bills', 'request', 'scan'];
+const SOON: QuickAction[] = ['bills'];
 
 /** HOM-04 "What would you like to do?" bottom sheet from Home's More. */
 export function QuickActionsSheet({

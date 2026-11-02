@@ -40,6 +40,17 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       else navigation.navigate('Approvals');
       return;
     }
+    // REQ-03: asked for money, or your request paid, declined or cancelled.
+    const requestCode = typeof n.data?.money_request_code === 'string' ? n.data.money_request_code : null;
+    if (requestCode) {
+      navigation.navigate('IncomingRequest', { code: requestCode });
+      return;
+    }
+    // SND-15: a scheduled payment went, waited, was skipped or didn't go.
+    if (type.startsWith('scheduled_payment')) {
+      navigation.navigate('ScheduledPayments');
+      return;
+    }
     if (invitationId || type.startsWith('invitation')) {
       navigation.navigate('Invitations');
       return;
@@ -47,7 +58,9 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
     // Emergency wallet events (named recipient/approver, unlock requests, unlocks)
     // open that wallet's emergency access screen.
     if (type.startsWith('emergency') && walletId) {
-      navigation.navigate('EmergencyCenter', { walletId });
+      // A release waiting for your yes, or paid: the release policy (WAL-16) shows it.
+      if (type === 'emergency_unlock_requested' || type === 'emergency_released') navigation.navigate('EmergencyPolicy', { walletId });
+      else navigation.navigate('EmergencyCenter', { walletId });
       return;
     }
     // The user was removed from this wallet — it's no longer accessible, so never
@@ -67,6 +80,17 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('ProjectInvite', { projectId });
       return;
     }
+    // VPJ-05 a builder's proposal; VLS-01/02 a finished project to show.
+    const proposalId = numFromData(n.data, ['proposal_id']);
+    if ((type === 'project_proposal' || type === 'project_proposal_declined') && proposalId) {
+      navigation.navigate('ProposalReview', { proposalId });
+      return;
+    }
+    const listingId = numFromData(n.data, ['listing_id']);
+    if ((type === 'vendor_listing_request' || type === 'vendor_listing_answered') && listingId) {
+      navigation.navigate('Listing', { listingId });
+      return;
+    }
     if (type === 'vendor_team_invite') {
       const memberId = numFromData(n.data, ['vendor_team_member_id']);
       if (memberId) navigation.navigate('TeamInvite', { memberId });
@@ -78,6 +102,16 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
     }
     if (type.startsWith('vendor_') && type !== 'vendor_team_removed') {
       navigation.navigate('BusinessVerification');
+      return;
+    }
+    // CHT-03 / CHT-04: a message opens its chat.
+    if (type === 'project_message' && projectId) {
+      navigation.navigate('ProjectChat', { projectId });
+      return;
+    }
+    const conversationId = numFromData(n.data, ['conversation_id']);
+    if (type === 'chat_message' && conversationId) {
+      navigation.navigate('Conversation', { conversationId });
       return;
     }
     if (projectId && (type.startsWith('project') || type.startsWith('milestone') || type.startsWith('retention'))) {

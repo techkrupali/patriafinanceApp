@@ -110,6 +110,12 @@ export function humanizeType(type: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** "2500.00" → "₦2,500", "1250.50" → "₦1,250.50": kobo only when there are some. */
+export function formatAmount(value: string | number | null | undefined): string {
+  const num = typeof value === 'number' ? value : parseFloat(value ?? '0');
+  return Number.isFinite(num) && Math.round(num * 100) % 100 !== 0 ? formatMoney(num) : formatNaira(num);
+}
+
 /** "834700.00" → "₦834,700" (whole naira, as the prototype shows lists and totals). */
 export function formatNaira(value: string | number | null | undefined): string {
   const num = typeof value === 'number' ? value : parseFloat(value ?? '0');

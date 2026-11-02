@@ -152,7 +152,7 @@ export function GoalWalletSetupScreen(props: RootScreenProps<'GoalWalletSetup'>)
 
 function GoalSetup({ navigation, route, draft }: RootScreenProps<'GoalWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const create = useCreateWallet();
 

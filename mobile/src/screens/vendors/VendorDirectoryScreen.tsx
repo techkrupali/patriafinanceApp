@@ -73,7 +73,6 @@ export function VendorDirectoryScreen({ navigation, route }: RootScreenProps<'Ve
 
   const query = useDirectory(debounced, category, near, verified);
   const vendors = query.data?.pages.flatMap((p) => p.vendors) ?? [];
-  const trade = TRADES.find((t) => t.value === category)?.label.toLowerCase() ?? 'vendor';
 
   return (
     <PtPageScreen
@@ -82,7 +81,7 @@ export function VendorDirectoryScreen({ navigation, route }: RootScreenProps<'Ve
       onBack={() => navigation.goBack()}
       right={
         <Pressable
-          onPress={() => { selection(); navigation.navigate('Tabs', { screen: 'Steward', params: { ask: `Find a ${trade === 'building' ? 'builder' : trade} near ${near || 'me'}` } }); }}
+          onPress={() => { selection(); navigation.navigate('FindVendorSteward', { category, near, projectId }); }}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Ask Steward"

@@ -9,6 +9,7 @@ import { PtPageScreen } from '../../components/pt/PtPageScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtNote, PtPanel, PtReviewRow } from '../../components/pt/PtForm';
 import { PinSheet } from '../../components/PinSheet';
+import { PtField } from '../../components/pt/PtField';
 import { LoadingBlock, PersonRow } from '../../components/project/ProjectUi';
 import { formatNaira, initials } from '../../lib/format';
 import { namesList } from '../../lib/projects';
@@ -28,6 +29,8 @@ export function ReleasePaymentScreen({ navigation, route }: RootScreenProps<'Rel
   const approve = useApproveRelease();
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  // MLS-02 "Approved 10:02 am · "Looks good"".
+  const [note, setNote] = useState('');
   const m = query.data?.milestones.find((x) => x.id === milestoneId);
   const p = query.data?.project;
 
@@ -50,16 +53,18 @@ export function ReleasePaymentScreen({ navigation, route }: RootScreenProps<'Rel
   const submit = (pin: string) => {
     setPinError(null);
     approve.mutate(
-      { milestoneId, pin },
+      { milestoneId, pin, note: note.trim() || undefined },
       {
         onSuccess: (r) => {
           setPinOpen(false);
           if (r.milestone.status === 'released') {
             showAlert('Payment released', `${formatNaira(r.milestone.paid_now ?? m.release_now)} is on its way to ${p.vendor?.name ?? 'the builder'}.`);
+            navigation.navigate('ProjectDetail', { projectId });
           } else {
+            // MLS-02: who's said yes so far, and "Remind Chidi".
             showAlert('Approved', `We've asked ${namesList(others.map((o) => o.first_name)) || 'the other approvers'} to approve too. It's paid once they do.`);
+            navigation.replace('MilestoneApprovals', { projectId, milestoneId });
           }
-          navigation.navigate('ProjectDetail', { projectId });
         },
         onError: (e) => {
           const err = e as ApiError;
@@ -112,6 +117,7 @@ export function ReleasePaymentScreen({ navigation, route }: RootScreenProps<'Rel
           );
         })}
       </PtPanel>
+      {needsAll ? <PtField label="A note for the others (optional)" value={note} onChangeText={setNote} placeholder="Looks good" maxLength={200} /> : null}
       <PinSheet
         visible={pinOpen}
         title="Approve with PIN"

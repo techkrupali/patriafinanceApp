@@ -55,11 +55,12 @@ class SpendRules
         return $budget + ['fee' => $fee, 'net' => $amount - $fee];
     }
 
-    /** After the money left (reference of its debit): tag it, take the fee, send alerts. */
-    public function settle(Wallet $from, User $user, ?string $reference, array $plan): void
+    /** After the money left (reference of its debit): tag it, take the fee, send alerts. The charity's gift, if any. */
+    public function settle(Wallet $from, User $user, ?string $reference, array $plan): ?CharityDonation
     {
+        $donation = null;
         if (($plan['fee'] ?? 0) > 0) {
-            $this->chargeEarlyBreak($from, $user, (int) $plan['fee']);
+            $donation = $this->chargeEarlyBreak($from, $user, (int) $plan['fee'], $reference);
         }
         try {
             $this->budgets->recorded($from, $reference, $plan['category_id'] ?? null);
@@ -67,6 +68,8 @@ class SpendRules
         } catch (\Throwable $e) {
             report($e); // never undo a payment that already left
         }
+
+        return $donation;
     }
 
     /** SAV-05: taking money out of locked savings before they open costs the fee. */
@@ -89,17 +92,20 @@ class SpendRules
     }
 
     /** BRK-04: the fee leaves the wallet; the charity's half is owed to it, with a receipt. */
-    private function chargeEarlyBreak(Wallet $wallet, User $user, int $fee): void
+    private function chargeEarlyBreak(Wallet $wallet, User $user, int $fee, ?string $breakReference = null): ?CharityDonation
     {
         $charity = $this->charityFor($wallet);
         $txn = $this->wallets->debit($wallet, $fee, 0, 'fee', array_filter([
             'kind' => 'early_break_fee',
             'charity' => $charity?->name,
+            // BRK-05: which money taken out this fee was for.
+            'break_reference' => $breakReference,
         ]), 'Early-break fee (' . ($wallet->meta['lock']['fee_percent'] ?? self::EARLY_BREAK_FEE_PERCENT) . '%)', $user->id);
 
         if ($charity) {
             $initials = collect(preg_split('/\s+/', $charity->name))->take(2)->map(fn ($w) => Str::upper(Str::substr($w, 0, 1)))->join('');
-            CharityDonation::create([
+
+            return CharityDonation::create([
                 'organisation_id' => $charity->id,
                 'user_id' => $user->id,
                 'wallet_id' => $wallet->id,
@@ -108,5 +114,7 @@ class SpendRules
                 'receipt_no' => $initials . '-' . now()->format('Y') . '-' . random_int(1000, 9999),
             ]);
         }
+
+        return null;
     }
 }

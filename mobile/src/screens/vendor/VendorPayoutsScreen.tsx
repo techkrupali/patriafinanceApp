@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
-import { useSetAutoWithdraw, useVendorHome, useVendorPayouts } from '../../api/projectFlow';
+import { useSetAutoWithdraw, useVendorHome, useVendorPayouts, useVendorWithdraw } from '../../api/projectFlow';
+import { ApiError } from '../../api/client';
 import { PtTabScreen } from '../../components/pt/PtTabScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtPanel, PtReviewRow, PtSwitchRow } from '../../components/pt/PtForm';
 import { PtSectionTitle } from '../../components/pt/PtList';
 import { PtSheet } from '../../components/pt/PtSheet';
+import { PtField } from '../../components/pt/PtField';
+import { PinSheet } from '../../components/PinSheet';
 import { LoadingBlock } from '../../components/project/ProjectUi';
-import { formatMoney, formatNaira } from '../../lib/format';
+import { formatMoney, formatNaira, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
+import { notifySuccess } from '../../lib/haptics';
 import { dayMonth } from '../../lib/projects';
 import type { VendorTabScreenProps } from '../../navigation/types';
 import { showAlert } from '../../lib/alert';
@@ -19,9 +23,44 @@ export function VendorPayoutsScreen({ navigation }: VendorTabScreenProps<'Vendor
   const query = useVendorPayouts();
   const home = useVendorHome();
   const setAuto = useSetAutoWithdraw();
+  const withdraw = useVendorWithdraw();
   const [autoOpen, setAutoOpen] = useState(false);
+  const [outOpen, setOutOpen] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   const p = query.data;
   const owner = home.data?.team_role === 'owner';
+  // The ₦20 bank fee comes out of the balance too, so the most that can go out is a little under it.
+  const most = p ? Math.max(0, Number(p.available) - Number(p.fee)) : 0;
+  const to = p?.account ? `${p.account.name ?? 'Business account'} · ${p.account.bank_name ?? 'Bank'} •••• ${p.account.last4}` : '';
+
+  const openWithdraw = () => {
+    setAmount(String(most));
+    setOutOpen(true);
+  };
+  const send = (pin: string) => {
+    setPinError(null);
+    withdraw.mutate(
+      { amount, pin },
+      {
+        onSuccess: () => {
+          notifySuccess();
+          setPinOpen(false);
+          setOutOpen(false);
+          showAlert('On its way', `${formatNaira(amount)} is going to ${to}.`);
+        },
+        onError: (e) => {
+          const err = e as ApiError;
+          if (err.errors?.pin) setPinError(err.errors.pin[0]);
+          else {
+            setPinOpen(false);
+            showAlert('Not sent', err.message);
+          }
+        },
+      },
+    );
+  };
 
   return (
     <PtTabScreen title="Payouts" refreshing={query.isRefetching} onRefresh={() => void query.refetch()}>
@@ -75,11 +114,24 @@ export function VendorPayoutsScreen({ navigation }: VendorTabScreenProps<'Vendor
               })}
             </View>
           )}
-          {owner && p.wallet_id && Number(p.available) > 0 ? (
-            <PtButton title={`Withdraw ${formatNaira(p.available)}`} onPress={() => navigation.navigate('Withdraw', { walletId: p.wallet_id! })} />
-          ) : null}
+          {owner && p.account && p.can_be_paid && most > 0 ? <PtButton title={`Withdraw ${formatNaira(most)}`} onPress={openWithdraw} /> : null}
         </>
       )}
+
+      <PtSheet
+        visible={outOpen}
+        title="Withdraw"
+        subtitle="Payouts only go to your verified business account."
+        onClose={() => setOutOpen(false)}
+        footer={<PtButton title={`Withdraw ${formatNaira(amount || 0)}`} disabled={!Number(amount) || Number(amount) > most} onPress={() => setPinOpen(true)} />}
+      >
+        <PtField label="Amount" prefix="₦" value={groupAmountInput(amount)} onChangeText={(t) => setAmount(sanitizeAmountInput(t))} keyboardType="decimal-pad" placeholder="0" />
+        <PtPanel>
+          <PtReviewRow label="To" value={p?.account ? `${p.account.name ?? 'Business account'}` : '—'} sub={p?.account ? `${p.account.bank_name ?? 'Bank'} •••• ${p.account.last4}` : null} />
+          <PtReviewRow label="Fee" value={formatNaira(p?.fee ?? 0)} sub={Number(amount) > most ? `You can withdraw up to ${formatNaira(most)}` : null} last />
+        </PtPanel>
+      </PtSheet>
+      <PinSheet visible={pinOpen} title="Withdraw" subtitle="To your business account" amount={formatNaira(amount || 0)} recipient={p?.account?.name ?? undefined} loading={withdraw.isPending} error={pinError} onSubmit={send} onClose={() => setPinOpen(false)} />
 
       <PtSheet visible={autoOpen} title="Automatic withdrawal" subtitle="Every payout goes straight to your business account." onClose={() => setAutoOpen(false)}>
         <PtSwitchRow

@@ -11,6 +11,7 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtNote, PtPanel, PtPills } from '../../components/pt/PtForm';
 import { PtSheet } from '../../components/pt/PtSheet';
+import { PtChip } from '../../components/pt/PtChip';
 import { FileRow, LoadingBlock, PhotoGrid } from '../../components/project/ProjectUi';
 import { pickFile } from '../../lib/upload';
 import { dayMonth } from '../../lib/projects';
@@ -97,6 +98,10 @@ export function ProjectDocumentsScreen({ navigation, route }: RootScreenProps<'P
             ))}
             <FileRow icon="file" title="Receipts" sub={`${data.receipts.length} file${data.receipts.length === 1 ? '' : 's'}`} onPress={data.receipts.length ? () => setView('receipts') : undefined} />
             <FileRow icon="camera" title="Site photos" sub={`${data.site_photos} photo${data.site_photos === 1 ? '' : 's'} · from milestones`} onPress={photos.length ? () => setView('photos') : undefined} last />
+          </PtPanel>
+          {/* "Copy to Google Drive · Patriai / Mama's house renovation" needs a Drive connection, which isn't built yet. */}
+          <PtPanel>
+            <FileRow icon="upload-cloud" title="Copy to Google Drive" sub={`Patriai / ${data.project.title}`} right={<PtChip label="Coming soon" tone="neutral" />} last />
           </PtPanel>
           <PtNote>Photos and receipts from milestone submissions are saved here automatically, with the date they were added.</PtNote>
         </>

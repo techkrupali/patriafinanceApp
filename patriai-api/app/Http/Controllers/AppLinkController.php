@@ -7,13 +7,14 @@ use Illuminate\View\View;
 
 /**
  * SYS-08: the web side of a Patriai link. SMS and WhatsApp only make https
- * links tappable, so /r, /i and /a open this page, which hands over to the
- * app (patriai://…) where the link opens the right screen after the PIN.
- * Nothing private is shown here: no names on requests, no amounts.
+ * links tappable, so /join, /i, /a and /p open this page, which hands over to
+ * the app (patriai://…) where the link opens the right screen after the PIN.
+ * Nothing private is shown here: no names on approvals, no amounts. A money
+ * request (/r) is meant for the person asked, so it shows who and how much.
  */
 class AppLinkController extends Controller
 {
-    // GET /r/{code} — a referral code, filled in at sign-up.
+    // GET /join/{code} — a referral code, filled in at sign-up.
     public function referral(string $code): View
     {
         $owner = User::whereRaw('lower(referral_code) = ?', [strtolower($code)])->where('status', 'active')->first();
@@ -31,6 +32,37 @@ class AppLinkController extends Controller
     public function request(int $id): View
     {
         return $this->page('request/' . $id, 'Someone needs your yes', 'Open the request in Patriai to approve or decline it.');
+    }
+
+    // GET /p/{tag}?amount= — QR-01 "Show this to get paid".
+    public function pay(\Illuminate\Http\Request $request, string $tag): View
+    {
+        $owner = User::whereRaw('lower(username) = ?', [strtolower(ltrim($tag, '@'))])->where('status', 'active')->first();
+        $amount = preg_match('/^\d+(\.\d{1,2})?$/', (string) $request->query('amount')) ? (string) $request->query('amount') : null;
+
+        return $this->page('pay/' . ltrim($tag, '@') . ($amount ? "?amount={$amount}" : ''), $owner ? "Pay {$owner->first_name} on Patriai" : 'Pay on Patriai', $amount ? 'They asked for ₦' . number_format((float) $amount) . '. Open Patriai to check and pay with your PIN.' : 'Open Patriai to choose how much and pay with your PIN.');
+    }
+
+    // GET /r/{code} — REQ-02 a money request: pay in the app, or by bank transfer with the code.
+    public function moneyRequest(string $code): View
+    {
+        $found = \App\Models\MoneyRequest::with(['requester', 'wallet'])->where('code', strtoupper($code))->first() ?? abort(404);
+        $wallet = $found->wallet;
+        if ($found->status === 'pending' && $wallet && !$wallet->virtual_account) {
+            \App\Services\WalletService::make()->ensureVirtualAccount($wallet);
+            $wallet->refresh();
+        }
+
+        return view('link.request', [
+            'request' => $found,
+            'first' => $found->requester->first_name,
+            'amount' => '₦' . number_format($found->left() / 100),
+            'appUrl' => 'patriai://r/' . $found->code,
+            'androidUrl' => 'intent://r/' . $found->code . '#Intent;scheme=patriai;package=com.patriai.app;end',
+            'account_number' => $wallet?->virtual_account,
+            'bank' => $wallet?->virtual_account_bank,
+            'account_name' => $wallet ? 'PATRIAI/' . strtoupper($wallet->owner->fullName()) : null,
+        ]);
     }
 
     private function page(string $path, string $title, string $body): View

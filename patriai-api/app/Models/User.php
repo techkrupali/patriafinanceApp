@@ -145,6 +145,12 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    /** CHW-06: a child's own sign-in, linked to their wallet with a code. */
+    public function isChild(): bool
+    {
+        return $this->role === 'child';
+    }
+
     public function fullName(): string
     {
         return trim("{$this->first_name} {$this->last_name}") ?: ($this->name ?? '');

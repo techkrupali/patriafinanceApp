@@ -26,12 +26,14 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
 }
 
 const MILESTONE_OUTCOMES = [
-  { value: "release_full", label: "Release in full", hint: "The builder is paid the milestone, less anything normally held back." },
+  { value: "fix", label: "Fix it by a date", hint: "The builder redoes the work by the date. The money stays on hold until the family approves the fix." },
   { value: "partial_refund", label: "Release less a refund", hint: "The refund stays in the family's project wallet; the rest is paid." },
   { value: "full_refund", label: "Refund in full", hint: "Nothing is paid; the milestone is cancelled and the money stays with the family." },
+  { value: "release_full", label: "Not upheld · pay in full", hint: "The builder is paid the milestone, less anything normally held back." },
 ];
 const PAYMENT_OUTCOMES = [
-  { value: "resolved", label: "Resolved", hint: "The problem was put right." },
+  { value: "refund", label: "Refund", hint: "The amount goes back into the wallet the payment left, as a refund." },
+  { value: "resolved", label: "Resolved", hint: "The problem was put right another way." },
   { value: "rejected", label: "Not upheld", hint: "Nothing was wrong with the payment." },
 ];
 
@@ -39,7 +41,8 @@ const OUTCOMES: Record<string, string> = {
   fixed: "Fixed at no extra cost",
   partial_refund: "Paid less a refund",
   full_refund: "Refunded in full",
-  released: "Paid in full",
+  released: "Not upheld · paid in full",
+  refunded: "Refunded",
   resolved: "Resolved",
 };
 
@@ -56,6 +59,7 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
   const [message, setMessage] = useState("");
   const [outcome, setOutcome] = useState("");
   const [refund, setRefund] = useState("");
+  const [fixBy, setFixBy] = useState("");
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -85,7 +89,7 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
     mutationFn: () =>
       api(`/api/v1/admin/disputes/${id}/decide`, {
         method: "POST",
-        body: JSON.stringify({ outcome, note: note.trim(), ...(outcome === "partial_refund" ? { refund } : {}) }),
+        body: JSON.stringify({ outcome, note: note.trim(), ...(outcome === "partial_refund" || outcome === "refund" ? { refund } : {}), ...(outcome === "fix" ? { fix_by: fixBy } : {}) }),
       }),
     onSuccess: () => {
       setConfirm(false);
@@ -96,6 +100,15 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
       setConfirm(false);
       setToast({ tone: "red", message: err.message });
     },
+  });
+
+  const take = useMutation({
+    mutationFn: () => api(`/api/v1/admin/disputes/${id}/take`, { method: "POST" }),
+    onSuccess: () => {
+      setToast({ tone: "green", message: "The case is yours. Both sides see Patriai is reviewing it." });
+      refresh();
+    },
+    onError: (err: Error) => setToast({ tone: "red", message: err.message }),
   });
 
   if (isError) {
@@ -112,13 +125,27 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
   const d = data?.dispute;
   const active = d ? !["resolved", "rejected"].includes(d.status) : false;
   const outcomes = d?.kind === "milestone" ? MILESTONE_OUTCOMES : PAYMENT_OUTCOMES;
-  const canDecide = outcome !== "" && note.trim().length > 0 && (outcome !== "partial_refund" || Number(refund) > 0);
+  const canDecide =
+    outcome !== "" && note.trim().length > 0 && (!["partial_refund", "refund"].includes(outcome) || Number(refund) > 0) && (outcome !== "fix" || fixBy !== "");
+  // Deciding before the builder answered or anyone asked Patriai: say so in the confirmation.
+  const early = d?.kind === "milestone" && !["escalated", "under_review"].includes(d.status);
+  const overdue = d && active && d.decision_due && new Date(d.decision_due) < new Date() && ["escalated", "under_review", "open"].includes(d.status);
 
   return (
     <>
       <PageHeader title={d?.subject ?? "Dispute"} subtitle={d ? `${d.number ?? `#${d.id}`} · opened ${formatDate(d.created_at)}` : undefined}>
         {d ? <StatusBadge status={d.status} /> : null}
+        {d?.can?.take ? (
+          <Button variant="outline" onClick={() => take.mutate()} disabled={take.isPending}>
+            {take.isPending ? "Taking..." : d.officer ? `Taken by ${d.officer} · take over` : "Take case"}
+          </Button>
+        ) : null}
       </PageHeader>
+      {overdue ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          The decision was due {formatDeadline(d!.decision_due)}. Decide now or write to both sides.
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -153,7 +180,16 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
                       "A payment"
                     )}
                   </Field>
-                  <Field name="On hold">{d!.amount_on_hold ? naira(d!.amount_on_hold) : "—"}</Field>
+                  {Number(d!.amount_on_hold) > 0 ? (
+                    <Field name="On hold">{naira(d!.amount_on_hold!)}</Field>
+                  ) : d!.payment ? (
+                    <Field name="Payment">
+                      {naira(d!.payment.amount)}
+                      <span className="block text-xs font-normal text-muted">{d!.payment.description ?? ""}</span>
+                    </Field>
+                  ) : (
+                    <Field name="On hold">—</Field>
+                  )}
                   {d!.project ? (
                     <Field name="Project">
                       <Link href={`/projects/${d!.project.id}`} className="text-brand hover:underline">
@@ -181,6 +217,8 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
                   <Field name="Reply by">{formatDeadline(d!.reply_by)}</Field>
                   <Field name="Decision due">{formatDeadline(d!.decision_due)}</Field>
                   <Field name="Evidence until">{formatDeadline(d!.evidence_until)}</Field>
+                  {d!.fix_by ? <Field name="Fix by">{formatDate(d!.fix_by)}</Field> : null}
+                  <Field name="Case officer">{d!.officer ?? "Not taken yet"}</Field>
                 </dl>
               )}
             </CardContent>
@@ -276,6 +314,12 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
                 {outcome === "partial_refund" ? (
                   <Input value={refund} onChange={(e) => setRefund(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={`Refund in naira, less than ${d.milestone ? naira(d.milestone.amount) : "the milestone"}`} aria-label="Refund amount" />
                 ) : null}
+                {outcome === "refund" ? (
+                  <Input value={refund} onChange={(e) => setRefund(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={`Refund in naira${d.payment ? `, up to ${naira(d.payment.amount)}` : ""}`} aria-label="Refund amount" />
+                ) : null}
+                {outcome === "fix" ? (
+                  <Input type="date" value={fixBy} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setFixBy(e.target.value)} aria-label="Fix by" />
+                ) : null}
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -287,13 +331,14 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
                 <Button className="w-full" onClick={() => setConfirm(true)} disabled={!canDecide || decide.isPending}>
                   Record decision
                 </Button>
-                <p className="text-xs text-muted">The decision is final for this dispute. Money moves straight away.</p>
+                <p className="text-xs text-muted">{outcome === "fix" ? "The money stays on hold until the family approves the fix." : "The decision is final for this dispute. Money moves straight away."}</p>
               </div>
             ) : (
               <dl className="grid grid-cols-1 gap-y-4">
                 <Field name="Outcome">{d.status === "rejected" ? "Not upheld" : OUTCOMES[d.outcome ?? "resolved"] ?? "Resolved"}</Field>
                 {d.released_amount && Number(d.released_amount) > 0 ? <Field name="Released to the builder">{naira(d.released_amount)}</Field> : null}
-                {d.refund_amount && Number(d.refund_amount) > 0 ? <Field name="Refunded to the family">{naira(d.refund_amount)}</Field> : null}
+                {d.held_back && Number(d.held_back) > 0 ? <Field name="Held back as usual">{naira(d.held_back)}</Field> : null}
+                {d.refund_amount && Number(d.refund_amount) > 0 ? <Field name={d.kind === "milestone" ? "Refunded to the family" : "Refunded to their wallet"}>{naira(d.refund_amount)}</Field> : null}
                 <Field name="Closed">{formatDateTime(d.resolved_at)}</Field>
                 {d.resolution ? <Field name="Note">{d.resolution}</Field> : null}
               </dl>
@@ -305,7 +350,7 @@ export default function DisputeDetailPage({ params }: { params: Promise<{ id: st
       <ConfirmDialog
         open={confirm}
         title="Record this decision?"
-        message={outcomes.find((o) => o.value === outcome)?.hint ?? ""}
+        message={`${outcomes.find((o) => o.value === outcome)?.hint ?? ""}${early ? " Neither side has asked Patriai to step in yet, so this decides before they've finished talking." : ""}`}
         confirmLabel="Record decision"
         busy={decide.isPending}
         onConfirm={() => decide.mutate()}

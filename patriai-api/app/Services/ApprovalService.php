@@ -36,6 +36,8 @@ class ApprovalService
             'withdrawal' => 'withdrawal',
             'transfer_wallet' => 'wallet transfer',
             'transfer_user' => 'transfer',
+            'transfer_group' => 'transfer',
+            'transfer_request' => 'payment',
             'transfer_bank' => 'bank transfer',
             'milestone_release' => 'milestone payout',
             'rule_change' => 'rule change',
@@ -53,12 +55,18 @@ class ApprovalService
     {
         return in_array($request->action, self::GOVERNANCE_ACTIONS, true)
             ? "{$prefix}: {$request->description}"
-            : "{$prefix}: ₦" . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action);
+            : "{$prefix}: ₦" . $this->shown($request->amount) . ' ' . $this->actionLabel($request->action);
     }
 
     private function naira(int $kobo): string
     {
         return number_format($kobo / 100, 2, '.', '');
+    }
+
+    /** For people to read: "35,000", or "1,250.50" when there are kobo. */
+    private function shown(int $kobo): string
+    {
+        return number_format($kobo / 100, $kobo % 100 ? 2 : 0);
     }
 
     /**
@@ -101,7 +109,7 @@ class ApprovalService
             'expires_at' => now()->addHours($wallet->approvalExpiryHours()),
         ]);
 
-        $title = 'Approval needed: ₦' . $this->naira($amountKobo) . ' ' . $this->actionLabel($action);
+        $title = 'Approval needed: ₦' . $this->shown($amountKobo) . ' ' . $this->actionLabel($action);
         $data = [
             'approval_request_id' => $request->id,
             'wallet_id' => $wallet->id,
@@ -188,7 +196,7 @@ class ApprovalService
 
         foreach ($wallet->eligibleApprovers($initiator->id) as $approverId) {
             if ($approver = User::find($approverId)) {
-                $this->notifications->push($approver, 'approval_auto', "Approved automatically: ₦{$this->naira($amountKobo)}", "{$initiator->first_name} asked for ₦{$this->naira($amountKobo)}" . ($description ? " for {$description}" : '') . " from {$wallet->name}.", ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id]);
+                $this->notifications->push($approver, 'approval_auto', "Approved automatically: ₦{$this->shown($amountKobo)}", "{$initiator->first_name} asked for ₦{$this->shown($amountKobo)}" . ($description ? " for {$description}" : '') . " from {$wallet->name}.", ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id]);
             }
         }
 
@@ -406,11 +414,32 @@ class ApprovalService
                     $reference = $result['reference'];
                     break;
 
+                case 'transfer_group':
+                    $group = \App\Models\SavedAccountGroup::with('accounts.payee')->find((int) ($payload['group_id'] ?? 0));
+                    if (!$group || $group->accounts->isEmpty()) {
+                        throw ValidationException::withMessages(['destination' => 'That group no longer exists.']);
+                    }
+                    $paid = $this->wallets->payGroup($wallet, $initiator, $group, $amount, $payload['description'] ?? $request->description ?? $group->name);
+                    $reference = collect($paid)->pluck('reference')->filter()->first();
+                    if (!$reference) {
+                        throw ValidationException::withMessages(['destination' => collect($paid)->pluck('error')->filter()->first() ?? 'No payment in the group went through.']);
+                    }
+                    break;
+
+                case 'transfer_request':
+                    $moneyRequest = \App\Models\MoneyRequest::where('code', $payload['code'] ?? '')->first();
+                    if (!$moneyRequest) {
+                        throw ValidationException::withMessages(['destination' => 'That request no longer exists.']);
+                    }
+                    $reference = MoneyRequestService::make()->settle($moneyRequest, $initiator, $wallet, $amount)['reference'];
+                    break;
+
                 case 'transfer_user':
                     $identifier = $payload['identifier'] ?? '';
-                    $recipient = str_contains($identifier, '@')
-                        ? User::where('email', strtolower($identifier))->first()
-                        : User::where('phone', $identifier)->first();
+                    // Who was meant when it was asked (an @tag, phone or email then).
+                    $recipient = !empty($payload['user_id'])
+                        ? User::where('status', 'active')->find((int) $payload['user_id'])
+                        : (str_contains($identifier, '@') ? User::where('email', strtolower($identifier))->first() : User::where('phone', $identifier)->first());
 
                     if (!$recipient) {
                         throw ValidationException::withMessages(['destination' => 'Recipient no longer exists.']);
@@ -465,8 +494,8 @@ class ApprovalService
                 $this->notifications->push(
                     $recipient,
                     'transfer_received',
-                    'You received ₦' . $this->naira($amount),
-                    ($initiator ? $initiator->fullName() : 'Someone') . ' sent you ₦' . $this->naira($amount) . '.',
+                    'You received ₦' . $this->shown($amount),
+                    ($initiator ? $initiator->fullName() : 'Someone') . ' sent you ₦' . $this->shown($amount) . '.',
                     ['amount' => $this->naira($amount), 'reference' => $reference],
                 );
             }
@@ -487,7 +516,7 @@ class ApprovalService
                     $initiator,
                     'approval_failed',
                     'Approval could not be completed',
-                    (in_array($request->action, self::GOVERNANCE_ACTIONS, true) ? "Your {$this->actionLabel($request->action)}" : "Your ₦" . $this->naira($request->amount) . ' ' . $this->actionLabel($request->action)) . " on {$wallet->name} was approved but failed: {$reason}",
+                    (in_array($request->action, self::GOVERNANCE_ACTIONS, true) ? "Your {$this->actionLabel($request->action)}" : "Your ₦" . $this->shown($request->amount) . ' ' . $this->actionLabel($request->action)) . " on {$wallet->name} was approved but failed: {$reason}",
                     ['approval_request_id' => $request->id, 'wallet_id' => $wallet->id],
                 );
             }

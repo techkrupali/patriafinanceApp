@@ -65,9 +65,10 @@ class Project extends Model
      */
     public function reservedAmount(): int
     {
-        return (int) $this->milestones()
-            ->whereIn('status', self::RESERVED_MILESTONE_STATUSES)
-            ->sum('amount')
+        $reserved = $this->milestones()->whereIn('status', self::RESERVED_MILESTONE_STATUSES);
+
+        // An advance (VDM-12) already left the wallet, so it's no longer set aside.
+        return (int) (clone $reserved)->sum('amount') - (int) (clone $reserved)->sum('advance_paid')
             + $this->heldBack();
     }
 

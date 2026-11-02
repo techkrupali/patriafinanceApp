@@ -108,7 +108,7 @@ export function GivingWalletSetupScreen(props: RootScreenProps<'GivingWalletSetu
 
 function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const insights = useSavingsInsights();
   const saved = useSavedAccounts();

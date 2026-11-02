@@ -121,7 +121,7 @@ class WalletService
     public function credit(Wallet $wallet, int $amountKobo, string $type, array $counterparty = [], ?string $sessionId = null, ?string $description = null, ?int $userId = null, ?string $bankingReference = null): Transaction
     {
         try {
-            return DB::transaction(function () use ($wallet, $amountKobo, $type, $counterparty, $sessionId, $description, $userId, $bankingReference) {
+            $tx = DB::transaction(function () use ($wallet, $amountKobo, $type, $counterparty, $sessionId, $description, $userId, $bankingReference) {
                 if ($sessionId && Transaction::where('session_id', $sessionId)->exists()) {
                     return Transaction::where('session_id', $sessionId)->first();
                 }
@@ -145,6 +145,9 @@ class WalletService
                     'banking_reference' => $bankingReference,
                 ]);
             });
+            $this->moneyIn($wallet);
+
+            return $tx;
         } catch (QueryException $e) {
             // Concurrent duplicate delivery: the unique session_id lost the race.
             // Return the winning row instead of surfacing a 500 (keeps webhooks idempotent).
@@ -152,6 +155,14 @@ class WalletService
                 return $existing;
             }
             throw $e;
+        }
+    }
+
+    /** MLS-04: money into a project sets its next phases aside (after the outer transaction, if any). */
+    private function moneyIn(Wallet $wallet): void
+    {
+        if ($wallet->type === 'project') {
+            DB::afterCommit(fn () => VendorProjectService::make()->fundOnDeposit($wallet));
         }
     }
 
@@ -257,6 +268,7 @@ class WalletService
 
             return ['reference' => $out->reference, 'balance_after' => $src->balance];
         });
+        $this->moneyIn($to);
 
         $this->recordRoundUp($from, $amountKobo, $to, $description);
 
@@ -282,6 +294,50 @@ class WalletService
     }
 
     /** Withdraw to an external bank account via the banking rails. */
+    /**
+     * Pay a group of saved accounts its shares (SND-03 "Our churches · split 50/50").
+     * Each account is paid on its own; one that fails is refunded and reported
+     * without undoing the others. Returns [{name, amount, reference|null, error|null}].
+     */
+    public function payGroup(Wallet $wallet, User $initiator, \App\Models\SavedAccountGroup $group, int $amountKobo, ?string $description = null): array
+    {
+        $out = [];
+        foreach ($group->shares($amountKobo) as $accountId => $share) {
+            $account = $group->accounts->firstWhere('id', $accountId);
+            if (!$account || $share <= 0) {
+                continue;
+            }
+            try {
+                $txn = $this->payPayee($wallet->fresh(), $initiator, $account, $share, $description);
+                $out[] = ['name' => $account->nickname, 'amount' => number_format($share / 100, 2, '.', ''), 'reference' => $txn->reference, 'error' => null];
+            } catch (\Throwable $e) {
+                $reason = $e instanceof ValidationException ? collect($e->errors())->flatten()->first() : $e->getMessage();
+                $out[] = ['name' => $account->nickname, 'amount' => number_format($share / 100, 2, '.', ''), 'reference' => null, 'error' => (string) $reason];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Pay a saved account (SND, giving, goal payouts): a bank account by payout, a
+     * Patriai user straight into their Main wallet. Returns the outgoing transaction.
+     */
+    public function payPayee(Wallet $wallet, User $initiator, \App\Models\SavedAccount $account, int $amountKobo, ?string $description = null): Transaction
+    {
+        if ($account->isPatriai()) {
+            $to = $account->payee?->mainWallet();
+            if (!$to || $account->payee->status !== 'active') {
+                throw ValidationException::withMessages(['to' => "{$account->nickname} can't receive money on Patriai right now."]);
+            }
+            $result = $this->transferBetweenWallets($wallet, $to, $amountKobo, $initiator, $description ?: "Transfer to {$account->payee->fullName()}");
+
+            return Transaction::where('reference', $result['reference'])->firstOrFail();
+        }
+
+        return $this->withdrawToBank($wallet, $initiator, $amountKobo, $account->bank_code, $account->account_number, $account->account_name, $account->bank_name, $description);
+    }
+
     public function withdrawToBank(Wallet $wallet, User $initiator, int $amountKobo, string $bankCode, string $accountNumber, string $accountName, string $bankName, ?string $description = null): Transaction
     {
         $feeKobo = (int) config('services.matrix.transfer_fee_kobo', 2000);

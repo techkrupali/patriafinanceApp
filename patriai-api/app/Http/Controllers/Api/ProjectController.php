@@ -8,6 +8,7 @@ use App\Models\ProjectDocument;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Models\VendorTeamMember;
+use App\Services\ProjectApprovalService;
 use App\Services\ProjectService;
 use App\Services\ProjectSetupService;
 use App\Services\VendorTeamService;
@@ -157,6 +158,9 @@ class ProjectController extends ApiController
         $family = $project->isFamilyApprover($user);
         $evidence = $project->milestones->flatMap->evidence;
         $documents = ProjectDocument::with('user')->where('project_id', $project->id)->latest()->get();
+        $approvals = ProjectApprovalService::make();
+        $approverIds = collect($approvals->rulesFor($project)['approver_ids'])
+            ->merge($project->milestones->flatMap(fn (Milestone $m) => $approvals->rulesFor($project, $m)['approver_ids']))->unique();
 
         return $this->ok('Project fetched', [
             'project' => $this->serializeProject($project, $user),
@@ -177,19 +181,116 @@ class ProjectController extends ApiController
             'suggestions' => !$project->vendor_id ? $this->builderSuggestions($project) : null,
             // VND-04: the milestones this person has already rated the builder for.
             'reviewed_milestones' => \App\Models\VendorReview::where('user_id', $user->id)->where('project_id', $project->id)->pluck('milestone_id')->filter()->values(),
+            // MLS-03, PJH-05, PJH-06: who approves, who's on each side, and who put in what.
+            'approval_rules' => $role === 'foreman' ? null : $this->approvalRules($project),
+            'people' => $this->people($project, $role === 'foreman' || $role === 'site_manager' || $role === 'accounts' || $role === 'vendor'),
             'can' => [
-                'approve' => $family,
+                // MLS-03: the project's approvers (a funder who approves too, CTB-01).
+                'approve' => $family || $approverIds->contains($user->id),
                 'edit' => $family,
                 'invite_vendor' => $project->owner_id === $user->id,
                 'accept' => $project->vendor_id === $user->id && $project->vendor_status === 'invited',
                 'propose' => $project->actsForVendor($user, 'submit') && in_array($project->vendor_status, ['accepted', null], true),
                 'submit' => $project->actsForVendor($user, 'submit') && in_array($project->vendor_status, ['accepted', null], true),
                 'upload' => $project->actsForVendor($user, 'upload') && in_array($project->vendor_status, ['accepted', null], true),
-                'chat' => $role !== 'accounts',
+                'chat' => $role !== 'accounts' && ($project->wallet?->members()->where('user_id', $user->id)->first()?->permissions['chat'] ?? true) !== false,
                 'dispute' => $family && $project->vendor_id !== null,
                 'see_money' => $role !== 'foreman',
             ],
         ]);
+    }
+
+    /** MLS-03: the project's approval settings, who could approve, and per-milestone overrides. */
+    private function approvalRules(Project $project): array
+    {
+        $svc = ProjectApprovalService::make();
+        $rules = $svc->rulesFor($project);
+        $people = $svc->candidates($project)->keyBy('id');
+        $person = fn (User $u) => ['id' => $u->id, 'name' => $u->fullName(), 'first_name' => $u->first_name, 'role' => $project->roleOf($u)];
+        $milestones = $project->milestones->keyBy('id');
+        $over = $project->meta['approvals']['site_photo_over'] ?? null;
+
+        return [
+            'custom' => $svc->custom($project),
+            'mode' => $rules['mode'],
+            'needed' => $rules['needed'],
+            'approvers' => collect($rules['approver_ids'])->map(fn ($id) => $people->get($id))->filter()->map($person)->values(),
+            'candidates' => $people->values()->map($person),
+            'overrides' => collect($project->meta['approvals']['overrides'] ?? [])->map(fn ($o, $mid) => [
+                'milestone_id' => (int) $mid,
+                'title' => $milestones->get((int) $mid)?->title,
+                'amount' => number_format((int) ($milestones->get((int) $mid)?->amount ?? 0) / 100, 2, '.', ''),
+                'approver_ids' => $o['approver_ids'],
+                'names' => collect($o['approver_ids'])->map(fn ($id) => $people->get($id)?->first_name)->filter()->values(),
+                'needed' => (int) $o['needed'],
+            ])->values(),
+            'site_photo_over' => $over !== null ? number_format($over / 100, 2, '.', '') : null,
+        ];
+    }
+
+    /**
+     * PJH-05 "Family side · 4 / Vendor side · 3" with what each funder put in (PJH-06).
+     * The builder's side doesn't see what each family member put in.
+     */
+    private function people(Project $project, bool $vendorSide): array
+    {
+        $rules = ProjectApprovalService::make()->rulesFor($project);
+        $approverIds = collect($rules['approver_ids'])->merge(collect($project->meta['approvals']['overrides'] ?? [])->flatMap(fn ($o) => $o['approver_ids']))->unique();
+        $contributions = $project->wallet ? \App\Services\WalletManageService::make()->contributions($project->wallet) : ['by_user' => [], 'total' => 0];
+        $familyIds = collect([$project->owner_id])->merge($project->wallet?->members()->where('status', 'active')->pluck('user_id') ?? [])->unique();
+        $naira = fn (int $k) => number_format($k / 100, 2, '.', '');
+        $family = User::whereIn('id', $familyIds)->get()->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : $u->id)->map(fn (User $u) => [
+            'id' => $u->id,
+            'name' => $u->fullName(),
+            'first_name' => $u->first_name,
+            'role' => $project->roleOf($u),
+            'approver' => $approverIds->contains($u->id),
+            'put_in' => $vendorSide ? null : $naira((int) ($contributions['by_user'][$u->id] ?? 0)),
+        ])->values();
+
+        $vendor = collect();
+        if ($project->vendor) {
+            $profile = VendorProfile::where('user_id', $project->vendor_id)->first();
+            $vendor->push(['id' => $project->vendor->id, 'name' => $project->vendor->fullName(), 'first_name' => $project->vendor->first_name, 'role' => 'vendor', 'business' => $profile?->business_name]);
+            if ($profile && in_array($project->vendor_status, ['accepted', null], true)) {
+                VendorTeamMember::with('user')->where('vendor_profile_id', $profile->id)->where('status', 'active')->get()
+                    ->filter(fn (VendorTeamMember $m) => $m->user && $m->covers($project->id))
+                    ->each(fn (VendorTeamMember $m) => $vendor->push(['id' => $m->user->id, 'name' => $m->user->fullName(), 'first_name' => $m->user->first_name, 'role' => $m->role, 'business' => $profile->business_name]));
+            }
+        }
+
+        return [
+            'family' => $family,
+            'vendor' => $vendor->values(),
+            'put_in_total' => $vendorSide ? null : $naira((int) $contributions['total']),
+        ];
+    }
+
+    // PUT /projects/{project}/approval-rules — MLS-03 {mode, approver_ids, needed?, overrides?, site_photo_over?} (owner)
+    public function approvalRulesUpdate(Request $request, Project $project): JsonResponse
+    {
+        $user = $request->user();
+        if ($guard = $this->ownerGuard($project, $user)) {
+            return $guard;
+        }
+        $data = $request->validate([
+            'mode' => ['required', 'in:' . implode(',', ProjectApprovalService::MODES)],
+            'approver_ids' => ['required', 'array', 'min:1'],
+            'approver_ids.*' => ['integer'],
+            'needed' => ['nullable', 'integer', 'min:1'],
+            'overrides' => ['sometimes', 'array'],
+            'overrides.*.milestone_id' => ['required', 'integer'],
+            'overrides.*.approver_ids' => ['required', 'array', 'min:1'],
+            'overrides.*.approver_ids.*' => ['integer'],
+            'overrides.*.needed' => ['nullable', 'integer', 'min:1'],
+            'site_photo_over' => ['nullable', 'numeric', 'min:1'],
+        ]);
+        if (isset($data['site_photo_over'])) {
+            $data['site_photo_over'] = $this->toKobo((string) $data['site_photo_over']);
+        }
+        ProjectApprovalService::make()->save($project, $user, $data);
+
+        return $this->ok('Approval settings saved — we told the builder', ['approval_rules' => $this->approvalRules($project->refresh()->load('milestones'))]);
     }
 
     /** PRJ-10 "Budget vs actual": each milestone's spend against its plan, extras the builder added, and the buffer left. */
@@ -300,6 +401,8 @@ class ProjectController extends ApiController
             'due_date' => ['nullable', 'date', 'after_or_equal:today'],
             'deliverables' => ['sometimes', 'array', 'max:12'],
             'deliverables.*' => ['string', 'max:120'],
+            // PRJ-05 "Proof needed".
+            'proof_needed' => ['nullable', 'string', 'max:200'],
         ]);
 
         $milestone = ProjectService::make()->addMilestone(
@@ -312,6 +415,9 @@ class ProjectController extends ApiController
         );
         if (!empty($data['deliverables'])) {
             $milestone->update(['deliverables' => collect($data['deliverables'])->map(fn ($t) => trim($t))->filter()->map(fn ($t) => ['text' => $t, 'done' => false])->values()->all()]);
+        }
+        if (!empty($data['proof_needed'])) {
+            $milestone->update(['proof_needed' => trim($data['proof_needed'])]);
         }
 
         return $this->ok('Milestone added', [

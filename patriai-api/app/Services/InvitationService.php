@@ -60,6 +60,10 @@ class InvitationService
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
         }
+        // A child's own sign-in joins only their own wallet, through its code (CHW-06).
+        if ($invitee?->isChild()) {
+            throw ValidationException::withMessages(['invite' => 'Children join with the code from their own wallet.']);
+        }
         // ME-23 "Tier 2 · Up to 3 wallets, shared wallets": sharing starts at Tier 2.
         if (!LimitService::make()->tier((int) ($wallet->owner?->kyc_tier ?? 0))['shared_wallets']) {
             throw ValidationException::withMessages(['invite' => 'Shared wallets start at Tier 2. Verify your NIN and a selfie to invite people.']);
@@ -134,7 +138,7 @@ class InvitationService
                 $invitee,
                 'invitation_received',
                 "Invitation to join {$wallet->name}",
-                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->role}." . $this->pledgeLine($invitation),
+                "{$inviter->fullName()} invited you to join {$wallet->name} as {$invitation->roleName()}." . $this->pledgeLine($invitation),
                 [
                     'invitation_id' => $invitation->id,
                     'wallet_id' => $wallet->id,

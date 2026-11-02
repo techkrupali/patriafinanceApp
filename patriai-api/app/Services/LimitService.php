@@ -58,7 +58,7 @@ class LimitService
                 $total += $t->amount + $t->fee;
             });
         ApprovalRequest::with('wallet:id,type')->where('initiator_id', $user->id)->whereIn('status', ['pending', 'approved'])
-            ->whereIn('action', ['withdrawal', 'transfer_bank', 'transfer_wallet', 'transfer_user'])->where('created_at', '>=', $start)->get()
+            ->whereIn('action', ['withdrawal', 'transfer_bank', 'transfer_wallet', 'transfer_user', 'transfer_group', 'transfer_request'])->where('created_at', '>=', $start)->get()
             ->each(function (ApprovalRequest $r) use (&$total, $own) {
                 if ($r->wallet?->type === 'project' || ($r->action === 'transfer_wallet' && in_array((int) ($r->payload['wallet_id'] ?? 0), $own, true))) {
                     return;
@@ -107,10 +107,11 @@ class LimitService
      * Every payment out: null when it may go, else [message, http status, data].
      * $internal: a move between the person's own wallets (no limits, no holds).
      * $recipient: someone else receiving into their Main (their balance limit).
+     * $scheduled: SND-14 a payment set up earlier with the PIN and two-step; no phone is sending it.
      *
      * @return array{0: string, 1: int, 2: array}|null
      */
-    public function check(User $user, int $kobo, Request $request, bool $internal = false, ?User $recipient = null): ?array
+    public function check(User $user, int $kobo, Request $request, bool $internal = false, ?User $recipient = null, bool $scheduled = false): ?array
     {
         $maintenance = SystemSetting::get('maintenance');
         if (!empty($maintenance['on'])) {
@@ -123,7 +124,7 @@ class LimitService
             return null;
         }
 
-        $device = SecurityService::make()->currentDevice($request, $user);
+        $device = $scheduled ? null : SecurityService::make()->currentDevice($request, $user);
         if ($device && !$device->canSend()) {
             return ['This phone is new. It can receive money now and send from ' . $device->send_after->copy()->setTimezone('Africa/Lagos')->format('j M, g:i a') . '.', 422, ['code' => 'new_device', 'until' => $device->send_after->toIso8601String()]];
         }
@@ -143,7 +144,7 @@ class LimitService
             }
         }
 
-        if ($user->hasTwoFactor() && $kobo > SecurityService::TWO_FACTOR_OVER) {
+        if (!$scheduled && $user->hasTwoFactor() && $kobo > SecurityService::TWO_FACTOR_OVER) {
             $code = $request->input('two_factor_code');
             if (!$code) {
                 if ($user->two_factor_method !== 'authenticator') {

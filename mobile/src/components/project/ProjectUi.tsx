@@ -151,18 +151,21 @@ export function PhotoGrid({
   photos,
   onAdd,
   onRemove,
+  onOpen,
   adding = false,
 }: {
   photos: { key: string | number; url: string; caption?: string | null; video?: boolean; document?: boolean }[];
   onAdd?: () => void;
   onRemove?: (key: string | number) => void;
+  /** MLS-01: open a photo full size. */
+  onOpen?: (index: number) => void;
   adding?: boolean;
 }) {
   const tile = { width: '31.5%' as const, aspectRatio: 1, borderRadius: ptRadius.sm, overflow: 'hidden' as const };
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {photos.map((p) => (
-        <View key={p.key} style={[tile, { backgroundColor: pt.sunken }]}>
+      {photos.map((p, i) => (
+        <Pressable key={p.key} onPress={onOpen ? () => { selection(); onOpen(i); } : undefined} disabled={!onOpen} accessibilityRole={onOpen ? 'button' : undefined} accessibilityLabel={onOpen ? `Open ${p.caption ?? (p.video ? 'video' : 'photo')}` : undefined} style={[tile, { backgroundColor: pt.sunken }]}>
           {p.document || p.video ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <Feather name={p.video ? 'video' : 'file-text'} size={24} color={pt.brand} />
@@ -188,7 +191,7 @@ export function PhotoGrid({
               <Feather name="x" size={14} color="#FFFFFF" />
             </Pressable>
           ) : null}
-        </View>
+        </Pressable>
       ))}
       {onAdd ? (
         <Pressable

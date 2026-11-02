@@ -99,6 +99,8 @@ class FamilyController extends ApiController
                 'status' => 'active',
                 // JNT-01 "Co-owner · verified": BVN checked (a joint wallet needs both).
                 'verified' => (int) $u->kyc_tier >= 1,
+                // A child's own sign-in (CHW-06): family, but never a keyholder, co-owner or invitee.
+                'is_child' => $u->isChild(),
                 'memberships' => $person['memberships'],
             ];
         }

@@ -107,6 +107,16 @@ class SavingsMethodsTest extends TestCase
         Sanctum::actingAs($emeka);
         $this->postJson("/api/v1/invitations/{$invite->id}/accept", ['source_wallet_id' => $emeka->mainWallet()->id])->assertOk();
         $this->assertSame(2, AutomationRule::where('user_id', $emeka->id)->where('to_wallet_id', $wallet->id)->count());
+
+        // WPV-02 his own rule: "Your rule 15% of salary", then "Change my %" and "Pause my saving".
+        $this->getJson("/api/v1/wallets/{$wallet->id}/savings")->assertOk()->assertJsonPath('data.savings.me.auto_save.salary_percent', 15)->assertJsonPath('data.savings.me.is_owner', false);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/savings/contribution", ['salary_percent' => 60])->assertStatus(422);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/savings/contribution", ['salary_percent' => 10])->assertOk()->assertJsonPath('data.savings.me.auto_save.salary_percent', 10);
+        $this->assertSame(15, AutomationRule::where('user_id', $ngozi->id)->where('to_wallet_id', $wallet->id)->where('trigger', 'salary')->value('percent'));
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/savings/contribution", ['enabled' => false])->assertOk()->assertJsonPath('data.savings.me.auto_save.enabled', false);
+        // Without "let savers choose", only the owner sets the share.
+        $wallet->savingsPlan->update(['allow_contributor_edit' => false]);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/savings/contribution", ['salary_percent' => 20])->assertStatus(422);
     }
 
     public function test_salary_landing_saves_its_share_once_a_month(): void

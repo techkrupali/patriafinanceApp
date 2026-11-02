@@ -54,7 +54,7 @@ function ResponseRow({ response }: { response: ApprovalResponse }) {
   );
 }
 
-export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'>) {
+export function ApprovalDetailScreen({ route, navigation }: RootScreenProps<'ApprovalDetail'>) {
   const insets = useSafeAreaInsets();
   const { approvalId } = route.params;
   const myId = useAuth((s) => s.user?.id);
@@ -213,6 +213,16 @@ export function ApprovalDetailScreen({ route }: RootScreenProps<'ApprovalDetail'
                 <Text className="text-[13px] font-bold text-brand">Executed</Text>
                 <Text className="text-xs text-muted">Ref · {approval.executed_transaction_reference}</Text>
               </View>
+              {/* BRK-05: savings taken out early — what landed, the fee and the charity's receipt. */}
+              {approval.wallet?.type === 'savings' && approval.initiator?.id === myId ? (
+                <Text
+                  onPress={() => approval.executed_transaction_reference && navigation.navigate('BreakDone', { reference: approval.executed_transaction_reference })}
+                  accessibilityRole="link"
+                  className="text-[13px] font-bold text-brand"
+                >
+                  See receipt
+                </Text>
+              ) : null}
             </View>
           ) : null}
           {approval.fail_reason ? (

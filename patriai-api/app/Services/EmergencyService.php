@@ -75,6 +75,12 @@ class EmergencyService
         return number_format($kobo / 100, 2, '.', '');
     }
 
+    /** ₦85,000 / ₦1,250.50 — amounts in messages people read. */
+    private function shown(int $kobo): string
+    {
+        return '₦' . number_format($kobo / 100, $kobo % 100 ? 2 : 0);
+    }
+
     // ------------------------------------------------------------------ setup
 
     /** Member roles that exist only because of the emergency rules. */
@@ -654,8 +660,85 @@ class EmergencyService
         return $this->createReleaseRequest($wallet, $setting, $requester, null, $note, null);
     }
 
+    /**
+     * WAL-17 "Release money": an amount for what happened, paid to the hospital
+     * (when the fund pays directly) or the asker's Main, with proof. Within the
+     * fast-release limit a keyholder with proof is paid at once (EMG-04);
+     * otherwise it waits for enough keyholders and is paid on the last yes —
+     * the fund itself stays locked.
+     */
+    public function requestRelease(Wallet $wallet, User $requester, int $amountKobo, string $pin, ?string $note, ?UploadedFile $proof, ?array $payee): EmergencyUnlockRequest
+    {
+        $setting = $this->requireSetting($wallet);
+        $this->requireLocked($setting);
+        if (!$this->isAuthorized($wallet, $requester)) {
+            throw ValidationException::withMessages(['wallet' => 'You are not one of the people who can ask for a release.']);
+        }
+        if ($amountKobo <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Enter how much is needed.']);
+        }
+        if ($setting->pay_directly && empty($payee['account_number'])) {
+            throw ValidationException::withMessages(['payee' => "This fund pays bills directly — add the hospital or clinic's bank account."]);
+        }
+        $fee = $setting->pay_directly ? (int) config('services.matrix.transfer_fee_kobo', 2000) : 0;
+        if ($amountKobo + $fee > $wallet->availableToSpend()) {
+            throw ValidationException::withMessages(['amount' => 'That is more than the fund holds right now.']);
+        }
+
+        // EMG-04: small, with proof, by a keyholder, and not used in the last 30 days — at once.
+        $last = $this->lastFastRelease($wallet);
+        $fastOpen = $setting->fast_release_limit && $amountKobo <= $setting->fast_release_limit && $proof && $this->isKeyholder($wallet, $requester)
+            && !($last && $last->created_at->copy()->addDays($setting->fast_release_every_days)->isFuture());
+        if ($fastOpen) {
+            return $this->fastRelease($wallet, $requester, $amountKobo, $pin, $proof, $note, $setting->pay_directly ? $payee : null);
+        }
+
+        app(PinService::class)->verify($requester, $pin);
+        $this->expireOldRequests($wallet);
+        if ($wallet->emergencyUnlockRequests()->where('method', 'dual_approval')->where('status', 'pending')->exists()) {
+            throw ValidationException::withMessages(['amount' => 'A release request is already waiting for the keyholders.']);
+        }
+        if (!$setting->pay_directly && !$requester->mainWallet()) {
+            throw ValidationException::withMessages(['amount' => 'You need an active main wallet to receive this money.']);
+        }
+        $path = $proof?->store('emergency-documents', 'local');
+        $request = $this->createReleaseRequest($wallet, $setting, $requester, null, $note, $path, $amountKobo, $setting->pay_directly ? array_intersect_key($payee, array_flip(['bank_code', 'bank_name', 'account_number', 'account_name'])) : null);
+
+        return $request->status === 'approved' ? $this->payRelease($request) : $request;
+    }
+
+    /** The last yes on a release for an amount: the money goes, and the fund stays locked. */
+    public function payRelease(EmergencyUnlockRequest $request): EmergencyUnlockRequest
+    {
+        $wallet = $request->wallet;
+        $by = $request->approver ?? $request->requester ?? $wallet->owner;
+        $what = "Emergency release from {$wallet->name}" . ($request->note ? ": {$request->note}" : '');
+        try {
+            if (!empty($request->payee['account_number'])) {
+                $p = $request->payee;
+                $reference = $this->wallets->withdrawToBank($wallet, $by, $request->amount, $p['bank_code'], $p['account_number'], $p['account_name'], $p['bank_name'], $what)->reference;
+            } else {
+                $to = $request->requester?->mainWallet() ?? throw ValidationException::withMessages(['amount' => 'The asker has no main wallet to receive this.']);
+                $reference = $this->wallets->transferBetweenWallets($wallet, $to, $request->amount, $by, $what)['reference'];
+            }
+        } catch (\Throwable $e) {
+            $request->update(['status' => 'rejected', 'review_note' => 'Could not pay: ' . ($e instanceof ValidationException ? collect($e->errors())->flatten()->first() : $e->getMessage())]);
+            report($e);
+
+            return $request->refresh();
+        }
+        $request->update(['status' => 'released', 'reference' => $reference]);
+        AuditService::make()->log($wallet, $by, 'emergency_released', $this->shown($request->amount) . ' released' . ($request->note ? " for {$request->note}" : ''), ['request_id' => $request->id, 'amount' => $request->amount]);
+        $to = !empty($request->payee['account_name']) ? $request->payee['account_name'] : ($request->requester?->first_name . "'s Main wallet");
+        foreach (User::whereIn('id', $this->approverIds($wallet, $wallet->emergencySetting)->push($wallet->user_id)->unique())->get() as $u) {
+            $this->notifications->push($u, 'emergency_released', $this->shown($request->amount) . " released from {$wallet->name}", "Paid to {$to}." . ($request->note ? " For: {$request->note}" : ''), ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id]);
+        }
+
+        return $request->refresh();
+    }
+
     /** A release request from a keyholder, a beneficiary or a trusted contact. */
-    private function createReleaseRequest(Wallet $wallet, EmergencySetting $setting, ?User $requester, ?EmergencyTrustedContact $contact, ?string $note, ?string $proofPath): EmergencyUnlockRequest
+    private function createReleaseRequest(Wallet $wallet, EmergencySetting $setting, ?User $requester, ?EmergencyTrustedContact $contact, ?string $note, ?string $proofPath, ?int $amount = null, ?array $payee = null): EmergencyUnlockRequest
     {
         $approvers = $this->approverIds($wallet, $setting);
         $required = $setting->keyholder_ids === null ? 2 : $setting->requiredYeses($wallet->user_id);
@@ -667,19 +750,26 @@ class EmergencyService
             'requested_by' => $requester?->id,
             'trusted_contact_id' => $contact?->id,
             'method' => 'dual_approval',
+            'status' => 'pending',
             'note' => $note ?: null,
             'document_type' => $proofPath ? 'proof' : null,
             'document_path' => $proofPath,
             'approvals' => $yes,
             'required_approvals' => $required,
             'expires_at' => $setting->request_expiry_hours ? now()->addHours($setting->request_expiry_hours) : null,
+            // WAL-17: a release for an amount, paid on the last yes (null: release the whole fund).
+            'amount' => $amount,
+            'payee' => $payee,
         ]);
 
-        AuditService::make()->log($wallet, $requester ?? $wallet->owner, 'emergency_unlock_requested', "{$who} asked to release the wallet", ['request_id' => $request->id, 'trusted_contact_id' => $contact?->id]);
+        AuditService::make()->log($wallet, $requester ?? $wallet->owner, 'emergency_unlock_requested', ($amount ? "{$who} asked to release {$this->shown($amount)}" : "{$who} asked to release the wallet"), ['request_id' => $request->id, 'trusted_contact_id' => $contact?->id]);
 
         if ($requester && count($yes) >= $required) {
             $request->update(['status' => 'approved', 'approved_by' => $requester->id, 'decided_at' => now()]);
-            $this->unlock($wallet, $requester, 'dual_approval', $request->id, $note);
+            // An amount is paid by the caller (outside any rollback); otherwise the fund opens.
+            if ($amount === null) {
+                $this->unlock($wallet, $requester, 'dual_approval', $request->id, $note);
+            }
 
             return $request->refresh();
         }
@@ -690,7 +780,7 @@ class EmergencyService
                 $this->notifications->push(
                     $user,
                     'emergency_unlock_requested',
-                    ($contact ? "{$who}, a trusted contact, asked to release {$wallet->name}" : "{$who} asked to release {$wallet->name}"),
+                    ($contact ? "{$who}, a trusted contact, asked to release {$wallet->name}" : "{$who} asked to release " . ($amount ? $this->shown($amount) . ' from ' : '') . $wallet->name),
                     "Your yes is needed — {$still} more of " . $approvers->count() . ' keyholders must agree.' . ($proofPath ? ' Proof is attached.' : '') . ($note ? " Note: {$note}" : ''),
                     ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id],
                 );
@@ -830,7 +920,7 @@ class EmergencyService
             throw ValidationException::withMessages(['request' => 'Someone other than the requester has to approve.']);
         }
 
-        return DB::transaction(function () use ($request, $approver, $wallet, $setting) {
+        $done = DB::transaction(function () use ($request, $approver, $wallet, $setting) {
             $locked = EmergencyUnlockRequest::whereKey($request->id)->lockForUpdate()->first();
             // Requests from before keyholders counted the asker implicitly.
             $yes = $locked->approvals ?? array_values(array_filter([$locked->requested_by]));
@@ -851,12 +941,15 @@ class EmergencyService
             }
 
             $locked->update(['approvals' => $yes, 'status' => 'approved', 'approved_by' => $approver->id, 'decided_at' => now()]);
-            if ($setting->isLocked()) {
+            if ($locked->amount === null && $setting->isLocked()) {
                 $this->unlock($wallet, $approver, 'dual_approval', $locked->id);
             }
 
             return $locked->refresh();
         });
+
+        // WAL-17: the last yes pays the amount (a bank payout runs outside the rollback).
+        return $done->status === 'approved' && $done->method === 'dual_approval' && $done->amount !== null ? $this->payRelease($done) : $done;
     }
 
     /** Enough keyholders agreed: the new rules apply (if they still make sense). */
@@ -956,14 +1049,15 @@ class EmergencyService
         app(PinService::class)->verify($user, $pin);
         $path = $proof->store('emergency-documents', 'local');
 
+        $what = "Fast release from {$wallet->name}" . ($note ? ": {$note}" : '');
         // A bank payout keeps its own ledger safety (a timeout stays pending for
         // reconciliation), so it runs on its own, never inside a rollback.
         $paid = $direct
-            ? $this->wallets->withdrawToBank($wallet, $user, $amountKobo, $payee['bank_code'], $payee['account_number'], $payee['account_name'], $payee['bank_name'], "Fast release from {$wallet->name}")->reference
+            ? $this->wallets->withdrawToBank($wallet, $user, $amountKobo, $payee['bank_code'], $payee['account_number'], $payee['account_name'], $payee['bank_name'], $what)->reference
             : null;
 
-        $request = DB::transaction(function () use ($wallet, $user, $to, $amountKobo, $path, $note, $direct, $payee, $paid) {
-            $moved = $paid ? ['reference' => $paid] : $this->wallets->transferBetweenWallets($wallet, $to, $amountKobo, $user, "Fast release from {$wallet->name}");
+        $request = DB::transaction(function () use ($wallet, $user, $to, $amountKobo, $path, $note, $direct, $payee, $paid, $what) {
+            $moved = $paid ? ['reference' => $paid] : $this->wallets->transferBetweenWallets($wallet, $to, $amountKobo, $user, $what);
 
             return EmergencyUnlockRequest::create([
                 'wallet_id' => $wallet->id,
@@ -981,14 +1075,14 @@ class EmergencyService
             ]);
         });
 
-        AuditService::make()->log($wallet, $user, 'emergency_fast_release', "{$user->fullName()} released ₦{$this->naira($amountKobo)} fast, with proof", ['request_id' => $request->id, 'amount' => $amountKobo]);
+        AuditService::make()->log($wallet, $user, 'emergency_fast_release', "{$user->fullName()} released {$this->shown($amountKobo)} fast, with proof", ['request_id' => $request->id, 'amount' => $amountKobo]);
 
         $setting = $wallet->emergencySetting;
         foreach (User::whereIn('id', array_diff($setting->keyholders($wallet->user_id), [$user->id]))->get() as $keyholder) {
             $this->notifications->push(
                 $keyholder,
                 'emergency_fast_release',
-                "{$user->fullName()} released ₦{$this->naira($amountKobo)} from {$wallet->name}",
+                "{$user->fullName()} released {$this->shown($amountKobo)} from {$wallet->name}",
                 'Check the proof within ' . self::FAST_RELEASE_REVIEW_HOURS . ' hours. You can flag it if something looks wrong.' . ($note ? " Note: {$note}" : ''),
                 ['wallet_id' => $wallet->id, 'emergency_request_id' => $request->id],
             );
@@ -1186,12 +1280,12 @@ class EmergencyService
             return $result;
         });
 
-        AuditService::make()->log($wallet, $user, 'emergency_withdrawal', "{$user->fullName()} received ₦{$this->naira($amountKobo)} as a beneficiary", ['amount' => $amountKobo]);
+        AuditService::make()->log($wallet, $user, 'emergency_withdrawal', "{$user->fullName()} received {$this->shown($amountKobo)} as a beneficiary", ['amount' => $amountKobo]);
         if ($owner = $wallet->owner) {
             $this->notifications->push(
                 $owner,
                 'emergency_withdrawal',
-                "{$user->fullName()} received ₦{$this->naira($amountKobo)}",
+                "{$user->fullName()} received {$this->shown($amountKobo)}",
                 "Paid from {$wallet->name} to their Patriai wallet.",
                 ['wallet_id' => $wallet->id, 'reference' => $result['reference']],
             );
@@ -1350,7 +1444,14 @@ class EmergencyService
             // The personal message is for the moment of unlock; the owner always sees it.
             'beneficiary_note' => $isOwner || !$locked ? $setting->beneficiary_note : null,
             'requests' => $requests->map(fn ($r) => $this->serializeRequest($r, $viewer))->values(),
+            // WAL-16 / WPV-07: "Target ₦350,000 · 40%", "after 2 months of saving", releases so far.
+            'target' => $wallet->target_amount ? $this->naira($wallet->target_amount) : null,
+            'months_saving' => (int) $wallet->created_at?->diffInMonths(now()),
+            'releases' => $wallet->emergencyUnlockRequests()->where('status', 'released')->count(),
             'me' => [
+                // "You put in" and "Your monthly".
+                'put_in' => $this->naira((int) (WalletManageService::make()->contributions($wallet)['by_user'][$viewer->id] ?? 0)),
+                'monthly' => ($rule = \App\Models\AutomationRule::where('user_id', $viewer->id)->where('to_wallet_id', $wallet->id)->where('enabled', true)->first()) && $rule->amount ? $this->naira((int) $rule->amount) : null,
                 'role' => $this->roleOf($wallet, $setting, $viewer),
                 'can_edit_rules' => $isOwner,
                 // Owner, or the approver once unlocked: may withdraw/transfer directly.

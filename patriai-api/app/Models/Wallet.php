@@ -460,6 +460,15 @@ class Wallet extends Model
     }
 
     /** 'owner' if the wallet owner, else the active member role, else null. */
+    /**
+     * WPV-05 "Relative · gifts only": on a child's wallet, aunties and uncles add
+     * money and see the goal, but not the balance or what the child spends.
+     */
+    public function hidesSpendingFrom(User $user): bool
+    {
+        return $this->type === 'child' && !in_array($this->roleOf($user), ['owner', 'co_owner', 'child'], true);
+    }
+
     public function roleOf(User $user): ?string
     {
         if ($this->user_id === $user->id) {

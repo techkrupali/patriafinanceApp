@@ -24,6 +24,14 @@ class WalletInvitation extends Model
         'responded_at',
     ];
 
+    /** "a co-owner", "a contributor", "an approver" — for messages. */
+    public function roleName(): string
+    {
+        $name = str_replace('_', '-', (string) $this->role);
+
+        return (preg_match('/^[aeiou]/i', $name) ? 'an ' : 'a ') . $name;
+    }
+
     protected function casts(): array
     {
         return [

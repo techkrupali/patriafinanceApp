@@ -46,6 +46,8 @@ class InvitationController extends ApiController
             'permissions.fund' => ['sometimes', 'boolean'],
             'permissions.request' => ['sometimes', 'boolean'],
             'permissions.withdraw' => ['sometimes', 'boolean'],
+            // CTB-01 "Join the project chat".
+            'permissions.chat' => ['sometimes', 'boolean'],
         ]);
 
         $inviteRole = $data['role'] ?? 'contributor';
@@ -191,6 +193,15 @@ class InvitationController extends ApiController
                     'keyholder_ids' => array_values(array_unique([...$setting->keyholder_ids, $request->user()->id])),
                     'dual_approval' => true,
                 ]);
+            }
+
+            // CTB-02 "Approvals · 2 of 3: Ngozi, Chidi and you": a funder who approves joins the project's approvers.
+            if ($invitation->can_approve && $invitation->wallet->type === 'project'
+                && ($project = \App\Models\Project::where('wallet_id', $invitation->wallet_id)->first())
+                && \App\Services\ProjectApprovalService::make()->custom($project)) {
+                $meta = $project->meta;
+                $meta['approvals']['approver_ids'] = array_values(array_unique([...$meta['approvals']['approver_ids'], $request->user()->id]));
+                $project->update(['meta' => $meta]);
             }
 
             if ($joint) {

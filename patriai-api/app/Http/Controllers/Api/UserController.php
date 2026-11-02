@@ -23,6 +23,8 @@ class UserController extends ApiController
 
         $users = User::where('id', '!=', $request->user()->id)
             ->where('status', 'active')
+            // Children's own sign-ins aren't found by strangers.
+            ->where(fn ($q) => $q->whereNull('role')->orWhere('role', '!=', 'child'))
             ->where(function ($w) use ($q) {
                 $w->whereRaw('lower(username) like ?', ["%{$q}%"])
                     ->orWhereRaw('lower(name) like ?', ["%{$q}%"])
@@ -36,7 +38,7 @@ class UserController extends ApiController
             'users' => $users->map(fn (User $u) => [
                 'id' => $u->id,
                 'full_name' => $u->fullName(),
-                'username' => $u->username,
+                'username' => $u->ensureUsername(),
                 'avatar_url' => $u->avatar_url,
             ])->values(),
         ]);

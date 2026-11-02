@@ -1,9 +1,11 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { keys } from './hooks';
-import { appendFile, type PickedFile } from '../lib/upload';
+import { appendFile, photoFacts, type PickedFile } from '../lib/upload';
 import type {
   AddMilestonePayload,
+  ApprovalRuleMode,
+  ProjectApprovalRules,
   DisputeData,
   DisputeReason,
   DisputesPageData,
@@ -91,12 +93,37 @@ export function useEditMilestone() {
 export function useApproveRelease() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ milestoneId, pin }: { milestoneId: number; pin: string }) =>
-      api<{ milestone: Milestone; reference?: string; approval_request_id?: number }>(`/milestones/${milestoneId}/approve`, { method: 'POST', body: { pin } }),
+    mutationFn: ({ milestoneId, pin, note }: { milestoneId: number; pin: string; note?: string }) =>
+      api<{ milestone: Milestone; reference?: string; approval_request_id?: number }>(`/milestones/${milestoneId}/approve`, { method: 'POST', body: { pin, note } }),
     onSuccess: () => {
       refreshProjects(qc);
       void qc.invalidateQueries({ queryKey: ['approvals'] });
     },
+  });
+}
+
+/** MLS-02 "viewed 11:15 am": an approver opened the proof. */
+export function useMilestoneViewed() {
+  return useMutation({ mutationFn: (milestoneId: number) => api(`/milestones/${milestoneId}/viewed`, { method: 'POST' }) });
+}
+
+/** MLS-03 "Save, and tell the builder". */
+export function useSaveApprovalRules(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { mode: ApprovalRuleMode; approver_ids: number[]; needed?: number; overrides?: { milestone_id: number; approver_ids: number[]; needed: number }[]; site_photo_over?: string | null }) =>
+      api<{ approval_rules: ProjectApprovalRules }>(`/projects/${projectId}/approval-rules`, { method: 'PUT', body }),
+    onSuccess: () => refreshProjects(qc),
+  });
+}
+
+/** CTB-01 "Send invite": a funder who puts money in and, if asked, approves. */
+export function useInviteFunder(walletId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { identifier?: string; invitee_user_id?: number; role: 'contributor' | 'viewer'; can_approve: boolean; permissions: { fund: boolean; view: boolean; request: boolean; chat: boolean } }) =>
+      api(`/wallets/${walletId}/invitations`, { method: 'POST', body }),
+    onSuccess: () => refreshProjects(qc),
   });
 }
 
@@ -297,10 +324,19 @@ export function useTickDeliverables() {
 export function useAddEvidence() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ milestoneId, asset, receipt, caption }: { milestoneId: number; asset: PickedFile; receipt?: boolean; caption?: string }) => {
+    mutationFn: async ({ milestoneId, asset, receipt, siteVisit, caption }: { milestoneId: number; asset: PickedFile; receipt?: boolean; siteVisit?: boolean; caption?: string }) => {
       const form = new FormData();
       if (receipt) form.append('kind', 'receipt');
+      // MLS-03: an approver's own photo from the site.
+      if (siteVisit) form.append('kind', 'site_visit');
       if (caption) form.append('caption', caption.slice(0, 60));
+      // PRW-06 "Photos from the site · With date and location".
+      const facts = photoFacts(asset);
+      if (facts.taken_at) form.append('taken_at', facts.taken_at);
+      if (facts.lat !== undefined && facts.lng !== undefined) {
+        form.append('lat', facts.lat.toFixed(6));
+        form.append('lng', facts.lng.toFixed(6));
+      }
       await appendFile(form, 'file', asset, receipt ? 'receipt' : 'photo');
       return api<{ milestone: Milestone }>(`/milestones/${milestoneId}/evidence`, { method: 'POST', body: form });
     },
@@ -344,6 +380,19 @@ export function useSetAutoWithdraw() {
     onSuccess: (data) => {
       qc.setQueryData(flowKeys.vendorPayouts, data.payouts);
       refreshBusiness(qc);
+    },
+  });
+}
+
+/** VDM-06 "Withdraw": only ever to the verified business account. */
+export function useVendorWithdraw() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { amount: string; pin: string }) => api<{ reference: string; status: string; payouts: VendorPayouts }>('/vendor/payouts/withdraw', { method: 'POST', body }),
+    onSuccess: (data) => {
+      qc.setQueryData(flowKeys.vendorPayouts, data.payouts);
+      refreshBusiness(qc);
+      void qc.invalidateQueries({ queryKey: keys.wallets });
     },
   });
 }
@@ -446,7 +495,8 @@ export function useTeamInvites() {
 export function useAnswerTeamInvite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ memberId, join }: { memberId: number; join: boolean }) => api<{ member: TeamMember }>(`/team-invites/${memberId}/answer`, { method: 'POST', body: { join } }),
+    mutationFn: ({ memberId, join, reason }: { memberId: number; join: boolean; reason?: string }) =>
+      api<{ member: TeamMember }>(`/team-invites/${memberId}/answer`, { method: 'POST', body: { join, reason } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: flowKeys.teamInvites });
       refreshProjects(qc);

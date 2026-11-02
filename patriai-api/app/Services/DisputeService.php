@@ -70,6 +70,8 @@ class DisputeService
             'reason' => $data['reason'] ?? null,
             'remedy' => $data['remedy'] ?? null,
             'status' => 'open',
+            // No builder to answer: Patriai decides within 5 working days.
+            'decision_due' => Dispute::deadline(now(Dispute::TZ)->addWeekdays(Dispute::DECISION_WORKING_DAYS)),
         ]);
         $this->numbered($dispute);
         $this->record($dispute, $user, 'system', "{$user->first_name} opened the dispute");
@@ -259,7 +261,7 @@ class DisputeService
                 if ($milestone && in_array($milestone->status, ['submitted', 'rejected'], true)) {
                     $milestone->update(['status' => 'funded']);
                 }
-                $dispute->update(['status' => 'fixing']);
+                $dispute->update(['status' => 'fixing', 'fix_by' => $offer->offer['fix_by']]);
                 $this->record($dispute, $user, 'system', "{$user->first_name} accepted the offer to fix it by " . \Illuminate\Support\Carbon::parse($offer->offer['fix_by'])->format('D j M'));
             });
             if ($vendor) {
@@ -269,15 +271,36 @@ class DisputeService
             return $dispute->refresh();
         }
         if ($type === 'partial_refund') {
-            if (!$milestone || !in_array($milestone->status, ['submitted', 'approved'], true)) {
-                throw ValidationException::withMessages(['offer' => 'The builder needs to submit the work before a partial refund can be paid.']);
+            if (!$milestone) {
+                throw ValidationException::withMessages(['offer' => 'The milestone no longer exists.']);
             }
-            $this->assertPayable($dispute);
-            $offer->update(['offer' => array_merge($offer->offer, ['status' => 'accepted'])]);
-            $result = ProjectService::make()->releaseMilestone($milestone, $user, (int) $offer->offer['amount']);
-            $this->close($dispute, 'partial_refund', (int) $result['paid'], (int) $offer->offer['amount'], $user, "{$user->first_name} accepted a partial refund");
+            // The refund comes off the payment when it's released, by the project's
+            // own approval rules — accepting it doesn't pay anyone by itself.
+            $amount = (int) $offer->offer['amount'];
+            DB::transaction(function () use ($dispute, $offer, $milestone, $user, $amount) {
+                $offer->update(['offer' => array_merge($offer->offer, ['status' => 'accepted'])]);
+                $milestone->update(['meta' => array_merge($milestone->meta ?? [], ['agreed_refund' => $amount])]);
+                $dispute->update(['status' => 'agreed', 'refund_amount' => $amount]);
+                $this->record($dispute, $user, 'system', "{$user->first_name} accepted a ₦" . number_format($amount / 100) . ' refund');
+            });
+            $milestone->refresh();
+            // Their yes to the offer is their approval of the payment too, if they approve this milestone.
+            if ($milestone->status === 'submitted' && in_array($user->id, ProjectApprovalService::make()->rulesFor($milestone->project, $milestone)['approver_ids'], true)) {
+                try {
+                    ProjectApprovalService::make()->approve($milestone, $user, 'Accepted a partial refund');
+                } catch (ValidationException) {
+                    // Not payable yet (a site photo, an unverified business): approved later as usual.
+                }
+            }
+            $dispute->refresh();
+            if ($vendor && $dispute->isActive()) {
+                $rest = '₦' . number_format(($milestone->amount - $amount) / 100);
+                $this->notifications->push($vendor, 'dispute_offer_accepted', "The family accepted your refund on {$dispute->subject}", $milestone->status === 'funded' || $milestone->status === 'planned'
+                    ? "Submit the work when it's done. {$rest} is paid when the family approves it."
+                    : "{$rest} is paid once the family's approvers say yes.", ['dispute_id' => $dispute->id, 'project_id' => $dispute->project_id]);
+            }
 
-            return $dispute->refresh();
+            return $dispute;
         }
 
         throw ValidationException::withMessages(['offer' => 'This offer can\'t be accepted.']);
@@ -288,9 +311,11 @@ class DisputeService
     {
         $this->assertParty($dispute, $user);
         // A payment dispute is with Patriai from the start.
-        if ($dispute->kind !== 'milestone' || !in_array($dispute->status, ['open', 'responded', 'fixing'], true)) {
+        if ($dispute->kind !== 'milestone' || !in_array($dispute->status, ['open', 'responded', 'fixing', 'agreed'], true)) {
             throw ValidationException::withMessages(['dispute' => 'This dispute can\'t be sent to Patriai now.']);
         }
+        // The money goes back on hold: an approval already under way stops.
+        $this->holdPayment($dispute);
         $dispute->update([
             'status' => 'escalated',
             'escalated_at' => now(),
@@ -336,32 +361,57 @@ class DisputeService
     // ----------------------------------------------------------------- outcomes
 
     /**
-     * Admin: Patriai's decision, final for this dispute. On a milestone: release
-     * the payment in full, release it less a refund, or refund it in full (the
-     * money stays in the project wallet). On a payment: resolved or rejected.
+     * Admin: Patriai's decision, final for this dispute. On a milestone: pay it
+     * in full (not upheld), pay it less a refund, refund it in full (the money
+     * stays in the project wallet), or have the builder fix it by a date (the
+     * money stays on hold until the family approves the fix). On a payment:
+     * refund an amount to the wallet it left, resolved, or not upheld.
      */
-    public function decide(Dispute $dispute, User $admin, string $outcome, ?int $refund, string $note): Dispute
+    public function decide(Dispute $dispute, User $admin, string $outcome, ?int $refund, string $note, ?string $fixBy = null): Dispute
     {
         if (!$dispute->isActive()) {
             throw ValidationException::withMessages(['dispute' => 'This dispute is already closed.']);
         }
         if ($dispute->kind !== 'milestone') {
-            $dispute->update(['status' => $outcome === 'rejected' ? 'rejected' : 'resolved', 'outcome' => $outcome === 'rejected' ? null : 'resolved', 'resolution' => $note, 'resolved_at' => now(), 'decided_by' => $admin->id]);
-            $this->record($dispute, null, 'decision', $note);
-            $this->notifications->push($dispute->user, 'dispute_resolved', "Dispute {$dispute->number}: " . ($outcome === 'rejected' ? 'not upheld' : 'resolved'), $note, ['dispute_id' => $dispute->id]);
-
-            return $dispute->refresh();
+            return $this->decidePayment($dispute, $admin, $outcome, $refund, $note);
         }
 
         $milestone = $dispute->milestone;
         if (!$milestone) {
             throw ValidationException::withMessages(['dispute' => 'The milestone no longer exists.']);
         }
+        if ($outcome === 'fix') {
+            if (!$fixBy || \Illuminate\Support\Carbon::parse($fixBy)->lt(today())) {
+                throw ValidationException::withMessages(['fix_by' => 'Pick the date the fix must be done by.']);
+            }
+            DB::transaction(function () use ($dispute, $milestone, $admin, $note, $fixBy) {
+                $this->holdPayment($dispute);
+                // The builder redoes the work and submits it again; the money stays reserved.
+                if (in_array($milestone->refresh()->status, ['submitted', 'rejected'], true)) {
+                    $milestone->update(['status' => 'funded']);
+                }
+                $dispute->update(['status' => 'fixing', 'fix_by' => $fixBy, 'fix_reminded_at' => null, 'resolution' => $note, 'decided_by' => $admin->id]);
+                $this->record($dispute, null, 'decision', $note, ['type' => 'fix', 'fix_by' => $fixBy, 'status' => 'decided']);
+            });
+            $by = \Illuminate\Support\Carbon::parse($fixBy)->format('D j M');
+            $this->tellFamily($dispute, 'dispute_decided', "Patriai decided on {$dispute->subject}", "The builder must fix it by {$by}. The money stays on hold until you approve the new photos.");
+            if ($dispute->against) {
+                $this->notifications->push($dispute->against, 'dispute_decided', "Patriai decided: fix it by {$by}", "{$note} Submit new photos when it's done; you're paid when the family approves them.", ['dispute_id' => $dispute->id, 'project_id' => $dispute->project_id]);
+            }
+
+            return $dispute->refresh();
+        }
+
         $this->record($dispute, null, 'decision', $note);
         $dispute->update(['resolution' => $note, 'decided_by' => $admin->id]);
         if ($outcome === 'full_refund') {
+            $this->holdPayment($dispute);
             $milestone->update(['status' => 'cancelled']);
             $this->close($dispute, 'full_refund', 0, $milestone->amount, $admin, null);
+            // The phase is off the plan: the next one can be set aside, or the project is done.
+            $project = $milestone->project;
+            ProjectService::make()->completeIfDone($project);
+            VendorProjectService::make()->fundPlanned($project->refresh());
 
             return $dispute->refresh();
         }
@@ -374,7 +424,9 @@ class DisputeService
             $milestone->update(['status' => 'submitted']);
         }
         $result = ProjectService::make()->releaseMilestone($milestone->refresh(), $admin, $refund);
-        $this->close($dispute, $outcome === 'partial_refund' ? 'partial_refund' : 'released', (int) $result['paid'], $refund ?: null, $admin, null);
+        // What this phase came to for the builder, as in resolveFixed: less the refund and what's held back.
+        $paid = $result['milestone']->amount - $refund - (int) $result['milestone']->retention;
+        $this->close($dispute, $outcome === 'partial_refund' ? 'partial_refund' : 'released', $paid, $refund ?: null, $admin, null);
 
         return $dispute->refresh();
     }
@@ -388,6 +440,110 @@ class DisputeService
         $this->tellFamily($dispute, 'dispute_resolved', 'Dispute resolved', "{$business} fixed it and was paid ₦" . number_format($paid / 100) . ($retention ? ', with ₦' . number_format($retention / 100) . ' held back as usual.' : '.'));
         if ($dispute->against) {
             $this->notifications->push($dispute->against, 'dispute_resolved', "{$dispute->subject}: resolved", 'The family approved the fix. ₦' . number_format($paid / 100) . ' is in your wallet.', ['dispute_id' => $dispute->id]);
+        }
+    }
+
+    /** DSP-09: the partial refund the family agreed came off the payment the approvers released. */
+    public function settle(Dispute $dispute, int $paid, int $refund, int $retention): void
+    {
+        $dispute->update(['status' => 'resolved', 'outcome' => 'partial_refund', 'released_amount' => $paid, 'refund_amount' => $refund, 'resolved_at' => now()]);
+        $this->record($dispute, null, 'system', 'Paid, less the agreed refund');
+        $business = $this->business($dispute->against_user_id);
+        $this->tellFamily($dispute, 'dispute_resolved', 'Dispute resolved', "{$business} was paid ₦" . number_format($paid / 100) . ($retention ? ', with ₦' . number_format($retention / 100) . ' held back as usual' : '') . '. ₦' . number_format($refund / 100) . ' stays in your project wallet.');
+        if ($dispute->against) {
+            $this->notifications->push($dispute->against, 'dispute_resolved', "{$dispute->subject}: resolved", '₦' . number_format($paid / 100) . ' is in your wallet, less the ₦' . number_format($refund / 100) . ' refund you agreed.', ['dispute_id' => $dispute->id]);
+        }
+    }
+
+    /** A payment dispute: refund an amount to the wallet it left, resolved, or not upheld. */
+    private function decidePayment(Dispute $dispute, User $admin, string $outcome, ?int $refund, string $note): Dispute
+    {
+        if ($outcome === 'refund') {
+            $tx = $dispute->reference ? \App\Models\Transaction::where('reference', $dispute->reference)->first() : null;
+            $wallet = $tx?->wallet ?? $dispute->user?->mainWallet();
+            $most = $tx ? (int) $tx->amount : PHP_INT_MAX;
+            if (!$wallet || !$refund || $refund <= 0 || $refund > $most) {
+                throw ValidationException::withMessages(['refund' => $tx ? 'Refund up to ₦' . number_format($most / 100) . '.' : 'Enter the amount to refund.']);
+            }
+            DB::transaction(function () use ($dispute, $admin, $note, $refund, $wallet) {
+                WalletService::make()->credit($wallet, $refund, 'refund', ['name' => 'Patriai'], null, "Refund · dispute {$dispute->number}", $dispute->user_id);
+                $dispute->update(['status' => 'resolved', 'outcome' => 'refunded', 'refund_amount' => $refund, 'resolution' => $note, 'resolved_at' => now(), 'decided_by' => $admin->id]);
+                $this->record($dispute, null, 'decision', $note);
+            });
+            $this->notifications->push($dispute->user, 'dispute_resolved', "Dispute {$dispute->number}: refunded ₦" . number_format($refund / 100), "₦" . number_format($refund / 100) . " is back in {$wallet->name}. {$note}", ['dispute_id' => $dispute->id, 'wallet_id' => $wallet->id]);
+
+            return $dispute->refresh();
+        }
+        $dispute->update(['status' => $outcome === 'rejected' ? 'rejected' : 'resolved', 'outcome' => $outcome === 'rejected' ? null : 'resolved', 'resolution' => $note, 'resolved_at' => now(), 'decided_by' => $admin->id]);
+        $this->record($dispute, null, 'decision', $note);
+        $this->notifications->push($dispute->user, 'dispute_resolved', "Dispute {$dispute->number}: " . ($outcome === 'rejected' ? 'not upheld' : 'resolved'), $note, ['dispute_id' => $dispute->id]);
+
+        return $dispute->refresh();
+    }
+
+    /**
+     * An agreed fix that's late: the day after the date, both sides are told;
+     * two days on with nothing submitted, Patriai steps in.
+     */
+    public function fixOverdue(): int
+    {
+        $count = 0;
+        Dispute::with('milestone')->where('status', 'fixing')->whereNotNull('fix_by')->whereDate('fix_by', '<', today(Dispute::TZ))->get()
+            ->each(function (Dispute $dispute) use (&$count) {
+                // Submitted again: the family is checking it, so nothing is late.
+                if (in_array($dispute->milestone?->status, ['submitted', 'approved', 'released'], true)) {
+                    return;
+                }
+                $by = Dispute::day($dispute->fix_by);
+                if (!$dispute->fix_reminded_at) {
+                    $dispute->update(['fix_reminded_at' => now()]);
+                    $this->record($dispute, null, 'system', "The fix was due {$by} and hasn't been submitted");
+                    if ($dispute->against) {
+                        $this->notifications->push($dispute->against, 'dispute_fix_late', "The fix on {$dispute->subject} was due {$by}", 'Submit new photos of the fixed work. In 2 days Patriai steps in.', ['dispute_id' => $dispute->id, 'project_id' => $dispute->project_id]);
+                    }
+                    $this->tellFamily($dispute, 'dispute_fix_late', "The fix on {$dispute->subject} is late", "It was due {$by}. We've reminded the builder; in 2 days Patriai steps in. The money stays on hold.");
+                    $count++;
+                } elseif ($dispute->fix_reminded_at->lte(now()->subDays(2))) {
+                    $dispute->update([
+                        'status' => 'escalated',
+                        'escalated_at' => now(),
+                        'decision_due' => Dispute::deadline(now(Dispute::TZ)->addWeekdays(Dispute::DECISION_WORKING_DAYS)),
+                        'evidence_until' => Dispute::deadline(now(Dispute::TZ)->addDays(self::EVIDENCE_DAYS)),
+                    ]);
+                    $business = $this->business($dispute->against_user_id);
+                    $this->record($dispute, null, 'system', "{$business} didn't fix it in time, so Patriai is stepping in");
+                    $body = 'A Patriai case officer will decide by ' . Dispute::day($dispute->decision_due) . '.';
+                    $this->tellFamily($dispute, 'dispute_escalated', "Patriai is looking at {$dispute->subject}", $body);
+                    if ($dispute->against) {
+                        $this->notifications->push($dispute->against, 'dispute_escalated', "Patriai is looking at {$dispute->subject}", "The fix wasn't submitted in time. {$body}", ['dispute_id' => $dispute->id]);
+                    }
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    /** Admin "Take case": a case officer owns it; both sides see Patriai is reviewing. */
+    public function take(Dispute $dispute, User $admin): Dispute
+    {
+        if (!in_array($dispute->status, ['escalated', 'open', 'under_review'], true) || ($dispute->kind === 'milestone' && $dispute->status === 'open')) {
+            throw ValidationException::withMessages(['dispute' => 'Only a dispute waiting for Patriai can be taken.']);
+        }
+        $dispute->update(['status' => 'under_review', 'officer_id' => $admin->id, 'decision_due' => $dispute->decision_due ?? Dispute::deadline(now(Dispute::TZ)->addWeekdays(Dispute::DECISION_WORKING_DAYS))]);
+        $this->record($dispute, null, 'system', 'A Patriai case officer is reviewing it');
+
+        return $dispute->refresh();
+    }
+
+    /** Back on hold: a payment approval in progress for the milestone stops. */
+    private function holdPayment(Dispute $dispute): void
+    {
+        $milestone = $dispute->milestone;
+        $requestId = $milestone?->meta['approval_request_id'] ?? null;
+        if ($milestone && $milestone->status === 'approved' && $requestId) {
+            ApprovalRequest::whereKey($requestId)->where('status', 'pending')->update(['status' => 'cancelled']);
+            $milestone->update(['status' => 'submitted']);
         }
     }
 
@@ -434,6 +590,10 @@ class DisputeService
             'description' => $dispute->description,
             'reference' => $dispute->reference,
             'amount_on_hold' => $naira($dispute->amount_on_hold),
+            // DSP-01 "Double charge at Shoprite": the payment a payment dispute is about.
+            'payment' => $dispute->reference && ($t = \App\Models\Transaction::where('reference', $dispute->reference)->first())
+                ? ['amount' => $naira((int) $t->amount), 'description' => $t->description, 'created_at' => $t->created_at?->toIso8601String()]
+                : null,
             'raised_by' => $dispute->user ? ['id' => $dispute->user->id, 'name' => $dispute->user->fullName(), 'first_name' => $dispute->user->first_name] : null,
             'against' => $dispute->against ? ['id' => $dispute->against->id, 'name' => $this->business($dispute->against->id), 'profile_id' => VendorProfile::where('user_id', $dispute->against->id)->value('id')] : null,
             'project' => $dispute->project ? ['id' => $dispute->project->id, 'title' => $dispute->project->title] : null,
@@ -444,10 +604,16 @@ class DisputeService
             'escalation_note' => $dispute->escalation_note,
             'decision_due' => $dispute->decision_due?->timezone(Dispute::TZ)->toIso8601String(),
             'evidence_until' => $dispute->evidence_until?->timezone(Dispute::TZ)->toIso8601String(),
+            'fix_by' => $dispute->fix_by?->toDateString(),
+            'officer' => $dispute->officer_id ? \App\Models\User::find($dispute->officer_id)?->first_name : null,
+            'status_label' => $this->statusLabel($dispute, $isVendor),
             'outcome' => $dispute->outcome,
             'resolution' => $dispute->resolution,
             'released_amount' => $naira($dispute->released_amount),
             'refund_amount' => $naira($dispute->refund_amount),
+            // DSP-09 "₦190,000 held back as usual"; part of it may have gone earlier as a materials advance.
+            'held_back' => $dispute->milestone?->status === 'released' ? $naira((int) $dispute->milestone->retention) : null,
+            'advance_paid' => (int) $dispute->milestone?->advance_paid > 0 ? $naira((int) $dispute->milestone->advance_paid) : null,
             'resolved_at' => $dispute->resolved_at?->toIso8601String(),
             'created_at' => $dispute->created_at?->toIso8601String(),
             'messages' => $dispute->messages->map(fn (DisputeMessage $m) => [
@@ -466,9 +632,16 @@ class DisputeService
                 'reply' => $isVendor && in_array($dispute->status, ['open', 'responded'], true),
                 'message' => ($isVendor || $isFamily || $admin) && $dispute->isActive(),
                 'answer_offer' => $isFamily && $openOffer !== null && in_array($dispute->status, ['open', 'responded'], true),
-                'escalate' => ($isVendor || $isFamily) && $dispute->kind === 'milestone' && in_array($dispute->status, ['open', 'responded', 'fixing'], true),
+                // Patriai's decision is final: once it decided a fix, there's no asking again.
+                'escalate' => ($isVendor || $isFamily) && $dispute->kind === 'milestone' && $dispute->decided_by === null && in_array($dispute->status, ['open', 'responded', 'fixing', 'agreed'], true),
                 'add_evidence' => ($isVendor || $isFamily) && $dispute->isActive() && (!$dispute->evidence_until || now()->lte($dispute->evidence_until)),
-                'rate' => $isFamily && $dispute->status === 'resolved' && $dispute->against_user_id !== null,
+                // VND-04 the same rule as the review itself: a paid milestone, not reviewed yet.
+                'rate' => $isFamily && $dispute->status === 'resolved' && $dispute->milestone?->status === 'released'
+                    && !\App\Models\VendorReview::where('user_id', $viewer->id)->where('milestone_id', $dispute->milestone_id)->exists(),
+                // DSP-05 "Being fixed": the builder submits the fix, the family reviews it.
+                'submit_fix' => $isVendor && in_array($dispute->status, ['fixing', 'agreed'], true) && in_array($dispute->milestone?->status, ['funded', 'planned', 'rejected'], true),
+                'review_fix' => $isFamily && in_array($dispute->status, ['fixing', 'agreed'], true) && in_array($dispute->milestone?->status, ['submitted', 'approved'], true),
+                'take' => $admin && $dispute->officer_id !== $viewer?->id && (in_array($dispute->status, ['escalated', 'under_review'], true) || ($dispute->kind !== 'milestone' && $dispute->status === 'open')),
             ],
             'viewer' => $isVendor ? 'vendor' : ($isFamily ? 'family' : ($admin ? 'admin' : null)),
         ];
@@ -494,6 +667,10 @@ class DisputeService
             'project' => $dispute->project ? ['id' => $dispute->project->id, 'title' => $dispute->project->title] : null,
             'milestone' => $dispute->milestone ? ['id' => $dispute->milestone->id, 'title' => $dispute->milestone->title] : null,
             'amount_on_hold' => $naira($dispute->amount_on_hold),
+            // DSP-01 "Double charge at Shoprite · ₦18,400": the payment a payment dispute is about.
+            'payment_amount' => $dispute->kind !== 'milestone' && $dispute->reference
+                ? $naira(\App\Models\Transaction::where('reference', $dispute->reference)->value('amount'))
+                : null,
             'reply_by' => $dispute->reply_by?->timezone(Dispute::TZ)->toIso8601String(),
             'decision_due' => $dispute->decision_due?->timezone(Dispute::TZ)->toIso8601String(),
             'outcome' => $dispute->outcome,
@@ -515,15 +692,17 @@ class DisputeService
                 ? ($vendorSide ? 'Reply by ' . ($dispute->reply_by ? Dispute::day($dispute->reply_by) : 'soon') : 'Waiting for builder')
                 : 'Patriai is looking into it',
             'responded' => $vendorSide ? 'Waiting for the family' : 'They replied',
-            'fixing' => 'Being fixed',
+            'fixing' => 'Being fixed' . ($dispute->fix_by ? ' · by ' . Dispute::day($dispute->fix_by) : ''),
+            'agreed' => 'Refund of ' . $naira($dispute->refund_amount) . ' agreed',
             'escalated' => 'With Patriai · decision by ' . ($dispute->decision_due ? Dispute::day($dispute->decision_due) : 'soon'),
-            'under_review' => 'Under review',
+            'under_review' => 'Patriai is reviewing' . ($dispute->decision_due ? ' · decision by ' . Dispute::day($dispute->decision_due) : ''),
             'rejected' => 'Closed · not upheld',
             'resolved' => match ($dispute->outcome) {
                 'fixed' => 'Resolved · fixed at no cost',
                 'partial_refund' => 'Refunded ' . $naira($dispute->refund_amount),
                 'full_refund' => 'Refunded in full',
-                'released' => 'Resolved · paid in full',
+                'released' => $dispute->kind === 'milestone' ? 'Not upheld · paid in full' : 'Resolved',
+                'refunded' => 'Refunded ' . $naira($dispute->refund_amount),
                 default => 'Resolved',
             },
             default => ucfirst(str_replace('_', ' ', (string) $dispute->status)),

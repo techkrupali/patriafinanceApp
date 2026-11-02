@@ -228,6 +228,9 @@ class ProjectFlowController extends ApiController
             return $this->fail('Project not found', 404);
         }
         $messages = $project->hasMany(ProjectMessage::class)->with('user')->orderByDesc('id')->limit(100)->get()->reverse()->values();
+        if ($last = $messages->last()) {
+            \App\Services\ChatService::make()->read($request->user(), "project:{$project->id}", $last->id);
+        }
 
         return $this->ok('Messages', ['messages' => $messages->map(fn (ProjectMessage $m) => $this->serializeMessage($m, $request))->values()]);
     }
@@ -240,15 +243,8 @@ class ProjectFlowController extends ApiController
             return $this->fail('Project not found', 404);
         }
         $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
-        $message = ProjectMessage::create(['project_id' => $project->id, 'user_id' => $user->id, 'body' => trim($data['body'])]);
-
-        // Everyone else on the project hears.
-        $notify = collect([$project->owner_id, $project->vendor_id])
-            ->merge($project->wallet?->members()->where('status', 'active')->whereIn('role', ['owner', 'co_owner'])->pluck('user_id') ?? [])
-            ->filter()->unique()->reject(fn ($id) => $id === $user->id);
-        foreach (\App\Models\User::whereIn('id', $notify)->get() as $to) {
-            NotificationService::make()->push($to, 'project_message', "{$user->first_name} on {$project->title}", Str::limit($message->body, 140), ['project_id' => $project->id]);
-        }
+        // CHT-03: everyone on the project hears (unless they muted it); "Steward" gets an answer.
+        $message = \App\Services\ChatService::make()->sendToProject($project, $user, $data['body']);
 
         return $this->ok('Sent', ['message' => $this->serializeMessage($message->load('user'), $request)], 201);
     }
@@ -257,8 +253,11 @@ class ProjectFlowController extends ApiController
     {
         return [
             'id' => $m->id,
+            // CHT-03: message | milestone (a submission card) | system | steward.
+            'kind' => $m->kind ?? 'message',
+            'payload' => $m->payload,
             'body' => $m->body,
-            'name' => $m->user?->first_name ?? 'Someone',
+            'name' => $m->user?->first_name ?? ($m->kind === 'steward' ? 'Steward' : 'Patriai'),
             'initials' => strtoupper(mb_substr($m->user?->first_name ?? '?', 0, 1) . mb_substr($m->user?->last_name ?? '', 0, 1)),
             'mine' => $m->user_id === $request->user()->id,
             'created_at' => $m->created_at?->toIso8601String(),

@@ -374,14 +374,31 @@ class VendorProjectService
 
     // ----------------------------------------------------------------- helpers
 
-    /** Planned milestones get their money set aside, in order, while the wallet covers them. */
+    /**
+     * Planned milestones get their money set aside, in order, while the wallet
+     * covers them (MLS-04 "Not funded" → "Funded, locked"); then any materials
+     * advance waiting on one of them is paid (VDM-12).
+     */
     public function fundPlanned(Project $project): void
     {
         foreach ($project->milestones()->where('status', 'planned')->orderBy('sequence')->get() as $m) {
-            if ($m->amount > $project->availableToAllocate()) {
-                return;
+            if ($m->amount - $m->advance_paid > $project->availableToAllocate()) {
+                break;
             }
             $m->update(['status' => 'funded']);
+        }
+        ProjectApprovalService::make()->payWaitingAdvances($project);
+    }
+
+    /** Money came into a project wallet: set the next phases aside once the builder has accepted. */
+    public function fundOnDeposit(\App\Models\Wallet $wallet): void
+    {
+        if ($wallet->type !== 'project') {
+            return;
+        }
+        $project = Project::where('wallet_id', $wallet->id)->where('status', 'active')->first();
+        if ($project && $project->vendor_id && in_array($project->vendor_status, ['accepted', null], true)) {
+            $this->fundPlanned($project);
         }
     }
 

@@ -59,6 +59,20 @@ export function VendorHomeScreen({ navigation }: VendorTabScreenProps<'VendorHom
     else navigation.navigate('VendorProject', { projectId: n.project_id });
   };
 
+  // VDM-03: the projects, then "Start a new project · Send a family a quote with phases" (VPJ-01).
+  const rows = [
+    ...(data?.projects ?? []).map((p) => ({
+      key: `p${p.id}`,
+      title: p.title,
+      sub: p.sub,
+      add: false,
+      go: () => navigation.navigate(p.vendor_status === 'invited' || p.vendor_status === 'changes_proposed' ? 'ProjectInvite' : 'VendorProject', { projectId: p.id }),
+    })),
+    ...(data?.team_role === 'owner' || data?.team_role === 'site_manager'
+      ? [{ key: 'new', title: 'Start a new project', sub: 'Send a family a quote with phases', add: true, go: () => navigation.navigate('NewProposal') }]
+      : []),
+  ];
+
   return (
     <PtTabScreen refreshing={home.isRefetching} onRefresh={() => { void home.refetch(); void invites.refetch(); void profile.refetch(); }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -113,29 +127,25 @@ export function VendorHomeScreen({ navigation }: VendorTabScreenProps<'VendorHom
             <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>
               No projects yet. When a family invites {data.business.name} to a project, it shows here. Share your profile so families can find you.
             </Text>
-          ) : (
+          ) : null}
+          {rows.length ? (
             <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: 16 }}>
-              {data.projects.map((p, i) => (
-                <Pressable
-                  key={p.id}
-                  onPress={() => { selection(); navigation.navigate(p.vendor_status === 'invited' || p.vendor_status === 'changes_proposed' ? 'ProjectInvite' : 'VendorProject', { projectId: p.id }); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={p.title}
-                >
-                  <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: i === data.projects.length - 1 ? 0 : 1, borderBottomColor: pt.line }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
-                      <Feather name="home" size={18} color={pt.brand} />
+              {rows.map((r, i) => (
+                <Pressable key={r.key} onPress={() => { selection(); r.go(); }} accessibilityRole="button" accessibilityLabel={r.title}>
+                  <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: i === rows.length - 1 ? 0 : 1, borderBottomColor: pt.line }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: r.add ? pt.sunken : pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather name={r.add ? 'plus' : 'home'} size={18} color={pt.brand} />
                     </View>
                     <View style={{ flex: 1, gap: 1 }}>
-                      <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: pt.ink }} numberOfLines={1}>{p.title}</Text>
-                      <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>{p.sub}</Text>
+                      <Text style={{ fontFamily: ptFont.semibold, fontSize: 15, color: r.add ? pt.brand : pt.ink }} numberOfLines={1}>{r.title}</Text>
+                      <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }} numberOfLines={1}>{r.sub}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={pt.inkSubtle} />
                   </View>
                 </Pressable>
               ))}
             </View>
-          )}
+          ) : null}
         </>
       )}
     </PtTabScreen>

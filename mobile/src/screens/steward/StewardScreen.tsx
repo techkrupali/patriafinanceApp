@@ -12,6 +12,7 @@ import { SecureTransferCard } from '../../components/SecureTransferCard';
 import { TransactionListCard } from '../../components/TransactionListCard';
 import { TransactionGroupCard } from '../../components/TransactionGroupCard';
 import { SupportRequestCard } from '../../components/SupportRequestCard';
+import { VendorListCard } from '../../components/VendorListCard';
 import { ApiError } from '../../api/client';
 import {
   useApprovals,
@@ -284,6 +285,7 @@ export function StewardScreen({ navigation, route }: TabScreenProps<'Steward'>) 
               {m.action?.type === 'transaction_list' ? <TransactionListCard action={m.action} onShowMore={() => ask('Show more')} /> : null}
               {m.action?.type === 'transaction_group' ? <TransactionGroupCard action={m.action} onShowMore={() => ask('Show more')} /> : null}
               {m.action?.type === 'support_request' ? <SupportRequestCard action={m.action} /> : null}
+              {m.action?.type === 'vendor_list' ? <VendorListCard vendors={m.action.vendors} onOpen={(id) => navigation.navigate('VendorProfile', { profileId: id })} /> : null}
             </View>
           ),
         )}

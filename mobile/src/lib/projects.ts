@@ -201,6 +201,15 @@ export const TRADES = [
   { value: 'other', label: 'Other', plural: 'Other' },
 ];
 
+/** "a tiler", "builders": how Steward talks about one trade (VND-03). */
+export function tradePerson(category: string, many = false): string {
+  const map: Record<string, [string, string]> = {
+    building: ['builder', 'builders'], construction: ['builder', 'builders'], tiling: ['tiler', 'tilers'], electrical: ['electrician', 'electricians'],
+    plumbing: ['plumber', 'plumbers'], events: ['event planner', 'event planners'], school: ['school', 'schools'], catering: ['caterer', 'caterers'],
+  };
+  return (map[category] ?? ['vendor', 'vendors'])[many ? 1 : 0];
+}
+
 /** "Builders", "Electricians"… for a directory row. */
 export function tradeLabel(category: string): string {
   const map: Record<string, string> = {
@@ -219,7 +228,7 @@ export const TEAM_ROLES: { value: TeamRole; label: string; hint: string; chip: s
 export function projectRoleLabel(role: ProjectRole | null | undefined): string {
   const map: Record<string, string> = {
     owner: 'Owner', vendor: 'Vendor', co_owner: 'Co-owner', contributor: 'Contributor',
-    site_manager: 'Site manager', foreman: 'Foreman', accounts: 'Accounts',
+    viewer: 'Viewer', site_manager: 'Site manager', foreman: 'Foreman', accounts: 'Accounts',
   };
   return role ? map[role] ?? '' : '';
 }

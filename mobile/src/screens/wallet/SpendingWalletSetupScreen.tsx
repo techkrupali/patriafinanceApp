@@ -201,7 +201,7 @@ export function SpendingWalletSetupScreen(props: RootScreenProps<'SpendingWallet
 
 function SpendingSetup({ navigation, draft }: RootScreenProps<'SpendingWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const insights = useSavingsInsights();
   const create = useCreateWallet();

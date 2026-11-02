@@ -297,7 +297,7 @@ export function SavingsPlanScreen({ navigation, route }: RootScreenProps<'Saving
                   </Text>
                 )}
                 <Button
-                  title={me.auto_save ? 'Save Changes' : 'Start Auto-Saving'}
+                  title={me.auto_save ? 'Save changes' : 'Start saving'}
                   icon="checkmark"
                   onPress={saveMine}
                   loading={actions.startAutoSave.isPending || actions.updateAutoSave.isPending}

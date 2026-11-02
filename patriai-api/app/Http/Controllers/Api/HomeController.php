@@ -145,6 +145,47 @@ class HomeController extends ApiController
             ];
         }
 
+        // ---- SND-15 scheduled payments, giving and goal payouts in the next 7 days ----
+        foreach (\App\Services\ScheduledPaymentService::make()->overview($user, $now)['items'] as $item) {
+            if (!$item['next_on'] || $item['paused'] || $item['next_on']->gte($horizon)) {
+                continue;
+            }
+            $from = $item['from']['name'] ?? 'the wallet';
+            $label = "{$from} is short for " . ($item['next_on']->isToday() ? 'today' : $item['next_on']->copy()->setTimezone('Africa/Lagos')->format('l'));
+            // Two payments from the same wallet on the same day are one thing to fix.
+            if ($item['short'] !== null && !collect($needsYou)->contains('label', $label)) {
+                $needsYou[] = ['kind' => 'low_funds', 'id' => $item['id'], 'label' => $label];
+            }
+            $upcoming[] = [
+                'kind' => 'scheduled',
+                'id' => $item['id'],
+                'wallet_id' => $item['from']['id'] ?? null,
+                'title' => $item['title'],
+                'date' => $item['next_on']->copy()->setTimezone('Africa/Lagos')->toDateString(),
+                'subtitle' => $item['short'] !== null ? "{$from} is {$this->money($item['short'])} short" : ($item['confirm'] ? 'You confirm' : "Scheduled · from {$from}"),
+                'amount' => $this->naira($item['amount']),
+                'tone' => $item['short'] !== null ? 'danger' : 'neutral',
+            ];
+        }
+
+        // ---- REQ-03 money someone asked this person for ----
+        $asked = \App\Models\MoneyRequest::with('requester')->where('payer_user_id', $user->id)->where('status', 'pending')
+            ->where(fn (Builder $q) => $q->whereNull('due_on')->orWhere('due_on', '<', $horizon->toDateString()))->latest()->limit(5)->get();
+        foreach ($asked as $r) {
+            $needsYou[] = ['kind' => 'money_request', 'id' => $r->id, 'code' => $r->code, 'label' => "{$r->requester->first_name} asked for {$this->money($r->left())}"];
+            $upcoming[] = [
+                'kind' => 'money_request',
+                'id' => $r->id,
+                'code' => $r->code,
+                'wallet_id' => null,
+                'title' => "{$r->requester->first_name}: " . ($r->note ?: 'request'),
+                'date' => ($r->due_on ?? $r->created_at)->toDateString(),
+                'subtitle' => 'Asked of you',
+                'amount' => $this->naira($r->left()),
+                'tone' => 'warning',
+            ];
+        }
+
         usort($upcoming, fn ($a, $b) => strcmp((string) $a['date'], (string) $b['date']));
 
         return $this->ok('Home fetched', [

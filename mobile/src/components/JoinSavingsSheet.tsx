@@ -11,7 +11,7 @@ import { Button } from './Button';
 import { ErrorText } from './ErrorText';
 import { colors } from '../theme';
 import { useWallets, type AcceptInvitationOptions } from '../api/hooks';
-import { formatMoney, formatYmd, groupAmountInput, sanitizeAmountInput } from '../lib/format';
+import { formatNaira, formatYmd, groupAmountInput, sanitizeAmountInput } from '../lib/format';
 import type { SavingsFrequency, WalletInvitation } from '../api/types';
 
 interface JoinSavingsSheetProps {
@@ -107,7 +107,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
                   <Text className="text-[15px] font-bold text-brand-deep">Everyone saves {plan.label}</Text>
                   {plan.target_amount ? (
                     <Text className="mt-1 text-[13px] text-brand-deep">
-                      Goal: {formatMoney(plan.target_amount)}
+                      Goal: {formatNaira(plan.target_amount)}
                       {plan.target_date ? ` by ${formatYmd(plan.target_date)}` : ''}
                     </Text>
                   ) : null}
@@ -121,7 +121,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
 
               <View className="mt-5 flex-row items-center">
                 <View className="flex-1 pr-2">
-                  <Text className="text-[15px] font-bold text-ink">Start Auto-Saving Now</Text>
+                  <Text className="text-[15px] font-bold text-ink">Start saving now</Text>
                   <Text className="text-[12px] text-muted">Money moves from your wallet on schedule. Pause it any time.</Text>
                 </View>
                 <Switch value={autoSave} onValueChange={setAutoSave} trackColor={{ false: colors.lav, true: colors.brand }} thumbColor={colors.white} />
@@ -129,7 +129,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
 
               {autoSave ? (
                 <>
-                  <FundingSourceSelect label="Save From" wallets={sources} value={source} onChange={setSourceId} className="mt-5" />
+                  <FundingSourceSelect label="Save from" wallets={sources} value={source} onChange={setSourceId} className="mt-5" />
                   {pledge ? (
                     <Input
                       label="Each Month, on the 25th"
@@ -151,7 +151,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
                         keyboardType="decimal-pad"
                         containerClassName="mt-5"
                       />
-                      <Text className="mb-2 mt-5 text-[13px] font-semibold text-muted">How Often</Text>
+                      <Text className="mb-2 mt-5 text-[13px] font-semibold text-muted">How often</Text>
                       <FrequencyPicker
                         frequency={schedule.frequency}
                         dayOfWeek={schedule.dayOfWeek}
@@ -171,7 +171,7 @@ export function JoinSavingsSheet({ invitation, loading, error, onConfirm, onClos
 
               <ErrorText message={error} className="mt-4" />
               <Button
-                title={autoSave ? 'Join & Start Saving' : 'Join'}
+                title={autoSave ? 'Join and start saving' : 'Join'}
                 icon="checkmark"
                 onPress={confirm}
                 loading={loading}

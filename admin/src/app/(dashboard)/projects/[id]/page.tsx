@@ -280,6 +280,78 @@ export default function ProjectDetailPage({
           )}
         </Card>
       </div>
+
+      {/* MLS-03 approvals · VPJ proposal · CHT-03 chat record */}
+      {data ? (
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Who approves</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.approvals ? (
+                <div className="space-y-2 text-sm">
+                  <p className="font-medium">
+                    {data.approvals.mode === "any" ? `Any 1 of ${data.approvals.approvers.length}` : `${data.approvals.needed} of ${data.approvals.approvers.length}`}
+                    {data.approvals.custom ? "" : " (wallet rules)"}
+                  </p>
+                  <p className="text-muted">{data.approvals.approvers.join(", ")}</p>
+                  {data.approvals.overrides.map((o, i) => (
+                    <p key={i} className="text-muted">
+                      {o.milestone}: {o.needed} of {o.approvers.join(", ")}
+                    </p>
+                  ))}
+                  {data.approvals.site_photo_over ? <p className="text-muted">Site visit photo over {naira(data.approvals.site_photo_over)}</p> : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">—</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Builder&apos;s proposal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.proposal ? (
+                <div className="space-y-2 text-sm">
+                  <p className="font-medium">
+                    {naira(data.proposal.total)} · {data.proposal.phases} phases
+                  </p>
+                  <p className="text-muted">
+                    {data.proposal.terms.upfront ? "First phase paid upfront · " : ""}
+                    {data.proposal.terms.retention_percent}% held back for {data.proposal.terms.retention_months} months · start within {data.proposal.terms.start_within_days} days
+                  </p>
+                  <p className="text-muted">Sent {formatDateTime(data.proposal.sent_at)} · accepted {formatDateTime(data.proposal.accepted_at)}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted">Set up by the family.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Project chat</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.messages?.length ? (
+                <div className="max-h-80 space-y-3 overflow-y-auto text-sm">
+                  {data.messages.map((m) => (
+                    <div key={m.id}>
+                      <p className="text-xs text-muted">
+                        {m.by} · {formatDateTime(m.at)}
+                      </p>
+                      <p className={m.kind === "system" ? "text-muted italic" : ""}>{m.body}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">No messages.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </>
   );
 }

@@ -97,6 +97,52 @@ class SavingsEarlyBreakTest extends TestCase
         $this->assertMatchesRegularExpression('/^HH-2026-\d{4}$/', $donation->receipt_no);
     }
 
+    public function test_the_break_answers_with_its_fee_and_receipt(): void
+    {
+        [$ngozi, $main] = $this->person('Ngozi', 30_000_000);
+        $rent = $this->houseRent($ngozi, $main);
+
+        // BRK-04 → BRK-05 "₦47,500 is in Main · ₦1,250 went to Hope Harbour Children's Home".
+        $ref = $this->postJson('/api/v1/transfers', ['from_wallet_id' => $rent->id, 'amount' => '50000', 'pin' => '1234', 'destination' => ['kind' => 'wallet', 'wallet_id' => $main->id]])
+            ->assertOk()->assertJsonPath('data.early_break.fee', '2500.00')->assertJsonPath('data.early_break.received', '47500.00')
+            ->assertJsonPath('data.early_break.charity', "Hope Harbour Children's Home")->assertJsonPath('data.early_break.charity_amount', '1250.00')->json('data.reference');
+        $done = $this->getJson("/api/v1/early-breaks/{$ref}")->assertOk()
+            ->assertJsonPath('data.taken_out', '50000.00')->assertJsonPath('data.received', '47500.00')->assertJsonPath('data.fee', '2500.00')
+            ->assertJsonPath('data.wallet.balance', '50000.00')->assertJsonPath('data.wallet.locked', true)->assertJsonPath('data.charity.amount', '1250.00')->json('data');
+
+        // The donation receipt, from a short signed link.
+        $url = $this->postJson("/api/v1/donations/{$done['charity']['donation_id']}/receipt-link")->assertOk()->json('data.url');
+        $pdf = $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+        $this->get(route('donation.receipt', ['donation' => $done['charity']['donation_id']]))->assertForbidden();
+
+        // BRK-03: the charity's profile, with what Patriai users gave this year.
+        $org = Organisation::sole();
+        $this->getJson("/api/v1/organisations/{$org->id}")->assertOk()->assertJsonPath('data.given_this_year', '1250.00')->assertJsonPath('data.verified', true);
+
+        // Someone else can't see it or its receipt.
+        [$emeka] = $this->person('Emeka', 0, '+2348050000318');
+        Sanctum::actingAs($emeka);
+        $this->getJson("/api/v1/early-breaks/{$ref}")->assertNotFound();
+        $this->postJson("/api/v1/donations/{$done['charity']['donation_id']}/receipt-link")->assertNotFound();
+    }
+
+    public function test_a_member_asks_the_owner_for_more_access_once_a_day(): void
+    {
+        [$ngozi, $main] = $this->person('Ngozi', 30_000_000);
+        [$emeka] = $this->person('Emeka', 0, '+2348050000318');
+        $rent = $this->houseRent($ngozi, $main, [], [['user_id' => $emeka->id, 'role' => 'contributor']]);
+        Sanctum::actingAs($emeka);
+        $this->postJson('/api/v1/invitations/' . WalletInvitation::sole()->id . '/accept')->assertOk();
+
+        // WPV-09 "Ask Ngozi for more access".
+        $this->postJson("/api/v1/wallets/{$rent->id}/access-request", ['message' => 'I want to approve too'])->assertOk()->assertJsonPath('data.owner', 'Ngozi');
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $ngozi->id, 'type' => 'access_requested', 'title' => 'Emeka asked for more access']);
+        $this->postJson("/api/v1/wallets/{$rent->id}/access-request")->assertStatus(429);
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/wallets/{$rent->id}/access-request")->assertNotFound(); // the owner has it all
+    }
+
     public function test_with_a_co_saver_the_fee_is_taken_when_they_approve(): void
     {
         [$ngozi, $main] = $this->person('Ngozi', 30_000_000);
@@ -106,6 +152,8 @@ class SavingsEarlyBreakTest extends TestCase
         $this->postJson('/api/v1/invitations/' . WalletInvitation::sole()->id . '/accept')->assertOk();
 
         Sanctum::actingAs($ngozi);
+        // BRK-04 "Also needs Emeka's approval": a co-owner decides even without the can-approve flag.
+        $this->getJson("/api/v1/wallets/{$rent->id}")->assertOk()->assertJsonPath('data.approval.approvers.0.name', 'Emeka Okafor')->assertJsonCount(1, 'data.approval.approvers');
         $id = $this->postJson('/api/v1/transfers', ['from_wallet_id' => $rent->id, 'amount' => '20000', 'pin' => '1234', 'destination' => ['kind' => 'wallet', 'wallet_id' => $main->id]])
             ->assertOk()->assertJsonPath('data.pending_approval', true)->json('data.approval.id');
         $this->assertSame(0, Transaction::where('type', 'fee')->count());

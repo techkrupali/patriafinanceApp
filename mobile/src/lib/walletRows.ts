@@ -19,10 +19,10 @@ export function groupAccountNumber(n: string): string {
  * One-line description under a wallet's name: the account number for Main,
  * progress for goals ("Goal · 80% · due 8 Jan"), otherwise the type and owner.
  */
-export function walletSubtitle(w: Wallet): string {
+export function walletSubtitle(w: Wallet, long = false): string {
   const label = walletVisual(w.type).label;
   const type = label.charAt(0) + label.slice(1).toLowerCase();
-  if (w.type === 'main') return w.virtual_account ? groupAccountNumber(w.virtual_account) : 'Your everyday wallet';
+  if (w.type === 'main') return w.virtual_account ? `${groupAccountNumber(w.virtual_account)}${long ? ' · everyday' : ''}` : 'Your everyday wallet';
   if (w.type === 'emergency') return w.emergency_locked ? 'Emergency · locked' : 'Emergency · open';
 
   const target = parseFloat(w.target_amount ?? '');

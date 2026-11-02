@@ -192,7 +192,7 @@ class GoalService
             return ['wallet_id' => $wallet->id, 'status' => 'short'];
         }
 
-        $txn = $this->wallets->withdrawToBank($wallet, $owner, $amount, $account->bank_code, $account->account_number, $account->account_name, $account->bank_name, "{$wallet->name} for {$account->nickname}");
+        $txn = $this->wallets->payPayee($wallet, $owner, $account, $amount, "{$wallet->name} for {$account->nickname}");
         $meta = $wallet->fresh()->meta;
         $meta['goal']['payout']['paid_at'] = now()->toIso8601String();
         $meta['goal']['payout']['reference'] = $txn->reference;

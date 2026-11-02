@@ -6,14 +6,16 @@ import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtText } from '../../components/pt/PtText';
 import { PtPanel } from '../../components/pt/PtForm';
-import { useApproval, useReferralLookup } from '../../api/hooks';
+import { useApproval, useReferralLookup, useUserSearch } from '../../api/hooks';
+import { useMoneyRequest } from '../../api/requests';
+import { useSendDraft } from '../../store/sendDraft';
 import { useAppLock } from '../../store/appLock';
 import type { DeepLink } from '../../lib/deepLinks';
 import type { RootScreenProps } from '../../navigation/types';
 
 const KINDS: { kind: DeepLink['kind']; icon: React.ComponentProps<typeof Feather>['name']; title: string; sub: string }[] = [
   { kind: 'invite', icon: 'user', title: 'Invite link', sub: 'Opens the invitation' },
-  { kind: 'request', icon: 'arrow-down', title: 'Payment request', sub: 'Opens pay or decline' },
+  { kind: 'moneyRequest', icon: 'arrow-down', title: 'Payment request', sub: 'Opens pay or decline' },
   { kind: 'referral', icon: 'archive', title: 'Referral link', sub: 'Fills in the code at sign-up' },
 ];
 
@@ -45,29 +47,52 @@ function Spinner() {
 export function DeepLinkScreen({ route, navigation }: RootScreenProps<'DeepLink'>) {
   const { link } = route.params;
   const approval = useApproval(link.kind === 'request' ? link.id : 0);
+  const asked = useMoneyRequest(link.kind === 'moneyRequest' ? link.code : '');
   const lookup = useReferralLookup();
   const code = link.kind === 'referral' ? link.code : null;
+  // QR-01 pay link: the person behind the @tag.
+  const people = useUserSearch(link.kind === 'pay' ? link.tag : '');
+  const payee = link.kind === 'pay' ? (people.data ?? []).find((u) => (u.username ?? '').toLowerCase() === link.tag.toLowerCase()) : undefined;
+  const draft = useSendDraft();
 
   useEffect(() => {
     if (code) lookup.mutate(code);
   }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Open the screen once we know what the link is (a short beat so the landing reads).
-  const ready = link.kind === 'invite' || (link.kind === 'request' && approval.isSuccess) || (link.kind === 'referral' && (lookup.isSuccess || lookup.isError));
+  const ready =
+    link.kind === 'invite' || (link.kind === 'request' && approval.isSuccess) || (link.kind === 'moneyRequest' && asked.isSuccess) || (link.kind === 'referral' && (lookup.isSuccess || lookup.isError)) || (link.kind === 'pay' && Boolean(payee));
   useEffect(() => {
     if (!ready) return;
     const t = setTimeout(() => {
       if (link.kind === 'invite') navigation.replace('Invitations');
       else if (link.kind === 'request') navigation.replace('ApprovalDetail', { approvalId: link.id });
-      else navigation.replace('Referral', { code: link.code });
+      else if (link.kind === 'moneyRequest') navigation.replace('IncomingRequest', { code: link.code });
+      else if (link.kind === 'pay' && payee) {
+        draft.start();
+        draft.setRecipient({ kind: 'user', name: payee.full_name, identifier: `@${payee.username}`, sub: `Patriai · @${payee.username}`, avatarUrl: payee.avatar_url });
+        if (link.amount) draft.setAmount(link.amount);
+        navigation.replace('SendAmount');
+      } else if (link.kind === 'referral') navigation.replace('Referral', { code: link.code });
     }, 700);
     return () => clearTimeout(t);
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const who = link.kind === 'request' ? approval.data?.initiator.name.split(' ')[0] : link.kind === 'referral' ? lookup.data?.from.split(' ')[0] : null;
+  const who =
+    link.kind === 'request'
+      ? approval.data?.initiator.name.split(' ')[0]
+      : link.kind === 'moneyRequest'
+        ? asked.data?.requester.first_name
+        : link.kind === 'referral' ? lookup.data?.from.split(' ')[0] : link.kind === 'pay' ? payee?.full_name.split(' ')[0] : null;
   const title =
-    link.kind === 'invite' ? 'Opening your invitation…' : link.kind === 'request' ? (who ? `Opening ${who}'s request…` : 'Opening the request…') : who ? `Opening ${who}'s code…` : 'Opening the code…';
-  const failed = link.kind === 'request' && approval.isError;
+    link.kind === 'invite'
+      ? 'Opening your invitation…'
+      : link.kind === 'request' || link.kind === 'moneyRequest'
+        ? who ? `Opening ${who}'s request…` : 'Opening the request…'
+        : link.kind === 'pay'
+          ? who ? `Paying ${who}…` : 'Opening the payment…'
+          : who ? `Opening ${who}'s code…` : 'Opening the code…';
+  const failed = (link.kind === 'request' && approval.isError) || (link.kind === 'moneyRequest' && asked.isError) || (link.kind === 'pay' && people.isSuccess && !payee);
 
   return (
     <PtStepScreen
@@ -88,7 +113,9 @@ export function DeepLinkScreen({ route, navigation }: RootScreenProps<'DeepLink'
         </PtText>
         <PtText color={pt.inkMuted} style={{ textAlign: 'center', maxWidth: 320 }}>
           {failed
-            ? 'The request may be finished already, or it was sent to someone else. Ask the sender to share it again.'
+            ? link.kind === 'pay'
+              ? 'No one on Patriai has that @tag. Ask them to show their code again.'
+              : 'The request may be finished already, or it was sent to someone else. Ask the sender to share it again.'
             : 'Links for invites, payment requests and referrals open the right screen, after your PIN.'}
         </PtText>
       </View>
@@ -96,7 +123,7 @@ export function DeepLinkScreen({ route, navigation }: RootScreenProps<'DeepLink'
         {KINDS.map((k, i) => (
           <View
             key={k.kind}
-            accessibilityState={{ selected: k.kind === link.kind }}
+            accessibilityState={{ selected: k.kind === link.kind || (k.kind === 'moneyRequest' && link.kind === 'request') }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: i === KINDS.length - 1 ? 0 : 1, borderBottomColor: pt.line }}
           >
             <View style={{ width: 36, height: 36, borderRadius: ptRadius.sm, backgroundColor: pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>

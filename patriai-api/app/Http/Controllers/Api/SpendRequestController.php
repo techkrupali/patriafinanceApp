@@ -47,6 +47,8 @@ class SpendRequestController extends ApiController
             'pin' => ['required', self::TXN_PIN],
             'description' => ['nullable', 'string', 'max:200'],
             'budget_category_id' => ['nullable', 'integer'],
+            // CHD-04 "What is it for? Food · Transport · School · A gift · Fun · Other".
+            'category' => ['nullable', 'in:food,transport,school,gift,fun,other'],
             'destination.kind' => ['required', 'in:wallet,user,bank'],
             'destination.wallet_id' => ['required_if:destination.kind,wallet', 'nullable', 'integer'],
             'destination.identifier' => ['required_if:destination.kind,user', 'nullable', 'string'],
@@ -120,9 +122,8 @@ class SpendRequestController extends ApiController
                 break;
 
             case 'user':
-                $recipient = str_contains($dest['identifier'], '@')
-                    ? User::where('email', strtolower($dest['identifier']))->first()
-                    : User::where('phone', $dest['identifier'])->first();
+                // An @tag, phone or email, as on a payment.
+                $recipient = $this->findPayee((string) $dest['identifier']);
 
                 if (!$recipient || $recipient->id === $user->id) {
                     return $this->fail('Recipient not found', 404);
@@ -135,6 +136,7 @@ class SpendRequestController extends ApiController
                 $feeKobo = 0;
                 $payload = [
                     'identifier' => $dest['identifier'],
+                    'user_id' => $recipient->id,
                     'description' => $data['description'] ?? null,
                 ];
                 break;
@@ -153,7 +155,7 @@ class SpendRequestController extends ApiController
 
         // CHW-03/04: a child's wallet may allow the request at all (friends), need a
         // reason, or let a small one through on its own.
-        $payload += array_filter(['budget_category_id' => $plan['category_id']]);
+        $payload += array_filter(['budget_category_id' => $plan['category_id'], 'child_category' => $data['category'] ?? null]);
         if (ChildService::make()->screenRequest($wallet, $user, $amountKobo, $data['description'] ?? null, $dest)) {
             $req = ApprovalService::make()->autoApprove($wallet, $user, $action, $amountKobo, $feeKobo, $data['description'] ?? null, $payload);
 

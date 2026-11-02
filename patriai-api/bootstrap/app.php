@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'admin' => EnsureAdmin::class,
+            'child.scope' => \App\Http\Middleware\ChildScope::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
@@ -27,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule) {
         // Sweep stale pending approval requests into 'expired' once an hour.
         $schedule->command('approvals:expire')->hourly();
+        // REQ-02: the day before a money request is due.
+        $schedule->command('requests:remind')->dailyAt('09:00')->timezone('Africa/Lagos');
 
         // Accrue overdue-loan penalties and notify borrowers once a day.
         $schedule->command('loans:accrue-overdue')->dailyAt('00:05');
@@ -41,6 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Run due automation rules (scheduled auto-transfers). Idempotent per period,
         // so an hourly cadence safely fires daily/weekly/monthly rules.
         $schedule->command('automations:run')->hourly();
+        // SND-14: scheduled and repeat payments, close to the time they were set for.
+        $schedule->command('payments:run-scheduled')->everyFiveMinutes()->withoutOverlapping();
 
         // SPD-06 weekly summary, Sunday evening.
         $schedule->command('budgets:weekly-summary')->weeklyOn(0, '18:00')->timezone('Africa/Lagos');

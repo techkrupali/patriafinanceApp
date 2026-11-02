@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { pt } from '../../../theme';
 import { PtStepScreen } from '../../../components/pt/PtStepScreen';
 import { PtButton } from '../../../components/pt/PtButton';
@@ -18,6 +18,7 @@ import { useEmergency, useEmergencyActions, useFamily } from '../../../api/hooks
 import { useAuth } from '../../../store/auth';
 import { initials } from '../../../lib/format';
 import { notifySuccess } from '../../../lib/haptics';
+import { showAlert } from '../../../lib/alert';
 import { rulesFromDetail, rulesPayload, validateRules, type EmergencyPins, type EmergencyRulesState } from '../../../lib/emergencyRules';
 import type { EmergencyDetail, EmergencyPurpose } from '../../../api/types';
 import type { RootScreenProps } from '../../../navigation/types';
@@ -51,7 +52,7 @@ export function EditEmergencyRulesScreen(props: RootScreenProps<'EditEmergencyRu
 
 function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyRules'> & { saved: EmergencyDetail }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const actions = useEmergencyActions(route.params.walletId);
   const [purposes, setPurposes] = useState<EmergencyPurpose[]>(saved.purposes ?? [saved.purpose]);
   const [rules, setRules] = useState<EmergencyRulesState>(() => rulesFromDetail(saved));
@@ -76,6 +77,12 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
       setError('Pick at least one emergency it is for.');
       return;
     }
+    // Saving the same rules would only ask the keyholders about nothing.
+    const before = JSON.stringify(rulesPayload(rulesFromDetail(saved), { pin: '', pinConfirm: '' }, saved.purposes ?? [saved.purpose]));
+    if (JSON.stringify(rulesPayload(rules, pins, purposes)) === before) {
+      setError('Nothing has changed yet.');
+      return;
+    }
     const problem = validateRules(rules, pins, { pinRequired: rules.manual && !hasCustomPin });
     setError(problem);
     if (!problem) {
@@ -94,7 +101,7 @@ function EditRules({ navigation, route, saved }: RootScreenProps<'EditEmergencyR
           setPinOpen(false);
           navigation.goBack();
           if (needed > 1 && res.emergency.me.pending_rule_change) {
-            Alert.alert(
+            showAlert(
               'Sent to the keyholders',
               `Nothing changes until ${needed - 1 === 1 ? 'another keyholder says' : `${needed - 1} more keyholders say`} yes.`,
             );

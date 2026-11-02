@@ -132,6 +132,8 @@ class SavingsController extends ApiController
         $data = $request->validate($this->termRules() + [
             'source_wallet_id' => ['sometimes', 'integer'],
             'enabled' => ['sometimes', 'boolean'],
+            // WPV-02 "Change my %".
+            'salary_percent' => ['sometimes', 'integer', 'between:1,50'],
         ]);
         if (isset($data['amount'])) {
             $data['amount'] = $this->toKobo((string) $data['amount']);

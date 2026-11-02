@@ -21,6 +21,8 @@ export interface SignupDetails {
  */
 export type AuthStackParamList = {
   Welcome: undefined;
+  /** CHW-06 on the child's phone: "I have a code". */
+  ChildLink: undefined;
   /** VON-01 "How will you use Patriai?" — a family or a business. */
   AccountType: undefined;
   /** ONB-03 */
@@ -83,6 +85,23 @@ export type MainTabParamList = {
 };
 
 /** VDM-03…08 vendor mode: Projects · Payouts · Disputes · Profile. */
+/** CHD-03…07 the child's own app. */
+export type ChildTabParamList = {
+  ChildHome: undefined;
+  ChildAsk: undefined;
+  ChildGoal: undefined;
+  ChildTasks: undefined;
+};
+
+export type ChildStackParamList = {
+  ChildTabs: NavigatorScreenParams<ChildTabParamList> | undefined;
+  /** CHD-05 */
+  ChildRequests: undefined;
+  /** CHD-08 */
+  ChildTips: undefined;
+  ChildNotifications: undefined;
+};
+
 export type VendorTabParamList = {
   VendorHome: undefined;
   VendorPayouts: undefined;
@@ -99,7 +118,10 @@ export type RootStackParamList = {
   /** TRS-02: every wallet, grouped, with drafts. */
   AllWallets: undefined;
   /** Full transaction feed (was a tab; now reached from Home → View all). */
-  Activity: undefined;
+  /** TXN-01 all transactions, or one wallet's. */
+  Activity: { walletId?: number } | undefined;
+  /** TXN-02 one transaction (TXN-03 receipt, TXN-04 report). */
+  TransactionDetail: { id: number };
   /** AI Assistant chat (hosts the in-chat secure transfer PIN flow). */
   Assistant: undefined;
   WalletDetail: { walletId: number };
@@ -110,6 +132,8 @@ export type RootStackParamList = {
   RequestSpend: { walletId: number };
   /** Guided creation starts by picking the kind of wallet. */
   CreateWallet: undefined;
+  /** TRS-03 */
+  AddToTreasury: undefined;
   /** WCR-02 → WCR-11: a goal wallet, private or shared, with people and approvals. */
   /** GLW-01…05 + WCR-06/07; `addedAccountId` comes back from GIV-07. */
   GoalWalletSetup: { draftId?: number; addedAccountId?: number } | undefined;
@@ -118,7 +142,8 @@ export type RootStackParamList = {
   /** CHW-01…07 + WCR-06: a child's wallet. */
   ChildWalletSetup: { draftId?: number } | undefined;
   /** PRW-01…06 + WCR-06: a project paid by milestone. */
-  ProjectWalletSetup: { name?: string; draftId?: number } | undefined;
+  /** vendor: VND-02 "Add to a project" → PRW-04 with this builder already chosen. */
+  ProjectWalletSetup: { name?: string; draftId?: number; vendor?: { id: number; name: string } } | undefined;
   /** WCR-12: the new wallet's account details; `invited` are first names. */
   WalletCreated: { walletId: number; invited: string[] };
   /** WCR-07 (savings, emergency): progress, then what happened — invites, rules. */
@@ -130,6 +155,8 @@ export type RootStackParamList = {
     caption: string;
     events: { label: string; title: string; sub?: string }[];
     openLabel: string;
+    /** WCR-07 (Project): "Open project" goes to the project, not the wallet. */
+    projectId?: number;
     /** Spending (WCR-07): each category, "₦0 of ₦150,000", in place of the balance card. */
     budget?: { name: string; limit: string }[];
     /** Giving (WCR-07): what goes out first, in place of the balance card. */
@@ -159,6 +186,10 @@ export type RootStackParamList = {
   WalletSetup: { type: CreatableWalletType; draftId?: number };
   // ---- Emergency fund management ----
   EmergencyCenter: { walletId: number };
+  /** WAL-16 the fund's release rules and "Release money". */
+  EmergencyPolicy: { walletId: number };
+  /** WAL-17 an amount, what happened, who's paid and the proof — for the keyholders. */
+  EmergencyRelease: { walletId: number };
   /** Owner: change rules, beneficiaries and the custom PIN after setup. */
   EditEmergencyRules: { walletId: number };
   // ---- Savings plan management ----
@@ -199,6 +230,60 @@ export type RootStackParamList = {
   ConnectedApps: undefined;
   /** ME-17; `topic: 'fraud'` from ME-18 */
   SupportChat: { topic?: 'fraud' } | undefined;
+  // ---- Money in and out (SND, BEN, ADD-07, QR) ----
+  /** SND-01, maybe from a wallet's "Pay from wallet". */
+  Send: { fromWalletId?: number } | undefined;
+  /** REQ-01 / SPL-01: pick who to ask instead of who to pay. */
+  SendRecipient: { purpose?: 'request' | 'split' } | undefined;
+  SendBank: { accountNumber?: string } | undefined;
+  SendAmount: undefined;
+  SendFrom: undefined;
+  SendNote: undefined;
+  SendReview: undefined;
+  SendResult: {
+    outcome: 'sent' | 'approval' | 'processing' | 'failed' | 'moved';
+    reference?: string;
+    balance?: string;
+    approvalId?: number;
+    approvers?: string[];
+    reason?: string;
+    at?: string;
+  };
+  SavedAccounts: undefined;
+  SavedAccountAdd: undefined;
+  SavedAccountDetail: { id: number };
+  SavedGroup: { id: number; pay?: boolean };
+  MoveMoney: { fromWalletId?: number; toWalletId?: number } | undefined;
+  /** ADD-01, to a wallet (Main by default). */
+  AddMoney: { walletId?: number } | undefined;
+  /** ADD-02 the wallet's account details. */
+  BankTransfer: { walletId: number };
+  MyQr: undefined;
+  ScanQr: undefined;
+  /** REQ-01 */
+  RequestMoney: undefined;
+  /** REQ-02 the link to share. */
+  RequestSent: { code: string };
+  /** REQ-03 pay all, part, or decline (or, for your own, where it stands). */
+  IncomingRequest: { code: string };
+  /** SND-14 repeat the payment in the send draft; `retryInHour` from SND-13. */
+  SendSchedule: { retryInHour?: boolean } | undefined;
+  /** SND-15 */
+  ScheduledPayments: undefined;
+  /** WPV-04 "Change limits" */
+  ChildLimits: { walletId: number };
+  /** CHD-09 "Tasks and rewards" */
+  ChildTasksParent: { walletId: number };
+  /** CHD-12 */
+  AssignTask: { walletId: number };
+  /** WPV-05 "Send a gift" / "Add to the bike": a relative into a child's wallet or goal. */
+  ChildGift: { walletId: number; into: 'wallet' | 'goal' };
+  /** BRK-04 */
+  BreakEarly: { walletId: number };
+  /** BRK-05 */
+  BreakDone: { reference: string };
+  /** SPL-01 a new split (maybe from a payment), or one already sent. */
+  SplitBill: { key?: string; title?: string; total?: string; place?: string } | undefined;
   /** SYS-07 notifications primer, once per phone. */
   Permissions: undefined;
   /** SYS-08 "Opening Ngozi's request…" */
@@ -302,6 +387,44 @@ export type RootStackParamList = {
   ReviewMilestone: { projectId: number; milestoneId: number };
   /** PRJ-07 */
   ReleasePayment: { projectId: number; milestoneId: number };
+  /** MLS-01 one photo or video of a submission, full size. */
+  ProofViewer: { projectId: number; milestoneId: number; index?: number };
+  /** MLS-02 who has said yes, and "Remind Chidi". */
+  MilestoneApprovals: { projectId: number; milestoneId: number };
+  /** MLS-03 who approves each milestone. */
+  ProjectApprovalSettings: { projectId: number };
+  /** MLS-04 released, held back, funded, not funded. */
+  MoneyByMilestone: { projectId: number };
+  /** PJH-06 balance, account, who put in what. */
+  ProjectWallet: { projectId: number };
+  /** PJH-05 the family side and the builder's side. */
+  ProjectMembers: { projectId: number };
+  /** CTB-01 a funder who puts money in and approves. */
+  InviteFunder: { projectId: number };
+  /** CHT-01 every chat. */
+  Chats: undefined;
+  /** CHT-02 a direct chat or a group. */
+  NewChat: undefined;
+  /** CHT-04 a direct chat or group. */
+  Conversation: { conversationId: number };
+  /** CHT-05 a project chat's or a group's info. */
+  ChatInfo: { projectId?: number; conversationId?: number };
+  /** VPJ-05 a builder's proposal, for the family. */
+  ProposalReview: { proposalId: number };
+  /** VPJ-06 who approves, and fund the first phase. */
+  ProposalFund: { proposalId: number };
+  /** VPJ-01…04 the builder starts a project. */
+  NewProposal: undefined;
+  /** VLS-01 show a finished project on the profile. */
+  ListProject: undefined;
+  /** VLS-02 a finished project on a builder's profile. */
+  Listing: { listingId: number };
+  /** VND-03 "Find a vendor" with Steward, over the directory. */
+  FindVendorSteward: { category: string; near?: string; projectId?: number };
+  /** CTB-02 a funder (who may approve) is invited to a project. */
+  FunderInvite: { invitationId: number };
+  /** VDM-13 the builder's money on one project. */
+  VendorProjectFunds: { projectId: number };
   /** PRJ-09 */
   ProjectDocuments: { projectId: number };
   /** PRJ-10 */

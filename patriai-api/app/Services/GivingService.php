@@ -377,7 +377,7 @@ class GivingService
             }
 
             $from = !empty($settings['anonymous']) ? 'Patriai member' : $owner->fullName();
-            $txn = $this->wallets->withdrawToBank($wallet->fresh(), $owner, $payment->amount, $account->bank_code, $account->account_number, $account->account_name, $account->bank_name, ($schedule?->label ?? 'Giving') . " from {$from}");
+            $txn = $this->wallets->payPayee($wallet->fresh(), $owner, $account, $payment->amount, ($schedule?->label ?? 'Giving') . " from {$from}");
             $payment->update(['status' => 'paid', 'transaction_id' => $txn->id, 'receipt_no' => 'GV-' . now()->format('Y') . '-' . str_pad((string) $payment->id, 5, '0', STR_PAD_LEFT), 'note' => $note]);
 
             if (!empty($settings['receipts'])) {

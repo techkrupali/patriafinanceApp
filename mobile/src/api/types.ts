@@ -105,6 +105,8 @@ export interface Wallet {
   /** Goal wallets (GLW). */
   /** Savings and project wallets: what's free to move (not held for approvals or milestones). */
   available?: string | null;
+  /** TRS-01: a project wallet opens its project (PRJ-03). */
+  project_id?: number | null;
   goal?: GoalSummary | null;
   joint?: JointSummary | null;
   child?: ChildSummary | null;
@@ -241,6 +243,8 @@ export interface WalletInvitation {
   savings?: SavingsSummary | null;
   /** INV-O1: the joint wallet rules the partner accepts. */
   joint?: JointSummary | null;
+  /** CTB-02 "Approvals · 2 of 3: Ngozi, Chidi and you · Next to approve: Tiling". */
+  project?: { id: number; title: string; approvals: { needed: number; of: number; names: string[] }; next: { title: string; amount: string } | null } | null;
 }
 
 export type ApprovalAction =
@@ -274,6 +278,8 @@ export interface ApprovalRequest {
   id: number;
   wallet: WalletRef;
   initiator: PersonRef;
+  /** SND-10 "Waiting for Emeka": first names still to answer (pending only). */
+  waiting_on?: string[];
   action: ApprovalAction;
   /** Naira decimal string */
   amount: string;
@@ -414,16 +420,20 @@ export interface HomeTotals {
 }
 
 export interface HomeNeedItem {
-  kind: 'approval' | 'invitation' | 'milestone' | 'low_funds';
+  kind: 'approval' | 'invitation' | 'milestone' | 'low_funds' | 'money_request';
   id: number;
+  /** REQ-03 the request's code. */
+  code?: string;
   /** Short lower-case label for the "3 need you:" line. */
   label: string;
 }
 
 export interface HomeUpcomingItem {
-  kind: 'approval' | 'request' | 'rule';
+  /** scheduled: SND-15 a repeat payment, giving or a goal payout; money_request: REQ-03 asked of you. */
+  kind: 'approval' | 'request' | 'rule' | 'scheduled' | 'money_request';
   id: number;
-  wallet_id: number;
+  wallet_id: number | null;
+  code?: string;
   title: string;
   /** YYYY-MM-DD */
   date: string | null;
@@ -490,6 +500,8 @@ export interface WalletApprovalConfig {
   /** Naira decimal string, or null when every spend needs approval. */
   threshold: string | null;
   required_approvals: number;
+  /** Who would be asked if you sent money out (never you), as the server decides it. */
+  approvers?: { user_id: number; name: string }[];
 }
 
 export interface WalletDetailData {
@@ -613,6 +625,10 @@ export interface TransferSuccessData {
   /** Source wallet balance after transfer (naira decimal string) */
   balance: string;
   recipient: { name: string; email: string } | null;
+  /** A group payment: each account's share and how it went. */
+  group?: { name: string; amount: string; reference: string | null; error: string | null }[] | null;
+  /** BRK-04/05: locked savings taken out early kept a fee, half to the charity picked. */
+  early_break?: { fee: string; received: string; charity: string | null; charity_amount: string | null; receipt_no: string | null } | null;
 }
 
 export type TransferData = TransferSuccessData | PendingApprovalData;
@@ -666,6 +682,10 @@ export interface PhoneRegisterPayload {
 export type TransferDestination =
   | { kind: 'wallet'; wallet_id: number }
   | { kind: 'user'; identifier: string }
+  /** SND-03 a group of saved accounts, shared out by its split (BEN-04). */
+  | { kind: 'group'; group_id: number }
+  /** REQ-03 someone's money request (all or part of what's left). */
+  | { kind: 'request'; code: string }
   | {
       kind: 'bank';
       bank_code: string;
@@ -788,11 +808,28 @@ export interface SupportRequestAction {
   status: string | null;
 }
 
+/** VND-03 the vendors Steward found in the directory. */
+export interface VendorListAction {
+  type: 'vendor_list';
+  vendors: {
+    vendor_profile_id: number;
+    name: string;
+    category: string;
+    rating: number | null;
+    reviews: number;
+    location: string | null;
+    areas: string | null;
+    verified: boolean;
+    projects_completed: number;
+  }[];
+}
+
 export type AssistantAction =
   | SecureTransferAction
   | TransactionListAction
   | TransactionGroupAction
-  | SupportRequestAction;
+  | SupportRequestAction
+  | VendorListAction;
 
 export interface AssistantChatPayload {
   message: string;
@@ -940,6 +977,12 @@ export interface SaverAutoSave extends SavingsTerms {
   enabled: boolean;
   /** Only shown for the viewer's own auto-save. */
   source_wallet: { id: number; name: string } | null;
+  /** WPV-02 "Your rule 15% of salary". */
+  salary_percent?: number | null;
+  /** WPV-02 "Next save 25 Nov" (YYYY-MM-DD), the viewer's own. */
+  next_on?: string | null;
+  /** About how much a month, the viewer's own (naira decimal). */
+  per_month?: string | null;
 }
 
 export interface Saver {
@@ -1080,6 +1123,7 @@ export interface EmergencyTrustedContact {
 
 /** Where a pay-directly release went. */
 export interface EmergencyPayee {
+  bank_code?: string;
   bank_name?: string;
   account_number: string;
   account_name: string;
@@ -1123,7 +1167,7 @@ export interface EmergencyRequest {
   has_document: boolean;
   note: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired' | 'released' | 'flagged';
-  /** Fast release: naira moved. */
+  /** A release for an amount (WAL-17, fast release): naira. Null: the whole fund opens. */
   amount?: string | null;
   /** Keyholders' yeses so far and needed. */
   approvals?: number;
@@ -1179,7 +1223,14 @@ export interface EmergencyDetail {
   /** Owner always; recipients only once the wallet is unlocked. */
   beneficiary_note: string | null;
   requests: EmergencyRequest[];
+  /** WAL-16 "Target ₦350,000 · 40%"; WPV-07 "after 2 months of saving" and releases so far. */
+  target?: string | null;
+  months_saving?: number;
+  releases?: number;
   me: {
+    /** WPV-07 "You put in" and "Your monthly" (null: not saving into it). */
+    put_in?: string;
+    monthly?: string | null;
     role: 'owner' | 'approver' | 'recipient' | null;
     can_edit_rules: boolean;
     /** Owner, or the approver once unlocked: may withdraw/transfer directly. */
@@ -1211,6 +1262,12 @@ export interface EmergencyDetailData {
 export interface EmergencyWithdrawData {
   emergency: EmergencyDetail;
   reference: string;
+}
+
+/** WAL-17: released at once, or waiting for the keyholders. */
+export interface EmergencyReleaseData {
+  emergency: EmergencyDetail;
+  request: EmergencyRequest;
 }
 
 export interface UpdateWalletPayload {
@@ -1428,7 +1485,7 @@ export type MilestoneStatus = 'proposed' | 'planned' | 'funded' | 'submitted' | 
 
 /** The current user's relationship to a project. */
 /** A funder who joined the project wallet (PRW-05) is a co-owner or contributor; the builder's team (VDM-11) has a role too. */
-export type ProjectRole = 'owner' | 'vendor' | 'co_owner' | 'contributor' | 'site_manager' | 'foreman' | 'accounts';
+export type ProjectRole = 'owner' | 'vendor' | 'co_owner' | 'contributor' | 'viewer' | 'site_manager' | 'foreman' | 'accounts';
 export type ProjectKind = 'building' | 'renovation' | 'event' | 'community';
 /** INV-V1…V5: the builder was invited, asked for changes, accepted, or declined. */
 export type VendorStatus = 'invited' | 'changes_proposed' | 'accepted' | 'declined';
@@ -1546,9 +1603,54 @@ export interface MilestoneChange {
 export interface MilestoneApproval {
   needs_all: boolean;
   required: number;
+  /** MLS-03: any | all | count | named; override = this milestone has its own rule. */
+  mode?: ApprovalRuleMode;
+  override?: boolean;
   yes: number;
   request_id: number | null;
-  approvers: { id: number; name: string; first_name: string; said_yes: boolean; asked_at: string | null }[];
+  approvers: {
+    id: number;
+    name: string;
+    first_name: string;
+    role?: ProjectRole | 'viewer' | null;
+    said_yes: boolean;
+    /** MLS-02 "Approved 10:02 am · "Looks good"", "viewed 11:15 am". */
+    approved_at?: string | null;
+    note?: string | null;
+    viewed_at?: string | null;
+    asked_at: string | null;
+  }[];
+  /** "Emeka · Can see, not an approver here". */
+  viewers?: { id: number; name: string; first_name: string; role: ProjectRole | 'viewer' | null }[];
+  /** MLS-03: an approver's site visit photo is still needed. */
+  site_photo_needed?: boolean;
+}
+
+export type ApprovalRuleMode = 'any' | 'all' | 'count' | 'named';
+
+/** MLS-03 the project's approval settings. */
+export interface ProjectApprovalRules {
+  custom: boolean;
+  mode: ApprovalRuleMode;
+  needed: number;
+  approvers: ProjectPerson[];
+  candidates: ProjectPerson[];
+  overrides: { milestone_id: number; title: string | null; amount: string; approver_ids: number[]; names: string[]; needed: number }[];
+  site_photo_over: string | null;
+}
+
+export interface ProjectPerson {
+  id: number;
+  name: string;
+  first_name: string;
+  role: ProjectRole | 'viewer' | null;
+}
+
+/** PJH-05 "Family side · 4 / Vendor side · 3"; put_in is hidden from the builder's side. */
+export interface ProjectPeople {
+  family: (ProjectPerson & { approver: boolean; put_in: string | null })[];
+  vendor: (ProjectPerson & { business: string | null })[];
+  put_in_total: string | null;
 }
 
 export interface Milestone {
@@ -1597,6 +1699,14 @@ export interface Milestone {
   /** PRJ-06 "Something isn't right" → sent back with this note. */
   rejection: string | null;
   approval: MilestoneApproval | null;
+  /** PJH-02 "Approved by you and Ngozi". */
+  approved_by?: { id: number; first_name: string }[];
+  /** VDM-12 "Painting materials advance ₦360,000 · asked with Tiling". */
+  advance?: { milestone_id: number; title: string | null; percent: number; amount: string; paid: boolean } | null;
+  /** Paid ahead of this milestone; comes off its payment. */
+  advance_paid?: string;
+  /** DSP-06 a partial refund the family accepted; comes off the payment. */
+  agreed_refund?: string | null;
   dispute: { id: number; number: string; status: DisputeStatus } | null;
   created_at: string | null;
 }
@@ -1667,6 +1777,10 @@ export interface ProjectDetailData {
   suggestions: { near: string | null; count: number } | null;
   /** Milestones this person already rated the builder for (VND-04). */
   reviewed_milestones: number[];
+  /** MLS-03 (not for the builder's foreman). */
+  approval_rules: ProjectApprovalRules | null;
+  /** PJH-05 / PJH-06. */
+  people: ProjectPeople;
   can: {
     approve: boolean;
     edit: boolean;
@@ -1735,9 +1849,13 @@ export interface AssignVendorPayload {
 
 export interface MilestoneEvidence {
   id: number;
-  kind: 'image' | 'video' | 'receipt';
+  /** site_visit: an approver's own photo from the site (MLS-03). */
+  kind: 'image' | 'video' | 'receipt' | 'site_visit';
   url: string;
   caption: string | null;
+  /** From the photo itself, when the phone kept it (PRW-06 "With date and location"). */
+  taken_at?: string | null;
+  location?: { lat: number; lng: number } | null;
   uploaded_by: string | null;
   created_at: string | null;
 }
@@ -1750,12 +1868,16 @@ export interface AddMilestonePayload {
   /** Optional deadline, YYYY-MM-DD. */
   due_date?: string;
   deliverables?: string[];
+  /** PRJ-05 "Proof needed", e.g. "Photos of the finished roof". */
+  proof_needed?: string | null;
 }
 
 export interface SubmitMilestonePayload {
   note?: string;
   /** VDM-05 ticks, in the deliverables' order. */
   done?: boolean[];
+  /** VDM-12 "Ask for Painting materials money now": a share of the next phase. */
+  advance_percent?: number;
 }
 
 export interface RejectMilestonePayload {
@@ -1864,6 +1986,8 @@ export interface FamilyMember {
   id: number;
   name: string;
   email: string;
+  /** A child's own sign-in (CHW-06): family, never a keyholder or invitee. */
+  is_child?: boolean;
   /** Uppercase initials. */
   avatar: string;
   /** Highest role held across shared wallets. */
@@ -2112,14 +2236,14 @@ export type DisputeCategory =
   | 'account'
   | 'other';
 /** open: waiting for the builder · responded · fixing: the family accepted a fix · escalated: with Patriai. */
-export type DisputeStatus = 'open' | 'responded' | 'fixing' | 'escalated' | 'resolved' | 'under_review' | 'rejected';
+export type DisputeStatus = 'open' | 'responded' | 'fixing' | 'agreed' | 'escalated' | 'resolved' | 'under_review' | 'rejected';
 /** DSP-02 "What is it about?" */
 export type DisputeKind = 'milestone' | 'payment_made' | 'payment_received' | 'other';
 /** DSP-03 "What's wrong?" */
 export type DisputeReason = 'not_as_agreed' | 'not_finished' | 'poor_quality' | 'overcharged' | 'not_delivered' | 'other';
 /** DSP-03 "What would make it right?" */
 export type DisputeRemedy = 'fix' | 'partial_refund' | 'full_refund';
-export type DisputeOutcome = 'fixed' | 'partial_refund' | 'full_refund' | 'released' | 'resolved';
+export type DisputeOutcome = 'fixed' | 'partial_refund' | 'full_refund' | 'released' | 'resolved' | 'refunded';
 
 /** A DSP-01 / VDM-08 row. */
 export interface DisputeSummary {
@@ -2137,6 +2261,8 @@ export interface DisputeSummary {
   project: { id: number; title: string } | null;
   milestone: { id: number; title: string } | null;
   amount_on_hold: string | null;
+  /** A payment dispute: the payment it is about. */
+  payment_amount?: string | null;
   reply_by: string | null;
   decision_due: string | null;
   outcome: DisputeOutcome | null;
@@ -2181,6 +2307,8 @@ export interface DisputeDetail {
   description: string;
   reference: string | null;
   amount_on_hold: string | null;
+  /** DSP-01 the payment a payment dispute is about. */
+  payment?: { amount: string; description: string | null; created_at: string | null } | null;
   raised_by: { id: number; name: string; first_name: string } | null;
   against: { id: number; name: string; profile_id: number | null } | null;
   project: { id: number; title: string } | null;
@@ -2191,16 +2319,23 @@ export interface DisputeDetail {
   escalation_note: string | null;
   decision_due: string | null;
   evidence_until: string | null;
+  /** DSP-06 "re-lay the kitchen by Wed 28 Oct", YYYY-MM-DD. */
+  fix_by: string | null;
+  /** The Patriai case officer who took it. */
+  officer: string | null;
+  status_label: string;
   outcome: DisputeOutcome | null;
   resolution: string | null;
   released_amount: string | null;
   refund_amount: string | null;
+  held_back: string | null;
+  advance_paid: string | null;
   resolved_at: string | null;
   created_at: string | null;
   messages: DisputeMessage[];
   files: { id: number; kind: 'image' | 'video' | 'document'; url: string; name: string; from: 'family' | 'vendor' }[];
   open_offer_id: number | null;
-  can: { reply: boolean; message: boolean; answer_offer: boolean; escalate: boolean; add_evidence: boolean; rate: boolean };
+  can: { reply: boolean; message: boolean; answer_offer: boolean; escalate: boolean; add_evidence: boolean; rate: boolean; submit_fix?: boolean; review_fix?: boolean };
   viewer: 'vendor' | 'family' | 'admin' | null;
 }
 
@@ -2300,6 +2435,8 @@ export interface VendorListing {
   business_name: string;
   rc_number: string | null;
   since_year: number | null;
+  /** VON-07 a TIN on file: "Tax registered". */
+  tax_registered?: boolean;
   category: VendorCategory | string;
   services: string[];
   bio: string | null;
@@ -2325,7 +2462,7 @@ export interface VendorDetail extends VendorListing {
   stats?: { projects: number; milestones_paid: number; open_disputes: number };
 }
 
-export type VerificationItemStatus = 'todo' | 'pending' | 'approved' | 'redo' | 'waiting';
+export type VerificationItemStatus = 'todo' | 'done' | 'pending' | 'approved' | 'redo' | 'waiting';
 
 /** VON-09 "Verification". */
 export interface VendorVerification {
@@ -2403,6 +2540,8 @@ export interface VendorHomeData {
 /** VDM-06 payouts. */
 export interface VendorPayouts {
   available: string;
+  /** The bank transfer fee on a withdrawal. */
+  fee: string;
   wallet_id: number | null;
   held_back: string;
   held_back_projects: number;
@@ -2438,6 +2577,9 @@ export interface VendorTeamData {
 /** The project chat. */
 export interface ProjectMessage {
   id: number;
+  /** CHT-03: message | milestone (a submission card) | system | steward. */
+  kind?: 'message' | 'milestone' | 'system' | 'steward';
+  payload?: { milestone_id: number; title: string; amount: string; photos: { url: string; caption: string | null; video: boolean }[]; more: number } | null;
   body: string;
   name: string;
   initials: string;
@@ -2706,21 +2848,29 @@ export interface OrganisationsData {
 export interface SavedAccount {
   id: number;
   nickname: string;
+  /** As the bank returned it, or the Patriai user's name. */
   account_name: string;
-  account_number: string;
+  /** Bank accounts only (a Patriai user has none). */
+  account_number: string | null;
   masked_number: string;
-  bank_code: string;
-  bank_name: string;
+  bank_code: string | null;
+  bank_name: string | null;
   category: string;
   verified: boolean;
   organisation: { id: number; kind: OrganisationKind; area: string | null; state: string | null } | null;
   groups: string[];
+  /** SND-03: a bank account, or a Patriai user paid into their Main. */
+  kind?: 'bank' | 'patriai';
+  payee?: { id: number; name: string; username: string | null; avatar_url: string | null } | null;
 }
 
 export interface SavedAccountGroup {
   id: number;
   name: string;
-  accounts: { id: number; nickname: string; verified: boolean }[];
+  accounts: { id: number; nickname: string; verified: boolean; share?: number | null; area?: string | null }[];
+  /** BEN-04 default split. */
+  split?: 'even' | 'percent' | 'fixed';
+  split_label?: string;
 }
 
 export interface SavedAccountsData {

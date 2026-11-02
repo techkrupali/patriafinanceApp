@@ -600,6 +600,112 @@ export default function UserDetailPage({
         </Card>
       </div>
 
+      {/* Scheduled payments (SND-14/15) + money requests (REQ, SPL) */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Scheduled Payments</CardTitle>
+            {!isPending && (
+              <span className="text-xs text-muted">
+                {data!.scheduled_payments.filter((p) => p.status === "active").length} on
+              </span>
+            )}
+          </CardHeader>
+          {isPending ? (
+            <TableSkeleton rows={3} cols={3} />
+          ) : data!.scheduled_payments.length === 0 ? (
+            <EmptyState message="No scheduled payments." />
+          ) : (
+            <Table containerClassName="pb-2">
+              <THead>
+                <tr>
+                  <TH>To</TH>
+                  <TH className="text-right">Amount</TH>
+                  <TH>When</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data!.scheduled_payments.map((p) => (
+                  <TR key={p.id}>
+                    <TD>
+                      <p className="flex items-center gap-2 font-semibold">
+                        {p.to_name}
+                        {p.status === "active" ? null : <StatusBadge status={p.status} />}
+                      </p>
+                      <p className="text-xs text-muted">
+                        From {p.from_wallet ?? "—"} · {p.kind === "user" ? "On Patriai" : p.kind === "bank" ? "Bank account" : "Group"}
+                      </p>
+                    </TD>
+                    <TD className="text-right font-semibold">{naira(p.amount)}</TD>
+                    <TD>
+                      <p>{p.when}</p>
+                      <p className="text-xs text-muted">
+                        {p.status === "active" && p.next_run_at ? `Next ${formatDateTime(p.next_run_at)}` : `${p.runs}${p.ends_after ? ` of ${p.ends_after}` : ""} done`}
+                      </p>
+                      {p.last_result ? (
+                        <p className={`text-xs ${p.last_result === "failed" || p.last_result === "skipped" ? "text-danger" : "text-muted"}`} title={p.last_reason ?? undefined}>
+                          Last: {label(p.last_result)}
+                          {p.last_reason ? ` · ${p.last_reason}` : ""}
+                        </p>
+                      ) : null}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Money Requests</CardTitle>
+            {!isPending && (
+              <span className="text-xs text-muted">
+                {data!.money_requests.filter((r) => r.status === "pending").length} open
+              </span>
+            )}
+          </CardHeader>
+          {isPending ? (
+            <TableSkeleton rows={3} cols={3} />
+          ) : data!.money_requests.length === 0 ? (
+            <EmptyState message="No money requests." />
+          ) : (
+            <Table containerClassName="pb-2">
+              <THead>
+                <tr>
+                  <TH>Request</TH>
+                  <TH className="text-right">Amount</TH>
+                  <TH>Status</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data!.money_requests.map((r) => (
+                  <TR key={r.code}>
+                    <TD>
+                      <p className="font-semibold">
+                        {r.direction === "asked" ? `Asked ${r.other ?? "someone"}` : `Asked by ${r.other ?? "someone"}`}
+                        {r.other_on_patriai ? null : <span className="ml-2 text-xs font-normal text-muted">not on Patriai</span>}
+                      </p>
+                      <p className="max-w-[260px] truncate text-xs text-muted" title={r.note ?? undefined}>
+                        {[r.split ? `Split · ${r.split}` : r.note, `into ${r.wallet ?? "—"}`, `/r/${r.code}`].filter(Boolean).join(" · ")}
+                      </p>
+                    </TD>
+                    <TD className="text-right">
+                      <p className="font-semibold">{naira(r.amount)}</p>
+                      {Number(r.paid_amount) > 0 && r.status !== "paid" ? <p className="text-xs text-muted">{naira(r.paid_amount)} paid</p> : null}
+                    </TD>
+                    <TD>
+                      <StatusBadge status={r.status} />
+                      <p className="mt-1 text-xs text-muted">{r.due_on ? `Due ${formatDate(r.due_on)}` : formatDate(r.created_at)}</p>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
       {/* Security, limits, devices and login history (ME-05…24, ACC-02…07) */}
       <UserSecurity userId={id} onToast={setToast} />
 

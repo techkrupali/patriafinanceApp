@@ -218,6 +218,8 @@ class ProjectService
                 ['project_id' => $project->id, 'milestone_id' => $milestone->id],
             );
         }
+        // CHT-03 "MILESTONE SUBMITTED" in the project chat.
+        ChatService::make()->milestoneCard($milestone->refresh(), $vendor);
 
         return $milestone->refresh();
     }
@@ -232,9 +234,13 @@ class ProjectService
      *
      * @return array{status: string, milestone: Milestone, reference?: string, approval_request_id?: int}
      */
-    public function approveMilestone(Milestone $milestone, User $approver): array
+    public function approveMilestone(Milestone $milestone, User $approver, ?string $note = null): array
     {
         $project = $milestone->project;
+        // MLS-03: a project with its own approval settings decides who and how many.
+        if ($project && ProjectApprovalService::make()->custom($project)) {
+            return ProjectApprovalService::make()->approve($milestone, $approver, $note);
+        }
         if (!$project || !$project->isFamilyApprover($approver)) {
             throw ValidationException::withMessages(['milestone' => 'Only the project owner can approve this milestone']);
         }
@@ -256,23 +262,7 @@ class ProjectService
         if ($milestone->status !== 'submitted') {
             throw ValidationException::withMessages(['milestone' => 'Only a submitted milestone can be approved']);
         }
-        // DSP-02 "Opening a dispute puts the milestone payment on hold until it is sorted."
-        $dispute = $milestone->activeDispute();
-        if ($dispute && $dispute->status !== 'fixing') {
-            throw ValidationException::withMessages(['milestone' => 'This payment is on hold while the dispute is open.']);
-        }
-        if (!$project->vendor_id || !$project->vendor) {
-            throw ValidationException::withMessages(['milestone' => 'No vendor is assigned to receive this payout']);
-        }
-        if (!$project->vendor->mainWallet()) {
-            throw ValidationException::withMessages(['milestone' => 'Vendor has no active wallet to receive payment']);
-        }
-        // VON-09 "Until you're approved … families can't pay you yet."
-        $profile = VendorProfile::where('user_id', $project->vendor_id)->first();
-        if (!$profile?->canBePaid()) {
-            $name = $profile?->business_name ?? $project->vendor->fullName();
-            throw ValidationException::withMessages(['milestone' => "{$name} isn't verified yet. Families can only pay verified businesses."]);
-        }
+        $this->assertPayable($milestone);
 
         $projectWallet = $project->wallet;
 
@@ -294,6 +284,7 @@ class ProjectService
                 'status' => 'approved',
                 'meta' => array_merge($milestone->meta ?? [], ['approval_request_id' => $request->id]),
             ]);
+            ChatService::make()->projectEvent($project, $approver, 'system', "{$approver->first_name} approved {$milestone->title} · waiting for the others");
 
             return [
                 'status' => 'pending_approval',
@@ -305,6 +296,29 @@ class ProjectService
         $result = $this->releaseMilestone($milestone, $approver);
 
         return ['status' => 'released', 'milestone' => $result['milestone'], 'reference' => $result['reference']];
+    }
+
+    /** Nothing is paid while a dispute holds it, without a builder, or to an unverified business. */
+    public function assertPayable(Milestone $milestone): void
+    {
+        $project = $milestone->project;
+        // DSP-02 "Opening a dispute puts the milestone payment on hold until it is sorted."
+        $dispute = $milestone->activeDispute();
+        if ($dispute && !in_array($dispute->status, \App\Models\Dispute::PAYABLE, true)) {
+            throw ValidationException::withMessages(['milestone' => 'This payment is on hold while the dispute is open.']);
+        }
+        if (!$project->vendor_id || !$project->vendor) {
+            throw ValidationException::withMessages(['milestone' => 'No vendor is assigned to receive this payout']);
+        }
+        if (!$project->vendor->mainWallet()) {
+            throw ValidationException::withMessages(['milestone' => 'Vendor has no active wallet to receive payment']);
+        }
+        // VON-09 "Until you're approved … families can't pay you yet."
+        $profile = VendorProfile::where('user_id', $project->vendor_id)->first();
+        if (!$profile?->canBePaid()) {
+            $name = $profile?->business_name ?? $project->vendor->fullName();
+            throw ValidationException::withMessages(['milestone' => "{$name} isn't verified yet. Families can only pay verified businesses."]);
+        }
     }
 
     /**
@@ -331,46 +345,46 @@ class ProjectService
                 throw ValidationException::withMessages(['milestone' => 'This milestone has already been processed']);
             }
 
-            // A dispute's partial refund (DSP-07) stays in the project wallet; the rest is paid.
+            // A dispute's partial refund (DSP-07) stays in the project wallet; the rest is
+            // paid. One the family agreed (DSP-06) comes off whoever's yes releases it.
+            $dispute = $fresh->activeDispute();
+            if ($dispute?->status === 'agreed') {
+                $refund = max($refund, (int) ($fresh->meta['agreed_refund'] ?? 0));
+            }
             $refund = max(0, min($refund, $fresh->amount));
             $paid = $fresh->amount - $refund;
             // PRW-06 "Held back: 10% until 3 months after handover" stays in escrow.
             $retention = intdiv($paid * (int) ($project->meta['release']['retention_percent'] ?? 0), 100);
+            // VDM-12: money the builder already had for materials comes off this payment.
+            $now = max(0, $paid - $retention - (int) $fresh->advance_paid);
 
             // Overdraft-guarded, row-locked escrow payout. Throws (and rolls back
             // this transaction) if the escrow was drained below the amount.
-            $result = $this->wallets->transferBetweenWallets(
-                $projectWallet,
-                $vendorWallet,
-                $paid - $retention,
-                $actor,
-                "Milestone payout: {$fresh->title}",
-            );
+            $result = $now > 0
+                ? $this->wallets->transferBetweenWallets($projectWallet, $vendorWallet, $now, $actor, "Milestone payout: {$fresh->title}")
+                : ['reference' => null];
+
+            // PJH-02 "Approved by you and Ngozi".
+            $request = !empty($fresh->meta['approval_request_id']) ? ApprovalRequest::with('responses')->find($fresh->meta['approval_request_id']) : null;
+            $approvedBy = $request
+                ? collect([$request->initiator_id])->merge($request->responses->where('decision', 'approve')->pluck('approver_id'))->unique()->values()->all()
+                : [$actor->id];
 
             $fresh->update([
                 'status' => 'released',
                 'released_at' => now(),
                 'released_transaction_reference' => $result['reference'],
                 'retention' => $retention,
-                'meta' => array_merge($fresh->meta ?? [], array_filter(['refunded' => $refund ?: null, 'paid_now' => $paid - $retention])),
+                'meta' => array_merge($fresh->meta ?? [], array_filter(['refunded' => $refund ?: null, 'paid_now' => $now, 'approved_by_ids' => $approvedBy])),
             ]);
 
-            // Auto-complete the project once every milestone is released — only from
-            // 'active', never overwriting a terminal status like 'cancelled'. That's
-            // handover: what was held back is paid some months on.
-            if ($project->status === 'active'
-                && $project->milestones()->count() > 0
-                && !$project->milestones()->whereNotIn('status', ['released', 'cancelled'])->exists()) {
-                $project->update(['status' => 'completed']);
-                $project->milestones()->where('retention', '>', 0)->whereNull('retention_released_at')
-                    ->update(['retention_due_at' => now()->addMonthsNoOverflow((int) ($project->meta['release']['retention_months'] ?? 3))]);
-            }
+            $this->completeIfDone($project);
 
             $this->notifications->push(
                 $vendor,
                 'milestone_released',
                 'Milestone payment released',
-                '₦' . $this->naira($paid - $retention) . " was released to your wallet for \"{$fresh->title}\"." . ($retention ? ' ₦' . $this->naira($retention) . ' is held back until after handover.' : ''),
+                '₦' . $this->naira($now) . " was released to your wallet for \"{$fresh->title}\"." . ($retention ? ' ₦' . $this->naira($retention) . ' is held back until after handover.' : ''),
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
@@ -383,7 +397,7 @@ class ProjectService
                 $project->owner,
                 'milestone_released',
                 'Milestone paid',
-                "\"{$fresh->title}\" — ₦" . $this->naira($paid - $retention) . " released to {$vendor->fullName()}.",
+                "\"{$fresh->title}\" — ₦" . $this->naira($now) . " released to {$vendor->fullName()}.",
                 [
                     'project_id' => $project->id,
                     'milestone_id' => $fresh->id,
@@ -391,20 +405,44 @@ class ProjectService
                 ],
             );
 
-            // DSP-09: the fix the family accepted is done and paid, so the dispute closes.
-            if (($dispute = $fresh->activeDispute()) && $dispute->status === 'fixing') {
+            // DSP-09: the fix the family accepted is done and paid, or the refund they
+            // agreed came off — either way the dispute closes.
+            if ($dispute?->status === 'fixing') {
                 DisputeService::make()->resolveFixed($dispute, $paid - $retention, $retention);
+            } elseif ($dispute?->status === 'agreed') {
+                DisputeService::make()->settle($dispute, $paid - $retention, $refund, $retention);
             }
 
-            return ['milestone' => $fresh->refresh(), 'reference' => $result['reference'], 'paid' => $paid - $retention];
+            return ['milestone' => $fresh->refresh(), 'reference' => $result['reference'], 'paid' => $now];
         });
 
         // After the money is safely in: "Automatic withdrawal — every payout, straight away"
         // (VDM-06), and the next milestone's money is set aside.
-        VendorPayoutService::make()->autoWithdraw($vendor, $released['paid'], $milestone->title);
+        if ($released['paid'] > 0) {
+            VendorPayoutService::make()->autoWithdraw($vendor, $released['paid'], $milestone->title);
+        }
+        // …and the materials advance asked with this one goes once the next is funded (VDM-12).
         VendorProjectService::make()->fundPlanned($project->refresh());
+        $by = \App\Models\User::whereIn('id', $released['milestone']->meta['approved_by_ids'] ?? [])->pluck('first_name')->all();
+        ChatService::make()->projectEvent($project, null, 'system', "₦" . number_format($released['paid'] / 100) . " paid to " . ($vendor->first_name) . " for {$milestone->title}" . ($by ? ' · approved by ' . implode(' and ', $by) : ''));
 
         return $released;
+    }
+
+    /**
+     * Auto-complete the project once every milestone is released or refunded —
+     * only from 'active', never overwriting a terminal status like 'cancelled'.
+     * That's handover: what was held back is paid some months on.
+     */
+    public function completeIfDone(Project $project): void
+    {
+        if ($project->status === 'active'
+            && $project->milestones()->where('status', 'released')->exists()
+            && !$project->milestones()->whereNotIn('status', ['released', 'cancelled'])->exists()) {
+            $project->update(['status' => 'completed']);
+            $project->milestones()->where('retention', '>', 0)->whereNull('retention_released_at')
+                ->update(['retention_due_at' => now()->addMonthsNoOverflow((int) ($project->meta['release']['retention_months'] ?? 3))]);
+        }
     }
 
     /** PRJ-06 "Ask for changes": a submitted milestone goes back to the builder. The owner or a co-owner. */

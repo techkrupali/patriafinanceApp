@@ -58,6 +58,13 @@ export function ReferralCodeScreen({ route, navigation }: AuthScreenProps<'Refer
             await saveTxnPin(pin);
             await setBiometricEnabled(true);
           }
+          // VON-01 "Continue as a business" → VDM-01: straight into the business account, not the family questions.
+          if (useAuth.getState().postAuthRoute === 'BusinessSetup') {
+            // The app opens on the business side from now on (VDM-03), so an unfinished setup is one tap away.
+            await useAuth.getState().setMode('business');
+            useAuth.getState().finishOnboarding();
+            return;
+          }
           navigation.reset({ index: 0, routes: [{ name: 'Purpose' }] });
         },
         onError: (e) => {

@@ -9,11 +9,13 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtChip } from '../../components/pt/PtChip';
 import { PtNote } from '../../components/pt/PtForm';
 import { PtSectionTitle, PtRow } from '../../components/pt/PtList';
+import { ListingsStrip } from '../../components/project/ListingsStrip';
 import { PtSheet } from '../../components/pt/PtSheet';
 import { LoadingBlock, PhotoGrid, Stars } from '../../components/project/ProjectUi';
 import { tradeLabel } from '../../lib/projects';
 import type { RootScreenProps } from '../../navigation/types';
 import { showAlert } from '../../lib/alert';
+import { useAuth } from '../../store/auth';
 
 function Stat({ n, label }: { n: number | undefined; label: string }) {
   return (
@@ -27,6 +29,7 @@ function Stat({ n, label }: { n: number | undefined; label: string }) {
 /** VND-02 a vendor's profile: badge, stars, record, services, past work, the latest review — "Add to a project". */
 export function VendorProfileScreen({ navigation, route }: RootScreenProps<'VendorProfile'>) {
   const { profileId, projectId } = route.params;
+  const me = useAuth((s) => s.user);
   const query = useVendorProfile(profileId);
   const projects = useProjects();
   const invite = useInviteVendor();
@@ -68,8 +71,10 @@ export function VendorProfileScreen({ navigation, route }: RootScreenProps<'Vend
     const target = projectId ? (projects.data ?? []).find((p) => p.id === projectId) : undefined;
     if (target) addTo(target.id, target.title);
     else if (open.length) setPickOpen(true);
-    else navigation.navigate('ProjectWalletSetup');
+    else navigation.navigate('ProjectWalletSetup', { vendor: { id: v.id, name: v.business_name } });
   };
+  // A builder looking at their own profile doesn't add themselves to a project.
+  const mine = v.user_id === me?.id;
 
   const since = v.since_year ? ` · since ${v.since_year}` : '';
   return (
@@ -77,12 +82,15 @@ export function VendorProfileScreen({ navigation, route }: RootScreenProps<'Vend
       title={v.business_name}
       subtitle={`${tradeLabel(v.category)}${since}`}
       onBack={() => navigation.goBack()}
-      footer={<PtButton title="Add to a project" onPress={onAdd} loading={invite.isPending} />}
+      footer={mine ? null : <PtButton title="Add to a project" onPress={onAdd} loading={invite.isPending} />}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
         <PtAvatar initials={v.initials} uri={v.logo_url} tone="gold" size={64} />
         <View style={{ flex: 1, gap: 4 }}>
-          {v.verified ? <PtChip label="Verified business" tone="success" icon="check" /> : <PtChip label="Not verified yet" tone="warning" icon="clock" />}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {v.verified ? <PtChip label="Verified business" tone="success" icon="check" /> : <PtChip label="Not verified yet" tone="warning" icon="clock" />}
+            {v.tax_registered ? <PtChip label="Tax registered" tone="neutral" icon="file-text" /> : null}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Stars value={v.rating ?? 0} />
             <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }}>{v.rating ? v.rating.toFixed(1) : 'New'}</Text>
@@ -112,6 +120,8 @@ export function VendorProfileScreen({ navigation, route }: RootScreenProps<'Vend
           </View>
         </>
       ) : null}
+      {/* VLS-02 finished projects, paid through Patriai */}
+      <ListingsStrip profileId={profileId} onOpen={(id) => navigation.navigate('Listing', { listingId: id })} />
       {v.past_work.length ? (
         <>
           <PtSectionTitle title="Past work" />
@@ -129,7 +139,7 @@ export function VendorProfileScreen({ navigation, route }: RootScreenProps<'Vend
       ) : null}
 
       <PtSheet visible={pickOpen} title="Add to which project?" subtitle={`${v.business_name} will be asked to accept the milestones.`} onClose={() => setPickOpen(false)}
-        footer={<PtButton title="Start a new project" variant="ghost" onPress={() => { setPickOpen(false); navigation.navigate('ProjectWalletSetup'); }} />}
+        footer={<PtButton title="Start a new project" variant="ghost" onPress={() => { setPickOpen(false); navigation.navigate('ProjectWalletSetup', { vendor: { id: v.id, name: v.business_name } }); }} />}
       >
         <View>
           {open.map((p, i) => (

@@ -94,7 +94,7 @@ export function EditMilestoneScreen({ navigation, route }: RootScreenProps<'Edit
       );
       return;
     }
-    add.mutate({ title: title.trim(), amount, due_date: due ?? undefined, deliverables }, { onSuccess: () => navigation.goBack(), onError });
+    add.mutate({ title: title.trim(), amount, due_date: due ?? undefined, deliverables, proof_needed: proof.trim() || null }, { onSuccess: () => navigation.goBack(), onError });
   };
 
   const year = new Date().getFullYear();
@@ -138,7 +138,12 @@ export function EditMilestoneScreen({ navigation, route }: RootScreenProps<'Edit
       </PtPanel>
 
       <PtPanel>
-        <PtReviewRow label="Approvers" value={namesList(project.approvers.map((a) => a.first_name)) || 'You'} onEdit={() => navigation.navigate('WalletSettings', { walletId: project.wallet_id })} />
+        <PtReviewRow
+          label="Approvers"
+          value={namesList((milestone?.approval?.approvers.length ? milestone.approval.approvers.map((a) => a.first_name) : (query.data?.approval_rules?.approvers ?? project.approvers).map((a) => a.first_name))) || 'You'}
+          sub={milestone?.approval?.override ? 'Own rule for this milestone' : null}
+          onEdit={query.data?.approval_rules ? () => navigation.navigate('ProjectApprovalSettings', { projectId: project.id }) : undefined}
+        />
         <PtReviewRow label="Proof needed" value={proof || 'Photos'} onEdit={() => { setProofDraft(proof); setProofOpen(true); }} last />
       </PtPanel>
       {builderAgreed && milestone ? <PtNote>The builder must accept changes to amount or dates before they apply.</PtNote> : null}

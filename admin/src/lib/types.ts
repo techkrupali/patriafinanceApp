@@ -302,9 +302,43 @@ export interface UserInvitation {
   expires_at: string | null;
 }
 
+/** SND-14/15 a payment the user set to go out on a date. */
+export interface UserScheduledPayment {
+  id: number;
+  to_name: string;
+  kind: "user" | "bank" | "group" | null;
+  from_wallet: string | null;
+  amount: string; // naira string
+  when: string;
+  status: "active" | "paused" | "done" | "cancelled";
+  runs: number;
+  ends_after: number | null;
+  next_run_at: string | null;
+  last_result: "sent" | "approval" | "processing" | "skipped" | "failed" | null;
+  last_reason: string | null;
+}
+
+/** REQ/SPL money the user asked for, or was asked for. */
+export interface UserMoneyRequest {
+  code: string;
+  direction: "asked" | "asked_of";
+  other: string | null;
+  other_on_patriai: boolean;
+  wallet: string | null;
+  amount: string; // naira string
+  paid_amount: string;
+  note: string | null;
+  split: string | null;
+  status: "pending" | "paid" | "declined" | "cancelled";
+  due_on: string | null;
+  created_at: string | null;
+}
+
 export interface UserDetailData {
   user: ApiUser;
   automations: UserAutomation[];
+  scheduled_payments: UserScheduledPayment[];
+  money_requests: UserMoneyRequest[];
   invitations: UserInvitation[];
   wallets: ApiWallet[];
   devices: UserDevice[];
@@ -342,6 +376,11 @@ export interface WalletMember {
 export interface WalletDetailData {
   wallet: ApiWallet;
   members: WalletMember[];
+  /** Child wallets (CHD-07/12): tasks with rewards, and the weeks-in-a-row streak. */
+  child_tasks?: {
+    streak: number;
+    tasks: { id: number; title: string; reward: string; due_on: string | null; repeat_weekly: boolean; needs_photo: boolean; status: "todo" | "submitted" | "paid"; paid_at: string | null; by: string | null }[];
+  } | null;
   approval: {
     enabled: boolean;
     threshold: string | null; // naira string
@@ -643,6 +682,19 @@ export interface ProjectDetailData {
   vendor: { id: number; name: string; email: string } | null;
   wallet: ApiWallet;
   milestones: ProjectMilestone[];
+  /** MLS-03 who approves each milestone. */
+  approvals?: {
+    custom: boolean;
+    mode: "any" | "all" | "count" | "named";
+    needed: number;
+    approvers: string[];
+    overrides: { milestone: string | null; needed: number; approvers: string[] }[];
+    site_photo_over: string | null;
+  };
+  /** VPJ: the builder's proposal the project came from. */
+  proposal?: { id: number; total: string; phases: number; terms: { upfront: boolean; retention_percent: number; retention_months: number; start_within_days: number }; sent_at: string | null; accepted_at: string | null } | null;
+  /** CHT-03 the project chat, kept as a record. */
+  messages?: { id: number; kind: string; by: string; body: string | null; at: string | null }[];
 }
 
 export type KycStatus = "pending" | "approved" | "rejected";
@@ -1009,7 +1061,7 @@ export interface VendorDetailData {
 
 // ---------------------------------------------------------------- Disputes (DSP-08/09 decisions)
 
-export type DisputeStatus = "open" | "responded" | "fixing" | "escalated" | "resolved" | "under_review" | "rejected";
+export type DisputeStatus = "open" | "responded" | "fixing" | "agreed" | "escalated" | "resolved" | "under_review" | "rejected";
 
 export interface DisputeRow {
   id: number;
@@ -1033,11 +1085,17 @@ export interface DisputeRow {
   refund_amount: string | null;
   resolved_at: string | null;
   created_at: string | null;
+  /** Past the decision date and still with Patriai. */
+  overdue?: boolean;
+  /** The case officer who took it. */
+  officer?: string | null;
 }
 
 export interface DisputesData {
   disputes: DisputeRow[];
   counts: Partial<Record<DisputeStatus, number>>;
+  /** Payment disputes go straight to Patriai; milestone ones wait for the builder first. */
+  waiting?: { decision: number; builder: number };
   pagination: Pagination;
 }
 
@@ -1053,6 +1111,8 @@ export interface DisputeDetail {
   description: string;
   reference: string | null;
   amount_on_hold: string | null;
+  /** The payment a payment dispute is about. */
+  payment?: { amount: string; description: string | null; created_at: string | null } | null;
   raised_by: { id: number; name: string } | null;
   against: { id: number; name: string; profile_id: number | null } | null;
   project: { id: number; title: string } | null;
@@ -1062,12 +1122,18 @@ export interface DisputeDetail {
   escalation_note: string | null;
   decision_due: string | null;
   evidence_until: string | null;
+  /** The date an agreed or decided fix is due, YYYY-MM-DD. */
+  fix_by: string | null;
+  officer: string | null;
+  status_label: string;
   outcome: string | null;
   resolution: string | null;
   released_amount: string | null;
   refund_amount: string | null;
+  held_back: string | null;
   resolved_at: string | null;
   created_at: string | null;
+  can: { take?: boolean };
   messages: { id: number; kind: "message" | "offer" | "system" | "decision"; body: string | null; offer: { type: string; status: string; fix_by?: string; amount?: string } | null; from: "family" | "vendor" | "patriai"; name: string; created_at: string | null }[];
   files: { id: number; kind: "image" | "video" | "document"; url: string; name: string; from: "family" | "vendor" }[];
 }

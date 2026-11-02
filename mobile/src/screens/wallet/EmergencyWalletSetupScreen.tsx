@@ -112,7 +112,7 @@ export function EmergencyWalletSetupScreen(props: RootScreenProps<'EmergencyWall
 
 function EmergencySetup({ navigation, draft }: RootScreenProps<'EmergencyWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const create = useCreateWallet();
 

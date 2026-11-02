@@ -41,6 +41,7 @@ import type {
   HomeData,
   EmergencyDetailData,
   EmergencyDocumentType,
+  EmergencyReleaseData,
   EmergencyRequest,
   EmergencyRulesPayload,
   EmergencyWithdrawData,
@@ -192,12 +193,15 @@ export function useWallet(id: number) {
   return useQuery({
     queryKey: keys.wallet(id),
     queryFn: () => api<WalletDetailData>(`/wallets/${id}`),
+    // 0 = no wallet chosen yet.
+    enabled: id > 0,
   });
 }
 
-export function useWalletTransactions(id: number) {
+export function useWalletTransactions(id: number, enabled = true) {
   return useInfiniteQuery({
     queryKey: keys.walletTransactions(id),
+    enabled: enabled && id > 0,
     queryFn: ({ pageParam }) =>
       api<TransactionsPageData>(`/wallets/${id}/transactions?page=${pageParam}&per_page=20`),
     initialPageParam: 1,
@@ -452,6 +456,11 @@ export function useTransfer() {
       void qc.invalidateQueries({ queryKey: keys.dashboard });
       void qc.invalidateQueries({ queryKey: keys.home });
       void qc.invalidateQueries({ queryKey: ['approvals'] });
+      // REQ-03: a request paid all or part.
+      void qc.invalidateQueries({ queryKey: ['money-request'] });
+      // WPV-05: a gift into a child's wallet or goal.
+      void qc.invalidateQueries({ queryKey: ['child-view'] });
+      void qc.invalidateQueries({ queryKey: ['money-requests'] });
     },
   });
 }
@@ -954,10 +963,12 @@ export function useSubmitKyc() {
 // ---------- Family Hub ----------
 
 /** Aggregated people, pending invitations and stats across the user's wallets. */
-export function useFamily() {
+/** `adults`: for pickers (keyholders, co-owners, invitees) — a child's own sign-in is never one. */
+export function useFamily(opts: { adults?: boolean } = {}) {
   return useQuery({
     queryKey: keys.family,
     queryFn: () => api<FamilyData>('/family'),
+    select: opts.adults ? (d: FamilyData) => ({ ...d, members: d.members.filter((m) => !m.is_child) }) : undefined,
   });
 }
 
@@ -1352,6 +1363,31 @@ export function useEmergencyActions(walletId: number) {
         }
         form.append('proof', { uri: asset.uri, name: asset.fileName || `proof.${ext}`, type: asset.mimeType || 'image/jpeg' } as unknown as Blob);
         return api<EmergencyWithdrawData>(`/wallets/${walletId}/emergency/fast-release`, { method: 'POST', body: form });
+      },
+      onSuccess,
+    }),
+    /**
+     * WAL-17 "Send for release": an amount for what happened, to the hospital
+     * (when the fund pays directly) or your Main. Within the fast-release limit
+     * with proof it goes at once; otherwise the keyholders are asked.
+     */
+    release: useMutation({
+      mutationFn: async (input: {
+        amount: string;
+        pin: string;
+        note?: string;
+        proof?: PickedFile | null;
+        payee?: { bank_code: string; bank_name: string; account_number: string; account_name: string };
+      }) => {
+        const form = new FormData();
+        form.append('amount', input.amount);
+        form.append('pin', input.pin);
+        if (input.note) form.append('note', input.note);
+        if (input.payee) {
+          for (const [key, value] of Object.entries(input.payee)) form.append(`payee[${key}]`, value);
+        }
+        if (input.proof) await appendFile(form, 'proof', input.proof, 'proof');
+        return api<EmergencyReleaseData>(`/wallets/${walletId}/emergency/releases`, { method: 'POST', body: form });
       },
       onSuccess,
     }),

@@ -161,7 +161,7 @@ class DisputeFlowTest extends TestCase
 
         // DSP-06: the family accepts the fix; the builder redoes it and submits again.
         Sanctum::actingAs($ngozi);
-        $this->getJson("/api/v1/disputes/{$d['id']}")->assertOk()->assertJsonPath('data.dispute.can.answer_offer', true)->assertJsonPath('data.dispute.status_label', null);
+        $this->getJson("/api/v1/disputes/{$d['id']}")->assertOk()->assertJsonPath('data.dispute.can.answer_offer', true)->assertJsonPath('data.dispute.status_label', 'They replied');
         $this->postJson("/api/v1/disputes/{$d['id']}/offers/{$this->offer($d)}/answer", ['accept' => true])->assertOk()->assertJsonPath('data.dispute.status', 'fixing');
         $this->assertSame('funded', $tiling->refresh()->status);
         Sanctum::actingAs($tunde);
@@ -343,5 +343,137 @@ class DisputeFlowTest extends TestCase
         $this->postJson("/api/v1/admin/disputes/{$d['id']}/decide", ['outcome' => 'resolved', 'note' => 'Refunded ₦18,400 to your wallet.'])->assertOk()->assertJsonPath('data.dispute.status', 'resolved');
         Sanctum::actingAs($ngozi);
         $this->getJson('/api/v1/disputes?status=closed')->assertOk()->assertJsonPath('data.disputes.0.status_label', 'Resolved');
+    }
+
+    public function test_an_agreed_refund_is_paid_through_the_approvals(): void
+    {
+        $chidi = $this->person('Chidi');
+        [$project, $tiling, $ngozi, $tunde] = $this->submittedTiling('all', $chidi);
+        Sanctum::actingAs($ngozi);
+        $d = $this->open($tiling, 'partial_refund')->assertCreated()->json('data.dispute');
+        Sanctum::actingAs($tunde);
+        $d = $this->postJson("/api/v1/disputes/{$d['id']}/respond", ['type' => 'partial_refund', 'amount' => '300000'])->assertOk()->json('data.dispute');
+
+        // Ngozi's yes to the offer is her yes to the payment; Chidi still has to say yes.
+        Sanctum::actingAs($ngozi);
+        $agreed = $this->postJson("/api/v1/disputes/{$d['id']}/offers/{$this->offer($d)}/answer", ['accept' => true])->assertOk()->json('data.dispute');
+        $this->assertSame('agreed', $agreed['status']);
+        $this->assertSame('300000.00', $agreed['refund_amount']);
+        $this->assertSame(0, $tunde->mainWallet()->refresh()->balance);
+        $this->assertSame('approved', $tiling->refresh()->status);
+        $this->assertSame(160_000_000, ApprovalRequest::where('status', 'pending')->sole()->amount);
+        $m = collect($this->getJson("/api/v1/projects/{$project->id}")->json('data.milestones'))->firstWhere('id', $tiling->id);
+        $this->assertSame('300000.00', $m['agreed_refund']);
+        $this->assertSame('1440000.00', $m['release_now']);
+        $this->getJson('/api/v1/disputes?status=open')->assertOk()->assertJsonPath('data.disputes.0.status_label', 'Refund of ₦300,000 agreed');
+
+        Sanctum::actingAs($chidi);
+        $this->postJson("/api/v1/milestones/{$tiling->id}/approve", ['pin' => '1234'])->assertOk()->assertJsonPath('data.milestone.status', 'released');
+        $done = Dispute::find($d['id']);
+        $this->assertSame('resolved', $done->status);
+        $this->assertSame('partial_refund', $done->outcome);
+        $this->assertSame(144_000_000, $done->released_amount);
+        $this->assertSame(144_000_000, $tunde->mainWallet()->refresh()->balance);
+        $this->assertSame(30_000_000, (int) $tiling->refresh()->meta['refunded']);
+    }
+
+    public function test_a_refund_can_be_agreed_before_the_work_is_submitted(): void
+    {
+        [$project, , $ngozi, $tunde] = $this->submittedTiling();
+        $painting = $project->milestones()->where('title', 'Painting')->sole();
+        Sanctum::actingAs($ngozi);
+        $d = $this->open($painting, 'partial_refund')->assertCreated()->json('data.dispute');
+        Sanctum::actingAs($tunde);
+        $d = $this->postJson("/api/v1/disputes/{$d['id']}/respond", ['type' => 'partial_refund', 'amount' => '100000'])->assertOk()->json('data.dispute');
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/disputes/{$d['id']}/offers/{$this->offer($d)}/answer", ['accept' => true])->assertOk()->assertJsonPath('data.dispute.status', 'agreed');
+        $this->assertSame(0, $tunde->mainWallet()->refresh()->balance);
+
+        // The builder submits the work as usual, and the family's approval pays it less the refund.
+        Sanctum::actingAs($tunde);
+        $this->getJson("/api/v1/disputes/{$d['id']}")->assertOk()->assertJsonPath('data.dispute.can.submit_fix', true);
+        $this->post("/api/v1/milestones/{$painting->id}/evidence", ['file' => UploadedFile::fake()->image('wall.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $this->postJson("/api/v1/milestones/{$painting->id}/submit", ['note' => 'Painted'])->assertOk();
+        Sanctum::actingAs($ngozi);
+        $this->getJson("/api/v1/disputes/{$d['id']}")->assertOk()->assertJsonPath('data.dispute.can.review_fix', true);
+        $this->postJson("/api/v1/milestones/{$painting->id}/approve", ['pin' => '1234'])->assertOk()->assertJsonPath('data.milestone.status', 'released');
+        // ₦1,500,000 less 10% held back.
+        $this->assertSame(135_000_000, $tunde->mainWallet()->refresh()->balance);
+        $this->getJson("/api/v1/disputes/{$d['id']}")->assertOk()
+            ->assertJsonPath('data.dispute.outcome', 'partial_refund')
+            ->assertJsonPath('data.dispute.held_back', '150000.00')
+            ->assertJsonPath('data.dispute.can.rate', true);
+    }
+
+    public function test_patriai_can_decide_a_fix_by_a_date_and_a_late_fix_is_chased(): void
+    {
+        [$project, $tiling, $ngozi, $tunde] = $this->submittedTiling();
+        $admin = User::factory()->create(['role' => 'admin', 'first_name' => 'Amaka']);
+        Sanctum::actingAs($ngozi);
+        $d = $this->open($tiling)->assertCreated()->json('data.dispute');
+        $this->postJson("/api/v1/disputes/{$d['id']}/escalate")->assertOk();
+
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/v1/admin/disputes/{$d['id']}/take")->assertOk()
+            ->assertJsonPath('data.dispute.status', 'under_review')
+            ->assertJsonPath('data.dispute.officer', 'Amaka');
+        $this->postJson("/api/v1/admin/disputes/{$d['id']}/decide", ['outcome' => 'fix', 'note' => 'x'])->assertStatus(422)->assertJsonValidationErrors('fix_by');
+        $this->postJson("/api/v1/admin/disputes/{$d['id']}/decide", ['outcome' => 'fix', 'fix_by' => '2026-10-30', 'note' => 'Re-lay the kitchen floor at no cost.'])->assertOk()
+            ->assertJsonPath('data.dispute.status', 'fixing')
+            ->assertJsonPath('data.dispute.fix_by', '2026-10-30');
+        $this->assertSame('funded', $tiling->refresh()->status);
+        $this->assertSame(0, $tunde->mainWallet()->refresh()->balance);
+
+        // Not submitted by Fri 30 Oct: both sides are told, then Patriai steps in two days on.
+        Carbon::setTestNow(Carbon::parse('2026-10-31 08:00:00'));
+        $this->artisan('disputes:escalate-overdue')->assertSuccessful();
+        $this->assertSame('fixing', Dispute::find($d['id'])->status);
+        $this->assertSame(1, AppNotification::where('user_id', $tunde->id)->where('type', 'dispute_fix_late')->count());
+        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('type', 'dispute_fix_late')->count());
+        $this->artisan('disputes:escalate-overdue')->assertSuccessful();
+        $this->assertSame(1, AppNotification::where('user_id', $tunde->id)->where('type', 'dispute_fix_late')->count());
+        Carbon::setTestNow(Carbon::parse('2026-11-02 09:00:00'));
+        $this->artisan('disputes:escalate-overdue')->assertSuccessful();
+        $this->assertSame('escalated', Dispute::find($d['id'])->status);
+    }
+
+    public function test_a_reported_payment_opens_a_dispute_patriai_can_refund(): void
+    {
+        $ngozi = $this->person('Ngozi', 'Eze', 50_000_00);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $main = $ngozi->mainWallet();
+        $paid = Transaction::create(['wallet_id' => $main->id, 'user_id' => $ngozi->id, 'type' => 'withdrawal', 'direction' => 'debit', 'amount' => 1_840_000, 'fee' => 0, 'balance_before' => 6_840_000, 'balance_after' => 5_000_000, 'status' => 'successful', 'reference' => 'PTX-SHOPRITE-2', 'description' => 'Shoprite', 'counterparty' => ['name' => 'Shoprite']]);
+
+        // TXN-04 "I was charged twice" → DSP-05.
+        Sanctum::actingAs($ngozi);
+        $id = $this->postJson("/api/v1/transactions/{$paid->id}/report", ['problem' => 'charged_twice'])->assertOk()->json('data.dispute_id');
+        $this->getJson("/api/v1/transactions/{$paid->id}")->assertOk()->assertJsonPath('data.transaction.reported', true)->assertJsonPath('data.transaction.dispute_id', $id);
+        $this->getJson("/api/v1/disputes/{$id}")->assertOk()
+            ->assertJsonPath('data.dispute.kind', 'payment_made')
+            ->assertJsonPath('data.dispute.subject', 'I was charged twice · ₦18,400 to Shoprite')
+            ->assertJsonPath('data.dispute.payment.amount', '18400.00');
+
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/v1/admin/disputes/{$id}/take")->assertOk()->assertJsonPath('data.dispute.status', 'under_review');
+        $this->postJson("/api/v1/admin/disputes/{$id}/decide", ['outcome' => 'refund', 'note' => 'x'])->assertStatus(422)->assertJsonValidationErrors('refund');
+        $this->postJson("/api/v1/admin/disputes/{$id}/decide", ['outcome' => 'refund', 'refund' => '20000', 'note' => 'x'])->assertStatus(422)->assertJsonValidationErrors('refund');
+        $this->postJson("/api/v1/admin/disputes/{$id}/decide", ['outcome' => 'refund', 'refund' => '18400', 'note' => 'The second charge was a duplicate.'])->assertOk()
+            ->assertJsonPath('data.dispute.outcome', 'refunded');
+        $this->assertSame(50_000_00 + 1_840_000, $main->refresh()->balance);
+        $this->assertSame(1, Transaction::where('wallet_id', $main->id)->where('type', 'refund')->where('amount', 1_840_000)->count());
+        Sanctum::actingAs($ngozi);
+        $this->getJson('/api/v1/disputes?status=closed')->assertOk()->assertJsonPath('data.disputes.0.status_label', 'Refunded ₦18,400');
+    }
+
+    public function test_a_site_photo_keeps_when_and_where_it_was_taken(): void
+    {
+        [$project, , , $tunde] = $this->submittedTiling();
+        $painting = $project->milestones()->where('title', 'Painting')->sole();
+        Sanctum::actingAs($tunde);
+        $this->post("/api/v1/milestones/{$painting->id}/evidence", ['file' => UploadedFile::fake()->image('wall.jpg'), 'lat' => '6.858400'], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors('lng');
+        $e = $this->post("/api/v1/milestones/{$painting->id}/evidence", ['file' => UploadedFile::fake()->image('wall.jpg'), 'taken_at' => '2026-10-26T16:20:05', 'lat' => '6.858400', 'lng' => '7.395800'], ['Accept' => 'application/json'])
+            ->assertOk()->json('data.milestone.evidence.0');
+        $this->assertSame('2026-10-26', substr($e['taken_at'], 0, 10));
+        $this->assertEquals(['lat' => 6.8584, 'lng' => 7.3958], $e['location']);
     }
 }

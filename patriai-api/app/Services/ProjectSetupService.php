@@ -58,7 +58,8 @@ class ProjectSetupService
         $moveIn = null;
         if (!empty($data['move_in_wallet_id'])) {
             $moveIn = Wallet::where('id', (int) $data['move_in_wallet_id'])->where('user_id', $owner->id)->first();
-            if (!$moveIn || $moveIn->type === 'main' || !$moveIn->canSpend($owner) || $moveIn->availableToSpend() <= 0) {
+            // PRW-02 "Already saved in House Project": savings, never another project's escrow.
+            if (!$moveIn || !in_array($moveIn->type, ['savings', 'goal'], true) || !$moveIn->canSpend($owner) || $moveIn->availableToSpend() <= 0) {
                 throw ValidationException::withMessages(['move_in_wallet_id' => "That wallet's savings can't be moved in right now."]);
             }
         }

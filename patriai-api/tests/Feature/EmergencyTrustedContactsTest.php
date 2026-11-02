@@ -209,4 +209,28 @@ class EmergencyTrustedContactsTest extends TestCase
         $this->assertContains($obi->id, $setting->keyholder_ids);
         $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")->assertJsonPath('data.emergency.me.is_keyholder', true);
     }
+
+    public function test_a_release_for_a_bill_is_paid_to_the_hospital_on_the_last_yes(): void
+    {
+        [$wallet, $ngozi, $ada] = $this->fund();
+        $payee = ['bank_code' => '058', 'account_number' => '0123456789', 'account_name' => 'MERCY HOSPITAL ENUGU', 'bank_name' => 'GTBank'];
+        Sanctum::actingAs($ada);
+
+        // The fund pays bills directly, so it needs the hospital's account.
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '200000', 'pin' => '1234'], ['Accept' => 'application/json'])->assertStatus(422);
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '200000', 'pin' => '1234', 'note' => 'Surgery deposit', 'payee' => $payee], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('data.request.status', 'pending')
+            ->assertJsonPath('data.request.payee.account_name', 'MERCY HOSPITAL ENUGU');
+
+        $id = EmergencyUnlockRequest::where('method', 'dual_approval')->sole()->id;
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/emergency-requests/{$id}/approve")->assertOk()->assertJsonPath('data.emergency.locked', true);
+        $paid = Transaction::where('wallet_id', $wallet->id)->where('type', 'withdrawal')->sole();
+        $this->assertSame('successful', $paid->status);
+        $this->assertSame(20_000_000, $paid->amount);
+        $this->assertSame('released', EmergencyUnlockRequest::find($id)->status);
+        $this->assertSame(0, $ada->mainWallet()->refresh()->balance);
+    }
 }
+

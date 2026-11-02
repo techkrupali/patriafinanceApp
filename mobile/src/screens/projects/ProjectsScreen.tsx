@@ -9,7 +9,8 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtChip } from '../../components/pt/PtChip';
 import { PtPills } from '../../components/pt/PtForm';
 import { PtText } from '../../components/pt/PtText';
-import { LoadingBlock, ProgressLine } from '../../components/project/ProjectUi';
+import { AttentionCard, LoadingBlock, ProgressLine } from '../../components/project/ProjectUi';
+import { useProposals } from '../../api/proposals';
 import { formatNaira } from '../../lib/format';
 import { isVendorSide, projectChip, townOf } from '../../lib/projects';
 import { selection } from '../../lib/haptics';
@@ -50,6 +51,8 @@ function moneyLine(p: Project): { value: number; max: number; text: string } {
 /** PRJ-01 Projects: each project's chip, progress and money; a builder's projects open their own view. */
 export function ProjectsScreen({ navigation }: RootScreenProps<'Projects'>) {
   const query = useProjects();
+  // VPJ-05: builders' proposals waiting for this family's answer.
+  const proposals = (useProposals().data ?? []).filter((x) => x.can_answer);
   const [filter, setFilter] = useState<Filter>('all');
   const projects = query.data ?? [];
   const shown = projects.filter((p) => matches(p, filter));
@@ -86,6 +89,9 @@ export function ProjectsScreen({ navigation }: RootScreenProps<'Projects'>) {
         onChange={(v) => setFilter(v as Filter)}
         compact
       />
+      {proposals.map((x) => (
+        <AttentionCard key={`proposal-${x.id}`} tone="info" title={`New proposal from ${x.vendor.business ?? x.vendor.name ?? 'a builder'}`} sub={`${x.title} · ${formatNaira(x.total)} in ${x.phases.length} phases`} onPress={() => navigation.navigate('ProposalReview', { proposalId: x.id })} />
+      ))}
       {query.isLoading || query.error ? (
         <LoadingBlock error={query.error ? (query.error as Error).message : null} onRetry={() => void query.refetch()} />
       ) : shown.length === 0 ? (

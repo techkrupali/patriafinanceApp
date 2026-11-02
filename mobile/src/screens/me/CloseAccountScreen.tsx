@@ -27,7 +27,7 @@ export function CloseAccountScreen({ navigation }: RootScreenProps<'CloseAccount
   const items = q.data?.items ?? [];
 
   const edit = (key: string) => {
-    if (key === 'main') navigation.navigate('Transfer', undefined);
+    if (key === 'main') navigation.navigate('Send');
     else if (key === 'wallets') navigation.navigate('AllWallets');
     else if (key === 'joint') navigation.navigate('AllWallets');
   };

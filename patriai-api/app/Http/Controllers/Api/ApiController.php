@@ -123,9 +123,9 @@ abstract class ApiController extends Controller
      * daily limits, two-step on big payments and the receiver's balance limit.
      * The failure carries `data.code` so the app can show the right screen.
      */
-    protected function spendGuardError(User $user, int $amountKobo, Request $request, bool $internal = false, ?User $recipient = null): ?JsonResponse
+    protected function spendGuardError(User $user, int $amountKobo, Request $request, bool $internal = false, ?User $recipient = null, bool $scheduled = false): ?JsonResponse
     {
-        $blocked = \App\Services\LimitService::make()->check($user, $amountKobo, $request, $internal, $recipient);
+        $blocked = \App\Services\LimitService::make()->check($user, $amountKobo, $request, $internal, $recipient, $scheduled);
         if (!$blocked) {
             return null;
         }
@@ -162,6 +162,29 @@ abstract class ApiController extends Controller
         }
 
         return response()->json($payload, $code);
+    }
+
+    /**
+     * The Patriai user someone means by "@emeka", "emeka", an email or a phone
+     * number (SND-03 "Name, @tag, phone or account number"). Active users only.
+     */
+    protected function findPayee(string $identifier): ?User
+    {
+        $id = trim($identifier);
+        if ($id === '') {
+            return null;
+        }
+        // Children's own sign-ins (CHW-06) aren't paid or found by @tag, email or phone.
+        $query = User::where('status', 'active')->where(fn ($q) => $q->whereNull('role')->orWhere('role', '!=', 'child'));
+        if (str_starts_with($id, '@') || preg_match('/^[A-Za-z][A-Za-z0-9_.]{1,29}$/', $id)) {
+            return $query->whereRaw('lower(username) = ?', [strtolower(ltrim($id, '@'))])->first();
+        }
+        if (str_contains($id, '@')) {
+            return $query->where('email', strtolower($id))->first();
+        }
+
+        // As stored, or as typed loosely ("0803 412 7790").
+        return $query->where(fn ($q) => $q->where('phone', $id)->orWhere('phone', $this->normalizePhone($id)))->first();
     }
 
     /** A phone number someone types to sign in or change to, in E.164, or a validation error. */
@@ -281,6 +304,8 @@ abstract class ApiController extends Controller
             'balance' => $wallet->balanceNaira(),
             // PRW-05 "Move in House Project savings — ₦1,200,000 now": what's free to move.
             'available' => in_array($wallet->type, ['savings', 'project'], true) ? number_format(max(0, $wallet->availableToSpend()) / 100, 2, '.', '') : null,
+            // TRS-01: a project wallet opens its project (PRJ-03).
+            'project_id' => $wallet->type === 'project' ? Project::where('wallet_id', $wallet->id)->value('id') : null,
             'target_amount' => $wallet->target_amount !== null ? number_format($wallet->target_amount / 100, 2, '.', '') : null,
             'target_date' => $wallet->target_date?->toDateString(),
             'approval_enabled' => (bool) $wallet->approval_enabled,
@@ -419,7 +444,9 @@ abstract class ApiController extends Controller
             'role' => $invitation->role,
             'can_approve' => (bool) $invitation->can_approve,
             // Access chosen for this person at invite time (null = role defaults).
-            'permissions' => $invitation->permissions ? array_intersect_key($invitation->permissions, array_flip(['view', 'fund', 'request', 'withdraw'])) : null,
+            'permissions' => $invitation->permissions ? array_intersect_key($invitation->permissions, array_flip(['view', 'fund', 'request', 'withdraw', 'chat'])) : null,
+            // CTB-02 "Approvals · 2 of 3: Ngozi, Chidi and you · Next to approve: Tiling and plaster".
+            'project' => $invitation->relationLoaded('wallet') && $invitation->wallet?->type === 'project' ? $this->invitationProject($invitation) : null,
             // Emergency contributors: what they were asked to put in each month (EMG-02).
             'pledge' => $invitation->pledge_amount ? [
                 'amount' => number_format($invitation->pledge_amount / 100, 2, '.', ''),
@@ -437,6 +464,29 @@ abstract class ApiController extends Controller
             'expires_at' => $invitation->expires_at?->toIso8601String(),
             'responded_at' => $invitation->responded_at?->toIso8601String(),
             'created_at' => $invitation->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function invitationProject(WalletInvitation $invitation): ?array
+    {
+        $project = Project::with('milestones')->where('wallet_id', $invitation->wallet_id)->first();
+        if (!$project) {
+            return null;
+        }
+        $rules = \App\Services\ProjectApprovalService::make()->rulesFor($project);
+        $names = User::whereIn('id', $rules['approver_ids'])->get()->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : $u->id)->pluck('first_name');
+        $joins = $invitation->can_approve && !in_array($invitation->invitee_user_id, $rules['approver_ids'], true);
+        $next = $project->milestones->whereNotIn('status', ['released', 'cancelled', 'proposed'])->sortBy('sequence')->first();
+
+        return [
+            'id' => $project->id,
+            'title' => $project->title,
+            'approvals' => [
+                'needed' => $rules['mode'] === 'all' || $rules['mode'] === 'named' ? $rules['needed'] + ($joins ? 1 : 0) : $rules['needed'],
+                'of' => count($rules['approver_ids']) + ($joins ? 1 : 0),
+                'names' => $joins ? [...$names, 'you'] : $names->all(),
+            ],
+            'next' => $next ? ['title' => $next->title, 'amount' => number_format($next->amount / 100, 2, '.', '')] : null,
         ];
     }
 
@@ -477,6 +527,10 @@ abstract class ApiController extends Controller
             'approver_names' => isset($request->payload['approver_ids'])
                 ? User::whereIn('id', (array) $request->payload['approver_ids'])->get()->map(fn ($u) => $u->first_name ?: $u->fullName())->values()
                 : null,
+            // SND-10 "Waiting for Emeka": who still has to answer.
+            'waiting_on' => $request->status === 'pending' && $request->relationLoaded('wallet') && $request->wallet
+                ? User::whereIn('id', $request->wallet->eligibleApprovers($request->initiator_id)->diff($request->responses()->pluck('approver_id')))->get()->map(fn ($u) => $u->first_name ?: $u->fullName())->values()
+                : [],
         ];
 
         if ($viewer !== null) {
@@ -549,7 +603,8 @@ abstract class ApiController extends Controller
         $doneGross = (int) $released->sum(fn (Milestone $m) => $m->amount - (int) ($m->meta['refunded'] ?? 0));
         $heldBack = $project->heldBack();
         $retentionPaid = (int) $released->whereNotNull('retention_released_at')->sum('retention');
-        $paidSoFar = $doneGross - (int) $released->sum('retention') + $retentionPaid;
+        // VDM-13: materials advances already paid on phases not finished yet count too.
+        $paidSoFar = $doneGross - (int) $released->sum('retention') + $retentionPaid + (int) $planned->where('status', '!=', 'released')->sum('advance_paid');
         $balance = (int) ($project->wallet?->balance ?? 0);
         $first = $planned->whereNotIn('status', ['released'])->sortBy('sequence')->first();
         $phase = match (true) {
@@ -562,10 +617,9 @@ abstract class ApiController extends Controller
         };
         $attention = $toReview->sortBy('sequence')->first();
         $family = $project->owner?->last_name ? "{$project->owner->last_name} family" : $project->owner?->fullName();
-        $approvers = collect([$project->owner])->filter();
-        if ($project->wallet) {
-            $approvers = $approvers->merge(User::whereIn('id', $project->wallet->members()->where('status', 'active')->where('role', 'co_owner')->pluck('user_id'))->get());
-        }
+        // MLS-03: the project's approvers (its own settings, or the wallet's owner and co-owners).
+        $approvers = User::whereIn('id', \App\Services\ProjectApprovalService::make()->rulesFor($project)['approver_ids'])->get()
+            ->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : $u->id)->values();
 
         return [
             'id' => $project->id,
@@ -635,23 +689,51 @@ abstract class ApiController extends Controller
             $change['amount'] = $naira((int) $change['amount']);
         }
         $dispute = in_array($milestone->status, ['released', 'cancelled', 'proposed'], true) ? null : $milestone->activeDispute();
+        // DSP-06: a partial refund the family agreed comes off what's released.
+        $agreed = $dispute?->status === 'agreed' ? (int) ($milestone->meta['agreed_refund'] ?? 0) : 0;
+        $payable = $milestone->amount - $agreed;
 
-        // PRJ-06/07 "0 of 2 · Ngozi and Chidi": who has said yes to this payout.
+        // PRJ-06/07, MLS-02 "Approvers · 1 of 2": who has said yes to this payout, when, and what they said.
         $approval = null;
         if ($project && in_array($milestone->status, ['submitted', 'approved'], true)) {
+            $rules = \App\Services\ProjectApprovalService::make()->rulesFor($project, $milestone);
             $request = !empty($milestone->meta['approval_request_id']) ? ApprovalRequest::with('responses')->find($milestone->meta['approval_request_id']) : null;
             $request = $request && $request->status === 'pending' ? $request : null;
-            $ids = collect([$project->owner_id])->merge($project->wallet?->members()->where('status', 'active')->where('role', 'co_owner')->pluck('user_id') ?? [])->unique();
-            $yes = $request ? collect([$request->initiator_id])->merge($request->responses->where('decision', 'approve')->pluck('approver_id')) : collect();
-            $people = User::whereIn('id', $ids)->get()->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : 1)->values();
+            $said = collect();
+            if ($request) {
+                $said[$request->initiator_id] = ['at' => $request->created_at, 'note' => $milestone->meta['notes'][(string) $request->initiator_id] ?? null];
+                foreach ($request->responses->where('decision', 'approve') as $r) {
+                    $said[$r->approver_id] = ['at' => $r->created_at, 'note' => $r->note];
+                }
+            }
+            $viewed = $milestone->meta['viewed'] ?? [];
+            $people = User::whereIn('id', $rules['approver_ids'])->get()->sortBy(fn (User $u) => $u->id === $project->owner_id ? 0 : $u->id)->values();
+            $family = collect([$project->owner_id])->merge($project->wallet?->members()->where('status', 'active')->pluck('user_id') ?? [])->unique()->diff($rules['approver_ids']);
+            $over = $project->meta['approvals']['site_photo_over'] ?? null;
             $approval = [
-                'needs_all' => (bool) $project->wallet?->approval_enabled,
-                'required' => $project->wallet?->approval_enabled ? $people->count() : 1,
-                'yes' => $people->whereIn('id', $yes)->count(),
+                'needs_all' => $rules['needed'] > 1 && $rules['needed'] >= count($rules['approver_ids']),
+                'required' => $rules['needed'],
+                'mode' => $rules['mode'],
+                'override' => $rules['override'],
+                'yes' => $people->filter(fn (User $u) => $said->has($u->id))->count(),
                 'request_id' => $request?->id,
-                'approvers' => $people->map(fn (User $u) => ['id' => $u->id, 'name' => $u->fullName(), 'first_name' => $u->first_name, 'said_yes' => $yes->contains($u->id), 'asked_at' => $request?->created_at?->toIso8601String()])->values(),
+                'approvers' => $people->map(fn (User $u) => [
+                    'id' => $u->id,
+                    'name' => $u->fullName(),
+                    'first_name' => $u->first_name,
+                    'role' => $project->roleOf($u),
+                    'said_yes' => $said->has($u->id),
+                    'approved_at' => $said->has($u->id) ? $said[$u->id]['at']?->toIso8601String() : null,
+                    'note' => $said->has($u->id) ? $said[$u->id]['note'] : null,
+                    'viewed_at' => $viewed[(string) $u->id] ?? null,
+                    'asked_at' => $request?->created_at?->toIso8601String(),
+                ])->values(),
+                // "Emeka · Can see, not an approver here".
+                'viewers' => User::whereIn('id', $family)->get()->map(fn (User $u) => ['id' => $u->id, 'name' => $u->fullName(), 'first_name' => $u->first_name, 'role' => $project->roleOf($u)])->values(),
+                'site_photo_needed' => $over !== null && $milestone->amount > $over && !$milestone->evidence->contains('kind', 'site_visit'),
             ];
         }
+        $advance = $milestone->meta['advance'] ?? null;
 
         return [
             'id' => $milestone->id,
@@ -662,8 +744,9 @@ abstract class ApiController extends Controller
             'proof_needed' => $milestone->proof_needed,
             'amount' => $naira($milestone->amount),
             // PRJ-06 "₦1,710,000 now, ₦190,000 held back".
-            'release_now' => $naira($milestone->amount - intdiv($milestone->amount * $retentionPct, 100)),
-            'hold_back' => $naira(intdiv($milestone->amount * $retentionPct, 100)),
+            'release_now' => $naira($payable - intdiv($payable * $retentionPct, 100)),
+            'hold_back' => $naira(intdiv($payable * $retentionPct, 100)),
+            'agreed_refund' => $agreed ? $naira($agreed) : null,
             'due_date' => $milestone->due_date?->toDateString(),
             'status' => $milestone->status,
             'origin' => $milestone->origin ?? 'family',
@@ -682,12 +765,25 @@ abstract class ApiController extends Controller
             'retention_released_at' => $milestone->retention_released_at?->toIso8601String(),
             'rejection' => $milestone->meta['rejection'] ?? null,
             'approval' => $approval,
+            // PJH-02 "Approved by you and Ngozi".
+            'approved_by' => !empty($milestone->meta['approved_by_ids']) ? User::whereIn('id', $milestone->meta['approved_by_ids'])->get()->map(fn (User $u) => ['id' => $u->id, 'first_name' => $u->first_name])->values() : [],
+            // VDM-12 "Painting materials advance ₦360,000 · asked with Tiling".
+            'advance' => $advance ? [
+                'milestone_id' => (int) $advance['milestone_id'],
+                'title' => Milestone::whereKey($advance['milestone_id'])->value('title'),
+                'percent' => (int) $advance['percent'],
+                'amount' => $naira((int) $advance['amount']),
+                'paid' => !empty($advance['paid_at']),
+            ] : null,
+            'advance_paid' => $naira((int) $milestone->advance_paid),
             'dispute' => $dispute ? ['id' => $dispute->id, 'number' => $dispute->number, 'status' => $dispute->status] : null,
             'evidence' => $milestone->evidence->map(fn ($e) => [
                 'id' => $e->id,
                 'kind' => $e->kind,
                 'url' => $e->url,
                 'caption' => $e->caption,
+                'taken_at' => $e->taken_at?->toIso8601String(),
+                'location' => $e->latitude !== null && $e->longitude !== null ? ['lat' => $e->latitude, 'lng' => $e->longitude] : null,
                 'uploaded_by' => $e->user?->fullName(),
                 'created_at' => $e->created_at?->toIso8601String(),
             ])->values(),

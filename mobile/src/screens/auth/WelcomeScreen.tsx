@@ -19,6 +19,12 @@ const SLIDE_MS = 5000;
  * pager dots, the mint Create account button, and Log in / I have an invite.
  */
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
+  // ONB-02, not the tour, for someone who used Patriai on this phone — even if the
+  // navigator brought back the tour from an earlier sign-up in the same session.
+  useEffect(() => {
+    if (useAuth.getState().returning && !navigation.canGoBack()) navigation.replace('GetStarted');
+  }, [navigation]);
+
   const copy = useOnboardingCopy();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -133,7 +139,8 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
             <Pressable
               onPress={() => {
                 selection();
-                start(true);
+                // A child's code from a parent, or a family wallet invite (the code screen offers both).
+                navigation.navigate('ChildLink');
               }}
               hitSlop={6}
               accessibilityRole="button"

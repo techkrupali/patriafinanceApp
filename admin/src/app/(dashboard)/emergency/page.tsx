@@ -52,7 +52,7 @@ export default function EmergencyPage() {
             <option value="rejected">Rejected</option>
             <option value="cancelled">Cancelled</option>
             <option value="expired">Expired</option>
-            <option value="released">Released (fast)</option>
+            <option value="released">Released</option>
             <option value="flagged">Flagged</option>
           </Select>
           <Select
@@ -111,6 +111,7 @@ export default function EmergencyPage() {
                         </p>
                       ) : (r.method === "dual_approval" || r.method === "rule_change") && r.required_approvals ? (
                         <p className="text-xs text-muted">
+                          {r.amount ? `${naira(r.amount)} · ${r.payee ? `to ${r.payee.account_name}` : "to their Main"} · ` : ""}
                           {r.approvals ?? 0} of {r.required_approvals} said yes
                         </p>
                       ) : null}

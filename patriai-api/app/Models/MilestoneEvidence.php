@@ -15,7 +15,15 @@ class MilestoneEvidence extends Model
         'kind',
         'url',
         'caption',
+        'taken_at',
+        'latitude',
+        'longitude',
     ];
+
+    protected function casts(): array
+    {
+        return ['taken_at' => 'datetime', 'latitude' => 'float', 'longitude' => 'float'];
+    }
 
     public function milestone(): BelongsTo
     {

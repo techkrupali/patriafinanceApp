@@ -313,6 +313,16 @@ class VendorController extends ApiController
         return $this->ok('Vendor home', VendorPayoutService::make()->home($request->user()));
     }
 
+    // POST /vendor/payouts/withdraw {amount, pin} — VDM-06, to the business account only
+    public function withdraw(Request $request): JsonResponse
+    {
+        $data = $request->validate(['amount' => ['required', 'numeric', 'min:1'], 'pin' => ['required', 'string', self::TXN_PIN]]);
+        app(\App\Services\PinService::class)->verify($request->user(), $data['pin']);
+        $tx = VendorPayoutService::make()->withdraw($request->user(), $this->toKobo((string) $data['amount']));
+
+        return $this->ok('On its way to your business account', ['reference' => $tx->reference, 'status' => $tx->status, 'payouts' => VendorPayoutService::make()->payouts($request->user())]);
+    }
+
     // GET /vendor/payouts  — VDM-06
     public function payouts(Request $request): JsonResponse
     {
@@ -400,11 +410,11 @@ class VendorController extends ApiController
         return $this->ok('Team invites', ['invites' => $service->invitesFor($request->user())->map(fn ($m) => $service->present($m))->values()]);
     }
 
-    // POST /team-invites/{member}/answer  {join}
+    // POST /team-invites/{member}/answer  {join, reason?}
     public function answerTeamInvite(Request $request, VendorTeamMember $member): JsonResponse
     {
-        $data = $request->validate(['join' => ['required', 'boolean']]);
-        $member = VendorTeamService::make()->answer($member, $request->user(), (bool) $data['join']);
+        $data = $request->validate(['join' => ['required', 'boolean'], 'reason' => ['nullable', 'string', 'max:200']]);
+        $member = VendorTeamService::make()->answer($member, $request->user(), (bool) $data['join'], $data['reason'] ?? null);
 
         return $this->ok($data['join'] ? 'You joined the team' : 'Invite declined', ['member' => VendorTeamService::make()->present($member->load('vendorProfile'))]);
     }
@@ -454,6 +464,8 @@ class VendorController extends ApiController
             'business_name' => $profile->business_name,
             'rc_number' => $profile->rc_number,
             'since_year' => $profile->since_year,
+            // VON-07 "Shows a 'Tax registered' badge on your profile".
+            'tax_registered' => (bool) $profile->tin,
             'category' => $profile->category,
             'services' => $profile->services ?? [],
             'bio' => $profile->bio,
@@ -482,7 +494,7 @@ class VendorController extends ApiController
         return [
             'projects' => $projectIds->count(),
             'milestones_paid' => (int) Milestone::whereIn('project_id', $projectIds)->where('status', 'released')->count(),
-            'open_disputes' => (int) Dispute::where('against_user_id', $profile->user_id)->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review'])->count(),
+            'open_disputes' => (int) Dispute::where('against_user_id', $profile->user_id)->whereIn('status', Dispute::ACTIVE)->count(),
         ];
     }
 

@@ -4,6 +4,9 @@ use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\AdminSecurityController;
 use App\Http\Controllers\Api\AppStatusController;
+use App\Http\Controllers\Api\MoneyRequestController;
+use App\Http\Controllers\Api\EarlyBreakController;
+use App\Http\Controllers\Api\ScheduledPaymentController;
 use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
@@ -36,6 +39,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectFlowController;
 use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\PaymentsController;
 use App\Http\Controllers\Api\SavedAccountController;
 use App\Http\Controllers\Api\SavingsController;
 use App\Http\Controllers\Api\SpendRequestController;
@@ -80,6 +84,8 @@ Route::prefix('v1')->group(function () {
 
     // SYS-02/03 (before sign-in) and ME-19 Legal.
     Route::get('app/status', [AppStatusController::class, 'show'])->middleware('throttle:60,1,app-status');
+    // CHW-06 "Install Patriai on Kamsi's phone, tap I have a code": the child's own sign-in.
+    Route::post('children/link', [ChildController::class, 'link'])->middleware('throttle:10,1,child-link');
     Route::get('legal', [AppStatusController::class, 'legal']);
     Route::get('legal/{key}', [AppStatusController::class, 'document'])->where('key', '[a-z_]+');
 
@@ -87,7 +93,7 @@ Route::prefix('v1')->group(function () {
     Route::post('webhooks/banking', [WebhookController::class, 'banking']);
 
     // ---- Authenticated ----
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'child.scope'])->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
 
@@ -217,6 +223,21 @@ Route::prefix('v1')->group(function () {
         // Child wallets — a code to link the child's own phone.
         Route::post('children/link-code', [ChildController::class, 'reserve'])->middleware('throttle:20,1');
         Route::post('wallets/{wallet}/child/link-code', [ChildController::class, 'renew'])->middleware('throttle:20,1');
+        // CHD-09 / WPV-04 / WPV-05 what parents, co-parents and relatives see; limits; notes; tasks (CHD-12).
+        Route::get('wallets/{wallet}/child', [ChildController::class, 'view']);
+        Route::patch('wallets/{wallet}/child', [ChildController::class, 'update'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/child/note', [ChildController::class, 'note'])->middleware('throttle:20,1');
+        Route::get('wallets/{wallet}/tasks', [ChildController::class, 'tasks']);
+        Route::post('wallets/{wallet}/tasks', [ChildController::class, 'addTask'])->middleware('throttle:30,1');
+        Route::post('tasks/{task}/approve', [ChildController::class, 'approveTask'])->middleware('throttle:30,1');
+        Route::post('tasks/{task}/send-back', [ChildController::class, 'sendBackTask'])->middleware('throttle:30,1');
+        Route::delete('tasks/{task}', [ChildController::class, 'cancelTask'])->middleware('throttle:30,1');
+        // The child's own phone (CHD-03…07).
+        Route::get('child/home', [ChildController::class, 'home']);
+        Route::get('child/requests', [ChildController::class, 'requests']);
+        Route::post('child/goal', [ChildController::class, 'addToGoal'])->middleware('throttle:20,1');
+        Route::get('child/tasks', [ChildController::class, 'myTasks']);
+        Route::post('tasks/{task}/done', [ChildController::class, 'taskDone'])->middleware('throttle:20,1');
 
         // Joint wallets — rule changes both agree, notice to leave, closing with both PINs.
         Route::post('wallets/{wallet}/joint/changes', [JointController::class, 'propose'])->middleware('throttle:10,1');
@@ -239,10 +260,41 @@ Route::prefix('v1')->group(function () {
 
         // Saved accounts (GIV-07, SND-16) and the organisations Patriai lists (GIV-02, BRK-02).
         Route::get('saved-accounts', [SavedAccountController::class, 'index']);
+        Route::get('saved-accounts/{savedAccount}', [SavedAccountController::class, 'show']);
+        Route::patch('saved-accounts/{savedAccount}', [SavedAccountController::class, 'update'])->middleware('throttle:30,1');
+        Route::get('saved-account-groups/{group}', [SavedAccountController::class, 'showGroup']);
+        Route::patch('saved-account-groups/{group}', [SavedAccountController::class, 'updateGroup'])->middleware('throttle:30,1');
+        // Money in and out across wallets (SND-01, TXN-01…04).
+        Route::get('send/options', [PaymentsController::class, 'options']);
+        Route::get('transactions', [PaymentsController::class, 'index']);
+        Route::get('transactions/{transaction}', [PaymentsController::class, 'show']);
+        Route::post('transactions/{transaction}/report', [PaymentsController::class, 'report'])->middleware('throttle:10,1');
+        Route::post('transactions/{transaction}/receipt-link', [PaymentsController::class, 'receiptLink'])->middleware('throttle:30,1');
+        // Request money (REQ-01…03) and split a bill (SPL-01); paying one is POST /transfers {destination: {kind: request}}.
+        Route::get('money-requests', [MoneyRequestController::class, 'index']);
+        Route::post('money-requests', [MoneyRequestController::class, 'store'])->middleware('throttle:20,1');
+        Route::get('money-requests/{code}', [MoneyRequestController::class, 'show'])->where('code', '[A-Za-z0-9]{4,12}');
+        Route::post('money-requests/{code}/decline', [MoneyRequestController::class, 'decline'])->middleware('throttle:20,1')->where('code', '[A-Za-z0-9]{4,12}');
+        Route::post('money-requests/{code}/cancel', [MoneyRequestController::class, 'cancel'])->middleware('throttle:20,1')->where('code', '[A-Za-z0-9]{4,12}');
+        Route::post('money-requests/{code}/remind', [MoneyRequestController::class, 'remind'])->middleware('throttle:10,1')->where('code', '[A-Za-z0-9]{4,12}');
+        Route::post('bill-splits', [MoneyRequestController::class, 'split'])->middleware('throttle:10,1');
+        // SND-14/15 scheduled and repeat payments.
+        Route::get('scheduled-payments', [ScheduledPaymentController::class, 'index']);
+        Route::post('scheduled-payments', [ScheduledPaymentController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('scheduled-payments/{id}', [ScheduledPaymentController::class, 'show'])->whereNumber('id');
+        Route::patch('scheduled-payments/{id}', [ScheduledPaymentController::class, 'update'])->middleware('throttle:30,1')->whereNumber('id');
+        Route::delete('scheduled-payments/{id}', [ScheduledPaymentController::class, 'destroy'])->middleware('throttle:30,1')->whereNumber('id');
+        Route::get('bill-splits/{key}', [MoneyRequestController::class, 'showSplit'])->whereUuid('key');
+        Route::post('bill-splits/{key}/remind', [MoneyRequestController::class, 'remindSplit'])->middleware('throttle:10,1')->whereUuid('key');
         Route::post('saved-accounts', [SavedAccountController::class, 'store'])->middleware('throttle:20,1');
         Route::delete('saved-accounts/{savedAccount}', [SavedAccountController::class, 'destroy'])->middleware('throttle:30,1');
         Route::post('saved-account-groups', [SavedAccountController::class, 'storeGroup'])->middleware('throttle:20,1');
         Route::get('organisations', [OrganisationController::class, 'index']);
+        // BRK-03 a charity, BRK-05 a break and its donation receipt, WPV-09 asking for more access.
+        Route::get('organisations/{organisation}', [EarlyBreakController::class, 'organisation']);
+        Route::get('early-breaks/{reference}', [EarlyBreakController::class, 'show'])->where('reference', '[A-Za-z0-9_-]{6,64}');
+        Route::post('donations/{donation}/receipt-link', [EarlyBreakController::class, 'receiptLink'])->middleware('throttle:30,1');
+        Route::post('wallets/{wallet}/access-request', [EarlyBreakController::class, 'askForAccess'])->middleware('throttle:10,1');
 
         // Wallet drafts — auto-saved setup, resumable from the wallet list.
         Route::get('wallet-drafts', [WalletDraftController::class, 'index']);
@@ -259,6 +311,7 @@ Route::prefix('v1')->group(function () {
         Route::post('wallets/{wallet}/emergency/requests', [EmergencyController::class, 'requestUnlock'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/withdraw', [EmergencyController::class, 'withdraw'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/emergency/fast-release', [EmergencyController::class, 'fastRelease'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/emergency/releases', [EmergencyController::class, 'release'])->middleware('throttle:10,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/approve', [EmergencyController::class, 'approve'])->middleware('throttle:20,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/reject', [EmergencyController::class, 'reject'])->middleware('throttle:20,1');
         Route::post('emergency-requests/{emergencyUnlockRequest}/cancel', [EmergencyController::class, 'cancel'])->middleware('throttle:20,1');
@@ -277,6 +330,7 @@ Route::prefix('v1')->group(function () {
         Route::get('approvals/{approvalRequest}', [ApprovalController::class, 'show']);
         Route::post('approvals/{approvalRequest}/respond', [ApprovalController::class, 'respond'])->middleware('throttle:30,1');
         Route::post('approvals/{approvalRequest}/cancel', [ApprovalController::class, 'cancel'])->middleware('throttle:30,1');
+        Route::post('approvals/{approvalRequest}/remind', [ApprovalController::class, 'remind'])->middleware('throttle:10,1');
 
         // Notifications
         Route::get('notifications', [NotificationController::class, 'index']);
@@ -343,6 +397,7 @@ Route::prefix('v1')->group(function () {
         // Vendor mode (VDM-03 home, VDM-06 payouts, VDM-08 disputes) and joining a builder's team (INV-VT1).
         Route::get('vendor/home', [VendorController::class, 'home']);
         Route::get('vendor/payouts', [VendorController::class, 'payouts']);
+        Route::post('vendor/payouts/withdraw', [VendorController::class, 'withdraw'])->middleware('throttle:10,1,vendor-withdraw');
         Route::get('vendor/disputes', [VendorController::class, 'disputes']);
         Route::get('team-invites', [VendorController::class, 'teamInvites']);
         Route::post('team-invites/{member}/answer', [VendorController::class, 'answerTeamInvite'])->middleware('throttle:30,1,vendor-team');
@@ -355,11 +410,13 @@ Route::prefix('v1')->group(function () {
         Route::post('projects/{project}/vendor', [ProjectController::class, 'assignVendor'])->middleware('throttle:30,1,project-owner');
         Route::delete('projects/{project}/vendor', [ProjectController::class, 'removeVendor'])->middleware('throttle:30,1,project-owner');
         Route::post('projects/{project}/milestones', [ProjectController::class, 'addMilestone'])->middleware('throttle:30,1,project-owner');
+        Route::put('projects/{project}/approval-rules', [ProjectController::class, 'approvalRulesUpdate'])->middleware('throttle:30,1,project-owner');
         Route::delete('milestones/{milestone}', [ProjectController::class, 'removeMilestone'])->middleware('throttle:30,1,project-owner');
         Route::post('milestones/{milestone}/evidence', [MilestoneController::class, 'uploadEvidence'])->middleware('throttle:60,1,milestone-evidence');
         Route::post('milestones/{milestone}/submit', [MilestoneController::class, 'submit'])->middleware('throttle:30,1,milestone-review');
         Route::post('milestones/{milestone}/approve', [MilestoneController::class, 'approve'])->middleware('throttle:30,1,milestone-review');
         Route::post('milestones/{milestone}/reject', [MilestoneController::class, 'reject'])->middleware('throttle:30,1,milestone-review');
+        Route::post('milestones/{milestone}/viewed', [MilestoneController::class, 'viewed'])->middleware('throttle:60,1,milestone-review');
         Route::delete('milestones/{milestone}/evidence/{evidence}', [MilestoneController::class, 'deleteEvidence'])->middleware('throttle:60,1,milestone-evidence');
 
         // The family and the builder working on a project: the invitation (INV-V1…V5, PRJ-12), the builder's
@@ -372,6 +429,32 @@ Route::prefix('v1')->group(function () {
         Route::post('projects/{project}/milestones/propose', [ProjectFlowController::class, 'propose'])->middleware('throttle:60,1,project-flow');
         Route::post('projects/{project}/documents', [ProjectFlowController::class, 'uploadDocument'])->middleware('throttle:60,1,project-flow');
         Route::delete('projects/{project}/documents/{document}', [ProjectFlowController::class, 'deleteDocument'])->middleware('throttle:60,1,project-flow');
+        // VPJ-01…06 a builder's proposal; VLS-01/02 finished projects on a profile.
+        Route::post('vendor/proposals', [\App\Http\Controllers\Api\ProposalController::class, 'save'])->middleware('throttle:30,1,proposal');
+        Route::put('vendor/proposals/{proposal}', [\App\Http\Controllers\Api\ProposalController::class, 'save'])->middleware('throttle:30,1,proposal');
+        Route::post('vendor/proposals/{proposal}/documents', [\App\Http\Controllers\Api\ProposalController::class, 'document'])->middleware('throttle:30,1,proposal');
+        Route::post('vendor/proposals/{proposal}/send', [\App\Http\Controllers\Api\ProposalController::class, 'send'])->middleware('throttle:20,1,proposal');
+        Route::get('proposals', [\App\Http\Controllers\Api\ProposalController::class, 'index']);
+        Route::get('proposals/{proposal}', [\App\Http\Controllers\Api\ProposalController::class, 'show']);
+        Route::post('proposals/{proposal}/accept', [\App\Http\Controllers\Api\ProposalController::class, 'accept'])->middleware('throttle:10,1,proposal');
+        Route::post('proposals/{proposal}/decline', [\App\Http\Controllers\Api\ProposalController::class, 'decline'])->middleware('throttle:20,1,proposal');
+        Route::get('vendor/listing-candidates', [\App\Http\Controllers\Api\ProposalController::class, 'candidates']);
+        Route::post('vendor/listings', [\App\Http\Controllers\Api\ProposalController::class, 'list'])->middleware('throttle:20,1,proposal');
+        Route::post('listings/{listing}/answer', [\App\Http\Controllers\Api\ProposalController::class, 'answer'])->middleware('throttle:20,1,proposal');
+        Route::get('vendors/{vendorProfile}/listings', [\App\Http\Controllers\Api\ProposalController::class, 'listings']);
+        Route::get('listings/{listing}', [\App\Http\Controllers\Api\ProposalController::class, 'listingShow']);
+        // CHT-01…05 Chats.
+        Route::get('chats', [\App\Http\Controllers\Api\ChatController::class, 'index']);
+        Route::get('chat-contacts', [\App\Http\Controllers\Api\ChatController::class, 'contacts']);
+        Route::post('chats/direct', [\App\Http\Controllers\Api\ChatController::class, 'direct'])->middleware('throttle:30,1,chat');
+        Route::post('chats/groups', [\App\Http\Controllers\Api\ChatController::class, 'group'])->middleware('throttle:20,1,chat');
+        Route::get('chats/{conversation}', [\App\Http\Controllers\Api\ChatController::class, 'show']);
+        Route::patch('chats/{conversation}', [\App\Http\Controllers\Api\ChatController::class, 'update'])->middleware('throttle:30,1,chat');
+        Route::post('chats/{conversation}/messages', [\App\Http\Controllers\Api\ChatController::class, 'send'])->middleware('throttle:60,1,chat-send');
+        Route::post('chats/{conversation}/members', [\App\Http\Controllers\Api\ChatController::class, 'addMembers'])->middleware('throttle:30,1,chat');
+        Route::delete('chats/{conversation}/members/me', [\App\Http\Controllers\Api\ChatController::class, 'leave'])->middleware('throttle:30,1,chat');
+        Route::get('projects/{project}/chat-info', [\App\Http\Controllers\Api\ChatController::class, 'projectInfo']);
+        Route::patch('projects/{project}/chat', [\App\Http\Controllers\Api\ChatController::class, 'projectMute'])->middleware('throttle:30,1,chat');
         Route::get('projects/{project}/messages', [ProjectFlowController::class, 'messages']);
         Route::post('projects/{project}/messages', [ProjectFlowController::class, 'send'])->middleware('throttle:60,1,project-chat');
         Route::post('milestones/{milestone}/change', [ProjectFlowController::class, 'askChange'])->middleware('throttle:60,1,project-flow');
@@ -445,6 +528,7 @@ Route::prefix('v1')->group(function () {
             Route::get('disputes', [DisputeAdminController::class, 'index']);
             Route::get('disputes/{dispute}', [DisputeAdminController::class, 'show']);
             Route::post('disputes/{dispute}/decide', [DisputeAdminController::class, 'decide'])->middleware('throttle:30,1,admin-dispute');
+            Route::post('disputes/{dispute}/take', [DisputeAdminController::class, 'take'])->middleware('throttle:30,1,admin-dispute');
             Route::post('disputes/{dispute}/messages', [DisputeAdminController::class, 'message'])->middleware('throttle:60,1,admin-dispute');
 
             // KYC & Compliance (tier verification)

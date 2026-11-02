@@ -33,10 +33,7 @@ export function GetStartedScreen({ navigation }: AuthScreenProps<'GetStarted'>) 
         <PtButton
           title="I have an invite or a code"
           variant="ghost"
-          onPress={() => {
-            setPostAuthRoute('Invitations');
-            navigation.navigate('Phone');
-          }}
+          onPress={() => navigation.navigate('ChildLink')}
         />
         <PtButton title="Create an account" onPress={() => navigation.navigate('AccountType')} />
         <PtButton title="I already have an account" variant="ghost" onPress={() => navigation.navigate('Login')} />

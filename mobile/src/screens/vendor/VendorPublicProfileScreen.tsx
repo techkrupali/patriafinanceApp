@@ -12,6 +12,7 @@ import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtPills } from '../../components/pt/PtForm';
 import { PtRow, PtSectionTitle } from '../../components/pt/PtList';
+import { ListingsStrip } from '../../components/project/ListingsStrip';
 import { LoadingBlock, PhotoGrid, TextArea } from '../../components/project/ProjectUi';
 import { pickFile } from '../../lib/upload';
 import { selection } from '../../lib/haptics';
@@ -115,6 +116,8 @@ export function VendorPublicProfileScreen({ navigation }: VendorTabScreenProps<'
         onRemove={(k) => removeWork.mutate(Number(k))}
         adding={addWork.isPending}
       />
+      {/* VDM-07 → VLS-01 */}
+      <ListingsStrip profileId={p.id} onOpen={(id) => navigation.navigate('Listing', { listingId: id })} action="List a finished project" onAction={() => navigation.navigate('ListProject')} />
       <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: 16 }}>
         <PtRow title="Manage my team" subtitle="Site managers, foremen and accounts" chevron onPress={() => navigation.navigate('VendorTeam')} />
         <PtRow title="Verification" subtitle={p.verified ? 'Verified business' : 'Not verified yet'} chevron onPress={() => navigation.navigate('BusinessVerification')} />

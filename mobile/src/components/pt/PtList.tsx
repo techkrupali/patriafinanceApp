@@ -53,6 +53,8 @@ interface PtRowProps {
   right?: React.ReactNode;
   chevron?: boolean;
   onPress?: () => void;
+  /** TRS-04: a wallet's quick actions. */
+  onLongPress?: () => void;
   last?: boolean;
   minHeight?: number;
   disabled?: boolean;
@@ -67,6 +69,7 @@ export function PtRow({
   right,
   chevron = false,
   onPress,
+  onLongPress,
   last = false,
   minHeight = 60,
   disabled = false,
@@ -111,7 +114,9 @@ export function PtRow({
         selection();
         onPress();
       }}
+      onLongPress={onLongPress}
       accessibilityRole="button"
+      accessibilityHint={onLongPress ? 'Press and hold for quick actions' : undefined}
     >
       {body}
     </Pressable>

@@ -66,23 +66,42 @@ function Detail({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
       meta: dayTime(d.created_at),
     },
   ];
+  // Patriai's final decision, when a case officer decided a fix.
+  const decision = [...d.messages].reverse().find((m) => m.kind === 'decision');
   if (milestoneDispute) {
-    items.push(
-      reply
-        ? { key: 'reply', state: 'done', title: vendor ? 'You replied' : `${d.against?.name ?? 'The builder'} replied`, sub: reply.text, meta: dayTime(reply.at) }
-        : { key: 'reply', state: d.status === 'open' ? 'now' : 'todo', title: vendor ? 'Your reply' : `Waiting for ${d.against?.name ?? 'the builder'}`, sub: `Reply by ${deadlineDay(d.reply_by)}`, meta: d.status === 'open' ? 'Now' : undefined },
-    );
+    if (reply) items.push({ key: 'reply', state: 'done', title: vendor ? 'You replied' : `${d.against?.name ?? 'The builder'} replied`, sub: reply.text, meta: dayTime(reply.at) });
+    else if (['open', 'responded'].includes(d.status) || !decision)
+      items.push({ key: 'reply', state: d.status === 'open' ? 'now' : 'todo', title: vendor ? 'Your reply' : `Waiting for ${d.against?.name ?? 'the builder'}`, sub: `Reply by ${deadlineDay(d.reply_by)}`, meta: d.status === 'open' ? 'Now' : undefined });
+    if (decision) items.push({ key: 'decided', state: 'done', title: 'Patriai decided', sub: decision.body ?? undefined, meta: dayTime(decision.created_at) });
+    const by = d.fix_by ? ` by ${dayMonth(d.fix_by)}` : '';
     items.push(
       d.status === 'fixing'
-        ? { key: 'agree', state: 'now', title: 'Being fixed', sub: vendor ? 'Submit new photos when the fix is done' : 'You approve the new photos, then the builder is paid', meta: 'Now' }
-        : { key: 'agree', state: d.status === 'responded' ? 'now' : 'todo', title: 'Agree a fix', sub: vendor ? 'The family accepts your offer or replies' : 'Accept their offer or reply', meta: d.status === 'responded' ? 'Now' : undefined },
+        ? { key: 'agree', state: 'now', title: `Being fixed${by}`, sub: vendor ? 'Submit new photos when the fix is done' : 'You approve the new photos, then the builder is paid', meta: 'Now' }
+        : d.status === 'agreed'
+          ? {
+              key: 'agree',
+              state: 'now',
+              title: `${formatNaira(d.refund_amount)} refund agreed`,
+              sub: vendor ? `You're paid ${formatNaira(Number(d.milestone?.amount ?? 0) - Number(d.refund_amount ?? 0))} once the family's approvers say yes` : 'The approvers release the rest; the refund stays in your project wallet',
+              meta: 'Now',
+            }
+          : { key: 'agree', state: d.status === 'responded' ? 'now' : 'todo', title: 'Agree a fix', sub: vendor ? 'The family accepts your offer or replies' : 'Accept their offer or reply', meta: d.status === 'responded' ? 'Now' : undefined },
     );
   }
-  items.push(
+  // Once Patriai decided, there's nothing more for it to step into.
+  if (!(decision && milestoneDispute)) items.push(
     d.status === 'escalated' || d.status === 'under_review' || !milestoneDispute
-      ? { key: 'patriai', state: 'now', title: 'Patriai is deciding', sub: d.decision_due ? `Decision by ${deadlineDay(d.decision_due)}` : 'Within 5 working days', meta: d.evidence_until ? `Evidence until ${deadlineDay(d.evidence_until)}` : undefined }
+      ? {
+          key: 'patriai',
+          state: 'now',
+          title: d.status === 'under_review' ? `Patriai is reviewing${d.officer ? ` · ${d.officer}` : ''}` : 'Patriai is deciding',
+          sub: d.decision_due ? `Decision by ${deadlineDay(d.decision_due)}` : 'Within 5 working days',
+          meta: d.evidence_until ? `Evidence until ${deadlineDay(d.evidence_until)}` : undefined,
+        }
       : { key: 'patriai', state: 'todo', title: "Patriai decides if you can't agree", sub: 'Within 5 working days' },
   );
+  const milestoneId = d.milestone?.id;
+  const projectId = d.project?.id;
 
   const add = async () => {
     const f = await pickFile('library', 'media');
@@ -90,10 +109,18 @@ function Detail({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
     addFile.mutate(f, { onError: (e) => showAlert('Could not add it', (e as Error).message) });
   };
 
+  // DSP-05 "Being fixed": the builder sends the fix, the family checks it.
+  const next =
+    d.can.submit_fix && milestoneId && projectId
+      ? { title: d.status === 'agreed' ? 'Submit the work' : 'Submit the fix', go: () => navigation.navigate('SubmitWork', { projectId, milestoneId }) }
+      : d.can.review_fix && milestoneId && projectId
+        ? { title: d.status === 'agreed' ? 'Approve the payment' : 'Review the new photos', go: () => navigation.navigate('ReviewMilestone', { projectId, milestoneId }) }
+        : null;
   const footer = (
     <>
+      {next ? <PtButton title={next.title} onPress={next.go} /> : null}
       {d.can.reply ? <PtButton title="Respond" onPress={() => navigation.navigate('DisputeRespond', { disputeId: d.id })} /> : null}
-      {d.can.message ? <PtButton title={d.can.answer_offer ? 'See their offer' : 'Reply'} variant={d.can.reply ? 'secondary' : 'primary'} onPress={() => navigation.navigate('DisputeChat', { disputeId: d.id })} /> : null}
+      {d.can.message ? <PtButton title={d.can.answer_offer ? 'See their offer' : 'Reply'} variant={d.can.reply || next ? 'secondary' : 'primary'} onPress={() => navigation.navigate('DisputeChat', { disputeId: d.id })} /> : null}
       {d.can.escalate ? (
         <Pressable onPress={() => { selection(); navigation.navigate('EscalateDispute', { disputeId: d.id }); }} accessibilityRole="button" style={{ alignItems: 'center', paddingVertical: 4 }}>
           <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.brand }}>Ask Patriai to step in</Text>
@@ -124,16 +151,24 @@ function Detail({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
         ) : (
           <PtReviewRow label="About" value={d.kind === 'payment_received' ? 'A payment I received' : 'A payment I made'} sub={d.reference} />
         )}
-        {d.amount_on_hold ? <PtReviewRow label="On hold" value={formatNaira(d.amount_on_hold)} sub={d.milestone?.title} /> : null}
+        {Number(d.amount_on_hold) > 0 ? (
+          <PtReviewRow label="On hold" value={formatNaira(d.amount_on_hold)} sub={d.milestone?.title} />
+        ) : d.payment ? (
+          <PtReviewRow label="Payment" value={formatNaira(d.payment.amount)} sub={d.payment.description} />
+        ) : null}
         <PtReviewRow label={vendor ? 'They asked for' : 'You asked for'} value={d.remedy_label ?? d.reason_label ?? 'Patriai to look into it'} sub={d.reason_label && d.remedy_label ? d.reason_label : null} last />
       </PtPanel>
       <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>"{d.description}"</Text>
       <Timeline items={items} />
       {d.files.length ? <PhotoGrid photos={d.files.map((f) => ({ key: f.id, url: f.url, caption: f.from === 'vendor' ? 'Builder' : undefined, video: f.kind === 'video', document: f.kind === 'document' }))} /> : null}
       {d.can.add_evidence ? <PtButton title="Add evidence" variant="ghost" size="sm" onPress={() => void add()} loading={addFile.isPending} /> : null}
-      {milestoneDispute && d.status !== 'escalated' ? (
+      {milestoneDispute && !['escalated', 'under_review', 'fixing', 'agreed'].includes(d.status) ? (
         <PtNote icon="lock">{vendor ? "Answer within 3 days. If you don't, Patriai may decide using the family's evidence." : 'The milestone payment is on hold in your project wallet until this is sorted.'}</PtNote>
       ) : null}
+      {d.status === 'fixing' && d.fix_by ? (
+        <PtNote icon="clock">{vendor ? `Fix it by ${dayMonth(d.fix_by)}. If it isn't submitted by then, the family is told, and two days later Patriai steps in.` : `The fix is due ${dayMonth(d.fix_by)}. The money stays on hold until you approve the new photos.`}</PtNote>
+      ) : null}
+      {!milestoneDispute && d.status === 'open' ? <PtNote icon="lock">Patriai looks into payment problems and replies within 5 working days. Any refund goes back to the wallet it left.</PtNote> : null}
     </PtPageScreen>
   );
 }
@@ -146,7 +181,7 @@ function Outcome({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
   const label =
     d.status === 'rejected'
       ? 'Not upheld'
-      : { fixed: 'Fixed at no extra cost', partial_refund: 'Partial refund', full_refund: 'Refunded in full', released: 'Paid in full', resolved: 'Resolved' }[d.outcome ?? 'resolved'];
+      : { fixed: 'Fixed at no extra cost', partial_refund: 'Partial refund', full_refund: 'Refunded in full', released: 'Not upheld · paid in full', resolved: 'Resolved', refunded: `Refunded ${formatNaira(d.refund_amount)}` }[d.outcome ?? 'resolved'];
   const body =
     d.outcome === 'fixed'
       ? vendor ? 'The family approved your fix, and you were paid.' : `${builder} fixed it. You approved the new photos.`
@@ -156,8 +191,10 @@ function Outcome({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
           ? vendor ? 'Patriai decided the family is refunded in full.' : 'Nothing was paid for this milestone. The money stays in your project wallet.'
           : d.outcome === 'released'
             ? 'Patriai decided the payment should be released in full.'
-            : d.resolution ?? 'Patriai has closed this dispute.';
-  const held = d.milestone ? Math.max(0, Number(d.milestone.amount) - Number(d.refund_amount ?? 0) - Number(d.released_amount ?? 0)) : 0;
+            : d.outcome === 'refunded'
+              ? `${formatNaira(d.refund_amount)} is back in the wallet it left.`
+              : d.resolution ?? 'Patriai has closed this dispute.';
+  const held = Number(d.held_back ?? 0);
   const decision = [...d.messages].reverse().find((m) => m.kind === 'decision');
 
   return (
@@ -174,7 +211,8 @@ function Outcome({ d, navigation }: { d: DisputeDetail; navigation: Nav }) {
           {Number(d.released_amount ?? 0) > 0 ? (
             <PtReviewRow label={vendor ? 'Paid to you' : 'Released to builder'} value={formatNaira(d.released_amount)} sub={`${dayMonth(d.resolved_at)}${held > 0 ? ` · ${formatNaira(held)} held back as usual` : ''}`} />
           ) : null}
-          {Number(d.refund_amount ?? 0) > 0 ? <PtReviewRow label={vendor ? 'Refunded to the family' : 'Stays in your project wallet'} value={formatNaira(d.refund_amount)} /> : null}
+          {Number(d.advance_paid ?? 0) > 0 ? <PtReviewRow label="Paid earlier as an advance" value={formatNaira(d.advance_paid)} sub="Part of the amount released" /> : null}
+          {Number(d.refund_amount ?? 0) > 0 && d.kind === 'milestone' ? <PtReviewRow label={vendor ? 'Refunded to the family' : 'Stays in your project wallet'} value={formatNaira(d.refund_amount)} /> : null}
           <PtReviewRow label="Dispute" value={`${d.number ? `#${d.number}` : ''} · closed`} last />
         </PtPanel>
         {decision?.body ? <PtNote>{`Patriai's decision: ${decision.body}`}</PtNote> : null}

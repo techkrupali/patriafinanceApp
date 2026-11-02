@@ -39,7 +39,8 @@ export function SettingsRow({
   danger = false,
   last = false,
 }: {
-  icon: IconName;
+  /** A Feather name, or any icon (e.g. the bank glyph). */
+  icon: IconName | React.ReactElement;
   title: string;
   sub?: string | null;
   onPress?: () => void;
@@ -49,7 +50,7 @@ export function SettingsRow({
   const body = (
     <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, borderBottomWidth: last ? 0 : 1, borderBottomColor: pt.line, opacity: onPress ? 1 : 0.6 }}>
       <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: danger ? pt.dangerSoft : pt.brandSoft }}>
-        <Feather name={icon} size={17} color={danger ? pt.danger : pt.brand} />
+        {typeof icon === 'string' ? <Feather name={icon} size={17} color={danger ? pt.danger : pt.brand} /> : icon}
       </View>
       <View style={{ flex: 1, gap: 1 }}>
         <Text style={{ fontFamily: ptFont.semibold, fontSize: 16, lineHeight: 22, color: danger ? pt.danger : pt.ink }}>{title}</Text>

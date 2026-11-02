@@ -27,6 +27,7 @@ class Milestone extends Model
         'origin',
         'amount',
         'retention',
+        'advance_paid',
         'due_date',
         'status',
         'proof',
@@ -44,6 +45,7 @@ class Milestone extends Model
         return [
             'amount' => 'integer',
             'retention' => 'integer',
+            'advance_paid' => 'integer',
             'due_date' => 'date',
             'submitted_at' => 'datetime',
             'released_at' => 'datetime',
@@ -78,6 +80,6 @@ class Milestone extends Model
     /** DSP-02 "Opening a dispute puts the milestone payment on hold until it is sorted." */
     public function activeDispute(): ?Dispute
     {
-        return $this->disputes()->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review'])->latest('id')->first();
+        return $this->disputes()->whereIn('status', Dispute::ACTIVE)->latest('id')->first();
     }
 }

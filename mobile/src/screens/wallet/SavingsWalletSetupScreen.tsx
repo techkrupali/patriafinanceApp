@@ -227,7 +227,7 @@ export function SavingsWalletSetupScreen(props: RootScreenProps<'SavingsWalletSe
 
 function SavingsSetup({ navigation, draft }: RootScreenProps<'SavingsWalletSetup'> & { draft: WalletDraft | null }) {
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const family = useFamily({ adults: true });
   const wallets = useWallets();
   const insights = useSavingsInsights();
   const create = useCreateWallet();

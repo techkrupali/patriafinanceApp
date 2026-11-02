@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { pt, ptFont, ptRadius } from '../theme';
 import { OfflineBanner } from '../components/system/SystemStates';
+import { WalletActionsSheet } from '../components/WalletActionsSheet';
 import { PtTabScreen, PtQuickAction } from '../components/pt/PtTabScreen';
 import { PtButton } from '../components/pt/PtButton';
 import { PtCard, PtRow, PtSectionTitle } from '../components/pt/PtList';
@@ -47,6 +48,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
   const totals = home.data?.totals;
   const total = parseFloat(totals?.total ?? '0') || 0;
   const draftCount = drafts.data?.length ?? 0;
+  const [actions, setActions] = useState<(typeof list)[number] | null>(null);
 
   return (
     <PtTabScreen
@@ -57,7 +59,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
           variant="secondary"
           size="sm"
           icon={<Feather name="plus" size={16} color={pt.brand} />}
-          onPress={() => navigation.navigate('CreateWallet')}
+          onPress={() => navigation.navigate('AddToTreasury')}
         />
       }
       refreshing={home.isRefetching || wallets.isRefetching}
@@ -122,22 +124,17 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
               size={52}
               label="Move"
               icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
-              onPress={() => navigation.navigate('Transfer')}
+              onPress={() => navigation.navigate('MoveMoney')}
             />
             <PtQuickAction
               size={52}
               label="Top up"
               icon={<Feather name="arrow-down" size={22} color={pt.brand} />}
-              onPress={() => (main ? navigation.navigate('Fund', { walletId: main.id }) : navigation.navigate('CreateWallet'))}
+              onPress={() => navigation.navigate('AddMoney', main ? { walletId: main.id } : undefined)}
             />
-            <PtQuickAction size={52} label="Send" icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Transfer')} />
-            <PtQuickAction
-              size={52}
-              label="Withdraw"
-              icon={<Feather name="arrow-up" size={22} color={pt.brand} />}
-              onPress={() => (main ? navigation.navigate('Withdraw', { walletId: main.id }) : undefined)}
-              disabled={!main}
-            />
+            <PtQuickAction size={52} label="Send" icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Send')} />
+            {/* TRS-01: saved accounts; paying your own bank account is how money goes out. */}
+            <PtQuickAction size={52} label="Saved accounts" icon={<Feather name="users" size={21} color={pt.brand} />} onPress={() => navigation.navigate('SavedAccounts')} />
           </View>
 
           {/* Biggest wallets */}
@@ -149,7 +146,8 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
                 wallet={w}
                 hideAmount={hidden}
                 last={i === biggest.length - 1}
-                onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
+                onPress={() => (w.type === 'main' ? navigation.navigate('Activity', { walletId: w.id }) : w.type === 'project' && w.project_id ? navigation.navigate('ProjectDetail', { projectId: w.project_id }) : navigation.navigate('WalletDetail', { walletId: w.id }))}
+                onLongPress={() => setActions(w)}
               />
             ))}
           </PtCard>
@@ -167,6 +165,7 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
           ) : null}
         </>
       )}
+      <WalletActionsSheet wallet={actions} onClose={() => setActions(null)} />
     </PtTabScreen>
   );
 }

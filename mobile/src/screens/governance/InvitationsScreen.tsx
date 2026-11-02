@@ -57,6 +57,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
 
   const onAccept = (inv: WalletInvitation) => {
     selection();
+    // CTB-02: a project invite shows the project, the approvals and what's next.
+    if (inv.project) {
+      navigation.navigate('FunderInvite', { invitationId: inv.id });
+      return;
+    }
     if (inv.joint) {
       setJoinError(null);
       setJointInvite(inv);

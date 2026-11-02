@@ -54,6 +54,28 @@ class VendorPayoutService
         }
     }
 
+    /**
+     * VDM-06 "Withdraw ₦1,260,000": always to the verified business account on
+     * file, never somewhere typed in.
+     */
+    public function withdraw(User $vendor, int $amount): \App\Models\Transaction
+    {
+        $profile = VendorProfile::where('user_id', $vendor->id)->first();
+        $main = $vendor->mainWallet();
+        if (!$profile?->canBePaid() || !$profile->account_number) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'Payouts go to your verified business account. Add it in Verification first.']);
+        }
+        if (!$main || $amount <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'Enter how much to withdraw.']);
+        }
+        $fee = (int) config('services.matrix.transfer_fee_kobo', 2000);
+        if ($amount + $fee > $main->availableToSpend()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'You can withdraw up to ₦' . number_format(max(0, $main->availableToSpend() - $fee) / 100) . ' after the ₦' . number_format($fee / 100) . ' fee.']);
+        }
+
+        return $this->wallets->withdrawToBank($main, $vendor, $amount, $profile->bank_code, $profile->account_number, $profile->account_name ?? $profile->business_name, $profile->bank_name ?? 'Bank', "Payout to {$profile->business_name}");
+    }
+
     /** VDM-06. */
     public function payouts(User $vendor): array
     {
@@ -69,6 +91,7 @@ class VendorPayoutService
 
         return [
             'available' => $this->naira($main?->availableToSpend() ?? 0),
+            'fee' => $this->naira((int) config('services.matrix.transfer_fee_kobo', 2000)),
             'wallet_id' => $main?->id,
             'held_back' => $this->naira($heldBack),
             'held_back_projects' => $heldIn,
@@ -148,7 +171,7 @@ class VendorPayoutService
             foreach ($p->milestones as $m) {
                 if (($m->change_request['by'] ?? null) === 'family') {
                     $out[] = ['kind' => 'change', 'project_id' => $p->id, 'milestone_id' => $m->id, 'title' => "The family changed {$m->title}", 'sub' => "{$family} · accept or keep it as it was"];
-                } elseif ($m->status === 'funded' && (!empty($m->meta['rejection']) || $m->activeDispute()?->status === 'fixing')) {
+                } elseif ($m->status === 'funded' && (!empty($m->meta['rejection']) || in_array($m->activeDispute()?->status, \App\Models\Dispute::PAYABLE, true))) {
                     $out[] = ['kind' => 'redo', 'project_id' => $p->id, 'milestone_id' => $m->id, 'title' => "{$m->title} needs another look", 'sub' => "{$family} · submit again when it's fixed"];
                 } elseif (in_array($m->status, ['funded', 'planned'], true) && $m->due_date && $m->due_date->lte(now()->addDays(7)->endOfDay())) {
                     $out[] = ['kind' => 'due', 'project_id' => $p->id, 'milestone_id' => $m->id, 'title' => "{$m->title} is due " . $this->dueWord($m->due_date), 'sub' => implode(' · ', array_filter([$family, $place, 'submit photos when done']))];

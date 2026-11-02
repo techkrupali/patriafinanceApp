@@ -102,7 +102,7 @@ class VendorAdminController extends ApiController
             'stats' => [
                 'projects' => $projectIds->count(),
                 'milestones_paid' => (int) Milestone::whereIn('project_id', $projectIds)->where('status', 'released')->count(),
-                'open_disputes' => (int) Dispute::where('against_user_id', $vendorProfile->user_id)->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review'])->count(),
+                'open_disputes' => (int) Dispute::where('against_user_id', $vendorProfile->user_id)->whereIn('status', Dispute::ACTIVE)->count(),
             ],
             'labels' => $service->labels(),
         ]);

@@ -43,7 +43,16 @@ class WalletController extends ApiController
         $member = $user->memberWallets()
             ->where('wallets.user_id', '!=', $user->id)
             ->get()
-            ->map(fn ($w) => $this->serializeWallet($w, withOwner: true) + ['my_role' => $w->pivot->role, 'is_shared' => true]);
+            ->map(function ($w) use ($request) {
+                $row = $this->serializeWallet($w, withOwner: true) + ['my_role' => $w->pivot->role, 'is_shared' => true];
+                // WPV-05: a relative on a child's wallet doesn't see the balance.
+                if ($w->hidesSpendingFrom($request->user())) {
+                    $row['balance'] = null;
+                    $row['available'] = null;
+                }
+
+                return $row;
+            });
 
         return $this->ok('Wallets fetched', ['wallets' => $own->concat($member)->values()]);
     }
@@ -318,11 +327,10 @@ class WalletController extends ApiController
 
         $user = $request->user();
 
-        // KYC tier wallet-count guard. Caps are generous (5/10/25) so existing
-        // users are unaffected — verifying a higher tier unlocks more wallets.
-        $maxWallets = KycService::make()->limits((int) $user->kyc_tier)['max_wallets'];
-        if ($user->wallets()->count() >= $maxWallets) {
-            return $this->fail('Wallet limit reached for your verification tier. Verify a higher KYC tier to create more wallets.', 422);
+        // ME-23 wallets per tier (closed ones don't count): "On Tier 3 you can have up
+        // to 20 wallets. Close one you no longer use." — the same rule WalletService enforces.
+        if ($blocked = \App\Services\LimitService::make()->walletAllowance($user)) {
+            return $this->fail($blocked, 422);
         }
 
         if (!empty($data['emergency']) && $data['type'] !== 'emergency') {
@@ -473,8 +481,16 @@ class WalletController extends ApiController
             'can_approve' => (bool) $m->can_approve,
         ]);
 
+        // A relative on a child's wallet: no balance, no spending (WPV-05).
+        $giftsOnly = $wallet->hidesSpendingFrom($user);
+        $serialized = $this->serializeWallet($wallet, withOwner: true);
+        if ($giftsOnly) {
+            $serialized['balance'] = null;
+            $serialized['available'] = null;
+        }
+
         return $this->ok('Wallet fetched', [
-            'wallet' => $this->serializeWallet($wallet, withOwner: true),
+            'wallet' => $serialized,
             'members' => $members,
             'my_role' => $wallet->roleOf($user),
             'my_can_spend' => $wallet->canSpend($user),
@@ -483,6 +499,10 @@ class WalletController extends ApiController
                 'enabled' => (bool) $wallet->approval_enabled,
                 'threshold' => $wallet->approval_threshold !== null ? number_format($wallet->approval_threshold / 100, 2, '.', '') : null,
                 'required_approvals' => (int) $wallet->required_approvals,
+                // Who would be asked if you sent money out: everyone but you who decides here
+                // (owners, co-owners and admins, anyone given a yes, or only the named people).
+                'approvers' => \App\Models\User::whereIn('id', $wallet->eligibleApprovers($user->id))->get(['id', 'first_name', 'last_name', 'name'])
+                    ->map(fn ($u) => ['user_id' => $u->id, 'name' => $u->fullName()])->values(),
             ],
             'held_amount' => number_format($wallet->heldAmount() / 100, 2, '.', ''),
             'pending_approvals' => $wallet->approvalRequests()->where('status', 'pending')->count(),
@@ -495,7 +515,7 @@ class WalletController extends ApiController
             'emergency' => EmergencyService::make()->summary($wallet, $user),
             // Savings/goal wallets with a plan: the rule every saver follows.
             'savings' => SavingsService::make()->invitationSummary($wallet),
-            'recent_transactions' => $wallet->transactions()->latest()->limit(10)->get()
+            'recent_transactions' => $giftsOnly ? [] : $wallet->transactions()->latest()->limit(10)->get()
                 ->map(fn ($t) => $this->serializeTransaction($t)),
         ]);
     }
@@ -522,6 +542,9 @@ class WalletController extends ApiController
         // WalletPolicy::view === Wallet::isAccessibleBy — same rule, one source of truth.
         if ($request->user()->cannot('view', $wallet)) {
             return $this->fail('Wallet not found', 404);
+        }
+        if ($wallet->hidesSpendingFrom($request->user())) {
+            return $this->fail('Relatives see the goal, not what the child spends.', 403);
         }
 
         $txns = $wallet->transactions()

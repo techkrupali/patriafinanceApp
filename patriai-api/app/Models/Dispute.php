@@ -30,11 +30,19 @@ class Dispute extends Model
 
     /**
      * open: waiting for the other side · responded: they replied or offered ·
-     * fixing: the family accepted a fix, the work is being redone · escalated:
-     * Patriai is deciding · resolved: closed with an outcome. (under_review and
-     * rejected are kept for disputes that Patriai handles alone.)
+     * fixing: the family accepted a fix (or Patriai decided one), the work is
+     * being redone · agreed: the family accepted a partial refund, taken off the
+     * payment when the approvers release it · escalated: Patriai is deciding ·
+     * under_review: a case officer took it · resolved: closed with an outcome ·
+     * rejected: a payment dispute Patriai didn't uphold.
      */
-    public const STATUSES = ['open', 'responded', 'fixing', 'escalated', 'resolved', 'under_review', 'rejected'];
+    public const STATUSES = ['open', 'responded', 'fixing', 'agreed', 'escalated', 'resolved', 'under_review', 'rejected'];
+
+    /** Still being sorted out. */
+    public const ACTIVE = ['open', 'responded', 'fixing', 'agreed', 'escalated', 'under_review'];
+
+    /** The milestone can be paid again: the fix or the refund is agreed. */
+    public const PAYABLE = ['fixing', 'agreed'];
 
     /** DSP-08 "Decision within 5 working days"; VDM-08 "Answer within 3 days". */
     public const REPLY_DAYS = 3;
@@ -82,6 +90,9 @@ class Dispute extends Model
         'released_amount',
         'refund_amount',
         'decided_by',
+        'fix_by',
+        'fix_reminded_at',
+        'officer_id',
     ];
 
     protected function casts(): array
@@ -92,6 +103,8 @@ class Dispute extends Model
             'escalated_at' => 'datetime',
             'decision_due' => 'datetime',
             'evidence_until' => 'datetime',
+            'fix_by' => 'date',
+            'fix_reminded_at' => 'datetime',
             'amount_on_hold' => 'integer',
             'released_amount' => 'integer',
             'refund_amount' => 'integer',
@@ -131,6 +144,6 @@ class Dispute extends Model
     /** Still being sorted out: the milestone payment stays on hold. */
     public function isActive(): bool
     {
-        return in_array($this->status, ['open', 'responded', 'fixing', 'escalated', 'under_review'], true);
+        return in_array($this->status, self::ACTIVE, true);
     }
 }

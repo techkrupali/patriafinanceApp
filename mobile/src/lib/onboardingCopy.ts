@@ -17,7 +17,7 @@ const en = {
     ],
     createAccount: 'Create account',
     logIn: 'Log in',
-    invite: 'I have an invite',
+    invite: 'I have an invite or a code',
     bankedBy: 'Banking by Assetmatrix MFB',
   },
 
@@ -146,7 +146,7 @@ const pcm: Copy = {
     ],
     createAccount: 'Open account',
     logIn: 'Log in',
-    invite: 'I get invite',
+    invite: 'I get invite or code',
     bankedBy: 'Banking by Assetmatrix MFB',
   },
 

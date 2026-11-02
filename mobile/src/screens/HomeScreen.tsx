@@ -96,7 +96,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
   }, [user, total, home.isSuccess, home.dataUpdatedAt, remember]);
   const mask = (s: string) => (hidden ? '₦ ••••' : s);
 
-  const addMoney = () => (main ? navigation.navigate('Fund', { walletId: main.id }) : navigation.navigate('Treasury'));
+  const addMoney = () => navigation.navigate('AddMoney', main ? { walletId: main.id } : undefined);
 
   const openNeeds = (items: HomeNeedItem[]) => {
     const kinds = new Set(items.map((i) => i.kind));
@@ -108,8 +108,12 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
   const openUpcoming = (item: HomeUpcomingItem) => {
     if (item.kind === 'rule') {
-      if (item.tone === 'danger') navigation.navigate('Fund', { walletId: item.wallet_id });
+      if (item.tone === 'danger' && item.wallet_id) navigation.navigate('BankTransfer', { walletId: item.wallet_id });
       else navigation.navigate('Rules');
+    } else if (item.kind === 'scheduled') {
+      navigation.navigate('ScheduledPayments');
+    } else if (item.kind === 'money_request' && item.code) {
+      navigation.navigate('IncomingRequest', { code: item.code });
     } else {
       navigation.navigate('ApprovalDetail', { approvalId: item.id });
     }
@@ -119,13 +123,17 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
     setSheet(false);
     switch (action) {
       case 'send':
-        return navigation.navigate('Transfer');
+        return navigation.navigate('Send');
       case 'add':
         return addMoney();
       case 'wallet':
         return navigation.navigate('CreateWallet');
       case 'goal':
         return navigation.navigate('GoalWalletSetup');
+      case 'request':
+        return navigation.navigate('RequestMoney');
+      case 'scan':
+        return navigation.navigate('ScanQr');
       case 'invite': {
         const t = inviteTarget(wallets.data);
         return t.screen === 'InviteMember' ? navigation.navigate(t.screen, t.params) : navigation.navigate(t.screen);
@@ -273,12 +281,12 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
             {/* Quick actions */}
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <PtQuickAction label={copy.send} icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Transfer')} />
+              <PtQuickAction label={copy.send} icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Send')} />
               <PtQuickAction label={copy.addMoney} icon={<Feather name="arrow-down" size={22} color={pt.brand} />} onPress={addMoney} />
               <PtQuickAction
                 label={copy.move}
                 icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
-                onPress={() => navigation.navigate('Transfer')}
+                onPress={() => navigation.navigate('MoveMoney')}
               />
               <PtQuickAction label={copy.more} icon={<Feather name="menu" size={21} color={pt.brand} />} onPress={() => setSheet(true)} />
             </View>
@@ -320,7 +328,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                   <Pressable
                     onPress={() => {
                       selection();
-                      navigation.navigate('Rules');
+                      navigation.navigate('ScheduledPayments');
                     }}
                     hitSlop={8}
                     accessibilityRole="button"

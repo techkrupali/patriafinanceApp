@@ -117,7 +117,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Tile label="Statements" icon={<Feather name="file-text" size={18} color={pt.brand} />} />
-          <Tile label="Chats" icon={<Feather name="message-square" size={18} color={pt.brand} />} />
+          <Tile label="Chats" icon={<Feather name="message-square" size={18} color={pt.brand} />} onPress={() => navigation.navigate('Chats')} />
         </View>
       </View>
 

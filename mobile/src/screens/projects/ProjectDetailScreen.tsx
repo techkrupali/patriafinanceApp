@@ -12,6 +12,7 @@ import { PtAvatar } from '../../components/pt/PtAvatar';
 import { PtChoiceCard, PtNote, PtPanel, PtReviewRow } from '../../components/pt/PtForm';
 import { PtSectionTitle } from '../../components/pt/PtList';
 import { ActionTiles, AttentionCard, LoadingBlock, MoneyTiles, ProgressLine } from '../../components/project/ProjectUi';
+import { FunderProjectView } from '../../components/project/ProjectRoleViews';
 import { formatNaira, formatYmd, initials } from '../../lib/format';
 import { DECLINE_REASONS, isVendorSide, milestoneChip, monthName, namesList, townOf } from '../../lib/projects';
 import { selection } from '../../lib/haptics';
@@ -47,7 +48,30 @@ export function ProjectDetailScreen({ navigation, route }: RootScreenProps<'Proj
   if (!data.project.vendor && data.project.vendor_declined) {
     return <BuilderDeclined data={data} navigation={navigation} />;
   }
+  // PJH-02 a funder (who may approve), PJH-04 a viewer.
+  if (data.my_role === 'contributor' || data.my_role === 'viewer') {
+    const family = data.project.owner?.name.split(' ').slice(-1)[0];
+    return (
+      <PtPageScreen
+        title={data.project.title}
+        subtitle={family ? `${family} family project` : 'Family project'}
+        onBack={() => navigation.goBack()}
+        right={<PeopleButton onPress={() => navigation.navigate('ProjectMembers', { projectId })} />}
+      >
+        <FunderProjectView data={data} go={(screen, params) => (navigation.navigate as (s: string, p?: object) => void)(screen, params)} />
+      </PtPageScreen>
+    );
+  }
   return <Detail data={data} navigation={navigation} refreshing={query.isRefetching} />;
+}
+
+/** PJH-05 Members, from the header. */
+function PeopleButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={() => { selection(); onPress(); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Members" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+      <Feather name="users" size={22} color={pt.ink} />
+    </Pressable>
+  );
 }
 
 type Nav = RootScreenProps<'ProjectDetail'>['navigation'];
@@ -84,16 +108,21 @@ function Detail({ data, navigation }: { data: ProjectDetailData; navigation: Nav
       subtitle={`Project${p.setup?.location ? ` · ${townOf(p.setup.location)}` : ''}`}
       onBack={() => navigation.goBack()}
       right={
-        <Pressable onPress={() => { selection(); navigation.navigate('WalletSettings', { walletId: p.wallet_id }); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Approval settings">
-          <Feather name="settings" size={22} color={pt.ink} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <PeopleButton onPress={() => navigation.navigate('ProjectMembers', { projectId: p.id })} />
+          {data.can.invite_vendor ? (
+            <Pressable onPress={() => { selection(); navigation.navigate('ProjectApprovalSettings', { projectId: p.id }); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Approval settings" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="settings" size={22} color={pt.ink} />
+            </Pressable>
+          ) : null}
+        </View>
       }
       gap={14}
     >
       <MoneyTiles
         left={{ label: 'In the wallet', value: formatNaira(p.in_wallet) }}
         right={{ label: 'Paid so far', value: formatNaira(p.paid_so_far) }}
-        onPress={() => navigation.navigate('WalletDetail', { walletId: p.wallet_id })}
+        onPress={() => navigation.navigate('ProjectWallet', { projectId: p.id })}
       />
       <View style={{ gap: 6 }}>
         <ProgressLine value={Number(p.done_amount)} max={total} />
@@ -109,7 +138,7 @@ function Detail({ data, navigation }: { data: ProjectDetailData; navigation: Nav
         <AttentionCard
           title={`${vendorName} finished ${p.attention.title.toLowerCase()}`}
           sub={p.attention.status === 'approved' ? 'Waiting for the other approvers' : `Check the photos and release ${formatNaira(p.attention.release_now)}`}
-          onPress={() => navigation.navigate('ReviewMilestone', { projectId: p.id, milestoneId: p.attention!.milestone_id })}
+          onPress={() => navigation.navigate(p.attention!.status === 'approved' ? 'MilestoneApprovals' : 'ReviewMilestone', { projectId: p.id, milestoneId: p.attention!.milestone_id })}
         />
       ) : null}
 
@@ -186,7 +215,7 @@ function Detail({ data, navigation }: { data: ProjectDetailData; navigation: Nav
 
       <ActionTiles
         items={[
-          { label: 'Money', icon: 'lock', onPress: () => navigation.navigate('WalletDetail', { walletId: p.wallet_id }) },
+          { label: 'Money', icon: 'lock', onPress: () => navigation.navigate('MoneyByMilestone', { projectId: p.id }) },
           { label: 'Chat', icon: 'message-square', onPress: () => navigation.navigate('ProjectChat', { projectId: p.id }) },
           { label: 'Budget', icon: 'trending-up', onPress: () => navigation.navigate('ProjectBudget', { projectId: p.id }) },
           { label: 'Documents', icon: 'file', onPress: () => navigation.navigate('ProjectDocuments', { projectId: p.id }) },

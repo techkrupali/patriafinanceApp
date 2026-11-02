@@ -31,7 +31,7 @@ export default function DisputesPage() {
     <>
       <PageHeader
         title="Disputes"
-        subtitle={data ? `${data.counts.escalated ?? 0} waiting for a decision · ${data.counts.open ?? 0} waiting for the builder` : "Patriai's decisions"}
+        subtitle={data ? `${data.waiting?.decision ?? data.counts.escalated ?? 0} waiting for a decision · ${data.waiting?.builder ?? data.counts.open ?? 0} waiting for the builder` : "Patriai's decisions"}
       />
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
@@ -45,9 +45,11 @@ export default function DisputesPage() {
           >
             <option value="active">Not closed</option>
             <option value="escalated">Waiting for Patriai</option>
+            <option value="under_review">Taken by a case officer</option>
             <option value="open">Waiting for the builder</option>
             <option value="responded">Builder replied</option>
             <option value="fixing">Being fixed</option>
+            <option value="agreed">Refund agreed</option>
             <option value="resolved">Resolved</option>
             <option value="rejected">Not upheld</option>
             <option value="">All</option>
@@ -97,12 +99,21 @@ export default function DisputesPage() {
                     </TD>
                     <TD>{d.raised_by_name ?? "—"}</TD>
                     <TD>{d.against ?? "Patriai"}</TD>
-                    <TD className="text-right">{d.amount_on_hold ? naira(d.amount_on_hold) : "—"}</TD>
+                    <TD className="text-right">{Number(d.amount_on_hold) > 0 ? naira(d.amount_on_hold!) : "—"}</TD>
                     <TD>
                       <StatusBadge status={d.status} />
-                      <p className="mt-1 text-xs text-muted">{d.status_label}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {d.status_label}
+                        {d.officer ? ` · ${d.officer}` : ""}
+                      </p>
                     </TD>
-                    <TD className="text-muted">{d.status === "escalated" ? formatDeadline(d.decision_due) : d.status === "open" ? `Reply by ${formatDeadline(d.reply_by)}` : formatDate(d.resolved_at ?? d.created_at)}</TD>
+                    <TD className={d.overdue ? "font-semibold text-danger" : "text-muted"}>
+                      {d.status === "escalated" || d.status === "under_review" || (d.status === "open" && d.kind !== "milestone")
+                        ? `${formatDeadline(d.decision_due)}${d.overdue ? " · overdue" : ""}`
+                        : d.status === "open"
+                          ? `Reply by ${formatDeadline(d.reply_by)}`
+                          : formatDate(d.resolved_at ?? d.created_at)}
+                    </TD>
                   </TR>
                 ))}
               </TBody>

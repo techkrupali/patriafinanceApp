@@ -90,6 +90,9 @@ class WebhookController extends ApiController
             // any wallet's "share of every deposit" rules take theirs.
             AutomationService::make()->runIncome($wallet, $txn);
             AutomationService::make()->runDeposits($wallet, $txn);
+
+            // REQ-02 paid by transfer without the app: the code in the narration.
+            \App\Services\MoneyRequestService::make()->matchDeposit($wallet, $txn, $payload['narration'] ?? null);
         }
 
         return $this->ok('Wallet credited');

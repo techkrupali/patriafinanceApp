@@ -23,7 +23,7 @@ class DisputeController extends ApiController
         $service = DisputeService::make();
         $disputes = $service->visibleTo($user)
             ->with(['user', 'project', 'milestone'])
-            ->when($request->query('status') === 'open', fn ($q) => $q->whereIn('status', ['open', 'responded', 'fixing', 'escalated', 'under_review']))
+            ->when($request->query('status') === 'open', fn ($q) => $q->whereIn('status', Dispute::ACTIVE))
             ->when($request->query('status') === 'closed', fn ($q) => $q->whereIn('status', ['resolved', 'rejected']))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-
+import { Text, View } from 'react-native';
+import { pt, ptFont, ptRadius } from '../../theme';
 import { useProject } from '../../api/hooks';
 import { useAddEvidence, useRemoveEvidence, useSubmitWork, useTickDeliverables } from '../../api/projectFlow';
 import { ApiError } from '../../api/client';
 import { PtPageScreen } from '../../components/pt/PtPageScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
-import { PtGroupLabel, PtNote, PtPanel } from '../../components/pt/PtForm';
+import { PtGroupLabel, PtNote, PtPanel, PtPills, PtSwitchRow } from '../../components/pt/PtForm';
 import { FileRow, LoadingBlock, PhotoGrid, TextArea, TickRow } from '../../components/project/ProjectUi';
 import { formatNaira } from '../../lib/format';
 import { pickFile } from '../../lib/upload';
@@ -14,8 +15,9 @@ import type { RootScreenProps } from '../../navigation/types';
 import { showAlert } from '../../lib/alert';
 
 /**
- * VDM-05 "Submit: Tiling and plaster": photos and a video, receipts if the
- * family asked for them, what's done ticked, a note — "Submit for ₦1,900,000".
+ * VDM-05 / VDM-12 "Finish a phase": what approving releases, photos and a
+ * video, receipts if the family asked for them, what's done ticked, a note,
+ * and "Ask for Painting materials money now" — "Submit and request ₦2,070,000".
  * A foreman adds photos and ticks; a site manager or the owner submits.
  */
 export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitWork'>) {
@@ -29,6 +31,8 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
   const [note, setNote] = useState('');
   const [label, setLabel] = useState('');
   const [adding, setAdding] = useState<'photo' | 'receipt' | null>(null);
+  const [advance, setAdvance] = useState(false);
+  const [percent, setPercent] = useState(30);
   const m = query.data?.milestones.find((x) => x.id === milestoneId);
 
   useEffect(() => {
@@ -51,6 +55,10 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
   const receipts = m.evidence.filter((e) => e.kind === 'receipt');
   const editable = ['planned', 'funded', 'rejected'].includes(m.status);
   const needs = [release?.photos !== false ? 'photos' : null, release?.video ? 'a short video' : null, release?.receipts ? 'receipts' : null].filter(Boolean) as string[];
+  // VDM-12: the next phase, for materials money now.
+  const next = d.milestones.filter((x) => x.sequence > m.sequence && (x.status === 'planned' || x.status === 'funded')).sort((a, b) => a.sequence - b.sequence)[0];
+  const advanceAmount = next ? Math.floor((Number(next.amount) * percent) / 100) : 0;
+  const asking = Number(m.release_now) + (advance ? advanceAmount : 0);
   const missing = (release?.photos !== false && !photos.some((e) => e.kind === 'image')) || (release?.video && !photos.some((e) => e.kind === 'video')) || (release?.receipts && receipts.length === 0);
 
   const upload = async (receipt: boolean) => {
@@ -69,7 +77,7 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
 
   const send = () => {
     submit.mutate(
-      { milestoneId, note: note.trim() || undefined, done },
+      { milestoneId, note: note.trim() || undefined, done, advance_percent: advance && next ? percent : undefined },
       {
         onSuccess: () => {
           showAlert('Submitted', `${d.project.family ? `The ${d.project.family}` : 'The family'} will check the photos. You're paid within minutes of their approval.`);
@@ -85,12 +93,12 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
 
   return (
     <PtPageScreen
-      title={`Submit: ${m.title}`}
+      title={d.can.submit && editable ? 'Finish a phase' : `Submit: ${m.title}`}
       subtitle={d.project.title}
       onBack={() => navigation.goBack()}
       footer={
         !editable ? null : d.can.submit ? (
-          <PtButton title={`Submit for ${formatNaira(m.amount)}`} onPress={send} loading={submit.isPending} disabled={Boolean(missing)} />
+          <PtButton title={`Submit and request ${formatNaira(asking)}`} onPress={send} loading={submit.isPending} disabled={Boolean(missing)} />
         ) : (
           <PtButton
             title="Save ticks"
@@ -100,8 +108,17 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
         )
       }
     >
+      {d.can.submit && editable ? (
+        <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, padding: 16, gap: 4 }}>
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 17, color: pt.ink }}>{`${m.title} · ${formatNaira(m.amount)}`}</Text>
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted }}>
+            {`Approving it releases ${formatNaira(m.release_now)}${Number(m.hold_back) > 0 ? ` (${formatNaira(m.hold_back)} held back)` : ''}${next ? ` and lets you start ${next.title} (${formatNaira(next.amount)})` : ''}`}
+          </Text>
+        </View>
+      ) : null}
       {m.rejection ? <PtNote tone="attention">{`The family asked for changes: ${m.rejection}`}</PtNote> : null}
-      {m.dispute?.status === 'fixing' ? <PtNote tone="attention">The family accepted your fix. Add new photos of the fixed work and submit again.</PtNote> : null}
+      {m.dispute?.status === 'fixing' ? <PtNote tone="attention">The fix is agreed. Add new photos of the fixed work and submit again.</PtNote> : null}
+      {m.agreed_refund ? <PtNote tone="info">{`The family accepted your ${formatNaira(m.agreed_refund)} refund. You're paid the rest once they approve.`}</PtNote> : null}
       {!editable ? <PtNote>{m.status === 'released' ? 'This milestone has been paid.' : 'Submitted. The family is reviewing it.'}</PtNote> : null}
       {needs.length && editable ? <PtNote>{`The family asked for ${needs.join(', ').replace(/, ([^,]*)$/, ' and $1')} before they release the money.`}</PtNote> : null}
 
@@ -131,6 +148,22 @@ export function SubmitWorkScreen({ navigation, route }: RootScreenProps<'SubmitW
           {m.deliverables.map((x, i) => (
             <TickRow key={`${x.text}-${i}`} title={x.text} checked={Boolean(done[i])} onToggle={editable ? () => setDone((prev) => prev.map((v, j) => (j === i ? !v : v))) : undefined} last={i === m.deliverables.length - 1} />
           ))}
+        </PtPanel>
+      ) : null}
+
+      {d.can.submit && editable && next ? (
+        <PtPanel>
+          <PtSwitchRow
+            title={`Ask for ${next.title} materials money now`}
+            subtitle={`${percent}% of ${next.title}, ${formatNaira(advanceAmount)}, paid ${next.status === 'funded' ? 'with this approval' : `once the family funds ${next.title}`}`}
+            value={advance}
+            onChange={setAdvance}
+          />
+          {advance ? (
+            <View style={{ paddingBottom: 12 }}>
+              <PtPills options={[10, 20, 30, 40, 50].map((v) => ({ value: v, label: `${v}%` }))} value={percent} onChange={(v) => setPercent(Number(v))} />
+            </View>
+          ) : null}
         </PtPanel>
       ) : null}
 

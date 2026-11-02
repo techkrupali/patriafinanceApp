@@ -93,7 +93,7 @@ export function BusinessSetupScreen({ navigation, route }: RootScreenProps<'Busi
     case 7:
       return <BankStep {...props} />;
     default:
-      return <PublicProfile {...props} done={() => navigation.replace('BusinessVerification')} />;
+      return <PublicProfile {...props} done={() => (route.params?.step ? navigation.goBack() : navigation.replace('BusinessVerification'))} />;
   }
 }
 
@@ -164,6 +164,7 @@ function Owner({ profile, next, back, step }: StepProps) {
   const bvnOk = bvn.length === 11 || (!bvn && has?.bvn);
   const ninOk = nin.length === 11 || (!nin && has?.nin);
   const ok = Boolean(bvnOk && ninOk && has?.selfie);
+  const [tips, setTips] = useState(false);
 
   const go = () => {
     if (!bvn && !nin) return next();
@@ -189,10 +190,33 @@ function Owner({ profile, next, back, step }: StepProps) {
           subtitle={has?.selfie ? 'Tap to take it again' : 'To match your BVN photo'}
           right={busy === 'selfie' ? 'Uploading…' : undefined}
           chevron
-          onPress={() => void run('selfie', 'camera')}
+          onPress={() => setTips(true)}
           last
         />
       </PtPanel>
+
+      {/* KYC-05 "Take a quick selfie": the tips before the camera opens. */}
+      <PtSheet
+        visible={tips}
+        title="Take a quick selfie"
+        subtitle="We compare it with your BVN photo to make sure no one else is using your details."
+        onClose={() => setTips(false)}
+        footer={<PtButton title="Open camera" onPress={() => { setTips(false); void run('selfie', 'camera'); }} />}
+      >
+        {[
+          ['sun', 'Find good light, facing a window'],
+          ['eye-off', 'Take off glasses, caps and face masks'],
+          ['circle', 'Fill the circle with your face'],
+        ].map(([icon, text]) => (
+          <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: pt.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name={icon as 'sun'} size={18} color={pt.brand} />
+            </View>
+            <Text style={{ flex: 1, fontFamily: ptFont.medium, fontSize: 15, color: pt.ink }}>{text}</Text>
+          </View>
+        ))}
+        <PtNote>Your selfie is used only for verification and stored securely, as our Privacy notice explains.</PtNote>
+      </PtSheet>
     </PtStepScreen>
   );
 }
@@ -250,11 +274,18 @@ function Cac({ profile, next, back, step }: StepProps) {
   const save = useSaveBusiness();
   const { run, busy } = useItemUpload();
   const [rc, setRc] = useState(profile?.rc_number ?? '');
+  // "registered 2014" — shown on the public profile as "Since 2014".
+  const [since, setSince] = useState(profile?.since_year ? String(profile.since_year) : '');
   const cert = docName(profile, 'cac_certificate');
   const report = docName(profile, 'cac_status_report');
   const memo = docName(profile, 'memorandum');
-  const ok = rc.trim().length > 2 && Boolean(cert && report);
-  const go = () => (rc.trim().toUpperCase().replace(/\s+/g, '') === profile?.rc_number ? next() : save.mutate({ rc_number: rc.trim() }, { onSuccess: next, onError: (e) => showAlert('Could not save', errorText(e)) }));
+  const year = since ? Number(since) : null;
+  const yearOk = year === null || (year >= 1950 && year <= new Date().getFullYear());
+  const ok = rc.trim().length > 2 && Boolean(cert && report) && yearOk;
+  const go = () =>
+    rc.trim().toUpperCase().replace(/\s+/g, '') === profile?.rc_number && year === (profile?.since_year ?? null)
+      ? next()
+      : save.mutate({ rc_number: rc.trim(), since_year: year }, { onSuccess: next, onError: (e) => showAlert('Could not save', errorText(e)) });
 
   const box = (item: string, title: string, hint: string, name: string | null) => (
     <UploadBox title={title} hint={hint} busy={busy === item} onTake={() => void run(item, 'camera')} onUpload={() => void run(item, 'library')} done={name ? { name, sub: `${name} · we check it with CAC`, onReplace: () => void run(item, 'library') } : null} />
@@ -270,6 +301,7 @@ function Cac({ profile, next, back, step }: StepProps) {
       gap={16}
     >
       <PtField label="RC or BN number" value={rc} onChangeText={setRc} placeholder="RC 1234567" maxLength={30} autoCapitalize="characters" />
+      <PtField label="Year registered" value={since} onChangeText={(t) => setSince(t.replace(/\D/g, '').slice(0, 4))} placeholder="2014" keyboardType="number-pad" maxLength={4} error={yearOk ? undefined : 'Enter the year on your certificate'} />
       {box('cac_certificate', 'Certificate of incorporation', 'Or your business name certificate', cert)}
       {box('cac_status_report', 'CAC status report (form CAC 1.1)', 'Shows the directors and shareholders', report)}
       {box('memorandum', 'Memorandum and articles (optional)', 'Helps if you have several directors', memo)}

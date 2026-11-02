@@ -15,19 +15,25 @@ export function PtWalletRow({
   onPress,
   last,
   hideAmount = false,
+  long = false,
+  onLongPress,
 }: {
   wallet: Wallet;
   onPress: () => void;
   last?: boolean;
   hideAmount?: boolean;
+  /** TRS-02's fuller line ("803 412 7790 · everyday"). */
+  long?: boolean;
+  onLongPress?: () => void;
 }) {
   return (
     <PtRow
       title={wallet.name}
-      subtitle={walletSubtitle(wallet)}
+      subtitle={walletSubtitle(wallet, long)}
       minHeight={62}
       last={last}
       onPress={onPress}
+      onLongPress={onLongPress}
       left={
         <PtIconTile>
           <Ionicons name={walletVisual(wallet.type).icon} size={19} color={walletColour(wallet.colour) ?? pt.brand} />
@@ -35,7 +41,8 @@ export function PtWalletRow({
       }
       right={
         <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink, fontVariant: ['tabular-nums'] }}>
-          {hideAmount ? '₦ ••••' : formatNaira(wallet.balance)}
+          {/* WPV-05: a relative on a child's wallet isn't shown the balance. */}
+          {hideAmount ? '₦ ••••' : (wallet.balance as string | null) === null ? 'Gifts only' : formatNaira(wallet.balance)}
         </Text>
       }
     />

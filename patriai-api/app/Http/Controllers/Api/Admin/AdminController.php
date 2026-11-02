@@ -199,6 +199,40 @@ class AdminController extends ApiController
                     'last_run_at' => $r->last_run_at?->toIso8601String(),
                     'next_run_on' => $r->nextRunOn(now())?->toDateString(),
                 ]),
+            // SND-14/15 payments set to go out on a date, and REQ/SPL money asked for either way.
+            'scheduled_payments' => \App\Models\ScheduledPayment::with('fromWallet:id,name')
+                ->where('user_id', $user->id)->latest()->limit(20)->get()
+                ->map(fn (\App\Models\ScheduledPayment $p) => [
+                    'id' => $p->id,
+                    'to_name' => $p->to_name,
+                    'kind' => $p->destination['kind'] ?? null,
+                    'from_wallet' => $p->fromWallet?->name,
+                    'amount' => number_format($p->amount / 100, 2, '.', ''),
+                    'when' => $p->when(),
+                    'status' => $p->status,
+                    'runs' => $p->runs,
+                    'ends_after' => $p->ends_after,
+                    'next_run_at' => $p->next_run_at?->toIso8601String(),
+                    'last_result' => $p->last_result,
+                    'last_reason' => $p->last_reason,
+                ]),
+            'money_requests' => \App\Models\MoneyRequest::with(['requester:id,first_name,last_name,name', 'payer:id,first_name,last_name,name', 'wallet:id,name'])
+                ->where(fn ($q) => $q->where('requester_id', $user->id)->orWhere('payer_user_id', $user->id))
+                ->latest()->limit(20)->get()
+                ->map(fn (\App\Models\MoneyRequest $r) => [
+                    'code' => $r->code,
+                    'direction' => $r->requester_id === $user->id ? 'asked' : 'asked_of',
+                    'other' => $r->requester_id === $user->id ? $r->payerName() : $r->requester?->fullName(),
+                    'other_on_patriai' => $r->requester_id === $user->id ? $r->payer_user_id !== null : true,
+                    'wallet' => $r->wallet?->name,
+                    'amount' => number_format($r->amount / 100, 2, '.', ''),
+                    'paid_amount' => number_format($r->paid_amount / 100, 2, '.', ''),
+                    'note' => $r->note,
+                    'split' => $r->split_title,
+                    'status' => $r->status,
+                    'due_on' => $r->due_on?->toDateString(),
+                    'created_at' => $r->created_at?->toIso8601String(),
+                ]),
             'invitations' => WalletInvitation::with(['wallet:id,name', 'inviter:id,first_name,last_name,name'])
                 ->where('status', 'pending')
                 ->where(function ($q) use ($user) {
@@ -440,6 +474,8 @@ class AdminController extends ApiController
             'budget' => $wallet->budget() ? \App\Services\BudgetService::make()->detail($wallet, $wallet->owner) : null,
             // Giving wallets (GIV/WAL-18): set aside, given, coming up, pledge, recipients, settings.
             'giving' => $wallet->type === 'giving' ? \App\Services\GivingService::make()->detail($wallet) : null,
+            // CHD-07/12: the child's tasks and rewards.
+            'child_tasks' => $wallet->type === 'child' ? \App\Services\ChildTaskService::make()->list($wallet) : null,
             // Savings broken early pay a fee, half to the charity picked (SAV-05).
             'early_break' => ($lock = $wallet->savingsLock()) && $lock['early_break'] ? [
                 'fee_percent' => $lock['fee_percent'],
@@ -620,7 +656,44 @@ class AdminController extends ApiController
             ] : null,
             'wallet' => $this->serializeWallet($project->wallet, withOwner: true),
             'milestones' => $project->milestones->map(fn ($m) => $this->serializeMilestone($m))->values(),
+            // MLS-03 who approves; VPJ the builder's proposal it came from; CHT-03 the chat, kept as a record.
+            'approvals' => $this->projectApprovals($project),
+            'proposal' => ($pp = \App\Models\ProjectProposal::where('project_id', $project->id)->first()) ? [
+                'id' => $pp->id,
+                'total' => number_format($pp->total / 100, 2, '.', ''),
+                'phases' => count($pp->phases),
+                'terms' => $pp->terms,
+                'sent_at' => $pp->sent_at?->toIso8601String(),
+                'accepted_at' => $pp->responded_at?->toIso8601String(),
+            ] : null,
+            'messages' => \App\Models\ProjectMessage::with('user')->where('project_id', $project->id)->latest('id')->limit(40)->get()->reverse()->map(fn ($m) => [
+                'id' => $m->id,
+                'kind' => $m->kind,
+                'by' => $m->user?->fullName() ?? ($m->kind === 'steward' ? 'Steward' : 'Patriai'),
+                'body' => $m->body,
+                'at' => $m->created_at?->toIso8601String(),
+            ])->values(),
         ]);
+    }
+
+    private function projectApprovals(Project $project): array
+    {
+        $svc = \App\Services\ProjectApprovalService::make();
+        $rules = $svc->rulesFor($project);
+        $names = fn (array $ids) => \App\Models\User::whereIn('id', $ids)->get()->map(fn ($u) => $u->fullName())->values();
+
+        return [
+            'custom' => $svc->custom($project),
+            'mode' => $rules['mode'],
+            'needed' => $rules['needed'],
+            'approvers' => $names($rules['approver_ids']),
+            'overrides' => collect($project->meta['approvals']['overrides'] ?? [])->map(fn ($o, $mid) => [
+                'milestone' => $project->milestones->firstWhere('id', (int) $mid)?->title,
+                'needed' => (int) $o['needed'],
+                'approvers' => $names($o['approver_ids']),
+            ])->values(),
+            'site_photo_over' => isset($project->meta['approvals']['site_photo_over']) ? number_format($project->meta['approvals']['site_photo_over'] / 100, 2, '.', '') : null,
+        ];
     }
 
     // GET /admin/kyc?status=

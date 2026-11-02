@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import { Feather } from '@expo/vector-icons';
 import { pt, ptFont } from '../theme';
-import { PtStepScreen } from '../components/pt/PtStepScreen';
+import { PtPageScreen } from '../components/pt/PtPageScreen';
 import { PtCard, PtSectionTitle } from '../components/pt/PtList';
 import { PtWalletRow } from '../components/pt/PtWalletRow';
-import { PtButton } from '../components/pt/PtButton';
+import { PtPills } from '../components/pt/PtForm';
+import { WalletActionsSheet } from '../components/WalletActionsSheet';
 import { DraftWalletCard } from '../components/DraftWalletCard';
 import { LoadError } from '../components/LoadError';
 import { useWalletDrafts, useWallets } from '../api/hooks';
@@ -44,6 +46,7 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
   const drafts = useWalletDrafts();
   const hidden = useHomePrefs((s) => s.hidden);
   const [filter, setFilter] = useState<Filter>('all');
+  const [actions, setActions] = useState<Wallet | null>(null);
 
   const list = useMemo(() => wallets.data ?? [], [wallets.data]);
   const visible = useMemo(
@@ -56,40 +59,26 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
   const money = (n: number) => (hidden ? '₦ ••••' : formatNaira(n));
 
   return (
-    <PtStepScreen
+    <PtPageScreen
       onBack={() => navigation.goBack()}
       title="All wallets"
       subtitle={`${list.length} wallet${list.length === 1 ? '' : 's'} · ${money(sum(list))}`}
       gap={16}
-      footer={<PtButton title="Create a wallet" onPress={() => navigation.navigate('CreateWallet')} />}
+      right={
+        <Pressable
+          onPress={() => {
+            selection();
+            navigation.navigate('AddToTreasury');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Add to Treasury"
+          hitSlop={10}
+        >
+          <Feather name="plus" size={24} color={pt.ink} />
+        </Pressable>
+      }
     >
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
-        {FILTERS.map((f) => {
-          const on = f.key === filter;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => {
-                selection();
-                setFilter(f.key);
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              style={{
-                height: 36,
-                paddingHorizontal: 14,
-                borderRadius: 18,
-                justifyContent: 'center',
-                backgroundColor: on ? pt.brand : pt.raised,
-                borderWidth: on ? 0 : 1.5,
-                borderColor: pt.line,
-              }}
-            >
-              <Text style={{ fontFamily: on ? ptFont.bold : ptFont.semibold, fontSize: 13, color: on ? pt.onBrand : pt.ink }}>{f.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <PtPills options={FILTERS.map((f) => ({ value: f.key, label: f.label }))} value={filter} onChange={setFilter} />
 
       {wallets.isLoading ? (
         <ActivityIndicator color={pt.brand} style={{ marginTop: 32 }} />
@@ -99,7 +88,8 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
         <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>No wallets here yet.</Text>
       ) : (
         GROUPS.map((g) => {
-          const items = visible.filter((w) => walletBucket(w) === g.key);
+          // Main first: the everyday wallet.
+          const items = visible.filter((w) => walletBucket(w) === g.key).sort((a, b) => Number(b.type === 'main') - Number(a.type === 'main'));
           if (items.length === 0) return null;
           return (
             <View key={g.key} style={{ gap: 8 }}>
@@ -110,8 +100,11 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
                     key={w.id}
                     wallet={w}
                     hideAmount={hidden}
+                    long
                     last={i === items.length - 1}
-                    onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
+                    // TRS-02: Main opens its transactions (TXN-01).
+                    onPress={() => (w.type === 'main' ? navigation.navigate('Activity', { walletId: w.id }) : w.type === 'project' && w.project_id ? navigation.navigate('ProjectDetail', { projectId: w.project_id }) : navigation.navigate('WalletDetail', { walletId: w.id }))}
+                    onLongPress={() => setActions(w)}
                   />
                 ))}
               </PtCard>
@@ -128,6 +121,7 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
           ))}
         </View>
       ) : null}
-    </PtStepScreen>
+      <WalletActionsSheet wallet={actions} onClose={() => setActions(null)} />
+    </PtPageScreen>
   );
 }

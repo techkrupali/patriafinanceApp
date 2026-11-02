@@ -214,4 +214,53 @@ class EmergencyKeyholdersTest extends TestCase
         $this->postJson("/api/v1/emergency-requests/{$change->id}/approve")->assertOk()->assertJsonPath('data.emergency.rules.required_keyholders', 3);
         $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('type', 'emergency_rules_changed')->count());
     }
+
+    public function test_releasing_an_amount_waits_for_the_keyholders_and_pays_it(): void
+    {
+        Storage::fake('local');
+        [$wallet, $ngozi, $ada, $obi] = $this->fund(['fast_release_limit' => '50000']);
+        $proof = fn () => UploadedFile::fake()->image('hospital-bill.jpg');
+
+        // WAL-17: over ₦50,000, so 2 of 3 must agree. Ngozi's own yes counts.
+        Sanctum::actingAs($ngozi);
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '85000', 'pin' => '1234', 'note' => 'Papa admitted at Mercy Hospital', 'proof' => $proof()], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Sent to the keyholders')
+            ->assertJsonPath('data.request.amount', '85000.00')
+            ->assertJsonPath('data.request.approvals', 1)
+            ->assertJsonPath('data.request.required_approvals', 2);
+        $this->assertSame("Ngozi Okafor asked to release ₦85,000 from Mama and Papa's health fund", AppNotification::where('user_id', $ada->id)->where('type', 'emergency_unlock_requested')->sole()->title);
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '1000', 'pin' => '1234'], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Ada's yes pays it to Ngozi's Main; the fund stays locked.
+        $id = EmergencyUnlockRequest::where('method', 'dual_approval')->sole()->id;
+        Sanctum::actingAs($ada);
+        $this->postJson("/api/v1/emergency-requests/{$id}/approve")->assertOk()
+            ->assertJsonPath('message', 'Released — the money is on its way')
+            ->assertJsonPath('data.emergency.locked', true)
+            ->assertJsonPath('data.emergency.requests.0.status', 'released');
+        $this->assertSame(30_000_000 + 8_500_000, $ngozi->mainWallet()->balance);
+        $this->assertSame(20_000_000 - 8_500_000, $wallet->refresh()->balance);
+        $this->assertNotNull(EmergencyUnlockRequest::find($id)->reference);
+        $this->assertSame(1, AppNotification::where('user_id', $obi->id)->where('type', 'emergency_released')->count());
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")
+            ->assertJsonPath('data.emergency.releases', 1)
+            ->assertJsonPath('data.emergency.target', '1200000.00')
+            ->assertJsonPath('data.emergency.me.put_in', '0.00');
+        Sanctum::actingAs($ngozi);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/emergency")
+            ->assertJsonPath('data.emergency.me.put_in', '200000.00')
+            ->assertJsonPath('data.emergency.me.monthly', '30000.00');
+        Sanctum::actingAs($ada);
+
+        // Within ₦50,000 with proof, a keyholder is paid at once.
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '30000', 'pin' => '1234', 'proof' => $proof()], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Money sent to your main wallet')
+            ->assertJsonPath('data.request.status', 'released');
+        $this->assertSame(3_000_000, $ada->mainWallet()->balance);
+
+        // No more than the fund holds.
+        $this->post("/api/v1/wallets/{$wallet->id}/emergency/releases", ['amount' => '900000', 'pin' => '1234'], ['Accept' => 'application/json'])->assertStatus(422);
+    }
 }

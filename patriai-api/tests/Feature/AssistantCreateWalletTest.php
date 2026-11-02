@@ -187,7 +187,8 @@ class AssistantCreateWalletTest extends TestCase
 
         $this->assertFalse($out['created']);
         $this->assertIsString($out['error']);
-        $this->assertStringContainsStringIgnoringCase('limit', $out['error']);
+        // ME-23's own words: "On Tier 3 you can have up to 20 wallets. Close one you no longer use."
+        $this->assertMatchesRegularExpression('/you can have up to \d+ wallets|you have your Main wallet/i', $out['error']);
         $this->assertStringNotContainsStringIgnoringCase('exception', $out['error']);
         $this->assertSame($max, Wallet::where('user_id', $user->id)->count()); // none added
     }

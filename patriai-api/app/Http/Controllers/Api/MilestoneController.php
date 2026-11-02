@@ -7,6 +7,7 @@ use App\Models\MilestoneEvidence;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\PinService;
+use App\Services\ProjectApprovalService;
 use App\Services\ProjectService;
 use App\Services\VendorProjectService;
 use Illuminate\Http\JsonResponse;
@@ -44,14 +45,19 @@ class MilestoneController extends ApiController
             'proof' => ['nullable', 'string', 'max:2000'],
             'done' => ['sometimes', 'array'],
             'done.*' => ['boolean'],
+            // VDM-12 "Ask for Painting materials money now: 30% of Painting".
+            'advance_percent' => ['nullable', 'integer', 'between:10,50'],
         ]);
 
+        if (!empty($data['advance_percent'])) {
+            ProjectApprovalService::make()->askAdvance($milestone, (int) $data['advance_percent']);
+        }
         $milestone = VendorProjectService::make()->submit($milestone, $user, $data['note'] ?? $data['proof'] ?? null, $data['done'] ?? null);
 
         return $this->ok('Milestone submitted', ['milestone' => $this->serializeMilestone($milestone->load('evidence.user'))]);
     }
 
-    // POST /milestones/{milestone}/approve  — PRJ-07 {pin}: the owner or a co-owner
+    // POST /milestones/{milestone}/approve  — PRJ-07 {pin, note?}: an approver (MLS-03), or the owner or a co-owner
     public function approve(Request $request, Milestone $milestone): JsonResponse
     {
         $user = $request->user();
@@ -59,14 +65,15 @@ class MilestoneController extends ApiController
         if ($project instanceof JsonResponse) {
             return $project;
         }
-        if (!$project->isFamilyApprover($user)) {
+        $approvals = ProjectApprovalService::make();
+        if (!$project->isFamilyApprover($user) && !in_array($user->id, $approvals->rulesFor($project, $milestone)['approver_ids'], true)) {
             return $this->fail('Only the family can approve this milestone', 403);
         }
 
-        $data = $request->validate(['pin' => ['required', 'string', self::TXN_PIN]]);
+        $data = $request->validate(['pin' => ['required', 'string', self::TXN_PIN], 'note' => ['nullable', 'string', 'max:200']]);
         app(PinService::class)->verify($user, $data['pin']);
 
-        $result = ProjectService::make()->approveMilestone($milestone, $user);
+        $result = ProjectService::make()->approveMilestone($milestone, $user, $data['note'] ?? null);
 
         if (($result['status'] ?? null) === 'pending_approval') {
             return $this->ok('Approval requested — the milestone pays out once approvers sign off', [
@@ -108,22 +115,40 @@ class MilestoneController extends ApiController
         if ($project instanceof JsonResponse) {
             return $project;
         }
-        if (!$project->actsForVendor($user, 'upload')) {
-            return $this->fail('Only the builder\'s team can add photos', 403);
-        }
-        if (!in_array($milestone->status, ['planned', 'funded', 'rejected'], true)) {
-            return $this->fail('Photos can be added until the milestone is submitted', 422);
+        // MLS-03 "Require a site visit photo from an approver": the family adds theirs to a submitted milestone.
+        $siteVisit = $request->input('kind') === 'site_visit';
+        if ($siteVisit) {
+            if (!in_array($user->id, ProjectApprovalService::make()->rulesFor($project, $milestone)['approver_ids'], true)) {
+                return $this->fail('Only an approver can add a site visit photo', 403);
+            }
+            if (!in_array($milestone->status, ['submitted', 'approved'], true)) {
+                return $this->fail('Add the site visit photo once the builder has submitted the milestone', 422);
+            }
+        } else {
+            if (!$project->actsForVendor($user, 'upload')) {
+                return $this->fail('Only the builder\'s team can add photos', 403);
+            }
+            if (!in_array($milestone->status, ['planned', 'funded', 'rejected'], true)) {
+                return $this->fail('Photos can be added until the milestone is submitted', 422);
+            }
         }
 
         $data = $request->validate([
             'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf,mp4,mov,quicktime,m4v', 'max:51200'], // 50 MB
-            'kind' => ['nullable', 'in:receipt'],
+            'kind' => ['nullable', 'in:receipt,site_visit'],
             'caption' => ['nullable', 'string', 'max:60'],
+            // From the photo's own EXIF, when the phone kept it.
+            'taken_at' => ['nullable', 'date', 'before_or_equal:' . now()->addDay()->toDateString()],
+            'lat' => ['nullable', 'numeric', 'between:-90,90', 'required_with:lng'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180', 'required_with:lat'],
         ]);
 
         $file = $request->file('file');
         $mime = (string) $file->getMimeType();
-        $kind = ($data['kind'] ?? null) === 'receipt' ? 'receipt' : (str_starts_with($mime, 'video') ? 'video' : 'image');
+        $kind = $siteVisit ? 'site_visit' : (($data['kind'] ?? null) === 'receipt' ? 'receipt' : (str_starts_with($mime, 'video') ? 'video' : 'image'));
+        if ($siteVisit && !str_starts_with($mime, 'image')) {
+            return $this->fail('A site visit photo must be a photo', 422);
+        }
         if ($kind !== 'receipt' && $mime === 'application/pdf') {
             return $this->fail('A PDF can only be added as a receipt', 422);
         }
@@ -135,11 +160,26 @@ class MilestoneController extends ApiController
             'kind' => $kind,
             'url' => $request->getSchemeAndHttpHost() . '/storage/' . $path,
             'caption' => $data['caption'] ?? null,
+            'taken_at' => isset($data['taken_at']) ? \Illuminate\Support\Carbon::parse($data['taken_at'])->utc() : null,
+            'latitude' => $data['lat'] ?? null,
+            'longitude' => $data['lng'] ?? null,
         ]);
 
         return $this->ok('Evidence uploaded', [
             'milestone' => $this->serializeMilestone($milestone->fresh()->load('evidence.user')),
         ]);
+    }
+
+    // POST /milestones/{milestone}/viewed — MLS-02 "viewed 11:15 am"
+    public function viewed(Request $request, Milestone $milestone): JsonResponse
+    {
+        $project = $this->accessibleProject($milestone, $request->user());
+        if ($project instanceof JsonResponse) {
+            return $project;
+        }
+        ProjectApprovalService::make()->viewed($milestone, $request->user());
+
+        return $this->ok('Seen');
     }
 
     // DELETE /milestones/{milestone}/evidence/{evidence}  — before it's submitted

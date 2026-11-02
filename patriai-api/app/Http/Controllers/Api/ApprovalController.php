@@ -91,6 +91,39 @@ class ApprovalController extends ApiController
     }
 
     // POST /approvals/{approvalRequest}/cancel
+    // POST /approvals/{approvalRequest}/remind — SND-10 "Remind Emeka" (once an hour).
+    public function remind(Request $request, ApprovalRequest $approvalRequest): JsonResponse
+    {
+        $user = $request->user();
+        if ($approvalRequest->initiator_id !== $user->id) {
+            return $this->fail('Only the person who asked can send a reminder', 403);
+        }
+        if ($approvalRequest->status !== 'pending') {
+            return $this->fail('This request is no longer pending', 422);
+        }
+        $key = "approval:{$approvalRequest->id}:remind";
+        if (!\Illuminate\Support\Facades\Cache::add($key, 1, now()->addHour())) {
+            return $this->fail('You reminded them less than an hour ago.', 429);
+        }
+        $approvalRequest->load('wallet');
+        // Named approvers (MLS-03, WAL-08) are the only ones this request waits on.
+        $asked = isset($approvalRequest->payload['approver_ids'])
+            ? collect($approvalRequest->payload['approver_ids'])->map(fn ($id) => (int) $id)->reject(fn ($id) => $id === $user->id)
+            : $approvalRequest->wallet->eligibleApprovers($user->id);
+        $waiting = $asked->diff($approvalRequest->responses()->pluck('approver_id'));
+        foreach (\App\Models\User::whereIn('id', $waiting)->get() as $approver) {
+            \App\Services\NotificationService::make()->push(
+                $approver,
+                'approval_reminder',
+                "{$user->first_name} is waiting for your yes",
+                '₦' . number_format($approvalRequest->amount / 100) . ' from ' . $approvalRequest->wallet->name . ($approvalRequest->description ? " · {$approvalRequest->description}" : '') . '.',
+                ['approval_request_id' => $approvalRequest->id, 'wallet_id' => $approvalRequest->wallet_id],
+            );
+        }
+
+        return $this->ok('Reminder sent', ['reminded' => $waiting->count()]);
+    }
+
     public function cancel(Request $request, ApprovalRequest $approvalRequest): JsonResponse
     {
         if ($approvalRequest->initiator_id !== $request->user()->id) {

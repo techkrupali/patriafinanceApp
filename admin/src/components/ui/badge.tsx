@@ -67,6 +67,7 @@ const STATUS_TONES: Record<string, Tone> = {
   open: "amber",
   responded: "blue",
   fixing: "blue",
+  agreed: "blue",
   escalated: "red",
   under_review: "amber",
   resolved: "green",
