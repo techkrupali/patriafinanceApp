@@ -143,7 +143,7 @@ class WalletManageTest extends TestCase
             ->assertJsonPath('data.approval.required_approvals', 1)
             ->json('data.approval.id');
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk()->assertJsonPath('data.approval.status', 'executed');
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk()->assertJsonPath('data.approval.status', 'executed');
         $this->assertSame(1_000_000_00 - 300_000_00 + 35_000_00, $mains[$ngozi->id]->fresh()->balance);
         $this->assertTrue($fees->fresh()->isGoalLocked());
 
@@ -161,7 +161,7 @@ class WalletManageTest extends TestCase
         $this->getJson("/api/v1/wallets/{$fees->id}")->assertJsonPath('data.state.agree', 'Ngozi and Emeka');
         $id = $this->postJson("/api/v1/wallets/{$fees->id}/unlock")->assertOk()->json('data.approval.id');
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertNull($fees->fresh()->savingsLock());
 
         // Alone: nothing leaves before it opens, and it can't be closed with money in it.
@@ -194,7 +194,7 @@ class WalletManageTest extends TestCase
             ->assertOk()->assertJsonPath('data.done', false)->json('data.approval.id');
         $this->assertSame('active', $fees->fresh()->status);
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
 
         $fees->refresh();
         $this->assertSame('closed', $fees->status);

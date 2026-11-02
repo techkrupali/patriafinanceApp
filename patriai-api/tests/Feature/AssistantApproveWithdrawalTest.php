@@ -259,7 +259,7 @@ class AssistantApproveWithdrawalTest extends TestCase
         [$owner, , , $req] = $this->scenario();
         Sanctum::actingAs($owner);
 
-        $this->postJson("/api/v1/approvals/{$req->id}/respond", ['decision' => 'approve'])
+        $this->postJson("/api/v1/approvals/{$req->id}/respond", ['decision' => 'approve', 'pin' => '1234'])
             ->assertOk()
             ->assertJsonPath('status', true);
 

@@ -151,7 +151,7 @@ class ChildAppTest extends TestCase
         $view = $this->getJson("/api/v1/wallets/{$wallet->id}/child")->assertOk()->assertJsonPath('data.role', 'coparent')
             ->assertJsonPath('data.asks.0.title', 'A storybook')->assertJsonPath('data.asks.0.category', 'school')->assertJsonPath('data.asks.0.needs', 'Over ₦2,000 · needs you or Ngozi')
             ->assertJsonPath('data.spent_this_week', '1000.00')->json('data');
-        $this->postJson("/api/v1/approvals/{$view['asks'][0]['id']}/respond", ['decision' => 'approve', 'note' => 'Enjoy it!'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$view['asks'][0]['id']}/respond", ['decision' => 'approve', 'pin' => '1234', 'note' => 'Enjoy it!'])->assertOk();
 
         // CHD-05: yes by Emeka, with what he said; the small one, automatically.
         $requests = $this->kid($token)->getJson('/api/v1/child/requests')->assertOk()->json('data.requests');

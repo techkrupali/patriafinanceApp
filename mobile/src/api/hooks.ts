@@ -12,6 +12,7 @@ import { getDeviceMeta } from '../lib/device';
 import { appendFile, type PickedFile } from '../lib/upload';
 import { STORAGE_KEYS } from '../config';
 import type {
+  AwayMode,
   JointChanges,
   JointSummary,
   PhoneCheckData,
@@ -120,7 +121,7 @@ import type {
   PinForgotData,
 } from './types';
 
-type ApprovalScope = 'to_me' | 'mine';
+type ApprovalScope = 'to_me' | 'mine' | 'history';
 
 // ---------- Query keys ----------
 
@@ -747,7 +748,7 @@ export function useRespondApproval(id: number) {
 export function useCancelApproval(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<ApprovalDetailData>(`/approvals/${id}/cancel`, { method: 'POST' }),
+    mutationFn: (reason?: string) => api<ApprovalDetailData>(`/approvals/${id}/cancel`, { method: 'POST', body: { reason } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.approval(id) });
       void qc.invalidateQueries({ queryKey: ['approvals'] });
@@ -756,6 +757,36 @@ export function useCancelApproval(id: number) {
       void qc.invalidateQueries({ queryKey: keys.home });
     },
   });
+}
+
+/** APR-05 "Ask a question" (approver) and its answer (the person who asked). */
+export function useApprovalQuestion(id: number) {
+  const qc = useQueryClient();
+  const onSuccess = () => {
+    void qc.invalidateQueries({ queryKey: keys.approval(id) });
+    void qc.invalidateQueries({ queryKey: ['approvals'] });
+  };
+  return {
+    ask: useMutation({ mutationFn: (input: { body: string; pause: boolean }) => api<ApprovalDetailData>(`/approvals/${id}/questions`, { method: 'POST', body: input }), onSuccess }),
+    answer: useMutation({ mutationFn: (body: string) => api<ApprovalDetailData>(`/approvals/${id}/answer`, { method: 'POST', body: { body } }), onSuccess }),
+  };
+}
+
+/** APR-09 Away mode. */
+export function useAwayMode() {
+  return useQuery({ queryKey: ['me', 'away'] as const, queryFn: async () => (await api<{ away: AwayMode | null }>('/me/away')).away });
+}
+
+export function useAwayActions() {
+  const qc = useQueryClient();
+  const onSuccess = () => void qc.invalidateQueries({ queryKey: ['me', 'away'] });
+  return {
+    set: useMutation({
+      mutationFn: (input: { delegate_id: number; from: string; to: string; max_amount?: string; pin: string }) => api<{ away: AwayMode }>('/me/away', { method: 'PUT', body: input }),
+      onSuccess,
+    }),
+    clear: useMutation({ mutationFn: () => api<{ away: null }>('/me/away', { method: 'DELETE' }), onSuccess }),
+  };
 }
 
 // ---------- Notifications ----------

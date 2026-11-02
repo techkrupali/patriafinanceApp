@@ -162,7 +162,7 @@ class ProjectWalletSetupTest extends TestCase
         $this->postJson("/api/v1/milestones/{$foundation->id}/approve", ['pin' => '1234'])->assertOk()->assertJsonPath('data.milestone.status', 'approved')
             ->assertJsonPath('data.milestone.approval.yes', 1)->assertJsonPath('data.milestone.approval.required', 2);
         Sanctum::actingAs($emeka);
-        $this->postJson('/api/v1/approvals/' . ApprovalRequest::sole()->id . '/respond', ['decision' => 'approve'])->assertOk();
+        $this->postJson('/api/v1/approvals/' . ApprovalRequest::sole()->id . '/respond', ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $foundation->refresh();
         $this->assertSame('released', $foundation->status);
         $this->assertSame(10_000_000, $foundation->retention);
@@ -178,7 +178,7 @@ class ProjectWalletSetupTest extends TestCase
         Sanctum::actingAs($ngozi);
         $this->postJson("/api/v1/milestones/{$roofing->id}/approve", ['pin' => '1234'])->assertOk();
         Sanctum::actingAs($emeka);
-        $this->postJson('/api/v1/approvals/' . ApprovalRequest::latest('id')->first()->id . '/respond', ['decision' => 'approve'])->assertOk();
+        $this->postJson('/api/v1/approvals/' . ApprovalRequest::latest('id')->first()->id . '/respond', ['decision' => 'approve', 'pin' => '1234'])->assertOk();
 
         // Handover: every milestone paid, retention due in 3 months.
         $this->assertSame('completed', $project->refresh()->status);

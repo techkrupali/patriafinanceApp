@@ -177,7 +177,7 @@ class SpendingWalletTest extends TestCase
         $request = ApprovalRequest::findOrFail($res->json('data.approval.id'));
         $this->assertSame('over your ₦15,000 a day', $request->payload['over_limit']);
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$request->id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$request->id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertSame('executed', $request->refresh()->status);
         $this->assertSame(2, Transaction::where('wallet_id', $wallet->id)->where('type', 'withdrawal')->whereNotNull('budget_category_id')->count());
     }

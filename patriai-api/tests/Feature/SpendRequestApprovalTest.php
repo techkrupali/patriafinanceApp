@@ -66,7 +66,7 @@ class SpendRequestApprovalTest extends TestCase
 
         // 2. Owner approves — the executor performs the transfer.
         Sanctum::actingAs($owner);
-        $approve = $this->postJson("/api/v1/approvals/{$approvalId}/respond", ['decision' => 'approve']);
+        $approve = $this->postJson("/api/v1/approvals/{$approvalId}/respond", ['decision' => 'approve', 'pin' => '1234']);
         $approve->assertOk()->assertJsonPath('data.approval.status', 'executed');
 
         // 3. Money moved exactly once.

@@ -154,7 +154,7 @@ class MoneyFlowsTest extends TestCase
         $this->postJson("/api/v1/approvals/{$approval}/remind")->assertOk()->assertJsonPath('data.reminded', 1);
         $this->postJson("/api/v1/approvals/{$approval}/remind")->assertStatus(429);
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$approval}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$approval}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertSame(400_000 + 200_000, $emekaMain->fresh()->balance);
 
         // Someone else's group can't be paid.

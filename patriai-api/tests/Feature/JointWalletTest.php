@@ -159,7 +159,7 @@ class JointWalletTest extends TestCase
         $this->assertSame('a new account', $request->payload['over_limit']);
         $this->assertSame(24, (int) round(now()->diffInHours($request->expires_at)));
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$request->id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$request->id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertCount(1, $this->payouts);
         // Every payment notifies both of you.
         $this->assertSame(1, AppNotification::where('user_id', $emeka->id)->where('type', 'joint_payment')->count());

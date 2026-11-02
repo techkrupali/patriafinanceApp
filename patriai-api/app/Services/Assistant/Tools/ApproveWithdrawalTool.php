@@ -120,6 +120,8 @@ class ApproveWithdrawalTool implements AssistantTool
         // user. ApprovalService enforces every rule; we never bypass it.
         try {
             $sub = Request::create('/api/v1/approvals/'.$model->id.'/respond', 'POST', ['decision' => 'approve']);
+            // The user confirmed this approval in the chat; Steward never sees a PIN.
+            $sub->attributes->set('confirmed_in_chat', true);
             $sub->setUserResolver(fn () => $request->user());
 
             $response = app(ApprovalController::class)->respond($sub, $model);

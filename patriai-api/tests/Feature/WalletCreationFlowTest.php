@@ -215,11 +215,11 @@ class WalletCreationFlowTest extends TestCase
         $this->patchJson("/api/v1/wallets/{$wallet->id}", ['approval_threshold' => 50000])->assertStatus(422);
         $this->patchJson("/api/v1/wallets/{$wallet->id}", ['lock_until_goal' => true])->assertStatus(422);
         // Only Emeka is asked.
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertStatus(422);
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertStatus(422);
 
         Sanctum::actingAs($emeka);
         $this->getJson('/api/v1/approvals?scope=to_me')->assertJsonPath('data.approvals.0.id', $id)->assertJsonPath('data.approvals.0.governance', true);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk()->assertJsonPath('data.approval.status', 'executed');
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk()->assertJsonPath('data.approval.status', 'executed');
         $this->assertSame('majority', $wallet->fresh()->approvalMode());
         $this->assertSame(72, $wallet->fresh()->approvalExpiryHours());
 
@@ -227,7 +227,7 @@ class WalletCreationFlowTest extends TestCase
         $id = $this->patchJson("/api/v1/wallets/{$wallet->id}", ['required_approvals' => 1])->assertOk()
             ->assertJsonPath('data.pending_change.approver_names.0', 'Ngozi')->json('data.pending_change.id');
         Sanctum::actingAs($ngozi);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertNull($wallet->fresh()->approvalMode());
 
         // WAL-14: "Emeka changed the yeses needed … Ngozi approved".

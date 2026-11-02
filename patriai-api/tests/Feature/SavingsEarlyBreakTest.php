@@ -159,7 +159,7 @@ class SavingsEarlyBreakTest extends TestCase
         $this->assertSame(0, Transaction::where('type', 'fee')->count());
 
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$id}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertSame('executed', ApprovalRequest::find($id)->status);
         $this->assertSame(100_000, Transaction::where('wallet_id', $rent->id)->where('type', 'fee')->sole()->amount);
         $this->assertSame(20_000_000 + 1_900_000, $main->refresh()->balance);

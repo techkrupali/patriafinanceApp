@@ -172,7 +172,7 @@ class MoneyRequestTest extends TestCase
         $this->assertSame('pending', MoneyRequest::where('code', $code)->value('status'));
 
         Sanctum::actingAs($emeka);
-        $this->postJson("/api/v1/approvals/{$approval}/respond", ['decision' => 'approve'])->assertOk();
+        $this->postJson("/api/v1/approvals/{$approval}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
         $this->assertSame('paid', MoneyRequest::where('code', $code)->value('status'));
         $this->assertSame(300_000, $ngoziMain->fresh()->balance);
         $this->assertSame(9_700_000, $house->fresh()->balance);

@@ -333,6 +333,11 @@ Route::prefix('v1')->group(function () {
         Route::post('approvals/{approvalRequest}/respond', [ApprovalController::class, 'respond'])->middleware('throttle:30,1');
         Route::post('approvals/{approvalRequest}/cancel', [ApprovalController::class, 'cancel'])->middleware('throttle:30,1');
         Route::post('approvals/{approvalRequest}/remind', [ApprovalController::class, 'remind'])->middleware('throttle:10,1');
+        Route::post('approvals/{approvalRequest}/questions', [ApprovalController::class, 'ask'])->middleware('throttle:20,1');
+        Route::post('approvals/{approvalRequest}/answer', [ApprovalController::class, 'answer'])->middleware('throttle:20,1');
+        Route::get('me/away', [ApprovalController::class, 'away']);
+        Route::put('me/away', [ApprovalController::class, 'setAway'])->middleware('throttle:10,1');
+        Route::delete('me/away', [ApprovalController::class, 'clearAway'])->middleware('throttle:10,1');
 
         // Notifications
         Route::get('notifications', [NotificationController::class, 'index']);

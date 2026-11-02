@@ -207,7 +207,7 @@ class ApprovalService
      * Record one approver's decision. Executes the spend once the required
      * approval count is reached.
      */
-    public function respond(ApprovalRequest $request, User $approver, string $decision, ?string $note): ApprovalRequest
+    public function respond(ApprovalRequest $request, User $approver, string $decision, ?string $note, ?int $offer = null): ApprovalRequest
     {
         if ($request->status !== 'pending') {
             throw ValidationException::withMessages(['approval' => 'This request is no longer pending.']);
@@ -217,19 +217,28 @@ class ApprovalService
             throw ValidationException::withMessages(['approval' => 'This request has expired.']);
         }
         $named = $request->payload['approver_ids'] ?? null;
-        if (is_array($named) ? !in_array($approver->id, array_map('intval', $named), true) : !$request->wallet->canApprove($approver)) {
-            throw ValidationException::withMessages(['approval' => 'You are not allowed to approve on this wallet.']);
-        }
+        $allowed = is_array($named) ? in_array($approver->id, array_map('intval', $named), true) : $request->wallet->canApprove($approver);
         if ($request->initiator_id === $approver->id) {
             throw ValidationException::withMessages(['approval' => 'You cannot approve your own request.']);
         }
-        if ($request->responses()->where('approver_id', $approver->id)->exists()) {
-            throw ValidationException::withMessages(['approval' => 'You have already responded to this request.']);
+        // APR-09: answering for someone who's away, when not asked yourself (or already answered).
+        $for = null;
+        if (!$allowed || $request->responses()->where('approver_id', $approver->id)->exists()) {
+            $for = AwayService::make()->actingFor($request, $approver);
+            if (!$for) {
+                throw ValidationException::withMessages(['approval' => $allowed ? 'You have already responded to this request.' : 'You are not allowed to approve on this wallet.']);
+            }
+            $note = trim("{$approver->first_name} for {$for->first_name}" . ($note ? " · {$note}" : ''));
+        }
+        $by = $for ?? $approver;
+        // APR-04 "Offer ₦10,000 instead": only with a no, and less than asked.
+        if ($offer !== null && ($decision !== 'reject' || $offer <= 0 || $offer >= $request->amount)) {
+            throw ValidationException::withMessages(['offer' => 'Offer less than ₦' . number_format($request->amount / 100) . '.']);
         }
 
         $shouldExecute = false;
 
-        DB::transaction(function () use ($request, $approver, $decision, $note, &$shouldExecute) {
+        DB::transaction(function () use ($request, $by, $approver, $decision, $note, $offer, &$shouldExecute) {
             /** @var ApprovalRequest $locked */
             $locked = ApprovalRequest::whereKey($request->id)->lockForUpdate()->first();
 
@@ -241,19 +250,19 @@ class ApprovalService
                 $locked->update(['status' => 'expired']);
                 throw ValidationException::withMessages(['approval' => 'This request has expired.']);
             }
-            if ($locked->responses()->where('approver_id', $approver->id)->exists()) {
+            if ($locked->responses()->where('approver_id', $by->id)->exists()) {
                 throw ValidationException::withMessages(['approval' => 'You have already responded to this request.']);
             }
 
             ApprovalResponse::create([
                 'approval_request_id' => $locked->id,
-                'approver_id' => $approver->id,
+                'approver_id' => $by->id,
                 'decision' => $decision,
                 'note' => $note,
             ]);
 
             if ($decision === 'reject') {
-                $locked->update(['status' => 'rejected']);
+                $locked->update(['status' => 'rejected'] + ($offer ? ['payload' => array_merge($locked->payload ?? [], ['counter_offer' => $offer])] : []));
 
                 // A rejected milestone payout returns the milestone to 'submitted'
                 // so the owner can address the concern and re-approve.
@@ -270,7 +279,7 @@ class ApprovalService
                         $initiator,
                         'approval_rejected',
                         $this->title($locked, 'Request rejected'),
-                        "{$approver->fullName()} rejected your request on {$locked->wallet->name}." . ($note ? " Note: {$note}" : ''),
+                        "{$approver->fullName()} rejected your request on {$locked->wallet->name}." . ($note ? ' Note: ' . rtrim($note, '.') . '.' : '') . ($offer ? ' They offered ₦' . number_format($offer / 100) . ' instead.' : ''),
                         ['approval_request_id' => $locked->id, 'wallet_id' => $locked->wallet_id],
                     );
                 }
@@ -318,6 +327,104 @@ class ApprovalService
         }
 
         return $request->refresh();
+    }
+
+    /**
+     * APR-05 "Ask a question": the person who asked hears it; "Pause the request
+     * until they answer" stops the clock.
+     */
+    public function ask(ApprovalRequest $request, User $by, string $body, bool $pause): ApprovalRequest
+    {
+        $this->assertCanAnswer($request, $by);
+        $payload = $request->payload ?? [];
+        $payload['questions'][] = ['by' => $by->id, 'by_name' => $by->first_name, 'body' => $body, 'at' => now()->toIso8601String(), 'answer' => null];
+        $updates = [];
+        if ($pause && $request->expires_at && empty($payload['paused'])) {
+            // "It won't expire while you wait": keep what was left, start it again on the answer.
+            $payload['paused'] = ['left' => max(60, (int) now()->diffInSeconds($request->expires_at, false)), 'at' => now()->toIso8601String()];
+            $updates['expires_at'] = null;
+        }
+        $request->update($updates + ['payload' => $payload]);
+        if ($request->initiator) {
+            $this->notifications->push($request->initiator, 'approval_question', "{$by->first_name} asked about your request", "\"{$body}\"" . ($pause && !empty($payload['paused']) ? ' It waits for your answer.' : ''), ['approval_request_id' => $request->id, 'wallet_id' => $request->wallet_id]);
+        }
+
+        return $request->refresh();
+    }
+
+    /** The answer from the person who asked; a paused request starts its clock again. */
+    public function answer(ApprovalRequest $request, User $by, string $body): ApprovalRequest
+    {
+        if ($request->initiator_id !== $by->id || $request->status !== 'pending') {
+            throw ValidationException::withMessages(['approval' => 'Only the person who asked can answer, while it is waiting.']);
+        }
+        $payload = $request->payload ?? [];
+        $open = collect($payload['questions'] ?? [])->keys()->last(fn ($i) => empty($payload['questions'][$i]['answer']));
+        if ($open === null) {
+            throw ValidationException::withMessages(['approval' => 'There is no question to answer.']);
+        }
+        $payload['questions'][$open]['answer'] = ['body' => $body, 'at' => now()->toIso8601String()];
+        $updates = [];
+        if (!empty($payload['paused'])) {
+            $updates['expires_at'] = now()->addSeconds((int) $payload['paused']['left']);
+            unset($payload['paused']);
+        }
+        $request->update($updates + ['payload' => $payload]);
+        if ($asker = User::find($payload['questions'][$open]['by'])) {
+            $this->notifications->push($asker, 'approval_answer', "{$by->first_name} answered your question", "\"{$body}\"", ['approval_request_id' => $request->id, 'wallet_id' => $request->wallet_id]);
+        }
+
+        return $request->refresh();
+    }
+
+    /** APR-07 "Emeka viewed it": the first time each approver opens it. */
+    public function viewed(ApprovalRequest $request, User $viewer): void
+    {
+        if ($request->status !== 'pending' || $request->initiator_id === $viewer->id || isset($request->payload['viewed'][(string) $viewer->id])) {
+            return;
+        }
+        try {
+            $this->assertCanAnswer($request, $viewer);
+        } catch (ValidationException) {
+            return;
+        }
+        $payload = $request->payload ?? [];
+        $payload['viewed'][(string) $viewer->id] = now()->toIso8601String();
+        $request->forceFill(['payload' => $payload])->saveQuietly();
+    }
+
+    /** APR-08 "Cancel this request?" with why; whoever was asked hears it's withdrawn. */
+    public function cancel(ApprovalRequest $request, User $by, ?string $reason): ApprovalRequest
+    {
+        if ($request->initiator_id !== $by->id) {
+            throw ValidationException::withMessages(['approval' => 'Only the person who asked can cancel it.']);
+        }
+        if ($request->status !== 'pending') {
+            throw ValidationException::withMessages(['approval' => 'This request is no longer pending.']);
+        }
+        $request->update(['status' => 'cancelled', 'payload' => array_merge($request->payload ?? [], array_filter(['cancel_reason' => $reason]))]);
+        $request->loadMissing('wallet');
+        $asked = isset($request->payload['approver_ids'])
+            ? collect($request->payload['approver_ids'])->map(fn ($id) => (int) $id)->reject(fn ($id) => $id === $by->id)
+            : $request->wallet->eligibleApprovers($by->id);
+        foreach (User::whereIn('id', $asked->diff($request->responses()->pluck('approver_id')))->get() as $u) {
+            $this->notifications->push($u, 'approval_cancelled', "{$by->first_name} withdrew a request", '₦' . number_format($request->amount / 100) . " from {$request->wallet->name}" . ($reason ? " · {$reason}" : '') . '. Nothing to answer.', ['approval_request_id' => $request->id, 'wallet_id' => $request->wallet_id]);
+        }
+
+        return $request->refresh();
+    }
+
+    /** Someone who would answer it: asked themselves, or approving for someone away. */
+    private function assertCanAnswer(ApprovalRequest $request, User $user): void
+    {
+        if ($request->status !== 'pending') {
+            throw ValidationException::withMessages(['approval' => 'This request is no longer pending.']);
+        }
+        $named = $request->payload['approver_ids'] ?? null;
+        $allowed = $request->initiator_id !== $user->id && (is_array($named) ? in_array($user->id, array_map('intval', $named), true) : $request->wallet->canApprove($user));
+        if (!$allowed && !AwayService::make()->actingFor($request, $user)) {
+            throw ValidationException::withMessages(['approval' => 'Only someone asked to approve can do that.']);
+        }
     }
 
     /** "₦35,000 to Greenfield School" · "Over ₦50,000 needs Ngozi and Emeka". */

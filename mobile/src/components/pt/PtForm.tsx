@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
@@ -92,17 +92,18 @@ export function PtPills<T extends string | number>({
   value,
   onChange,
   compact = false,
+  solid = false,
 }: {
   options: { value: T; label: string }[];
   value: T | T[] | null;
   onChange: (value: T) => void;
   /** Smaller pills that fit a row of filters (PRJ-01 "All · In progress · Saving · Done"). */
   compact?: boolean;
+  /** Tabs: the chosen pill is filled dark green (APR-01 "Waiting for me · 2"). */
+  solid?: boolean;
 }) {
   const isOn = (v: T) => (Array.isArray(value) ? value.includes(v) : value === v);
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: compact ? 8 : 10 }}>
-      {options.map((o) => {
+  const pills = options.map((o) => {
         const on = isOn(o.value);
         return (
           <Pressable
@@ -115,20 +116,26 @@ export function PtPills<T extends string | number>({
             accessibilityState={{ selected: on }}
             style={{
               height: compact ? 36 : 40,
-              paddingHorizontal: compact ? 14 : 16,
+              paddingHorizontal: solid ? 11 : compact ? 14 : 16,
               borderRadius: 20,
               alignItems: 'center',
               justifyContent: 'center',
-              borderWidth: on ? 2 : 1.5,
+              borderWidth: solid ? 0 : on ? 2 : 1.5,
               borderColor: on ? pt.brand : pt.lineStrong,
-              backgroundColor: on ? pt.brandSoft : pt.raised,
+              backgroundColor: solid ? (on ? pt.brand : pt.sunken) : on ? pt.brandSoft : pt.raised,
             }}
           >
-            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: compact ? 14 : 15, color: on ? pt.brand : pt.ink }}>{o.label}</Text>
+            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: compact ? 14 : 15, color: solid ? (on ? '#FFFFFF' : pt.ink) : on ? pt.brand : pt.ink }}>{o.label}</Text>
           </Pressable>
         );
-      })}
-    </View>
+      });
+  // Tabs stay on one line and slide sideways when they don't fit.
+  return solid ? (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
+      {pills}
+    </ScrollView>
+  ) : (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: compact ? 8 : 10 }}>{pills}</View>
   );
 }
 

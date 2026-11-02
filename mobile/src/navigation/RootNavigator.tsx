@@ -155,6 +155,10 @@ import { ProjectInviteScreen } from '../screens/vendor/ProjectInviteScreen';
 import { AskChangeScreen, ChangesSentScreen, InviteMilestonesScreen } from '../screens/vendor/InviteMilestonesScreen';
 import { ApprovalsScreen } from '../screens/governance/ApprovalsScreen';
 import { ApprovalDetailScreen } from '../screens/governance/ApprovalDetailScreen';
+import { ApprovalDeclineScreen } from '../screens/governance/ApprovalDeclineScreen';
+import { ApprovalQuestionScreen } from '../screens/governance/ApprovalQuestionScreen';
+import { ApprovalOutcomeScreen } from '../screens/governance/ApprovalOutcomeScreen';
+import { AwayModeScreen } from '../screens/governance/AwayModeScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
 import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
@@ -569,6 +573,10 @@ export function RootNavigator() {
       <RootStack.Screen name="AskChange" component={AskChangeScreen} />
       <RootStack.Screen name="ChangesSent" component={ChangesSentScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="Approvals" component={ApprovalsScreen} />
+      <RootStack.Screen name="ApprovalDecline" component={ApprovalDeclineScreen} />
+      <RootStack.Screen name="ApprovalQuestion" component={ApprovalQuestionScreen} />
+      <RootStack.Screen name="ApprovalOutcome" component={ApprovalOutcomeScreen} options={{ gestureEnabled: false }} />
+      <RootStack.Screen name="AwayMode" component={AwayModeScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
       <RootStack.Screen name="Invitations" component={InvitationsScreen} />

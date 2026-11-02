@@ -149,6 +149,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
         <PtSectionTitle title="Family money" />
         <PtCard>
           <PtRow title="Approvals" subtitle="Payments waiting for a yes" chevron onPress={() => navigation.navigate('Approvals')} />
+          <PtRow title="Away mode" subtitle="Someone approves for you while you're away" chevron onPress={() => navigation.navigate('AwayMode')} />
           <PtRow title="Invitations" subtitle="Wallets you've been invited to" chevron onPress={() => navigation.navigate('Invitations')} />
           <PtRow title="Goals" subtitle="Targets and auto-save" chevron onPress={() => navigation.navigate('Goals')} />
           <PtRow title="Projects" subtitle="Pay builders by milestone" chevron onPress={() => navigation.navigate('Projects')} />

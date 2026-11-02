@@ -372,8 +372,16 @@ export type RootStackParamList = {
   InviteMilestones: { projectId: number };
   AskChange: { projectId: number; milestoneId: number };
   ChangesSent: { projectId: number };
-  Approvals: { scope?: 'to_me' | 'mine' } | undefined;
+  Approvals: { scope?: 'to_me' | 'mine' | 'history' } | undefined;
   ApprovalDetail: { approvalId: number };
+  /** APR-04 Decline with reason. */
+  ApprovalDecline: { approvalId: number };
+  /** APR-05 Ask a question. */
+  ApprovalQuestion: { approvalId: number };
+  /** APR-06 Outcomes. */
+  ApprovalOutcome: { approvalId: number };
+  /** APR-09 Away mode. */
+  AwayMode: undefined;
   Notifications: undefined;
   Invitations: undefined;
   // ---- Loans (Milestone 4 — Patria Lending) ----

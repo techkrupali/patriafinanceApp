@@ -304,6 +304,35 @@ export interface ApprovalRequest {
   governance?: boolean;
   /** Who was asked, first names (named approvers, owners). */
   approver_names?: string[] | null;
+  /** APR-02 "From Tolu's wallet · ₦42,300". */
+  from_balance?: string | null;
+  /** APR-02 "Why you: You approve requests over ₦2,000". */
+  why?: string;
+  /** APR-05 questions and their answers. */
+  questions?: { by_name: string | null; body: string; at: string | null; answer: { body: string; at: string } | null }[];
+  /** "Pause the request until Tolu answers": it won't expire while it waits. */
+  paused?: boolean;
+  /** APR-07 "Emeka viewed it · 12:05 pm". */
+  viewed?: { name: string | null; at: string }[];
+  /** APR-07 "we reminded him at 2 pm". */
+  reminded_at?: string | null;
+  /** APR-04 "Offer ₦10,000 instead". */
+  counter_offer?: string | null;
+  /** APR-08 why it was cancelled. */
+  cancel_reason?: string | null;
+  proof_url?: string | null;
+  /** APR-09 "Approving for Ngozi". */
+  acting_for?: string | null;
+}
+
+/** APR-09 Away mode. */
+export interface AwayMode {
+  on: boolean;
+  active: boolean;
+  delegate: { id: number; name: string; first_name: string } | null;
+  from: string;
+  to: string;
+  max_amount: string | null;
 }
 
 export type NotificationType =
@@ -1336,7 +1365,11 @@ export interface UsersSearchData {
 
 export interface RespondApprovalPayload {
   decision: 'approve' | 'reject';
+  /** APR-03 "Approve with PIN". */
+  pin?: string;
   note?: string;
+  /** APR-04 "Offer ₦10,000 instead" (naira). */
+  offer?: string;
 }
 
 // ============================================================================

@@ -537,6 +537,32 @@ abstract class ApiController extends Controller
             $data['my_responded'] = $request->responses()->where('approver_id', $viewer->id)->exists();
         }
 
+        // APR-02 "From Tolu's wallet · ₦42,300", "Why you", the questions asked; APR-07 who viewed it and when they were reminded.
+        $payload = $request->payload ?? [];
+        $wallet = $request->relationLoaded('wallet') ? $request->wallet : null;
+        $naira = fn (int $k) => number_format($k / 100, 2, '.', '');
+        $data['from_balance'] = $wallet ? $naira((int) $wallet->balance) : null;
+        $data['why'] = !empty($payload['over_limit'])
+            ? ucfirst((string) $payload['over_limit'])
+            : ($wallet && $wallet->approval_threshold ? 'You approve payments over ₦' . number_format($wallet->approval_threshold / 100) : (isset($payload['approver_ids']) ? 'You were asked by name' : 'You approve payments on this wallet'));
+        $data['questions'] = collect($payload['questions'] ?? [])->map(fn ($q) => [
+            'by_name' => $q['by_name'] ?? null,
+            'body' => $q['body'],
+            'at' => $q['at'] ?? null,
+            'answer' => $q['answer'] ?? null,
+        ])->values();
+        $data['paused'] = !empty($payload['paused']);
+        $data['viewed'] = collect($payload['viewed'] ?? [])->map(fn ($at, $id) => ['name' => User::find((int) $id)?->first_name, 'at' => $at])->values();
+        $data['reminded_at'] = $payload['reminded_at'] ?? null;
+        $data['counter_offer'] = isset($payload['counter_offer']) ? $naira((int) $payload['counter_offer']) : null;
+        $data['cancel_reason'] = $payload['cancel_reason'] ?? null;
+        $data['proof_url'] = isset($payload['proof_path']) ? \App\Http\Controllers\Api\WalletManageController::proofUrl($payload['proof_path']) : null;
+        // APR-09 "Approving for Ngozi": what the viewer answers for someone away.
+        $for = $viewer && $request->status === 'pending' && $request->initiator_id !== $viewer->id && !($wallet?->canApprove($viewer) && !isset($payload['approver_ids']))
+            && !(isset($payload['approver_ids']) && in_array($viewer->id, array_map('intval', (array) $payload['approver_ids']), true))
+            ? \App\Services\AwayService::make()->actingFor($request, $viewer) : null;
+        $data['acting_for'] = $for?->first_name;
+
         return $data;
     }
 

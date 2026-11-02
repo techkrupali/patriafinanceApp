@@ -10,6 +10,8 @@ import { PtField } from '../pt/PtField';
 import { PtGroupLabel, PtNote, PtReviewRow } from '../pt/PtForm';
 import { PtSheet } from '../pt/PtSheet';
 import { RoleSheet } from '../wallet/RoleSheet';
+import { PinSheet } from '../PinSheet';
+import { ApiError } from '../../api/client';
 import { useChildNote, useChildView, type ChildView } from '../../api/child';
 import { useChildLinkCode, useRespondApproval, useWalletLock } from '../../api/hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -78,15 +80,26 @@ function ViewingAs({ me, title, onWhat }: { me: string; title: string; onWhat: (
 function Ask({ ask, walletId, compact }: { ask: NonNullable<ChildView['asks']>[number]; walletId: number; compact?: boolean }) {
   const respond = useRespondApproval(ask.id);
   const qc = useQueryClient();
-  const answer = (decision: 'approve' | 'reject') =>
+  // APR-03: a yes moves money, so it takes the PIN.
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const answer = (decision: 'approve' | 'reject', pin?: string) =>
     respond.mutate(
-      { decision } as never,
+      { decision, pin },
       {
         onSuccess: () => {
           notifySuccess();
+          setPinOpen(false);
           void qc.invalidateQueries({ queryKey: ['child-view', walletId] });
         },
-        onError: (e) => showAlert('Not done', e.message),
+        onError: (e) => {
+          const err = e as ApiError;
+          if (pin && err.errors?.pin) setPinError(err.errors.pin[0]);
+          else {
+            setPinOpen(false);
+            showAlert('Not done', err.message);
+          }
+        },
       },
     );
   return (
@@ -99,8 +112,18 @@ function Ask({ ask, walletId, compact }: { ask: NonNullable<ChildView['asks']>[n
       <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>{ask.needs}</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <PtButton title="Decline" variant="secondary" style={{ flex: 1 }} onPress={() => answer('reject')} loading={respond.isPending && respond.variables?.decision === 'reject'} />
-        <PtButton title="Approve" style={{ flex: 1 }} onPress={() => answer('approve')} loading={respond.isPending && respond.variables?.decision === 'approve'} />
+        <PtButton title="Approve" style={{ flex: 1 }} onPress={() => { setPinError(null); setPinOpen(true); }} loading={respond.isPending && respond.variables?.decision === 'approve'} />
       </View>
+      <PinSheet
+        visible={pinOpen}
+        title={`Approve for ${ask.by ?? 'them'}`}
+        subtitle={ask.title}
+        amount={formatNaira(ask.amount)}
+        loading={respond.isPending}
+        error={pinError}
+        onSubmit={(pin) => answer('approve', pin)}
+        onClose={() => setPinOpen(false)}
+      />
     </View>
   );
 }
