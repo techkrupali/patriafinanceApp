@@ -381,7 +381,7 @@ class GivingService
             $payment->update(['status' => 'paid', 'transaction_id' => $txn->id, 'receipt_no' => 'GV-' . now()->format('Y') . '-' . str_pad((string) $payment->id, 5, '0', STR_PAD_LEFT), 'note' => $note]);
 
             if (!empty($settings['receipts'])) {
-                $this->notifications->push($owner, 'giving_receipt', "Receipt: {$this->naira($payment->amount)} to {$account->nickname}", ($schedule?->label ?? 'Giving') . " · {$payment->receipt_no} · " . now()->format('j M Y, g:i a') . ($note ? " · {$note}" : '') . '.', ['wallet_id' => $wallet->id, 'giving_payment_id' => $payment->id]);
+                $this->notifications->push($owner, 'giving_receipt', "Receipt: {$this->naira($payment->amount)} to {$account->nickname}", ($schedule?->label ?? 'Giving') . " · {$payment->receipt_no} · " . now(self::TIMEZONE)->format('j M Y, g:i a') . ($note ? " · {$note}" : '') . '.', ['wallet_id' => $wallet->id, 'giving_payment_id' => $payment->id]);
             }
         } catch (\Throwable $e) {
             $reason = $e instanceof ValidationException ? collect($e->errors())->flatten()->first() : $e->getMessage();
@@ -481,7 +481,8 @@ class GivingService
     {
         $now = now()->setTimezone(self::TIMEZONE);
         $schedules = $wallet->givingSchedules()->with(['savedAccount', 'group.accounts', 'pledge'])->get();
-        $coming = $schedules->flatMap(fn (GivingSchedule $s) => $s->upcoming($now, 2)->map(fn (Carbon $d) => [$s, $d]))
+        // WAL-18 "Coming up": the next date of each giving date, soonest first.
+        $coming = $schedules->flatMap(fn (GivingSchedule $s) => $s->upcoming($now, 1)->map(fn (Carbon $d) => [$s, $d]))
             ->sortBy(fn ($pair) => $pair[1]->timestamp)
             ->take(6)
             ->map(fn ($pair) => [
@@ -553,6 +554,8 @@ class GivingService
                 'group_id' => $r->group->id,
                 'name' => $r->group->name,
                 'accounts' => $r->group->accounts->pluck('nickname'),
+                // A giving date may go to one account in the group ("Sunday offering · Grace Parish Church").
+                'members' => $r->group->accounts->map(fn ($a) => ['saved_account_id' => $a->id, 'name' => $a->nickname])->values(),
             ] : [
                 'saved_account_id' => $r->saved_account_id,
                 'name' => $r->savedAccount?->nickname,

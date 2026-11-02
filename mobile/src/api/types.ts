@@ -2884,7 +2884,7 @@ export interface GivingDetail {
   awaiting: { id: number; label: string | null; amount: string; to: string | null; date: string }[];
   recent: { id: number; label: string | null; amount: string; to: string | null; status: 'paid' | 'failed' | 'skipped'; receipt_no: string | null; note: string | null; date: string }[];
   pledge: { id: number; name: string; total: string; paid: string; due_date: string | null; to: string | null } | null;
-  recipients: ({ group_id: number; name: string; accounts: string[] } | { saved_account_id: number; name: string; verified: boolean })[];
+  recipients: ({ group_id: number; name: string; accounts: string[]; members?: { saved_account_id: number; name: string }[] } | { saved_account_id: number; name: string; verified: boolean })[];
   statement: { year: number; enabled: boolean };
 }
 

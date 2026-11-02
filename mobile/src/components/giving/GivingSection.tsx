@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
@@ -9,12 +10,14 @@ import { PtText } from '../pt/PtText';
 import { PtSheet } from '../pt/PtSheet';
 import { PtAddRow } from '../pt/PtPeople';
 import { PtDivider, PtGroupLabel, PtPanel, PtSwitchRow } from '../pt/PtForm';
+import { PtChip } from '../pt/PtChip';
 import { ScheduleSheet, type ScheduleDraft } from './ScheduleSheet';
 import type { RecipientKey } from './ChooseSavedSheet';
 import { useGiving, useGivingActions } from '../../api/hooks';
 import { formatNaira, groupAmountInput, sanitizeAmountInput } from '../../lib/format';
 import { shortDate } from '../../lib/giving';
 import type { GivingDetail } from '../../api/types';
+import type { RootStackParamList } from '../../navigation/types';
 
 type Schedule = GivingDetail['schedules'][number];
 
@@ -30,13 +33,21 @@ export function GivingSection({ walletId, isOwner }: { walletId: number; isOwner
   const [editing, setEditing] = useState<Schedule | null>(null);
   const [adding, setAdding] = useState<ScheduleDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRecipients, setShowRecipients] = useState(false);
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   if (giving.isLoading) return <ActivityIndicator color={pt.brand} />;
   if (!g) return null;
 
   const year = new Date().getFullYear();
   const pledgePct = g.pledge ? Math.min(100, (parseFloat(g.pledge.paid) / parseFloat(g.pledge.total)) * 100) : 0;
-  const payees = g.recipients.map((r) => ('group_id' in r ? { key: `g${r.group_id}` as RecipientKey, name: r.name, size: r.accounts.length } : { key: `a${r.saved_account_id}` as RecipientKey, name: r.name, size: 1 }));
+  const direct = g.recipients.map((r) => ('group_id' in r ? { key: `g${r.group_id}` as RecipientKey, name: r.name, size: r.accounts.length } : { key: `a${r.saved_account_id}` as RecipientKey, name: r.name, size: 1 }));
+  // One account inside a group can have its own date too ("Sunday offering · Grace Parish Church").
+  const members = g.recipients
+    .flatMap((r) => ('group_id' in r ? r.members ?? [] : []))
+    .map((m) => ({ key: `a${m.saved_account_id}` as RecipientKey, name: m.name, size: 1 }))
+    .filter((m, i, all) => !direct.some((d) => d.key === m.key) && all.findIndex((x) => x.key === m.key) === i);
+  const payees = [...direct, ...members];
   const fail = (e: Error) => setError(e.message);
 
   return (
@@ -135,22 +146,33 @@ export function GivingSection({ walletId, isOwner }: { walletId: number; isOwner
       ) : null}
 
       <PtPanel>
-        <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+        <Pressable
+          onPress={() => setShowRecipients(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Recipients"
+          style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}
+        >
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>Recipients</Text>
             <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }} numberOfLines={2}>
               {g.recipients.map((r) => r.name).join(', ') || 'None yet'}
             </Text>
           </View>
-        </View>
+          <Feather name="chevron-right" size={18} color={pt.inkSubtle} />
+        </Pressable>
         <PtDivider />
-        <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+        <Pressable
+          onPress={() => navigation.navigate('WalletStatement', { walletId })}
+          accessibilityRole="button"
+          accessibilityLabel={`${g.statement.year} giving statement`}
+          style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}
+        >
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{g.statement.year} giving statement</Text>
-            <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{g.statement.enabled ? 'Emailed in January' : 'Off — turn it on in settings'}</Text>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{g.statement.enabled ? 'Ready in January' : 'See this year so far'}</Text>
           </View>
-          <Feather name="file-text" size={18} color={pt.inkSubtle} />
-        </View>
+          <Feather name="chevron-right" size={18} color={pt.inkSubtle} />
+        </Pressable>
       </PtPanel>
 
       {g.recent.length ? (
@@ -174,6 +196,26 @@ export function GivingSection({ walletId, isOwner }: { walletId: number; isOwner
         </View>
       ) : null}
 
+      <PtSheet visible={showRecipients} title="Recipients" subtitle="Who this wallet gives to" onClose={() => setShowRecipients(false)}>
+        <PtPanel>
+          {g.recipients.map((r, i) => (
+            <React.Fragment key={'group_id' in r ? `g${r.group_id}` : `a${r.saved_account_id}`}>
+              {i > 0 ? <PtDivider /> : null}
+              <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{'group_id' in r ? `${r.name} (group)` : r.name}</Text>
+                  {'group_id' in r ? (
+                    <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }} numberOfLines={2}>
+                      {r.accounts.join(', ')}
+                    </Text>
+                  ) : null}
+                </View>
+                {'group_id' in r ? null : <PtChip label={r.verified ? 'Verified' : 'Checked'} tone={r.verified ? 'success' : 'neutral'} icon={r.verified ? 'check' : 'circle'} />}
+              </View>
+            </React.Fragment>
+          ))}
+        </PtPanel>
+      </PtSheet>
       <EditScheduleSheet
         schedule={editing}
         onSave={(patch) => editing && actions.updateSchedule.mutate({ id: editing.id, ...patch }, { onSuccess: () => setEditing(null), onError: fail })}

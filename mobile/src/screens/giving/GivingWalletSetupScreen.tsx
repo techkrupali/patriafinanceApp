@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
@@ -87,6 +87,8 @@ const EMPTY: GivingForm = {
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+/** "Sunday offering" keeps its capital; "Monthly gift" becomes "monthly gift" mid-sentence. */
+const inSentence = (t: string) => (/^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
 
 /**
  * Giving wallet from the client prototype: GIV-01 kind → GIV-02 who receives it
@@ -168,6 +170,11 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
     return a ? { key, name: a.nickname, sub: accountLine(a), verified: a.verified, size: 1, group: false, church: a.organisation?.kind === 'church' || a.organisation?.kind === 'mosque' } : null;
   };
   const chosen = form.recipients.map(recipientInfo).filter((r): r is NonNullable<ReturnType<typeof recipientInfo>> => r !== null);
+  /** A giving date can go to a chosen recipient or to one account inside a chosen group ("Sunday offering · Grace Parish Church"). */
+  const membersOf = (keys: RecipientKey[]): RecipientKey[] =>
+    keys.flatMap((k) => (k.startsWith('g') ? (groups.find((g) => `g${g.id}` === k)?.accounts ?? []).map((a) => `a${a.id}` as RecipientKey) : []));
+  const allowedPayees = (keys: RecipientKey[]) => [...keys, ...membersOf(keys)];
+  const keepSchedules = (keys: RecipientKey[]) => form.schedules.filter((x) => allowedPayees(keys).includes(x.payee));
   const orgs = useOrganisations({ q: q.trim() }, q.trim().length >= 2);
 
   // ---- money
@@ -201,6 +208,10 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
       else if (form.kind === 'parents') out.push({ ...base, key, label: 'Upkeep', amount: '50000', payee: r.key, frequency: 'monthly', dayOfMonth: salaryDay });
       else if (form.kind === 'dues') out.push({ ...base, key, label: 'Dues', amount: '5000', payee: r.key, frequency: 'monthly', dayOfMonth: 1 });
       else out.push({ ...base, key, label: 'Monthly gift', amount: '10000', payee: r.key, frequency: 'monthly' });
+      if (form.kind === 'tithes' && r.group && !chosen.some((c) => !c.group && c.church) && !out.some((s) => s.label === 'Sunday offering')) {
+        const church = membersOf([r.key]).map(recipientInfo).find((m) => m?.church) ?? recipientInfo(membersOf([r.key])[0]);
+        if (church) out.push({ ...base, key: `${key}o`, label: 'Sunday offering', amount: '2000', payee: church.key, frequency: 'weekly' });
+      }
     });
     return out;
   };
@@ -213,7 +224,7 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
       if (form.fixedOn && !(Number(form.fixed) > 0)) return 'Enter the fixed amount each month.';
       if (form.roundupOn && !main) return 'Round-ups come from your Main wallet.';
     }
-    if (s === 'when' && form.schedules.some((x) => !form.recipients.includes(x.payee))) return 'A giving date goes to someone no longer chosen. Edit or remove it.';
+    if (s === 'when' && form.schedules.some((x) => !allowedPayees(form.recipients).includes(x.payee))) return 'A giving date goes to someone no longer chosen. Edit or remove it.';
     if (s === 'pledge' && form.pledgeOn) {
       if (!form.pledge.name.trim()) return 'Say what the pledge is for.';
       if (!(pledgeTotal > 0) || pledgePaid >= pledgeTotal) return 'Enter the total and what you have paid so far.';
@@ -313,7 +324,7 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
               walletId: res.wallet.id,
               title: 'Giving is set up',
               subtitle: [
-                first ? `Your first ${first.title.toLowerCase()} goes on ${longDate(first.date)} at 7:00 am.` : null,
+                first ? `Your first ${inSentence(first.title)} goes on ${longDate(first.date)} at 7:00 am.` : null,
                 form.percentOn ? `We'll set aside ${form.percent}% when money lands in ${source.name}.` : null,
               ]
                 .filter(Boolean)
@@ -321,7 +332,7 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
               caption: '',
               events: [],
               payments: upcoming.slice(0, 3).map((u) => ({ title: u.title, sub: `${u.to} · ${shortDate(u.date)}`, amount: u.amount })),
-              note: soon ? `The first ${first.title.toLowerCase()} comes from ${source.name} this week, since nothing is set aside yet.` : undefined,
+              note: soon ? `The first ${inSentence(first.title)} comes from ${source.name} this week, since nothing is set aside yet.` : undefined,
               openLabel: 'Open wallet',
             });
           });
@@ -376,7 +387,17 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
     const results = (orgs.data?.organisations ?? []).filter((o) => !accounts.some((a) => a.organisation?.id === o.id && form.recipients.includes(`a${a.id}`)));
     return (
       <PtStepScreen onBack={back} flow={header} title="Who receives it?" subtitle="Pick from verified organisations or add an account." gap={16} footer={footer('Continue')}>
-        <PtField label="Search" value={q} onChangeText={setQ} placeholder="Search churches, mosques, charities" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: pt.lineStrong, borderRadius: ptRadius.md, paddingHorizontal: 14, backgroundColor: pt.raised }}>
+          <Feather name="search" size={18} color={pt.inkMuted} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Search churches, mosques, charities"
+            placeholderTextColor={pt.inkSubtle}
+            accessibilityLabel="Search churches, mosques and charities"
+            style={{ flex: 1, paddingVertical: 14, fontFamily: ptFont.regular, fontSize: 16, color: pt.ink }}
+          />
+        </View>
         {q.trim().length >= 2 ? (
           <PtPanel>
             {orgs.isLoading ? <ActivityIndicator color={pt.brand} style={{ paddingVertical: 14 }} /> : null}
@@ -440,7 +461,8 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
                     <Pressable
                       onPress={() => {
                         selection();
-                        set({ recipients: form.recipients.filter((k) => k !== r.key), schedules: form.schedules.filter((x) => x.payee !== r.key) });
+                        const keys = form.recipients.filter((k) => k !== r.key);
+                        set({ recipients: keys, schedules: keepSchedules(keys) });
                       }}
                       hitSlop={8}
                       accessibilityRole="button"
@@ -471,7 +493,7 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
           visible={sheet === 'saved'}
           chosen={form.recipients}
           onDone={(keys) => {
-            set({ recipients: keys, schedules: form.schedules.filter((x) => keys.includes(x.payee)) });
+            set({ recipients: keys, schedules: keepSchedules(keys) });
             setSheet(null);
           }}
           onAddNew={() => {
@@ -617,7 +639,14 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
 
   // ------------------------------------------------------------ GIV-04
   if (step === 'when') {
-    const payees = chosen.map((r) => ({ key: r.key as RecipientKey, name: r.name, size: r.size }));
+    const payees = [
+      ...chosen.map((r) => ({ key: r.key as RecipientKey, name: r.name, size: r.size })),
+      ...membersOf(form.recipients)
+        .filter((k) => !form.recipients.includes(k))
+        .map(recipientInfo)
+        .filter((r): r is NonNullable<ReturnType<typeof recipientInfo>> => r !== null)
+        .map((r) => ({ key: r.key as RecipientKey, name: r.name, size: 1 })),
+    ];
     return (
       <PtStepScreen onBack={back} flow={header} title="When should it go out?" subtitle="Payments go at 7:00 am so they arrive before service." gap={14} footer={footer('Continue')}>
         {form.schedules.length ? (
@@ -836,14 +865,15 @@ function GivingSetup({ navigation, route, draft }: RootScreenProps<'GivingWallet
     ...form.extra.map((l) => (l.kind === 'percent' ? `${l.percent}% from ${ownWallets.find((w) => w.id === l.sourceId)?.name ?? 'another wallet'}` : `${formatNaira(l.amount)} from ${ownWallets.find((w) => w.id === l.sourceId)?.name ?? 'another wallet'}`)),
   ].filter(Boolean);
   const viewer = form.viewerId ? (family.data?.members ?? []).find((m) => m.id === form.viewerId) : null;
+  const asideRounded = Math.round(monthlyAside / 500) * 500;
   return (
     <PtStepScreen onBack={back} flow={header} title="Review your giving" subtitle="Check everything. You can edit before you create." gap={16} footer={footer('Create wallet', submit, create.isPending)}>
       <PtPanel>
         <PtReviewRow label="Name" value={name.trim()} sub={viewer ? `${firstName(viewer.name)} can see it` : 'Only you can see it'} onEdit={() => flow.goTo('kind')} />
         <PtReviewRow
           label="Set aside"
-          value={asideParts.length ? asideParts.join(' + ') : 'When you add money'}
-          sub={monthlyAside > 0 ? `About ${formatNaira(Math.round(monthlyAside / 500) * 500)} a month from ${source?.name ?? 'Main'}${form.extra.length ? ' and more' : ''}` : null}
+          value={asideParts.length ? asideParts.join(' + ').replace(/^./, (c) => c.toUpperCase()) : 'When you add money'}
+          sub={asideRounded > 0 ? `About ${formatNaira(asideRounded)} a month from ${source?.name ?? 'Main'}${form.extra.length ? ' and more' : ''}` : null}
           onEdit={() => flow.goTo('aside')}
         />
         {form.schedules.map((x) => {

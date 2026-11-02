@@ -412,7 +412,8 @@ class Wallet extends Model
     /**
      * Can the given user REQUEST money / raise a spend request on this wallet?
      * Owner/co_owner always; every other active member by default, unless their
-     * permissions matrix explicitly turns 'request' off. Non-members: false.
+     * permissions matrix explicitly turns 'request' off. Viewers only when it is
+     * explicitly turned on. Non-members: false.
      */
     public function canRequest(User $user): bool
     {
@@ -429,6 +430,10 @@ class Wallet extends Model
         }
         if (in_array($member->role, self::SPENDING_ROLES, true)) {
             return true;
+        }
+        // "View only, no spending": a viewer asks for money only if that was turned on for them.
+        if ($member->role === 'viewer') {
+            return ($member->permissions['request'] ?? false) === true;
         }
 
         return ($member->permissions['request'] ?? true) !== false;

@@ -268,7 +268,12 @@ class GivingWalletTest extends TestCase
             ->assertJsonPath('data.giving.coming_up.0.when', 'First Sunday')
             ->assertJsonPath('data.giving.recipients.0.name', 'Our churches')
             ->assertJsonPath('data.giving.recipients.1.name', 'Little Saints Orphanage')
+            // One account in the group can have its own date ("Sunday offering · Grace Parish Church").
+            ->assertJsonPath('data.giving.recipients.0.members.0.name', 'Grace Parish Church')
             ->assertJsonPath('data.giving.settings.anonymous', false);
+        // WAL-18 "Coming up": the next date of each giving date, not every Sunday.
+        $coming = collect($this->getJson("/api/v1/wallets/{$wallet->id}/giving")->json('data.giving.coming_up'));
+        $this->assertSame(1, $coming->where('label', 'Sunday offering')->count());
 
         // A one-off for a thanksgiving Sunday.
         $this->postJson("/api/v1/wallets/{$wallet->id}/giving/schedules", ['label' => 'Thanksgiving', 'amount' => '15000', 'saved_account_id' => SavedAccount::where('nickname', 'Grace Parish Church')->value('id'), 'frequency' => 'once', 'run_on' => '2026-11-08'])
@@ -280,5 +285,22 @@ class GivingWalletTest extends TestCase
         $this->artisan('giving:statements', ['year' => 2026])->assertSuccessful();
         $statement = AppNotification::where('user_id', $ngozi->id)->where('type', 'giving_statement')->sole();
         $this->assertStringContainsString('₦17,000 given', $statement->body);
+    }
+
+    public function test_a_viewer_sees_the_wallet_but_cannot_ask_to_pay_from_it(): void
+    {
+        [$ngozi, $main] = $this->person('Ngozi', 30_000_000);
+        [$emeka] = $this->person('Emeka', 0, '8050000318');
+        $wallet = $this->giving($ngozi, $main, $this->recipients($ngozi));
+        $member = WalletMember::create(['wallet_id' => $wallet->id, 'user_id' => $emeka->id, 'role' => 'viewer', 'status' => 'active']);
+
+        Sanctum::actingAs($emeka);
+        $this->getJson("/api/v1/wallets/{$wallet->id}")->assertOk()->assertJsonPath('data.my_can_request', false);
+        $this->getJson("/api/v1/wallets/{$wallet->id}/giving")->assertOk();
+        $this->assertFalse($wallet->canRequest($emeka));
+
+        // Only when the owner turns it on for them.
+        $member->update(['permissions' => ['request' => true]]);
+        $this->assertTrue($wallet->fresh()->canRequest($emeka));
     }
 }
