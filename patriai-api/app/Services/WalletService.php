@@ -81,7 +81,8 @@ class WalletService
         // Funding virtual account on the banking provider. Non-fatal if the
         // provider is briefly unavailable — retried on first funding-details call.
         // A joint wallet gets its account once the partner accepts (JNT WCR-07).
-        if ($type !== 'joint') {
+        // An ajo pot takes money only from its members' contributions.
+        if (!in_array($type, ['joint', 'ajo'], true)) {
             $this->ensureVirtualAccount($wallet);
         }
 

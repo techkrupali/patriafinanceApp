@@ -382,6 +382,20 @@ export type RootStackParamList = {
   ApprovalOutcome: { approvalId: number };
   /** APR-09 Away mode. */
   AwayMode: undefined;
+  /** AJO-03 a member's circle, WPV-06 the organiser's, or a circle still forming. */
+  Ajo: { walletId: number };
+  /** AJO-01 "New ajo circle", or "Edit rules" on one. */
+  AjoSetup: { walletId?: number } | undefined;
+  /** Invite people to a forming circle, or someone to take a member's place. */
+  AjoInvite: { walletId: number; replaceMemberId?: number };
+  /** AJO-02 payout order: set it and start, or see it and ask to swap. */
+  AjoOrder: { walletId: number };
+  /** AJO-04 a missed contribution. */
+  AjoMissed: { walletId: number };
+  /** INV-J1 "Join the circle", from an invitation or a code. */
+  AjoJoin: { invitationId?: number; code?: string };
+  /** TRS-03 "Join an ajo circle · With a code from the organiser". */
+  AjoCode: undefined;
   Notifications: undefined;
   Invitations: undefined;
   // ---- Loans (Milestone 4 — Patria Lending) ----

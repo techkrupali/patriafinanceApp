@@ -159,6 +159,13 @@ import { ApprovalDeclineScreen } from '../screens/governance/ApprovalDeclineScre
 import { ApprovalQuestionScreen } from '../screens/governance/ApprovalQuestionScreen';
 import { ApprovalOutcomeScreen } from '../screens/governance/ApprovalOutcomeScreen';
 import { AwayModeScreen } from '../screens/governance/AwayModeScreen';
+import { AjoScreen } from '../screens/ajo/AjoScreen';
+import { AjoSetupScreen } from '../screens/ajo/AjoSetupScreen';
+import { AjoInviteScreen } from '../screens/ajo/AjoInviteScreen';
+import { AjoOrderScreen } from '../screens/ajo/AjoOrderScreen';
+import { AjoMissedScreen } from '../screens/ajo/AjoMissedScreen';
+import { AjoJoinScreen } from '../screens/ajo/AjoJoinScreen';
+import { AjoCodeScreen } from '../screens/ajo/AjoCodeScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
 import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
@@ -577,6 +584,14 @@ export function RootNavigator() {
       <RootStack.Screen name="ApprovalQuestion" component={ApprovalQuestionScreen} />
       <RootStack.Screen name="ApprovalOutcome" component={ApprovalOutcomeScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="AwayMode" component={AwayModeScreen} />
+      {/* Ajo circles: AJO-01…04, INV-J1, WPV-06. */}
+      <RootStack.Screen name="Ajo" component={AjoScreen} />
+      <RootStack.Screen name="AjoSetup" component={AjoSetupScreen} />
+      <RootStack.Screen name="AjoInvite" component={AjoInviteScreen} />
+      <RootStack.Screen name="AjoOrder" component={AjoOrderScreen} />
+      <RootStack.Screen name="AjoMissed" component={AjoMissedScreen} />
+      <RootStack.Screen name="AjoJoin" component={AjoJoinScreen} />
+      <RootStack.Screen name="AjoCode" component={AjoCodeScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
       <RootStack.Screen name="Invitations" component={InvitationsScreen} />

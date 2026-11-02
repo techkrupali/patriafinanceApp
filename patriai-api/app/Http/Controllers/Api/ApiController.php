@@ -335,6 +335,8 @@ abstract class ApiController extends Controller
             'goal' => $wallet->type === 'goal' ? \App\Services\GoalService::make()->summary($wallet) : null,
             'joint' => \App\Services\JointService::make()->summary($wallet, request()->user()),
             'child' => \App\Services\ChildService::make()->summary($wallet),
+            // TRS-02 "Unity ladies ajo · Your turn in March · ₦600,000".
+            'ajo' => $wallet->type === 'ajo' ? \App\Services\AjoService::make()->rowSummary($wallet, request()->user()) : null,
             // WAL-08 "Named people" and WAL-06 "Notifications".
             'approver_ids' => $wallet->approvalMode() === 'named' ? $wallet->namedApprovers()->all() : null,
             'notify' => $wallet->meta['notify'] ?? null,
@@ -459,6 +461,10 @@ abstract class ApiController extends Controller
             // INV-O1: the joint wallet rules the partner accepts.
             'joint' => $invitation->relationLoaded('wallet') && $invitation->wallet
                 ? \App\Services\JointService::make()->summary($invitation->wallet)
+                : null,
+            // INV-J1: the circle the person is asked to join.
+            'ajo' => $invitation->relationLoaded('wallet') && $invitation->wallet?->type === 'ajo' && ($circle = \App\Services\AjoService::make()->forWallet($invitation->wallet))
+                ? \App\Services\AjoService::make()->preview($circle)
                 : null,
             'status' => $invitation->status,
             'expires_at' => $invitation->expires_at?->toIso8601String(),

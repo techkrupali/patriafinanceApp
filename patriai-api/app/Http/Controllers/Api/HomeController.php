@@ -37,7 +37,8 @@ class HomeController extends ApiController
         $user = $request->user();
         $now = now();
 
-        $wallets = $this->visibleWallets($user);
+        // TRS-02 "Other circles and linked accounts aren't counted in your total": an ajo pot isn't yours.
+        $wallets = $this->visibleWallets($user)->reject(fn (Wallet $w) => $w->type === 'ajo')->values();
         $walletIds = $wallets->pluck('id')->all();
 
         $needsYou = [];
@@ -184,6 +185,15 @@ class HomeController extends ApiController
                 'amount' => $this->naira($r->left()),
                 'tone' => 'warning',
             ];
+        }
+
+        // ---- Ajo circles: your payment, a turn coming to you (AIQ-06) ----
+        foreach (\App\Services\AjoService::make()->upcomingFor($user, $horizon) as $item) {
+            if (!empty($item['late'])) {
+                $needsYou[] = ['kind' => 'ajo_due', 'id' => $item['id'], 'wallet_id' => $item['wallet_id'], 'label' => "{$item['title']}: your payment is late"];
+            }
+            unset($item['late']);
+            $upcoming[] = $item;
         }
 
         usort($upcoming, fn ($a, $b) => strcmp((string) $a['date'], (string) $b['date']));

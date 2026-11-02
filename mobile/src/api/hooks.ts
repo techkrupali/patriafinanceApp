@@ -184,11 +184,18 @@ export function useDashboard() {
   });
 }
 
-export function useWallets() {
+const withoutCircles = (d: WalletsData) => d.wallets.filter((w) => w.type !== 'ajo');
+const allWallets = (d: WalletsData) => d.wallets;
+
+/**
+ * The person's wallets. An ajo pot is left out unless asked for (Treasury and
+ * Home's "Other circles"): nobody moves, sends or sets rules with it.
+ */
+export function useWallets(opts: { circles?: boolean } = {}) {
   return useQuery({
     queryKey: keys.wallets,
     queryFn: () => api<WalletsData>('/wallets'),
-    select: (d) => d.wallets,
+    select: opts.circles ? allWallets : withoutCircles,
   });
 }
 
@@ -671,6 +678,8 @@ export interface AcceptInvitationOptions {
   frequency?: SavingsFrequency;
   day_of_week?: number;
   day_of_month?: number;
+  /** INV-J1 "Pay automatically from Main". */
+  auto_pay?: boolean;
 }
 
 export function useAcceptInvitation() {

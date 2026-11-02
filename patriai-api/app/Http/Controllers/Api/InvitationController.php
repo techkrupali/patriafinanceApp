@@ -32,6 +32,9 @@ class InvitationController extends ApiController
         if ($wallet->type === 'main') {
             return $this->fail('Your main wallet cannot be shared', 422);
         }
+        if ($wallet->type === 'ajo') {
+            return $this->fail('Invite people from the circle.', 422);
+        }
 
         $data = $request->validate([
             // Existing users are invited directly by id (username search); everyone
@@ -151,6 +154,18 @@ class InvitationController extends ApiController
             $invitation->update(['status' => 'expired']);
 
             return $this->fail('This invitation has expired', 422);
+        }
+
+        // INV-J1 "Join the circle": verified people only, paying from Main if they like.
+        if ($invitation->wallet->type === 'ajo' && ($circle = \App\Services\AjoService::make()->forWallet($invitation->wallet))) {
+            $autoPay = $request->validate(['auto_pay' => ['sometimes', 'boolean']])['auto_pay'] ?? true;
+            \App\Services\AjoService::make()->join($circle, $request->user(), (bool) $autoPay, $invitation);
+            $member = WalletMember::where('wallet_id', $invitation->wallet_id)->where('user_id', $request->user()->id)->first();
+
+            return $this->ok('Invitation accepted', [
+                'wallet' => $this->serializeWallet($invitation->wallet->refresh(), withOwner: true),
+                'member' => $this->serializeMember($member->load('user')),
+            ]);
         }
 
         // Savings wallets: optionally start your own auto-save as you join.

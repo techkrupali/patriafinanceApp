@@ -44,10 +44,12 @@ export type WalletType =
   | 'giving'
   | 'joint'
   | 'child'
-  | 'spending';
+  | 'spending'
+  /** AJO: a circle's pot, held by Patriai. */
+  | 'ajo';
 
-/** Types a user is allowed to create (everything except the system `main` wallet). */
-export type CreatableWalletType = Exclude<WalletType, 'main'>;
+/** Types a user is allowed to create from WCR-01 (an ajo circle has its own setup, AJO-01). */
+export type CreatableWalletType = Exclude<WalletType, 'main' | 'ajo'>;
 
 export interface WalletOwner {
   id: number;
@@ -110,6 +112,8 @@ export interface Wallet {
   goal?: GoalSummary | null;
   joint?: JointSummary | null;
   child?: ChildSummary | null;
+  /** TRS-02 "Your turn in March · ₦600,000 · ₦50,000 paid". */
+  ajo?: import('./ajo').AjoRow | null;
   lock?: {
     /** WAL-10: until a date, until the target is reached, or until the owners agree. */
     mode: 'date' | 'target' | 'agree';
@@ -243,6 +247,8 @@ export interface WalletInvitation {
   savings?: SavingsSummary | null;
   /** INV-O1: the joint wallet rules the partner accepts. */
   joint?: JointSummary | null;
+  /** INV-J1: the ajo circle the person is asked to join. */
+  ajo?: import('./ajo').AjoPreview | null;
   /** CTB-02 "Approvals · 2 of 3: Ngozi, Chidi and you · Next to approve: Tiling". */
   project?: { id: number; title: string; approvals: { needed: number; of: number; names: string[] }; next: { title: string; amount: string } | null } | null;
 }
@@ -449,8 +455,10 @@ export interface HomeTotals {
 }
 
 export interface HomeNeedItem {
-  kind: 'approval' | 'invitation' | 'milestone' | 'low_funds' | 'money_request';
+  kind: 'approval' | 'invitation' | 'milestone' | 'low_funds' | 'money_request' | 'ajo_due';
   id: number;
+  /** ajo_due: the circle's pot wallet. */
+  wallet_id?: number;
   /** REQ-03 the request's code. */
   code?: string;
   /** Short lower-case label for the "3 need you:" line. */
@@ -459,7 +467,7 @@ export interface HomeNeedItem {
 
 export interface HomeUpcomingItem {
   /** scheduled: SND-15 a repeat payment, giving or a goal payout; money_request: REQ-03 asked of you. */
-  kind: 'approval' | 'request' | 'rule' | 'scheduled' | 'money_request';
+  kind: 'approval' | 'request' | 'rule' | 'scheduled' | 'money_request' | 'ajo_due' | 'ajo_next' | 'ajo_payout';
   id: number;
   wallet_id: number | null;
   code?: string;
@@ -469,7 +477,7 @@ export interface HomeUpcomingItem {
   subtitle: string;
   /** Naira decimal string. */
   amount: string;
-  tone: 'warning' | 'danger' | 'neutral';
+  tone: 'warning' | 'danger' | 'neutral' | 'success';
 }
 
 export interface HomeGoal {

@@ -56,6 +56,8 @@ class GetWalletsTool implements AssistantTool
             'currency' => $w['currency'],
             'status' => $w['status'],
             'my_role' => $w['my_role'] ?? null,
+            // AIQ-06 "Ajo payout": an ajo pot isn't the user's money; this says their turn and what they've paid.
+            'ajo' => $w['ajo'] ?? null,
         ], $wallets);
 
         return [

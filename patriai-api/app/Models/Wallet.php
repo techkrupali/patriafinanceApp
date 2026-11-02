@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 
 class Wallet extends Model
 {
-    public const TYPES = ['main', 'shared', 'project', 'savings', 'goal', 'emergency', 'giving', 'joint', 'child', 'spending'];
+    public const TYPES = ['main', 'shared', 'project', 'savings', 'goal', 'emergency', 'giving', 'joint', 'child', 'spending', 'ajo'];
 
     /** Roles that may move money out UNCONDITIONALLY. Others need an explicit can_spend grant. */
     public const SPENDING_ROLES = ['owner', 'co_owner'];
@@ -302,6 +302,10 @@ class Wallet extends Model
         if ($this->isFrozen()) {
             return false;
         }
+        // An ajo pot: "Organisers can't touch the pot. Patriai pays each turn automatically."
+        if ($this->type === 'ajo') {
+            return false;
+        }
         // ME-18: a person who froze their account sends from no wallet, shared ones included.
         if ($user->isFrozen()) {
             return false;
@@ -394,6 +398,10 @@ class Wallet extends Model
      */
     public function canFund(User $user): bool
     {
+        // Money goes into an ajo pot only as a member's contribution (AjoService).
+        if ($this->type === 'ajo') {
+            return false;
+        }
         if ($this->user_id === $user->id) {
             return true;
         }
@@ -417,6 +425,9 @@ class Wallet extends Model
      */
     public function canRequest(User $user): bool
     {
+        if ($this->type === 'ajo') {
+            return false;
+        }
         if ($this->isHardLocked()) {
             return false;
         }

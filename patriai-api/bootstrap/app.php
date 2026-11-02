@@ -52,6 +52,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Giving dates go at 7:00 am Nigeria time; hourly after that catches a missed tick.
         $schedule->command('giving:run')->hourly()->between('07:00', '20:00')->timezone('Africa/Lagos');
+        // Ajo circles: open rounds, take payments, add late fees and pay turns (AJO-03/04).
+        $schedule->command('ajo:run')->hourly()->between('07:00', '20:00')->timezone('Africa/Lagos');
         // Thanksgiving reminders on Saturday evening; statements on 2 January.
         $schedule->command('giving:remind')->weeklyOn(6, '17:00')->timezone('Africa/Lagos');
         $schedule->command('giving:statements')->yearlyOn(1, 2, '08:00')->timezone('Africa/Lagos');

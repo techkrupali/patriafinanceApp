@@ -12,6 +12,7 @@ const SECTIONS: { key: HomeSection; title: string }[] = [
   { key: 'upcoming', title: 'Next 7 days' },
   { key: 'goals', title: 'Goals' },
   { key: 'projects', title: 'Projects' },
+  { key: 'ajo', title: 'Ajo turn' },
 ];
 
 /** HOM-08 Customise home: which sections show, and hiding balances on open. */

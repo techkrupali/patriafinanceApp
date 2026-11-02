@@ -42,7 +42,8 @@ export function PtWalletRow({
       right={
         <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink, fontVariant: ['tabular-nums'] }}>
           {/* WPV-05: a relative on a child's wallet isn't shown the balance. */}
-          {hideAmount ? '₦ ••••' : (wallet.balance as string | null) === null ? 'Gifts only' : formatNaira(wallet.balance)}
+          {/* TRS-02: an ajo pot isn't yours — show what you've paid in. */}
+          {hideAmount ? '₦ ••••' : wallet.type === 'ajo' ? `${formatNaira(wallet.ajo?.paid ?? '0')} paid` : (wallet.balance as string | null) === null ? 'Gifts only' : formatNaira(wallet.balance)}
         </Text>
       }
     />

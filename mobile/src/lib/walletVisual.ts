@@ -32,6 +32,7 @@ const MAP: Record<WalletType, WalletVisual> = {
   joint: { gradient: ['#0B4A3C', '#3D5249'] as const, icon: 'people-circle', label: 'JOINT', onDark: true },
   child: { gradient: ['#DFF3EA', '#B7CEC0'] as const, icon: 'happy', label: 'CHILD', onDark: false },
   spending: { gradient: ['#08392F', '#0B5D4B'] as const, icon: 'card', label: 'SPENDING', onDark: true },
+  ajo: { gradient: ['#8F5400', '#F2A93B'] as const, icon: 'sync-circle', label: 'AJO', onDark: true },
 };
 
 const FALLBACK: WalletVisual = {
@@ -59,6 +60,7 @@ const TITLES: Record<WalletType, string> = {
   joint: 'Joint',
   child: 'Child',
   spending: 'Spending',
+  ajo: 'Ajo circle',
 };
 
 export function walletTypeTitle(type: WalletType | string | null | undefined): string {

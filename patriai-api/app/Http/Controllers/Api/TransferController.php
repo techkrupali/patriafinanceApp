@@ -250,6 +250,9 @@ class TransferController extends ApiController
                 if (!$to || !($to->isAccessibleBy($user) || \App\Services\ChildAppService::make()->canGiftInto($to, $user))) {
                     return $this->fail('Destination wallet not found', 404);
                 }
+                if ($to->type === 'ajo') {
+                    return $this->fail('Pay into an ajo circle from the circle itself.', 422);
+                }
                 if ($needsApproval) {
                     $req = ApprovalService::make()->create($from, $user, 'transfer_wallet', $amountKobo, 0, $data['description'] ?? null, [
                         'wallet_id' => $to->id,

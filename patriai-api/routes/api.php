@@ -252,6 +252,22 @@ Route::prefix('v1')->group(function () {
         Route::patch('wallets/{wallet}/budget/categories/{category}', [BudgetController::class, 'updateCategory'])->middleware('throttle:30,1');
         Route::patch('wallets/{wallet}/budget/spenders/{user}', [BudgetController::class, 'updateSpender'])->middleware('throttle:30,1');
 
+        // Ajo circles — AJO-01…04, INV-J1, WPV-06: rotating savings with a pot Patriai holds.
+        Route::post('ajo', [\App\Http\Controllers\Api\AjoController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('ajo/{wallet}', [\App\Http\Controllers\Api\AjoController::class, 'show']);
+        Route::patch('ajo/{wallet}', [\App\Http\Controllers\Api\AjoController::class, 'update'])->middleware('throttle:30,1');
+        Route::post('ajo/{wallet}/invite', [\App\Http\Controllers\Api\AjoController::class, 'invite'])->middleware('throttle:30,1');
+        Route::post('ajo/{wallet}/start', [\App\Http\Controllers\Api\AjoController::class, 'start'])->middleware('throttle:10,1');
+        Route::post('ajo/{wallet}/cancel', [\App\Http\Controllers\Api\AjoController::class, 'cancel'])->middleware('throttle:10,1');
+        Route::post('ajo/{wallet}/pay', [\App\Http\Controllers\Api\AjoController::class, 'pay'])->middleware('throttle:20,1');
+        Route::patch('ajo/{wallet}/me', [\App\Http\Controllers\Api\AjoController::class, 'me'])->middleware('throttle:30,1');
+        Route::post('ajo/{wallet}/remind', [\App\Http\Controllers\Api\AjoController::class, 'remind'])->middleware('throttle:10,1');
+        Route::post('ajo/{wallet}/swaps', [\App\Http\Controllers\Api\AjoController::class, 'swap'])->middleware('throttle:10,1');
+        Route::post('ajo/{wallet}/members/{member}/replace', [\App\Http\Controllers\Api\AjoController::class, 'replace'])->middleware('throttle:10,1');
+        Route::post('ajo-swaps/{swap}/respond', [\App\Http\Controllers\Api\AjoController::class, 'respondSwap'])->middleware('throttle:20,1');
+        Route::get('ajo-codes/{code}', [\App\Http\Controllers\Api\AjoController::class, 'preview'])->middleware('throttle:30,1');
+        Route::post('ajo-codes/{code}/join', [\App\Http\Controllers\Api\AjoController::class, 'joinByCode'])->middleware('throttle:10,1');
+
         // Giving wallets — WAL-18, giving dates, payments waiting for a yes.
         Route::get('wallets/{wallet}/giving', [GivingController::class, 'show']);
         Route::post('wallets/{wallet}/giving/schedules', [GivingController::class, 'storeSchedule'])->middleware('throttle:30,1');

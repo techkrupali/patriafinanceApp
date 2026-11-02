@@ -32,6 +32,7 @@ const DOT: Record<HomeUpcomingItem['tone'], string> = {
   warning: '#8F5400',
   danger: pt.danger,
   neutral: pt.lineStrong,
+  success: pt.brand,
 };
 
 /** 40pt white circle button in the Home header. */
@@ -62,7 +63,7 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
   const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
   const home = useHome();
-  const wallets = useWallets();
+  const wallets = useWallets({ circles: true });
   const hidden = useHomePrefs((s) => s.hidden);
   const toggleHidden = useHomePrefs((s) => s.toggleHidden);
   const sections = useHomePrefs((s) => s.sections);
@@ -103,6 +104,10 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
     if (kinds.has('approval')) navigation.navigate('Approvals', { scope: 'to_me' });
     else if (kinds.has('invitation')) navigation.navigate('Invitations');
     else if (kinds.has('milestone')) navigation.navigate('Projects');
+    else if (kinds.has('ajo_due')) {
+      const ajo = items.find((i) => i.kind === 'ajo_due');
+      if (ajo?.wallet_id) navigation.navigate('AjoMissed', { walletId: ajo.wallet_id });
+    }
     else navigation.navigate('Rules');
   };
 
@@ -114,6 +119,9 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
       navigation.navigate('ScheduledPayments');
     } else if (item.kind === 'money_request' && item.code) {
       navigation.navigate('IncomingRequest', { code: item.code });
+    } else if (item.kind.startsWith('ajo_') && item.wallet_id) {
+      // AIQ-06 "Ajo details": a late payment opens AJO-04, the rest the circle.
+      navigation.navigate(item.kind === 'ajo_due' && item.tone === 'danger' ? 'AjoMissed' : 'Ajo', { walletId: item.wallet_id });
     } else {
       navigation.navigate('ApprovalDetail', { approvalId: item.id });
     }
@@ -473,6 +481,37 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
                     {p.needs_review ? <PtChip label={copy.review} tone="warning" icon="clock" /> : null}
                   </Pressable>
                 ))
+              : null}
+
+            {/* HOM-08 "Ajo turn": each circle you're in, and when your turn comes. */}
+            {sections.ajo
+              ? (wallets.data ?? [])
+                  .filter((w) => w.type === 'ajo' && w.ajo && ['forming', 'active'].includes(w.ajo.status))
+                  .map((w) => (
+                    <Pressable
+                      key={`ajo-${w.id}`}
+                      onPress={() => {
+                        selection();
+                        navigation.navigate('Ajo', { walletId: w.id });
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${w.name}, ${w.ajo?.line}`}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 10, paddingHorizontal: 14 }}
+                    >
+                      <View style={{ width: 36, height: 36, borderRadius: ptRadius.sm, backgroundColor: '#FDEBC8', alignItems: 'center', justifyContent: 'center' }}>
+                        <Feather name="rotate-cw" size={17} color="#8F5400" />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }} numberOfLines={1}>
+                          {w.name}
+                        </Text>
+                        <Text style={{ fontFamily: ptFont.regular, fontSize: 11, color: pt.inkMuted }} numberOfLines={1}>
+                          {w.ajo?.line}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }}>{mask(formatNaira(w.ajo?.payout ?? '0'))}</Text>
+                    </Pressable>
+                  ))
               : null}
           </>
         )}

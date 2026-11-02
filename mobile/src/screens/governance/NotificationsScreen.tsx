@@ -51,6 +51,11 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('ScheduledPayments');
       return;
     }
+    // Ajo circles: a payment that didn't go or is late opens AJO-04; the rest the circle.
+    if (type.startsWith('ajo_') && walletId) {
+      navigation.navigate(type === 'ajo_late' || type === 'ajo_payment_failed' ? 'AjoMissed' : 'Ajo', { walletId });
+      return;
+    }
     if (invitationId || type.startsWith('invitation')) {
       navigation.navigate('Invitations');
       return;

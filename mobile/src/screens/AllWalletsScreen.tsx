@@ -33,16 +33,18 @@ const GROUPS: { key: WalletBucket; title: string }[] = [
   { key: 'mine', title: 'Mine' },
   { key: 'shared', title: 'Shared' },
   { key: 'children', title: 'Children' },
+  { key: 'circles', title: 'Other circles' },
 ];
 
 const isGoal = (w: Wallet) => (parseFloat(w.target_amount ?? '') || 0) > 0 || w.type === 'goal' || w.type === 'savings';
 const isLocked = (w: Wallet) => (w.status && w.status !== 'active') || Boolean(w.emergency_locked) || Boolean(w.access_schedule);
 
-const sum = (ws: Wallet[]) => ws.reduce((t, w) => t + (parseFloat(w.balance) || 0), 0);
+/** Other circles (ajo pots) aren't counted in your total. */
+const sum = (ws: Wallet[]) => ws.filter((w) => w.type !== 'ajo').reduce((t, w) => t + (parseFloat(w.balance) || 0), 0);
 
 /** TRS-02 All wallets: grouped Mine / Shared / Children, filters, and unfinished setups. */
 export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) {
-  const wallets = useWallets();
+  const wallets = useWallets({ circles: true });
   const drafts = useWalletDrafts();
   const hidden = useHomePrefs((s) => s.hidden);
   const [filter, setFilter] = useState<Filter>('all');
@@ -93,7 +95,7 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
           if (items.length === 0) return null;
           return (
             <View key={g.key} style={{ gap: 8 }}>
-              <PtSectionTitle title={`${g.title} · ${money(sum(items))}`} />
+              <PtSectionTitle title={g.key === 'circles' ? g.title : `${g.title} · ${money(sum(items))}`} />
               <PtCard>
                 {items.map((w, i) => (
                   <PtWalletRow
@@ -102,12 +104,13 @@ export function AllWalletsScreen({ navigation }: RootScreenProps<'AllWallets'>) 
                     hideAmount={hidden}
                     long
                     last={i === items.length - 1}
-                    // TRS-02: Main opens its transactions (TXN-01).
-                    onPress={() => (w.type === 'main' ? navigation.navigate('Activity', { walletId: w.id }) : w.type === 'project' && w.project_id ? navigation.navigate('ProjectDetail', { projectId: w.project_id }) : navigation.navigate('WalletDetail', { walletId: w.id }))}
-                    onLongPress={() => setActions(w)}
+                    // TRS-02: Main opens its transactions (TXN-01); an ajo opens the circle (AJO-03).
+                    onPress={() => (w.type === 'main' ? navigation.navigate('Activity', { walletId: w.id }) : w.type === 'ajo' ? navigation.navigate('Ajo', { walletId: w.id }) : w.type === 'project' && w.project_id ? navigation.navigate('ProjectDetail', { projectId: w.project_id }) : navigation.navigate('WalletDetail', { walletId: w.id }))}
+                    onLongPress={w.type === 'ajo' ? undefined : () => setActions(w)}
                   />
                 ))}
               </PtCard>
+              {g.key === 'circles' ? <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>Other circles aren't counted in your total.</Text> : null}
             </View>
           );
         })

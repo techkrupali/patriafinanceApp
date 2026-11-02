@@ -45,6 +45,9 @@ class WalletMemberController extends ApiController
     // PATCH /wallets/{wallet}/members/{member}  { role?, can_approve? }
     public function update(Request $request, Wallet $wallet, WalletMember $member): JsonResponse
     {
+        if ($wallet->type === 'ajo') {
+            return $this->fail('Replace a member from the circle instead.', 422);
+        }
         if (!$wallet->isAccessibleBy($request->user())) {
             return $this->fail('Wallet not found', 404);
         }
@@ -184,6 +187,9 @@ class WalletMemberController extends ApiController
     // DELETE /wallets/{wallet}/members/{member}
     public function destroy(Request $request, Wallet $wallet, WalletMember $member): JsonResponse
     {
+        if ($wallet->type === 'ajo') {
+            return $this->fail('Replace a member from the circle instead.', 422);
+        }
         if (!$wallet->isAccessibleBy($request->user())) {
             return $this->fail('Wallet not found', 404);
         }

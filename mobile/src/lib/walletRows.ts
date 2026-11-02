@@ -2,10 +2,11 @@ import type { Wallet } from '../api/types';
 import { formatYmd } from './format';
 import { walletVisual } from './walletVisual';
 
-/** Treasury buckets (prototype TRS-01/02): only you, someone else is in it, a child's. */
-export type WalletBucket = 'mine' | 'shared' | 'children';
+/** Treasury buckets (prototype TRS-01/02): only you, someone else is in it, a child's, other circles (ajo). */
+export type WalletBucket = 'mine' | 'shared' | 'children' | 'circles';
 
 export function walletBucket(w: Wallet): WalletBucket {
+  if (w.type === 'ajo') return 'circles';
   if (w.type === 'child') return 'children';
   return w.is_shared || (w.my_role && w.my_role !== 'owner') ? 'shared' : 'mine';
 }
@@ -24,6 +25,8 @@ export function walletSubtitle(w: Wallet, long = false): string {
   const type = label.charAt(0) + label.slice(1).toLowerCase();
   if (w.type === 'main') return w.virtual_account ? `${groupAccountNumber(w.virtual_account)}${long ? ' · everyday' : ''}` : 'Your everyday wallet';
   if (w.type === 'emergency') return w.emergency_locked ? 'Emergency · locked' : 'Emergency · open';
+  // TRS-02 "Unity ladies ajo · Your turn in March · ₦600,000".
+  if (w.type === 'ajo') return w.ajo ? `${w.ajo.line} · ₦${Math.round(parseFloat(w.ajo.payout)).toLocaleString('en-NG')}` : 'Ajo circle';
 
   const target = parseFloat(w.target_amount ?? '');
   if (Number.isFinite(target) && target > 0) {

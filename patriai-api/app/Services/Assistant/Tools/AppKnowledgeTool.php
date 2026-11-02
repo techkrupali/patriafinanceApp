@@ -151,6 +151,15 @@ class AppKnowledgeTool implements AssistantTool
                     .'KYC tier. (Project wallets are set up through the Projects feature; your Main wallet is created for '
                     .'you automatically.)',
             ],
+            'ajo_circles' => [
+                'title' => 'Ajo circles (rotating savings)',
+                'answer' => 'In an ajo circle everyone pays the same amount each week or month into a pot that Patriai '
+                    .'holds, and the whole pot goes to one member each round, in a drawn or agreed order. Start one from '
+                    .'Treasury → Add → Start an ajo circle, or join with the organiser\'s code. Payments go automatically '
+                    .'from Main on the due day; after a few days a late fee is added and goes into that round\'s pot, and '
+                    .'missing 3 rounds moves your turn to the end. Members can swap turns when both agree. Organisers '
+                    .'cannot take money from the pot — Patriai pays each turn automatically. Everyone must be verified to join.',
+            ],
             'sending_money' => [
                 'title' => 'Sending money',
                 'answer' => 'Open a wallet and tap Transfer, or ask me. You can send to another of your wallets, to a '

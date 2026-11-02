@@ -28,7 +28,7 @@ const SEGMENTS = [
  */
 export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
   const home = useHome();
-  const wallets = useWallets();
+  const wallets = useWallets({ circles: true });
   const drafts = useWalletDrafts();
   const hidden = useHomePrefs((s) => s.hidden);
 
@@ -41,7 +41,8 @@ export function WalletsScreen({ navigation }: TabScreenProps<'Treasury'>) {
 
   const list = useMemo(() => wallets.data ?? [], [wallets.data]);
   const biggest = useMemo(
-    () => [...list].sort((a, b) => (parseFloat(b.balance) || 0) - (parseFloat(a.balance) || 0)).slice(0, 3),
+    // An ajo pot isn't yours (TRS-02 "Other circles … aren't counted in your total").
+    () => [...list].filter((w) => w.type !== 'ajo').sort((a, b) => (parseFloat(b.balance) || 0) - (parseFloat(a.balance) || 0)).slice(0, 3),
     [list],
   );
   const main = list.find((w) => w.type === 'main');

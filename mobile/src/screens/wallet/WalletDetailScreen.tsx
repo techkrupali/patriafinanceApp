@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
@@ -124,6 +124,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const pause = useWalletLock(walletId);
 
   const wallet = detail.data?.wallet;
+  // An ajo pot has its own screen (AJO-03 / WPV-06), e.g. from a notification.
+  const isAjo = wallet?.type === 'ajo';
+  useEffect(() => {
+    if (isAjo) navigation.replace('Ajo', { walletId });
+  }, [isAjo, navigation, walletId]);
   const members = detail.data?.members ?? [];
   const role = detail.data?.my_role ?? wallet?.my_role;
   const approval = detail.data?.approval;

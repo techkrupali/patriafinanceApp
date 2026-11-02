@@ -100,6 +100,9 @@ class WalletManageController extends ApiController
         if ($err = $this->guardOwner($request, $wallet)) {
             return $err;
         }
+        if ($wallet->type === 'ajo') {
+            return $this->fail('An ajo circle ends after the last turn. Before it starts, cancel it from the circle.', 422);
+        }
         $data = $request->validate([
             'mode' => ['required', 'in:archive,close'],
             'move_to' => ['nullable', 'in:each,wallet,main'],

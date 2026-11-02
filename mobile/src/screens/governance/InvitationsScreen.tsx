@@ -73,6 +73,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
       navigation.navigate('FunderInvite', { invitationId: inv.id });
       return;
     }
+    // INV-J1 "Join the circle": what you pay and receive, and paying from Main.
+    if (inv.ajo) {
+      navigation.navigate('AjoJoin', { invitationId: inv.id });
+      return;
+    }
     if (inv.joint) {
       setJoinError(null);
       setJointInvite(inv);
