@@ -1597,6 +1597,13 @@ export function useJointActions(walletId: number) {
   };
 }
 
+/** GOL-10 "Send a thank-you to everyone". */
+export function useGoalThanks(walletId: number) {
+  return useMutation({
+    mutationFn: (note?: string) => api<{ sent: number }>(`/wallets/${walletId}/goal/thanks`, { method: 'POST', body: { note } }),
+  });
+}
+
 /** INV-O1 "Suggest a change": before accepting, the invited partner asks for different rules. */
 export function useSuggestJointChange(invitationId: number | null) {
   const qc = useQueryClient();

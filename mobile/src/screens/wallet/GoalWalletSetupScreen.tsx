@@ -156,10 +156,27 @@ function GoalSetup({ navigation, route, draft }: RootScreenProps<'GoalWalletSetu
   const wallets = useWallets();
   const create = useCreateWallet();
 
-  const [name, setName] = useState(draft?.name ?? KINDS[0].name);
-  const [form, setForm] = useState<GoalForm>(() => ({ ...EMPTY, ...((draft?.data ?? {}) as Partial<GoalForm>) }));
+  // GOL-12 "Use this plan": the newborn template, starting at the plan.
+  const tpl = route.params?.template;
+  const [name, setName] = useState(draft?.name ?? tpl?.name ?? KINDS[0].name);
+  const [form, setForm] = useState<GoalForm>(() => ({
+    ...EMPTY,
+    ...(tpl
+      ? {
+          kind: tpl.kind,
+          forWhom: tpl.forWhom,
+          target: tpl.target,
+          dueDate: tpl.dueDate,
+          link: tpl.link,
+          lines: tpl.lines.map((l, i) => ({ key: `t${i}`, ...l })),
+          // A ready-made plan suggests your monthly: the total over the saves before the due date.
+          myAmount: String(Math.ceil(Number(tpl.target) / Math.max(1, saveDates({ ...EMPTY, dueDate: tpl.dueDate }).length) / 1000) * 1000),
+        }
+      : {}),
+    ...((draft?.data ?? {}) as Partial<GoalForm>),
+  }));
   const set = (patch: Partial<GoalForm>) => setForm((f) => ({ ...f, ...patch }));
-  const flow = useSetupFlow(navigation, STEPS, (draft?.step ?? 1) - 1);
+  const flow = useSetupFlow(navigation, STEPS, draft ? (draft.step ?? 1) - 1 : tpl ? STEPS.indexOf('plan') : 0);
   const step = flow.step;
 
   const [error, setError] = useState<string | null>(null);
@@ -767,7 +784,7 @@ function GoalSetup({ navigation, route, draft }: RootScreenProps<'GoalWalletSetu
           sub={form.lines.length ? `${form.lines.length} line${form.lines.length === 1 ? '' : 's'}: ${form.lines.map((l) => lineWord(l.name)).join(', ')}` : null}
           onEdit={() => flow.goTo('target')}
         />
-        <PtReviewRow label="Plan" value={planLine} sub={`${onTrack ? 'On track' : 'Short'} for ${formatNaira(total)}`} onEdit={() => flow.goTo('plan')} />
+        <PtReviewRow label="Plan" value={planLine} sub={onTrack ? `On track for ${formatNaira(total)}` : `Reaches ${formatNaira(total)} · ${formatNaira(Math.max(0, (Number(form.target) || 0) - total))} short`} onEdit={() => flow.goTo('plan')} />
         <PtReviewRow label="People" value={[myName, ...form.people.map((p) => p.name)].join(', ')} sub={form.link ? 'Contribution link on' : null} onEdit={() => flow.goTo('people')} />
         <PtReviewRow
           label="Lock"

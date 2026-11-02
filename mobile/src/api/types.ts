@@ -990,6 +990,10 @@ export interface Saver {
   status: 'owner' | 'member' | 'invited';
   auto_save: SaverAutoSave | null;
   total_saved: string;
+  /** GOL-07 "paid this month" (naira decimal). */
+  this_month?: string;
+  /** WPV-01 "Your last 1 Oct". */
+  last_at?: string | null;
   invitation_id?: number;
 }
 
@@ -2647,6 +2651,8 @@ export interface GoalSummary {
   link: string | null;
   reminders: { before_save: boolean; nudge: boolean } | null;
   payout: { to: string | null; run_on: string; paid_at: string | null } | null;
+  /** GOL-10: when it first reached the target. */
+  reached_at?: string | null;
 }
 
 export type JointMode = 'equal' | 'income' | 'fixed';
@@ -2775,7 +2781,15 @@ export interface BudgetDetail {
   /** `pending`: invited, not joined yet. */
   spenders: { user_id: number | null; name: string | null; role: string; can_spend: boolean; pending?: boolean; categories: string[] | null; daily_limit: string | null }[];
   viewers: string[];
-  me: { categories: number[] | null; daily_limit: string | null };
+  /** WPV-08 "You can spend today ₦12,500 of ₦15,000 · Food and market only", and the last payment. */
+  me: {
+    categories: number[] | null;
+    category_names?: string[] | null;
+    daily_limit: string | null;
+    spent_today?: string;
+    left_today?: string | null;
+    last?: { title: string; amount: string; category: string | null; created_at: string | null } | null;
+  };
 }
 
 export interface BudgetDetailData {

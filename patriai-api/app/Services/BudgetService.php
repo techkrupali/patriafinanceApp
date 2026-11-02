@@ -467,10 +467,35 @@ class BudgetService
             ])->values(),
             'spenders' => $spenders->concat($invited)->values(),
             'viewers' => $members->where('role', 'viewer')->map(fn (WalletMember $m) => $m->user?->fullName())->values(),
-            'me' => [
-                'categories' => $this->member($wallet, $viewer)?->permissions['categories'] ?? null,
-                'daily_limit' => ($d = $this->member($wallet, $viewer)?->permissions['daily_limit'] ?? null) !== null ? number_format($d / 100, 2, '.', '') : null,
-            ],
+            'me' => $this->mine($wallet, $viewer, $names->all()),
+        ];
+    }
+
+    /**
+     * WPV-08 "You can spend today ₦12,500 of ₦15,000 · Food and market only",
+     * and the spender's last payment.
+     */
+    private function mine(Wallet $wallet, User $viewer, array $names): array
+    {
+        $permissions = $this->member($wallet, $viewer)?->permissions ?? [];
+        $daily = $permissions['daily_limit'] ?? null;
+        $today = $this->spent($wallet, now()->startOfDay(), null, $viewer->id);
+        $last = \App\Models\Transaction::where('wallet_id', $wallet->id)->where('user_id', $viewer->id)->where('direction', 'debit')
+            ->whereIn('type', ['transfer_out', 'withdrawal'])->whereIn('status', ['successful', 'pending'])->latest('id')->first();
+        $naira = fn (int $k) => number_format($k / 100, 2, '.', '');
+
+        return [
+            'categories' => $permissions['categories'] ?? null,
+            'category_names' => is_array($permissions['categories'] ?? null) ? collect($permissions['categories'])->map(fn ($id) => $names[$id] ?? null)->filter()->values()->all() : null,
+            'daily_limit' => $daily !== null ? $naira((int) $daily) : null,
+            'spent_today' => $naira($today),
+            'left_today' => $daily !== null ? $naira(max(0, (int) $daily - $today)) : null,
+            'last' => $last ? [
+                'title' => $last->description ?: ($last->counterparty['name'] ?? $last->counterparty['account_name'] ?? 'Payment'),
+                'amount' => $naira((int) $last->amount),
+                'category' => $last->budget_category_id ? ($names[$last->budget_category_id] ?? null) : null,
+                'created_at' => $last->created_at?->toIso8601String(),
+            ] : null,
         ];
     }
 }

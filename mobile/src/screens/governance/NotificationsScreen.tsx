@@ -69,6 +69,14 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('Tabs', { screen: 'Treasury' });
       return;
     }
+    // GOL-10 "You did it, together".
+    if (type === 'goal_reached') {
+      const goalId = numFromData(n.data, ['wallet_id']);
+      if (goalId) {
+        navigation.navigate('GoalReached', { walletId: goalId });
+        return;
+      }
+    }
     // Projects, vendors and disputes (client sheet "Projects, vendors, disputes").
     const projectId = numFromData(n.data, ['project_id']);
     const disputeId = numFromData(n.data, ['dispute_id']);

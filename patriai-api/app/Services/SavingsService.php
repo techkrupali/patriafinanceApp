@@ -527,13 +527,23 @@ class SavingsService
             ->selectRaw('user_id, sum(amount) as total')
             ->pluck('total', 'user_id');
 
-        $saverRow = function (User $user, string $status) use ($rules, $saved, $viewer) {
+        // GOL-07 "₦40,000 a month · paid this month"; WPV-01 "Your last 1 Oct".
+        $monthStart = now()->setTimezone('Africa/Lagos')->startOfMonth()->utc();
+        $credits = Transaction::where('wallet_id', $wallet->id)->where('direction', 'credit')->where('status', 'successful')->whereNotNull('user_id')
+            ->groupBy('user_id')->selectRaw('user_id, max(created_at) as last_at, sum(case when created_at >= ? then amount else 0 end) as this_month', [$monthStart])
+            ->get()->keyBy('user_id');
+
+        $saverRow = function (User $user, string $status) use ($rules, $saved, $viewer, $credits) {
+            $c = $credits->get($user->id);
+
             return [
                 'user' => $this->person($user),
                 'status' => $status, // owner | member | invited
                 // Which wallet pays is only the saver's business.
                 'auto_save' => $this->saverTerms($rules->get($user->id, collect()), $user->id === $viewer->id),
                 'total_saved' => $this->naira((int) ($saved[$user->id] ?? 0)),
+                'this_month' => $this->naira((int) ($c->this_month ?? 0)),
+                'last_at' => $c?->last_at ? Carbon::parse($c->last_at)->toIso8601String() : null,
             ];
         };
 

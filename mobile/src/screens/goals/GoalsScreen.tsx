@@ -1,185 +1,105 @@
-import React, { useMemo } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import React from 'react';
+import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Screen } from '../../components/Screen';
-import { Header } from '../../components/Header';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
-import { LoadError } from '../../components/LoadError';
-import { DraftWalletCard } from '../../components/DraftWalletCard';
-import { colors, gradients, outline, radius } from '../../theme';
+import { Feather } from '@expo/vector-icons';
+import { pt, ptFont, ptRadius } from '../../theme';
 import { useWalletDrafts, useWallets } from '../../api/hooks';
-import { formatMoney, formatYmd } from '../../lib/format';
+import { PtPageScreen } from '../../components/pt/PtPageScreen';
+import { PtButton } from '../../components/pt/PtButton';
+import { PtRing } from '../../components/pt/PtRing';
+import { LoadingBlock } from '../../components/project/ProjectUi';
+import { DraftWalletCard } from '../../components/DraftWalletCard';
+import { formatNaira, formatYmd } from '../../lib/format';
 import { selection } from '../../lib/haptics';
 import { resumeDraft } from '../../lib/drafts';
-import { walletVisual } from '../../lib/walletVisual';
 import type { Wallet } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
-const GOAL_TYPES = ['savings', 'goal', 'emergency', 'giving'];
+const short = (ymd: string) => formatYmd(ymd.slice(0, 10)).replace(/ \d{4}$/, '');
+const monthYear = (ymd: string) => new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date(`${ymd.slice(0, 10)}T00:00:00`));
 
-function GoalCard({ wallet, onPress }: { wallet: Wallet; onPress: () => void }) {
-  const visual = walletVisual(wallet.type);
-  const balance = parseFloat(wallet.balance || '0');
-  const target = parseFloat(wallet.target_amount ?? '');
-  const hasTarget = Number.isFinite(target) && target > 0;
-  const rawPct = hasTarget ? (balance / target) * 100 : 0;
-  const pct = Math.min(100, rawPct);
-  const fillWidth = Math.max(3, pct);
-  const reached = hasTarget && rawPct >= 100;
-
-  return (
-    <Card className="mt-3" onPress={onPress}>
-      <View className="flex-row items-center">
-        <LinearGradient
-          colors={visual.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ height: 44, width: 44, borderRadius: radius, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name={visual.icon} size={20} color={colors.white} />
-        </LinearGradient>
-        <View className="ml-3 flex-1 pr-2">
-          <Text className="text-[15px] font-bold text-ink" numberOfLines={1}>
-            {wallet.name}
-          </Text>
-        </View>
-        <View className="rounded bg-lav-faint px-2.5 py-1">
-          <Text className="text-[10px] font-bold uppercase tracking-wider text-muted">{visual.label}</Text>
-        </View>
-      </View>
-
-      {hasTarget ? (
-        <View className="mt-4">
-          <View className="h-2.5 overflow-hidden rounded-full bg-lav">
-            <View className="h-2.5 rounded-full bg-brand" style={{ width: `${fillWidth}%` }} />
-          </View>
-          <View className="mt-2.5 flex-row items-center justify-between">
-            <Text className="flex-1 pr-2 text-[13px] text-muted" numberOfLines={1}>
-              {formatMoney(wallet.balance)} of {formatMoney(wallet.target_amount)}
-              {wallet.target_date ? ` · by ${formatYmd(wallet.target_date)}` : ''}
-            </Text>
-            <Text className="text-[13px] font-bold text-brand">{Math.floor(pct)}%</Text>
-          </View>
-          {reached ? (
-            <View className="mt-2.5 flex-row items-center self-start rounded bg-success-soft px-3 py-1.5">
-              <Ionicons name="checkmark-circle" size={14} color={colors.brand} style={{ marginRight: 5 }} />
-              <Text className="text-[11px] font-bold text-brand">Goal reached 🎉</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : (
-        <View className="mt-4">
-          <Text className="text-[15px] font-extrabold tracking-tight text-ink">
-            Saved {formatMoney(wallet.balance)}
-          </Text>
-          <Text className="mt-1 text-[13px] text-muted">No target set</Text>
-        </View>
-      )}
-    </Card>
-  );
+/** "Due 8 Jan", "Locked to Jun 2027", "Kamsi's goal", "Reached". */
+function goalLine(w: Wallet, childGoal: string | undefined): string {
+  const balance = Number(w.balance);
+  const target = Number(w.target_amount ?? 0);
+  if (target && balance >= target) return 'Reached';
+  if (childGoal) return childGoal;
+  if (w.lock?.locked && w.lock.mode === 'date' && w.lock.until) return `Locked to ${monthYear(w.lock.until)}`;
+  if (w.target_date) return `Due ${short(w.target_date)}`;
+  return 'No date';
 }
 
+/**
+ * GOL-01 Goals home: "4 goals · ₦1,136,000 saved", each with its ring, how far
+ * along and when it's due (or locked to, or a child's goal), "Expecting a
+ * baby?" (GOL-12), and New goal.
+ */
 export function GoalsScreen({ navigation }: RootScreenProps<'Goals'>) {
-  const { data, isLoading, error, refetch, isRefetching } = useWallets();
+  const q = useWallets();
   const drafts = useWalletDrafts();
-  const goalDrafts = (drafts.data ?? []).filter((d) => GOAL_TYPES.includes(d.type));
-
-  const goals = useMemo(
-    () => (data ?? []).filter((w) => GOAL_TYPES.includes(w.type)),
-    [data],
-  );
-
-  const totalSaved = useMemo(
-    () => goals.reduce((sum, w) => sum + parseFloat(w.balance || '0'), 0),
-    [goals],
-  );
-
-  const addAction = (
-    <Pressable
-      onPress={() => {
-        selection();
-        navigation.navigate('CreateWallet');
-      }}
-      hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded bg-white active:opacity-70"
-      style={outline.card}
-    >
-      <Ionicons name="add" size={24} color={colors.navy} />
-    </Pressable>
-  );
+  const all = (q.data ?? []).filter((w) => w.status !== 'closed');
+  // A child's own goal: "Kamsi's goal", from "Kamsi's wallet".
+  const childGoals = new Map(all.filter((w) => w.child?.goal?.wallet_id).map((w) => [w.child!.goal!.wallet_id, `${w.name.replace(/ wallet$/i, '')} goal`]));
+  const childGoalIds = new Set(childGoals.keys());
+  // Goal wallets, savings with a target, and the children's own goals.
+  const goals = all.filter((w) => w.type === 'goal' || (w.type === 'savings' && Number(w.target_amount ?? 0) > 0) || childGoalIds.has(w.id));
+  const saved = goals.reduce((t, w) => t + Number(w.balance), 0);
+  const goalDrafts = (drafts.data ?? []).filter((d) => d.type === 'goal');
 
   return (
-    <Screen withBottomInset>
-      <Header title="Savings goals" right={addAction} />
-
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.navy} />
-        </View>
-      ) : error ? (
-        <LoadError message={(error as Error).message} onRetry={() => refetch()} />
+    <PtPageScreen
+      title="Goals"
+      subtitle={goals.length ? `${goals.length} goal${goals.length === 1 ? '' : 's'} · ${formatNaira(saved)} saved` : 'Save toward something together'}
+      onBack={() => navigation.goBack()}
+      footer={<PtButton title="New goal" onPress={() => navigation.navigate('GoalWalletSetup')} />}
+    >
+      {q.isLoading || q.error ? (
+        <LoadingBlock error={q.error ? (q.error as Error).message : null} onRetry={() => void q.refetch()} />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.navy} />
-          }
-        >
-          {goals.length === 0 && goalDrafts.length === 0 ? (
-            <EmptyState
-              icon="flag-outline"
-              title="No savings goals yet"
-              message="Create a goal and watch it grow."
-              action={
-                <Button title="Create a goal" icon="add" onPress={() => navigation.navigate('CreateWallet')} />
-              }
-            />
+        <>
+          {goals.length ? (
+            <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingHorizontal: 16 }}>
+              {goals.map((w, i) => {
+                const target = Number(w.target_amount ?? 0);
+                const pct = target ? Math.min(100, Math.round((Number(w.balance) * 100) / target)) : 0;
+                return (
+                  <Pressable key={w.id} onPress={() => { selection(); navigation.navigate('WalletDetail', { walletId: w.id }); }} accessibilityRole="button" accessibilityLabel={w.name}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 76, paddingVertical: 12, borderBottomWidth: i === goals.length - 1 ? 0 : 1, borderBottomColor: pt.line }}>
+                      <PtRing percent={pct} size={52} stroke={6} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }} numberOfLines={1}>{w.name}</Text>
+                        <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.inkMuted }}>{target ? `${formatNaira(w.balance)} of ${formatNaira(target)}` : `${formatNaira(w.balance)} saved`}</Text>
+                        <Text style={{ fontFamily: ptFont.medium, fontSize: 12, color: pt.inkMuted }}>{goalLine(w, childGoals.get(w.id))}</Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color={pt.inkSubtle} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : (
-            <>
-              {goals.length > 0 ? (
-              <LinearGradient
-                colors={gradients.navy}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ borderRadius: radius, padding: 24 }}
-              >
-                <Text className="text-[11px] font-bold uppercase tracking-widest text-white/60">
-                  Total saved
-                </Text>
-                <Text className="mt-2 text-[40px] font-extrabold leading-tight tracking-tight text-white">
-                  {formatMoney(totalSaved)}
-                </Text>
-                <Text className="mt-1 text-[13px] text-white/50">
-                  across {goals.length} goal{goals.length === 1 ? '' : 's'}
-                </Text>
-              </LinearGradient>
-              ) : null}
-
-              {goals.map((w) => (
-                <GoalCard
-                  key={w.id}
-                  wallet={w}
-                  onPress={() => navigation.navigate('WalletDetail', { walletId: w.id })}
-                />
-              ))}
-
-              {goalDrafts.length > 0 ? (
-                <View className="mt-6" style={{ gap: 12 }}>
-                  <Text className="text-sm font-extrabold text-ink">Unfinished Goals</Text>
-                  {goalDrafts.map((d) => (
-                    <DraftWalletCard key={d.id} draft={d} onResume={() => resumeDraft(navigation, d)} />
-                  ))}
-                </View>
-              ) : null}
-            </>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 15, lineHeight: 22, color: pt.inkMuted }}>School fees, rent, a car, a wedding: set a target and a date, and everyone who's helping saves toward it.</Text>
           )}
-        </ScrollView>
+
+          {goalDrafts.map((d) => (
+            <DraftWalletCard key={d.id} draft={d} onResume={() => resumeDraft(navigation, d)} />
+          ))}
+
+          {/* GOL-12 */}
+          <Pressable onPress={() => { selection(); navigation.navigate('NewbornPlan'); }} accessibilityRole="button" accessibilityLabel="Expecting a baby?">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: pt.brandSoft, borderRadius: ptRadius.md, padding: 16 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: pt.raised, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="smile" size={22} color={pt.brand} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>Expecting a baby?</Text>
+                <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>A ready-made plan for hospital, baby things and the naming</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={pt.inkSubtle} />
+            </View>
+          </Pressable>
+        </>
       )}
-    </Screen>
+    </PtPageScreen>
   );
 }

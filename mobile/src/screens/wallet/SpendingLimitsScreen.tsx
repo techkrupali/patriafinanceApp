@@ -30,7 +30,8 @@ export function SpendingLimitsScreen({ navigation, route }: RootScreenProps<'Spe
   const wallet = useWallet(walletId);
   const budget = useBudget(walletId);
   const b = budget.data;
-  const canEdit = ['owner', 'co_owner'].includes(wallet.data?.wallet.my_role ?? '');
+  // The single-wallet endpoint puts the viewer's role beside the wallet.
+  const canEdit = ['owner', 'co_owner'].includes(wallet.data?.my_role ?? wallet.data?.wallet.my_role ?? '');
   const [category, setCategory] = useState<BudgetCategoryRow | null>(null);
   const [spender, setSpender] = useState<BudgetDetail['spenders'][number] | null>(null);
 

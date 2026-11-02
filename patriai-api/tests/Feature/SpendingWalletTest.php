@@ -165,6 +165,13 @@ class SpendingWalletTest extends TestCase
         $this->spend($bisi, $wallet, 5_000, 'Fuel and transport')->assertStatus(422)->assertJsonPath('errors.budget_category_id.0', 'You can only spend on Food and market from Household.');
         $this->spend($bisi, $wallet, 5_000, null)->assertStatus(422);
 
+        // WPV-08 "You can spend today ₦5,000 of ₦15,000 · Food and market only", and the last payment.
+        Sanctum::actingAs($bisi);
+        $me = $this->getJson("/api/v1/wallets/{$wallet->id}/budget")->assertOk()->json('data.budget.me');
+        $this->assertSame(['Food and market'], $me['category_names']);
+        $this->assertSame(['15000.00', '10000.00', '5000.00'], [$me['daily_limit'], $me['spent_today'], $me['left_today']]);
+        $this->assertSame(['10000.00', 'Food and market'], [$me['last']['amount'], $me['last']['category']]);
+
         // Over ₦15,000 today: it waits for Ngozi or Emeka.
         $res = $this->spend($bisi, $wallet, 8_000, 'Food and market')->assertOk()->assertJsonPath('data.pending_approval', true);
         $request = ApprovalRequest::findOrFail($res->json('data.approval.id'));

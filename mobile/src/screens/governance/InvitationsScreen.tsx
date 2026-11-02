@@ -53,8 +53,9 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
         setActingId(null);
         setJoining(null);
         setPinFor(null);
-        // INV-O3 "Your joint wallet is open".
+        // INV-O3 "Your joint wallet is open"; INV-C3 "You've joined" a goal.
         if (inv.joint) navigation.navigate('JointOpen', { walletId: data.wallet.id });
+        else if (inv.wallet?.type === 'goal') navigation.navigate('GoalJoined', { walletId: data.wallet.id });
         else navigation.navigate('WalletDetail', { walletId: data.wallet.id });
       },
       onError: (e) => {

@@ -19,6 +19,9 @@ import { CoSaverView } from '../../components/savings/CoSaverView';
 import { ChildWalletView, childSubtitle } from '../../components/child/ChildWalletViews';
 import { EmergencyMemberView } from '../../components/emergency/EmergencyMemberView';
 import { JointView } from '../../components/joint/JointView';
+import { GoalView } from '../../components/goal/GoalView';
+import { GoalContributorView } from '../../components/goal/GoalContributorView';
+import { SpenderView } from '../../components/spending/SpenderView';
 import { useChildView } from '../../api/child';
 import { useBudget, useWallet, useWalletLock, useWalletTransactions } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
@@ -153,6 +156,11 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const relative = childView.data?.role === 'relative';
   // WPV-07: an emergency fund seen by a keyholder, beneficiary or contributor.
   const emergencyMember = wallet?.type === 'emergency' && Boolean(emergency) && role !== 'owner' && !closed;
+  // GOL-07 for the owner and co-owners; WPV-01 for a contributor.
+  const goalView = wallet?.type === 'goal' && !closed && (role === 'owner' || role === 'co_owner');
+  const goalContributor = wallet?.type === 'goal' && !closed && !goalView;
+  // WPV-08: a household budget, seen by someone who spends from it.
+  const spenderView = wallet?.type === 'spending' && !closed && role != null && !['owner', 'co_owner'].includes(role);
   // WPV-03: an open joint wallet, for either partner.
   const jointView = wallet?.type === 'joint' && !closed && (wallet.joint?.state === 'open' || wallet.joint?.state === 'leaving');
   // BRK-04 for locked savings that allow an early break.
@@ -214,15 +222,21 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
       <StatusBar style="dark" />
       <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
         {navigation.canGoBack() ? <PtBackButton onPress={() => navigation.goBack()} /> : <View style={{ width: 44 }} />}
-        {coSaver || isChildWallet || emergencyMember || jointView ? (
+        {coSaver || isChildWallet || emergencyMember || jointView || goalView || goalContributor || spenderView ? (
           // WPV-02 "House rent · Savings · shared with Ngozi"; CHD-09 "Tolu's wallet · Child · age 13 to 15".
           <View style={{ flex: 1, paddingLeft: 4 }}>
             <Text style={{ fontFamily: ptFont.extrabold, fontSize: emergencyMember ? 20 : 22, letterSpacing: -0.4, color: pt.ink }} numberOfLines={1} accessibilityRole="header">
               {wallet?.name}
             </Text>
             <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }} numberOfLines={1}>
-              {jointView
+              {spenderView
+                ? 'Spending wallet'
+                : jointView
                 ? 'Joint wallet'
+                : goalView
+                ? `Goal · ${shared ? 'Shared' : 'Private'}`
+                : goalContributor
+                ? `Shared goal · ${(wallet?.owner?.name ?? '').split(' ').slice(-1)[0] || ownerFirst} family`
                 : isChildWallet
                 ? childSubtitle(childView.data, ownerFirst)
                 : emergencyMember
@@ -271,9 +285,12 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {isChildWallet && detail.data ? <ChildWalletView wallet={wallet} detail={detail.data} /> : null}
           {emergencyMember && detail.data ? <EmergencyMemberView wallet={wallet} detail={detail.data} /> : null}
           {jointView ? <JointView wallet={wallet} /> : null}
+          {goalView ? <GoalView wallet={wallet} canSpend={canSpend} /> : null}
+          {goalContributor && detail.data ? <GoalContributorView wallet={wallet} detail={detail.data} /> : null}
+          {spenderView && detail.data ? <SpenderView wallet={wallet} detail={detail.data} /> : null}
 
           {/* Hero */}
-          {coSaver || isChildWallet || emergencyMember || jointView ? null : (
+          {coSaver || isChildWallet || emergencyMember || jointView || goalView || goalContributor || spenderView ? null : (
           <View style={{ alignItems: 'center', gap: 10 }}>
             {hasTarget ? <PtRing percent={pct} size={150} stroke={14} caption="funded" color={walletColour(wallet.colour) ?? pt.gold500} /> : null}
             <Text style={{ fontFamily: ptFont.extrabold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, color: pt.ink, marginTop: hasTarget ? 6 : 12 }}>
@@ -323,7 +340,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {state && !((coSaver || emergencyMember) && state.kind === 'locked') ? <StateNotice state={state} action={action?.label} onAction={action?.run} /> : null}
 
           {/* Actions */}
-          {!stopped && !coSaver && !isChildWallet && !emergencyMember && !jointView ? (
+          {!stopped && !coSaver && !isChildWallet && !emergencyMember && !jointView && !goalView && !goalContributor && !spenderView ? (
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <PtButton title="Add money" onPress={() => navigation.navigate('WalletAccount', { walletId })} />
@@ -346,7 +363,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {/* Parts of the wallet with their own screens */}
-          {!closed && !coSaver && !isChildWallet && !emergencyMember && !jointView && (emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type)) ? (
+          {!closed && !coSaver && !isChildWallet && !emergencyMember && !jointView && !goalView && !goalContributor && !spenderView && (emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type)) ? (
             <View style={{ gap: 10 }}>
               {emergency ? (
                 <LinkCard
@@ -399,8 +416,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {wallet.type === 'joint' && wallet.joint && !jointView ? <JointSection wallet={wallet} myId={me?.id} /> : null}
           {wallet.type === 'goal' && wallet.goal && role === 'owner' && wallet.status === 'active' ? <GoalCancelButton walletId={walletId} name={wallet.name} /> : null}
 
-          {/* Tabs: the latest activity here; each tab opens its own page (a relative sees no spending) */}
-          {relative ? null : (
+          {/* Tabs: the latest activity here; each tab opens its own page (a relative sees no spending; a spender only their own, above) */}
+          {relative || spenderView ? null : (
           <View>
             <Tabs tabs={tabs} value="activity" onChange={openTab} />
             {txns.isLoading ? (

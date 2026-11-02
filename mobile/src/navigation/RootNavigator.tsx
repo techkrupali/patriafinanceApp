@@ -191,6 +191,11 @@ import { ListProjectScreen } from '../screens/vendor/ListProjectScreen';
 import { ListingScreen } from '../screens/vendors/ListingScreen';
 import { FindVendorStewardScreen } from '../screens/vendors/FindVendorStewardScreen';
 import { JointRulesScreen } from '../screens/wallet/JointRulesScreen';
+import { PayShareScreen } from '../screens/goals/PayShareScreen';
+import { GoalMilestonesScreen } from '../screens/goals/GoalMilestonesScreen';
+import { GoalReachedScreen } from '../screens/goals/GoalReachedScreen';
+import { NewbornPlanScreen } from '../screens/goals/NewbornPlanScreen';
+import { GoalJoinedScreen } from '../screens/goals/GoalJoinedScreen';
 import { JointLeaveScreen } from '../screens/wallet/JointLeaveScreen';
 import { JointOpenScreen } from '../screens/wallet/JointOpenScreen';
 import { ProjectDocumentsScreen } from '../screens/projects/ProjectDocumentsScreen';
@@ -601,6 +606,11 @@ export function RootNavigator() {
       <RootStack.Screen name="Listing" component={ListingScreen} />
       <RootStack.Screen name="FindVendorSteward" component={FindVendorStewardScreen} />
       <RootStack.Screen name="JointRules" component={JointRulesScreen} />
+      <RootStack.Screen name="PayShare" component={PayShareScreen} />
+      <RootStack.Screen name="GoalMilestones" component={GoalMilestonesScreen} />
+      <RootStack.Screen name="GoalReached" component={GoalReachedScreen} />
+      <RootStack.Screen name="NewbornPlan" component={NewbornPlanScreen} />
+      <RootStack.Screen name="GoalJoined" component={GoalJoinedScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="JointLeave" component={JointLeaveScreen} />
       <RootStack.Screen name="JointOpen" component={JointOpenScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="ProjectDocuments" component={ProjectDocumentsScreen} />

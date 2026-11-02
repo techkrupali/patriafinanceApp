@@ -219,6 +219,7 @@ Route::prefix('v1')->group(function () {
 
         // Goal wallets — cancelling gives everyone back what they put in.
         Route::post('wallets/{wallet}/goal/cancel', [GoalController::class, 'cancel'])->middleware('throttle:10,1');
+        Route::post('wallets/{wallet}/goal/thanks', [GoalController::class, 'thanks'])->middleware('throttle:10,1');
 
         // Child wallets — a code to link the child's own phone.
         Route::post('children/link-code', [ChildController::class, 'reserve'])->middleware('throttle:20,1');

@@ -10,6 +10,18 @@ use Illuminate\Http\Request;
 /** Goal wallets after setup: cancelling one gives everyone back what they put in (GLW-05). */
 class GoalController extends ApiController
 {
+    // POST /wallets/{wallet}/goal/thanks  {note?} — GOL-10 "Send a thank-you to everyone"
+    public function thanks(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!in_array($wallet->type, \App\Services\SavingsService::TYPES, true) || !$wallet->isAccessibleBy($request->user())) {
+            return $this->fail('Goal not found', 404);
+        }
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:300']]);
+        $sent = GoalService::make()->thank($wallet, $request->user(), isset($data['note']) ? trim($data['note']) : null);
+
+        return $this->ok($sent ? "Sent to {$sent} " . ($sent === 1 ? 'person' : 'people') : 'Nobody else to thank', ['sent' => $sent]);
+    }
+
     // POST /wallets/{wallet}/goal/cancel  {pin}
     public function cancel(Request $request, Wallet $wallet): JsonResponse
     {

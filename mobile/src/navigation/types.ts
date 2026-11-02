@@ -3,7 +3,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
-import type { CreatableWalletType, OtpChannel, PhoneAccount, UserSearchResult } from '../api/types';
+import type { CreatableWalletType, GoalKind, OtpChannel, PhoneAccount, UserSearchResult } from '../api/types';
 
 /** ONB-05 answers carried to the PIN step, where the account is created. */
 export interface SignupDetails {
@@ -136,7 +136,14 @@ export type RootStackParamList = {
   AddToTreasury: undefined;
   /** WCR-02 → WCR-11: a goal wallet, private or shared, with people and approvals. */
   /** GLW-01…05 + WCR-06/07; `addedAccountId` comes back from GIV-07. */
-  GoalWalletSetup: { draftId?: number; addedAccountId?: number } | undefined;
+  GoalWalletSetup:
+    | {
+        draftId?: number;
+        addedAccountId?: number;
+        /** GOL-12 "Use this plan": the goal filled in, starting at its plan (GLW-03). */
+        template?: { kind: GoalKind; name: string; forWhom: string; target: string; dueDate: string; lines: { name: string; amount: string }[]; link: boolean };
+      }
+    | undefined;
   /** JNT-01…05 + WCR-06: a joint wallet with a partner. */
   JointWalletSetup: { draftId?: number } | undefined;
   /** CHW-01…07 + WCR-06: a child's wallet. */
@@ -419,6 +426,16 @@ export type RootStackParamList = {
   ListProject: undefined;
   /** VLS-02 a finished project on a builder's profile. */
   Listing: { listingId: number };
+  /** GOL-08 Pay my share. */
+  PayShare: { walletId: number };
+  /** GOL-09 Edit milestones. */
+  GoalMilestones: { walletId: number };
+  /** GOL-10 Goal reached. */
+  GoalReached: { walletId: number };
+  /** GOL-12 Newborn plan. */
+  NewbornPlan: undefined;
+  /** INV-C3 "You've joined". */
+  GoalJoined: { walletId: number };
   /** WAL-19 Joint wallet rules: propose a change, approve the other's. */
   JointRules: { walletId: number };
   /** JNT-05 from WPV-03 Leave: notice to leave and closing with both PINs. */

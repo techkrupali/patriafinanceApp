@@ -187,4 +187,46 @@ class GoalWalletTest extends TestCase
         $this->assertSame(0, AutomationRule::where('to_wallet_id', $wallet->id)->where('enabled', true)->count());
         $this->assertSame(1, AppNotification::where('user_id', $emeka->id)->where('type', 'goal_cancelled')->count());
     }
+
+    public function test_reaching_the_goal_tells_everyone_once_and_they_can_say_thank_you(): void
+    {
+        [$wallet, $ngozi, $main, $emeka, $emekaMain, $ada] = $this->schoolFees(['lock' => ['mode' => 'none']]);
+        foreach ([[$emeka, $emekaMain], [$ada, $ada->mainWallet()]] as [$u, $w]) {
+            Sanctum::actingAs($u);
+            $this->postJson('/api/v1/invitations/' . WalletInvitation::where('invitee_user_id', $u->id)->sole()->id . '/accept', ['source_wallet_id' => $w->id])->assertOk();
+        }
+        $ada->mainWallet()->update(['balance' => 20_000_000]);
+        Carbon::setTestNow(Carbon::parse('2026-12-27 10:00:00'));
+
+        // GOL-08 "Pay my share": each puts money in from their own Main.
+        $pay = fn (User $u, Wallet $from, string $amount) => $this->actingAs($u)->postJson('/api/v1/transfers', ['from_wallet_id' => $from->id, 'amount' => $amount, 'pin' => '1234', 'destination' => ['kind' => 'wallet', 'wallet_id' => $wallet->id]])->assertOk();
+        Sanctum::actingAs($ngozi);
+        $pay($ngozi, $main, '370000');
+        $pay($emeka, $emekaMain, '330000');
+        $this->assertSame(0, AppNotification::where('type', 'goal_reached')->count());
+        $this->postJson("/api/v1/wallets/{$wallet->id}/goal/thanks")->assertStatus(422);
+
+        // GOL-07 / WPV-01: what each put in this month, and when last.
+        Sanctum::actingAs($ngozi);
+        $savers = collect($this->getJson("/api/v1/wallets/{$wallet->id}/savings")->json('data.savings.savers'))->keyBy('user.id');
+        $this->assertSame('370000.00', $savers[$ngozi->id]['this_month']);
+        $this->assertNotNull($savers[$emeka->id]['last_at']);
+
+        // Aunty Ada's gift takes it over ₦850,000, 12 days early.
+        $pay($ada, $ada->mainWallet(), '150000');
+        foreach ([$ngozi, $emeka, $ada] as $u) {
+            $n = AppNotification::where('user_id', $u->id)->where('type', 'goal_reached')->sole();
+            $this->assertSame('You did it, together', $n->title);
+            $this->assertSame('School fees 2027 hit ₦850,000, 12 days early. Greenfield School Ltd gets paid on 6 Jan, as planned.', $n->body);
+        }
+        $pay($ada, $ada->mainWallet(), '1000');
+        $this->assertSame(3, AppNotification::where('type', 'goal_reached')->count());
+        Sanctum::actingAs($ngozi);
+        $this->getJson("/api/v1/wallets/{$wallet->id}")->assertOk()->assertJsonPath('data.wallet.goal.reached_at', fn ($v) => $v !== null);
+
+        // GOL-10 "Send a thank-you to everyone": once.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/goal/thanks", ['note' => 'We did it!'])->assertOk()->assertJsonPath('data.sent', 2);
+        $this->assertStringContainsString('"We did it!"', AppNotification::where('user_id', $ada->id)->where('type', 'goal_thanks')->sole()->body);
+        $this->postJson("/api/v1/wallets/{$wallet->id}/goal/thanks")->assertStatus(422);
+    }
 }

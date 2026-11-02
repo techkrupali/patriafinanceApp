@@ -164,6 +164,10 @@ class WalletService
         if ($wallet->type === 'project') {
             DB::afterCommit(fn () => VendorProjectService::make()->fundOnDeposit($wallet));
         }
+        // GOL-10 "You did it, together": the first time a goal reaches its target.
+        if (in_array($wallet->type, SavingsService::TYPES, true) && $wallet->target_amount) {
+            DB::afterCommit(fn () => GoalService::make()->checkReached($wallet->fresh()));
+        }
     }
 
     /** Debit a wallet with an overdraft guard. */

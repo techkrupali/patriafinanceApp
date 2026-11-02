@@ -284,6 +284,61 @@ class GoalService
     }
 
     /** For the wallet serializer and admin. */
+    /**
+     * GOL-10: the target is reached for the first time. Everyone saving into it
+     * hears "You did it, together", with what each put in and how early it is.
+     */
+    public function checkReached(Wallet $wallet): bool
+    {
+        $target = (int) $wallet->target_amount;
+        if ($target <= 0 || (int) $wallet->balance < $target || !empty($wallet->meta['reached_at'])) {
+            return false;
+        }
+        $meta = $wallet->meta ?? [];
+        $meta['reached_at'] = now()->toIso8601String();
+        $wallet->update(['meta' => $meta]);
+
+        $early = $wallet->target_date && $wallet->target_date->endOfDay()->isFuture() ? (int) now()->startOfDay()->diffInDays($wallet->target_date->startOfDay()) : 0;
+        $payout = $meta['goal']['payout'] ?? null;
+        $payee = !empty($payout['saved_account_id']) ? SavedAccount::find($payout['saved_account_id'])?->nickname : null;
+        $body = "{$wallet->name} hit ₦" . number_format($target / 100) . ($early > 0 ? ", {$early} day" . ($early === 1 ? '' : 's') . ' early' : '') . '.'
+            . ($payee && !empty($payout['run_on']) ? " {$payee} gets paid on " . Carbon::parse($payout['run_on'])->format('j M') . ', as planned.' : '');
+        foreach ($this->savers($wallet) as $user) {
+            $this->notifications->push($user, 'goal_reached', 'You did it, together', $body, ['wallet_id' => $wallet->id]);
+        }
+
+        return true;
+    }
+
+    /** GOL-10 "Send a thank-you to everyone": once, from whoever sends it. */
+    public function thank(Wallet $wallet, User $by, ?string $note): int
+    {
+        if (empty($wallet->meta['reached_at'])) {
+            throw ValidationException::withMessages(['goal' => 'Say thank you once the goal is reached.']);
+        }
+        if (!empty($wallet->meta['thanked_by'][(string) $by->id])) {
+            throw ValidationException::withMessages(['goal' => 'You already said thank you.']);
+        }
+        $meta = $wallet->meta;
+        $meta['thanked_by'][(string) $by->id] = now()->toIso8601String();
+        $wallet->update(['meta' => $meta]);
+        $sent = 0;
+        foreach ($this->savers($wallet)->reject(fn (User $u) => $u->id === $by->id) as $user) {
+            $this->notifications->push($user, 'goal_thanks', "{$by->first_name} says thank you", trim(($note ? "\"{$note}\" " : '') . "For helping {$wallet->name} reach its target."), ['wallet_id' => $wallet->id]);
+            $sent++;
+        }
+
+        return $sent;
+    }
+
+    /** The owner and everyone who can add money. */
+    private function savers(Wallet $wallet): \Illuminate\Support\Collection
+    {
+        $ids = $wallet->members()->where('status', 'active')->pluck('user_id')->prepend($wallet->user_id)->unique();
+
+        return User::whereIn('id', $ids)->get()->filter(fn (User $u) => $u->id === $wallet->user_id || $wallet->canFund($u))->values();
+    }
+
     public function summary(Wallet $wallet): ?array
     {
         $goal = $wallet->meta['goal'] ?? null;
@@ -303,6 +358,8 @@ class GoalService
                 'run_on' => $goal['payout']['run_on'],
                 'paid_at' => $goal['payout']['paid_at'] ?? null,
             ] : null,
+            // GOL-10 "hit ₦850,000, 12 days early".
+            'reached_at' => $wallet->meta['reached_at'] ?? null,
         ];
     }
 }
