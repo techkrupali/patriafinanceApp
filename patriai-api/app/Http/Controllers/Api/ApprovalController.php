@@ -66,7 +66,7 @@ class ApprovalController extends ApiController
 
         $data = $this->serializeApprovalRequest($approvalRequest, $user);
         $data['responses'] = $approvalRequest->responses->map(fn ($r) => [
-            'approver' => $r->approver?->fullName(),
+            'approver' => $r->approver ? ['id' => $r->approver->id, 'name' => $r->approver->fullName()] : null,
             'decision' => $r->decision,
             'note' => $r->note,
             'created_at' => $r->created_at?->toIso8601String(),

@@ -244,6 +244,7 @@ Route::prefix('v1')->group(function () {
         Route::post('wallets/{wallet}/joint/changes/answer', [JointController::class, 'answer'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/joint/leave', [JointController::class, 'leave'])->middleware('throttle:10,1');
         Route::post('wallets/{wallet}/joint/close', [JointController::class, 'close'])->middleware('throttle:10,1');
+        Route::post('invitations/{invitation}/joint/suggest', [JointController::class, 'suggest'])->middleware('throttle:10,1');
 
         // Spending wallets — WAL-09 budget, categories and spender limits.
         Route::get('wallets/{wallet}/budget', [BudgetController::class, 'show']);

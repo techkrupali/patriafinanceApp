@@ -18,6 +18,7 @@ import { GoalCancelButton } from '../../components/goal/GoalCancelButton';
 import { CoSaverView } from '../../components/savings/CoSaverView';
 import { ChildWalletView, childSubtitle } from '../../components/child/ChildWalletViews';
 import { EmergencyMemberView } from '../../components/emergency/EmergencyMemberView';
+import { JointView } from '../../components/joint/JointView';
 import { useChildView } from '../../api/child';
 import { useBudget, useWallet, useWalletLock, useWalletTransactions } from '../../api/hooks';
 import { useAuth } from '../../store/auth';
@@ -152,6 +153,8 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
   const relative = childView.data?.role === 'relative';
   // WPV-07: an emergency fund seen by a keyholder, beneficiary or contributor.
   const emergencyMember = wallet?.type === 'emergency' && Boolean(emergency) && role !== 'owner' && !closed;
+  // WPV-03: an open joint wallet, for either partner.
+  const jointView = wallet?.type === 'joint' && !closed && (wallet.joint?.state === 'open' || wallet.joint?.state === 'leaving');
   // BRK-04 for locked savings that allow an early break.
   const lockedSavings = wallet?.type === 'savings' && Boolean(wallet.goal_locked || wallet.lock?.locked) && Boolean(wallet.lock?.early_break);
 
@@ -211,14 +214,16 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
       <StatusBar style="dark" />
       <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
         {navigation.canGoBack() ? <PtBackButton onPress={() => navigation.goBack()} /> : <View style={{ width: 44 }} />}
-        {coSaver || isChildWallet || emergencyMember ? (
+        {coSaver || isChildWallet || emergencyMember || jointView ? (
           // WPV-02 "House rent · Savings · shared with Ngozi"; CHD-09 "Tolu's wallet · Child · age 13 to 15".
           <View style={{ flex: 1, paddingLeft: 4 }}>
             <Text style={{ fontFamily: ptFont.extrabold, fontSize: emergencyMember ? 20 : 22, letterSpacing: -0.4, color: pt.ink }} numberOfLines={1} accessibilityRole="header">
               {wallet?.name}
             </Text>
             <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }} numberOfLines={1}>
-              {isChildWallet
+              {jointView
+                ? 'Joint wallet'
+                : isChildWallet
                 ? childSubtitle(childView.data, ownerFirst)
                 : emergencyMember
                   ? emergency?.my_emergency_role === 'approver'
@@ -265,9 +270,10 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {coSaver && detail.data ? <CoSaverView wallet={wallet} detail={detail.data} /> : null}
           {isChildWallet && detail.data ? <ChildWalletView wallet={wallet} detail={detail.data} /> : null}
           {emergencyMember && detail.data ? <EmergencyMemberView wallet={wallet} detail={detail.data} /> : null}
+          {jointView ? <JointView wallet={wallet} /> : null}
 
           {/* Hero */}
-          {coSaver || isChildWallet || emergencyMember ? null : (
+          {coSaver || isChildWallet || emergencyMember || jointView ? null : (
           <View style={{ alignItems: 'center', gap: 10 }}>
             {hasTarget ? <PtRing percent={pct} size={150} stroke={14} caption="funded" color={walletColour(wallet.colour) ?? pt.gold500} /> : null}
             <Text style={{ fontFamily: ptFont.extrabold, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, color: pt.ink, marginTop: hasTarget ? 6 : 12 }}>
@@ -317,7 +323,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           {state && !((coSaver || emergencyMember) && state.kind === 'locked') ? <StateNotice state={state} action={action?.label} onAction={action?.run} /> : null}
 
           {/* Actions */}
-          {!stopped && !coSaver && !isChildWallet && !emergencyMember ? (
+          {!stopped && !coSaver && !isChildWallet && !emergencyMember && !jointView ? (
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <PtButton title="Add money" onPress={() => navigation.navigate('WalletAccount', { walletId })} />
@@ -340,7 +346,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {/* Parts of the wallet with their own screens */}
-          {!closed && !coSaver && !isChildWallet && !emergencyMember && (emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type)) ? (
+          {!closed && !coSaver && !isChildWallet && !emergencyMember && !jointView && (emergency || pending > 0 || ['savings', 'goal', 'spending'].includes(wallet.type)) ? (
             <View style={{ gap: 10 }}>
               {emergency ? (
                 <LinkCard
@@ -390,7 +396,7 @@ export function WalletDetailScreen({ navigation, route }: RootScreenProps<'Walle
           ) : null}
 
           {wallet.type === 'giving' ? <GivingSection walletId={walletId} isOwner={role === 'owner'} /> : null}
-          {wallet.type === 'joint' && wallet.joint ? <JointSection wallet={wallet} myId={me?.id} /> : null}
+          {wallet.type === 'joint' && wallet.joint && !jointView ? <JointSection wallet={wallet} myId={me?.id} /> : null}
           {wallet.type === 'goal' && wallet.goal && role === 'owner' && wallet.status === 'active' ? <GoalCancelButton walletId={walletId} name={wallet.name} /> : null}
 
           {/* Tabs: the latest activity here; each tab opens its own page (a relative sees no spending) */}

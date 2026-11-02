@@ -12,6 +12,8 @@ import { getDeviceMeta } from '../lib/device';
 import { appendFile, type PickedFile } from '../lib/upload';
 import { STORAGE_KEYS } from '../config';
 import type {
+  JointChanges,
+  JointSummary,
   PhoneCheckData,
   BudgetDetailData,
   GivingDetailData,
@@ -1575,7 +1577,7 @@ export function useJointActions(walletId: number) {
   };
   return {
     propose: useMutation({
-      mutationFn: (input: { pin: string; changes: { per_payment?: string; per_day?: string; big_amount?: string; split?: string; notice_days?: number } }) =>
+      mutationFn: (input: { pin: string; changes: JointChanges }) =>
         api<{ applied: boolean; wallet: Wallet }>(`/wallets/${walletId}/joint/changes`, { method: 'POST', body: input }),
       onSuccess,
     }),
@@ -1593,6 +1595,15 @@ export function useJointActions(walletId: number) {
       onSuccess,
     }),
   };
+}
+
+/** INV-O1 "Suggest a change": before accepting, the invited partner asks for different rules. */
+export function useSuggestJointChange(invitationId: number | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (changes: JointChanges) => api<{ joint: JointSummary }>(`/invitations/${invitationId}/joint/suggest`, { method: 'POST', body: { changes } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.myInvitations }),
+  });
 }
 
 /** GLW-05 "If the goal is cancelled, everyone gets back what they put in". */

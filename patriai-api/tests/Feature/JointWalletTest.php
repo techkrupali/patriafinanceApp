@@ -169,7 +169,8 @@ class JointWalletTest extends TestCase
         Sanctum::actingAs($ngozi);
         $this->postJson("/api/v1/wallets/{$wallet->id}/withdraw", ['amount' => '45000'] + $bank)->assertOk()->assertJsonMissingPath('data.pending_approval');
         $this->assertCount(2, $this->payouts);
-        // Over ₦100,000 alone today.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/withdraw", ['amount' => '50000'] + $bank)->assertOk()->assertJsonMissingPath('data.pending_approval');
+        // Over ₦100,000 alone today: ₦95,000 alone so far (the ₦40,000 Emeka said yes to doesn't count).
         $this->postJson("/api/v1/wallets/{$wallet->id}/withdraw", ['amount' => '20000'] + $bank)->assertOk()->assertJsonPath('data.pending_approval', true);
         $this->assertSame('over ₦100,000 alone today', ApprovalRequest::latest('id')->first()->payload['over_limit']);
         // Over ₦50,000 a payment (Emeka hasn't spent today).
@@ -269,9 +270,92 @@ class JointWalletTest extends TestCase
         [$wallet, $ngozi, $main, $emeka] = $this->openJoint();
         Carbon::setTestNow(Carbon::parse('2026-11-01 17:00:00')); // Sunday the 1st, 6 pm Lagos
         $this->artisan('joint:run')->assertSuccessful();
+        // "PDF on the 1st", to both of them.
+        $sent = app('mail.manager')->mailer()->getSymfonyTransport()->messages()->map(fn ($m) => $m->getOriginalMessage())
+            ->filter(fn ($e) => str_ends_with((string) $e->getSubject(), 'October 2026 statement'))->values();
+        $this->assertEqualsCanonicalizing([$ngozi->email, $emeka->email], $sent->map(fn ($e) => $e->getTo()[0]->getAddress())->all());
+        $pdf = $sent->first()->getAttachments()[0];
+        $this->assertSame('application/pdf', $pdf->getMediaType() . '/' . $pdf->getMediaSubtype());
         foreach ([$ngozi, $emeka] as $user) {
             $this->assertSame(1, AppNotification::where('user_id', $user->id)->where('type', 'joint_summary')->count());
             $this->assertSame(1, AppNotification::where('user_id', $user->id)->where('type', 'joint_statement')->count());
         }
+    }
+
+    public function test_the_partner_can_suggest_a_change_before_accepting(): void
+    {
+        [$ngozi, $main] = $this->person('Ngozi', 100_000_000);
+        [$emeka] = $this->person('Emeka', 50_000_000);
+        Sanctum::actingAs($ngozi);
+        $id = $this->postJson('/api/v1/wallets', $this->payload($emeka->id, $main->id))->assertCreated()->json('data.wallet.id');
+
+        // INV-O1 "Suggest a change": Emeka would rather pay ₦100,000 and spend up to ₦80,000 alone.
+        Sanctum::actingAs($emeka);
+        $invite = WalletInvitation::where('invitee_user_id', $emeka->id)->sole();
+        $this->postJson("/api/v1/invitations/{$invite->id}/joint/suggest", ['changes' => []])->assertStatus(422);
+        $this->postJson("/api/v1/invitations/{$invite->id}/joint/suggest", ['changes' => ['partner' => '100000', 'per_payment' => '80000']])->assertOk()
+            ->assertJsonPath('data.joint.proposal.before_accept', true)
+            ->assertJsonPath('data.joint.proposal.summary', 'Contributions: ₦150,000 each, every 26th → ₦150,000 and ₦100,000, every 26th. Spend alone: ₦50,000 → ₦80,000 a payment.');
+        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('type', 'joint_rule_change')->count());
+
+        // Ngozi agrees; Emeka hears, then accepts the new rules.
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/wallets/{$id}/joint/changes/answer", ['pin' => '1234', 'agree' => true])->assertOk()
+            ->assertJsonPath('data.wallet.joint.limits.per_payment', '80000.00')
+            ->assertJsonPath('data.wallet.joint.contribution.partner', '100000.00')
+            ->assertJsonPath('data.wallet.joint.contribution.mode', 'fixed');
+        $this->assertSame(1, AppNotification::where('user_id', $emeka->id)->where('type', 'joint_rule_change')->count());
+        Sanctum::actingAs($emeka);
+        $this->postJson("/api/v1/invitations/{$invite->id}/accept", ['pin' => '1234'])->assertOk()->assertJsonPath('data.wallet.joint.state', 'open');
+        $this->assertSame(10_000_000, AutomationRule::where('user_id', $emeka->id)->where('to_wallet_id', $id)->sole()->amount);
+    }
+
+    public function test_contributions_and_the_expiry_change_together_and_the_page_shows_where_you_stand(): void
+    {
+        [$wallet, $ngozi, $main, $emeka] = $this->openJoint();
+        Carbon::setTestNow(Carbon::parse('2026-11-26 09:00:00'));
+        AutomationService::make()->runDue();
+
+        // WPV-03: "you each put in ₦150,000", "You can spend alone ₦50,000", "Left today ₦100,000".
+        Sanctum::actingAs($emeka);
+        $j = $this->getJson("/api/v1/wallets/{$wallet->id}")->assertOk()->json('data.wallet.joint');
+        $this->assertSame(['150000.00', '150000.00'], array_column($j['put_in'], 'amount'));
+        $this->assertSame(['spend_alone' => '50000.00', 'left_today' => '100000.00'], $j['me']);
+        $this->assertSame('2026-11-26', $j['first_contribution']);
+
+        // Ngozi pays ₦185,000: over the alone limit, so it waits for Emeka.
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/wallets/{$wallet->id}/withdraw", ['amount' => '185000', 'pin' => '1234', 'bank_code' => '058', 'account_number' => '0123456789', 'account_name' => 'GREENFIELD SCHOOL', 'bank_name' => 'GTBank'])
+            ->assertOk()->assertJsonPath('data.pending_approval', true);
+        Sanctum::actingAs($emeka);
+        $waiting = $this->getJson("/api/v1/wallets/{$wallet->id}")->json('data.wallet.joint.waiting');
+        $this->assertSame([['Ngozi', '185000.00', 'GREENFIELD SCHOOL']], array_map(fn ($w) => [$w['by']['first_name'], $w['amount'], $w['to']], $waiting));
+        $this->assertNotNull($waiting[0]['over']);
+        // Emeka says yes: it wasn't Ngozi alone, so her "left today" stays whole.
+        $this->postJson("/api/v1/approvals/{$waiting[0]['id']}/respond", ['decision' => 'approve', 'pin' => '1234'])->assertOk();
+        Sanctum::actingAs($ngozi);
+        $this->assertSame('100000.00', $this->getJson("/api/v1/wallets/{$wallet->id}")->json('data.wallet.joint.me.left_today'));
+        Sanctum::actingAs($emeka);
+
+        // WAL-19: Emeka proposes ₦200,000 each on the 1st, and 48 hours to answer.
+        $this->postJson("/api/v1/wallets/{$wallet->id}/joint/changes", ['pin' => '1234', 'changes' => ['mine' => '200000', 'partner' => '200000', 'day' => 1, 'expiry_hours' => 48]])->assertOk()
+            ->assertJsonPath('data.wallet.joint.proposal.summary', 'Contributions: ₦150,000 each, every 26th → ₦200,000 each, every 1st. Requests expire after 24 → 48 hours.');
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/wallets/{$wallet->id}/joint/changes/answer", ['pin' => '1234', 'agree' => true])->assertOk()
+            ->assertJsonPath('data.wallet.joint.expiry_hours', 48);
+        foreach ([$ngozi, $emeka] as $u) {
+            $rule = AutomationRule::where('user_id', $u->id)->where('to_wallet_id', $wallet->id)->sole();
+            $this->assertSame([20_000_000, 1, true], [$rule->amount, $rule->day_of_month, (bool) $rule->enabled]);
+        }
+    }
+
+    public function test_one_partner_cannot_lower_or_remove_the_other(): void
+    {
+        [$wallet, $ngozi, , $emeka] = $this->openJoint();
+        $member = WalletMember::where('wallet_id', $wallet->id)->where('user_id', $emeka->id)->sole();
+        Sanctum::actingAs($ngozi);
+        $this->patchJson("/api/v1/wallets/{$wallet->id}/members/{$member->id}", ['role' => 'viewer'])->assertStatus(422);
+        $this->deleteJson("/api/v1/wallets/{$wallet->id}/members/{$member->id}")->assertStatus(422);
+        $this->assertSame('co_owner', $member->refresh()->role);
     }
 }

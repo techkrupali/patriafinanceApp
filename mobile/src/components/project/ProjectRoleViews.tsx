@@ -48,7 +48,7 @@ export function ViewingAs({ role, tone = 'mint', onWhat }: { role: string; tone?
 }
 
 /** WPV-09 for a project: what this role can and can't do. */
-export function ProjectRoleSheet({ visible, title, can, cannot, owner, onClose }: { visible: boolean; title: string; can: string[]; cannot: string[]; owner: string; onClose: () => void }) {
+export function ProjectRoleSheet({ visible, title, can, cannot, owner, note, onClose }: { visible: boolean; title: string; can: string[]; cannot: string[]; owner: string; note?: string; onClose: () => void }) {
   const line = (text: string, ok: boolean, last: boolean) => (
     <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, borderBottomWidth: last ? 0 : 1, borderBottomColor: pt.line }}>
       <Feather name={ok ? 'check' : 'x'} size={20} color={ok ? pt.brand : pt.inkMuted} />
@@ -56,7 +56,7 @@ export function ProjectRoleSheet({ visible, title, can, cannot, owner, onClose }
     </View>
   );
   return (
-    <PtSheet visible={visible} title={title} subtitle={`${owner} set this when inviting you.`} onClose={onClose} footer={<PtButton title="Got it" variant="secondary" onPress={onClose} />}>
+    <PtSheet visible={visible} title={title} subtitle={note ?? `${owner} set this when inviting you.`} onClose={onClose} footer={<PtButton title="Got it" variant="secondary" onPress={onClose} />}>
       <View style={{ gap: 6 }}>
         <PtGroupLabel>You can</PtGroupLabel>
         <View style={{ paddingHorizontal: 12 }}>{can.map((t, i) => line(t, true, i === can.length - 1))}</View>

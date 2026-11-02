@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ApprovalRequest;
 use App\Models\AutomationRule;
 use App\Models\Transaction;
 use App\Models\User;
@@ -10,6 +11,7 @@ use App\Models\WalletInvitation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -133,8 +135,9 @@ class JointService
         if ((int) $partner->kyc_tier < 1) {
             throw ValidationException::withMessages(['kyc' => 'Verify your BVN first. Both of you must be verified for a joint wallet.']);
         }
-        $settings = $this->settings($wallet);
-        $amount = (int) ($invitation->pledge_amount ?? $settings['contribution']['partner'] ?? 0);
+        $settings = $this->settings($wallet->fresh());
+        // The partner's share as the rules now stand (a suggestion the owner agreed may have changed it).
+        $amount = (int) ($settings['contribution']['partner'] ?: ($invitation->pledge_amount ?? 0));
         if ($amount > 0) {
             $source = $sourceWalletId
                 ? Wallet::where('id', $sourceWalletId)->where('user_id', $partner->id)->first()
@@ -151,9 +154,11 @@ class JointService
         }
         AutomationRule::where('to_wallet_id', $wallet->id)->where('user_id', $wallet->user_id)->update(['enabled' => true]);
 
-        $meta = $wallet->meta;
+        $meta = $wallet->fresh()->meta;
         $meta['joint']['state'] = 'open';
         $meta['joint']['partner_id'] = $partner->id;
+        // Accepting means these rules: a suggestion still waiting falls away.
+        unset($meta['joint']['proposal']);
         $meta['joint']['opened_at'] = now()->toIso8601String();
         $wallet->update(['meta' => $meta]);
         $this->wallets->ensureVirtualAccount($wallet);
@@ -251,16 +256,42 @@ class JointService
         $meta['joint']['proposal'] = ['by' => $by->id, 'at' => now()->toIso8601String(), 'changes' => $changes];
         $wallet->update(['meta' => $meta]);
         foreach ($this->partners($wallet)->reject(fn (User $u) => $u->id === $by->id) as $other) {
-            $this->notifications->push($other, 'joint_rule_change', "{$by->first_name} wants to change the rules of {$wallet->name}", $this->describe($changes) . ' It only changes if you agree.', ['wallet_id' => $wallet->id]);
+            $this->notifications->push($other, 'joint_rule_change', "{$by->first_name} wants to change the rules of {$wallet->name}", $this->describe($changes, $settings, $wallet) . ' It only changes if you agree.', ['wallet_id' => $wallet->id]);
         }
 
         return ['applied' => false];
     }
 
-    /** The other partner's answer to a proposed change. */
+    /**
+     * INV-O1 "Suggest a change": before accepting, the invited partner asks for
+     * different rules. The owner agrees or not; then the partner accepts.
+     */
+    public function suggest(Wallet $wallet, User $by, WalletInvitation $invitation, array $changes): void
+    {
+        $settings = $this->settings($wallet);
+        if (!$settings || $settings['state'] !== 'waiting' || $invitation->wallet_id !== $wallet->id || $invitation->status !== 'pending') {
+            throw ValidationException::withMessages(['invitation' => 'This invitation is no longer open.']);
+        }
+        $changes = $this->cleanChanges($changes);
+        if ($changes === []) {
+            throw ValidationException::withMessages(['changes' => 'Nothing to change.']);
+        }
+        $meta = $wallet->meta;
+        $meta['joint']['proposal'] = ['by' => $by->id, 'at' => now()->toIso8601String(), 'changes' => $changes, 'before_accept' => true];
+        $wallet->update(['meta' => $meta]);
+        if ($owner = $wallet->owner) {
+            $this->notifications->push($owner, 'joint_rule_change', "{$by->first_name} suggested a change to {$wallet->name}", $this->describe($changes, $settings, $wallet) . " Agree, and {$by->first_name} can accept the rules.", ['wallet_id' => $wallet->id]);
+        }
+    }
+
+    /** The other partner's answer to a proposed change (or, before accepting, the owner's answer to a suggestion). */
     public function answer(Wallet $wallet, User $by, bool $agree): void
     {
-        $settings = $this->requireOpen($wallet);
+        $settings = $this->settings($wallet);
+        $suggested = ($settings['state'] ?? null) === 'waiting' && !empty($settings['proposal']['before_accept']) && $wallet->user_id === $by->id;
+        if (!$suggested) {
+            $settings = $this->requireOpen($wallet);
+        }
         $proposal = $settings['proposal'] ?? null;
         if (!$proposal) {
             throw ValidationException::withMessages(['proposal' => 'There is no change waiting.']);
@@ -274,17 +305,24 @@ class JointService
         if ($agree) {
             $this->apply($wallet, $proposal['changes']);
         }
-        $this->tellBoth(
-            $wallet,
-            'joint_rule_change',
-            $agree ? "{$by->first_name} agreed: {$wallet->name}'s rules changed" : "{$by->first_name} said no to the rule change",
-            $this->describe($proposal['changes']),
-        );
+        $title = $agree ? "{$by->first_name} agreed: {$wallet->name}'s rules changed" : "{$by->first_name} said no to the rule change";
+        $body = $this->describe($proposal['changes'], $settings, $wallet);
+        $this->tellBoth($wallet, 'joint_rule_change', $title, $body);
+        // A suggestion from the invited partner: they aren't a member yet.
+        if ($suggested && ($asker = User::find((int) $proposal['by']))) {
+            $this->notifications->push($asker, 'joint_rule_change', $title, $body . ($agree ? ' Accept the rules to open the wallet.' : ''), ['wallet_id' => $wallet->id]);
+        }
     }
 
     private function cleanChanges(array $changes): array
     {
         return array_filter([
+            // WAL-19 "Contributions · ₦150,000 each, every 26th".
+            'mine' => isset($changes['mine']) ? max(0, (int) $changes['mine']) : null,
+            'partner' => isset($changes['partner']) ? max(0, (int) $changes['partner']) : null,
+            'day' => isset($changes['day']) && (int) $changes['day'] >= 1 && (int) $changes['day'] <= 28 ? (int) $changes['day'] : null,
+            // JNT-03 "Expires after 24 hours".
+            'expiry_hours' => isset($changes['expiry_hours']) && in_array((int) $changes['expiry_hours'], Wallet::APPROVAL_EXPIRY_HOURS, true) ? (int) $changes['expiry_hours'] : null,
             'per_payment' => isset($changes['per_payment']) ? (int) $changes['per_payment'] : null,
             'per_day' => isset($changes['per_day']) ? (int) $changes['per_day'] : null,
             'big_amount' => isset($changes['big_amount']) ? (int) $changes['big_amount'] : null,
@@ -309,33 +347,90 @@ class JointService
                 $meta['joint']['leave'][$k] = $changes[$k];
             }
         }
+        if (isset($changes['expiry_hours'])) {
+            $meta['approval_expiry_hours'] = $changes['expiry_hours'];
+        }
+        $money = array_intersect_key($changes, array_flip(['mine', 'partner', 'day']));
+        if ($money) {
+            $c = array_merge($meta['joint']['contribution'], $money);
+            $c['mode'] = $c['mine'] === $c['partner'] ? 'equal' : 'fixed';
+            $meta['joint']['contribution'] = $c;
+        }
         $wallet->update(['meta' => $meta]);
+        if ($money) {
+            // Each partner's monthly move follows the new amount and day.
+            $this->syncContribution($wallet, $wallet->user_id, (int) $meta['joint']['contribution']['mine'], (int) $meta['joint']['contribution']['day']);
+            if (!empty($meta['joint']['partner_id'])) {
+                $this->syncContribution($wallet, (int) $meta['joint']['partner_id'], (int) $meta['joint']['contribution']['partner'], (int) $meta['joint']['contribution']['day']);
+            }
+        }
     }
 
-    private function describe(array $changes): string
+    private function syncContribution(Wallet $wallet, int $userId, int $amount, int $day): void
     {
+        $rule = AutomationRule::where('to_wallet_id', $wallet->id)->where('user_id', $userId)->first();
+        if ($rule) {
+            $rule->update($amount > 0 ? ['amount' => $amount, 'day_of_month' => $day, 'enabled' => ($this->settings($wallet->fresh())['state'] ?? null) !== 'waiting'] : ['enabled' => false]);
+
+            return;
+        }
+        $user = User::find($userId);
+        if ($amount > 0 && $user && ($main = $user->mainWallet())) {
+            AutomationService::make()->createContributionRule($user, $main, $wallet, [
+                'name' => "My share into {$wallet->name}",
+                'amount' => $amount,
+                'frequency' => 'monthly',
+                'day_of_month' => $day,
+                'enabled' => ($this->settings($wallet->fresh())['state'] ?? null) !== 'waiting',
+            ]);
+        }
+    }
+
+    /** WAL-19 "Spend alone: ₦50,000 → ₦80,000 a payment" (with the rules as they were, when known). */
+    private function describe(array $changes, ?array $before = null, ?Wallet $wallet = null): string
+    {
+        $was = fn (?string $old, string $new) => $old !== null && $old !== $new ? "{$old} → {$new}" : $new;
+        $splitWord = fn (?string $s) => match ($s) {
+            'contributed' => 'split by what each put in',
+            'equal' => 'split equally',
+            'decide' => 'decide together at the time',
+            default => null,
+        };
         $parts = [];
+        if (array_intersect_key($changes, array_flip(['mine', 'partner', 'day']))) {
+            $c = $before['contribution'] ?? ['mine' => 0, 'partner' => 0, 'day' => 26];
+            $new = array_merge($c, array_intersect_key($changes, array_flip(['mine', 'partner', 'day'])));
+            $line = fn (array $x) => ((int) $x['mine'] === (int) $x['partner'] ? $this->naira((int) $x['mine']) . ' each' : $this->naira((int) $x['mine']) . ' and ' . $this->naira((int) $x['partner'])) . ', every ' . $this->ordinal((int) $x['day']);
+            $parts[] = 'Contributions: ' . $was($before ? $line($c) : null, $line($new));
+        }
         if (isset($changes['per_payment'])) {
-            $parts[] = 'spend alone up to ' . $this->naira($changes['per_payment']) . ' a payment';
+            $parts[] = 'Spend alone: ' . $was(isset($before['limits']) ? $this->naira((int) $before['limits']['per_payment']) : null, $this->naira($changes['per_payment'])) . ' a payment';
         }
         if (isset($changes['per_day'])) {
-            $parts[] = $this->naira($changes['per_day']) . ' a day each';
+            $parts[] = 'Alone each day: ' . $was(isset($before['limits']) ? $this->naira((int) $before['limits']['per_day']) : null, $this->naira($changes['per_day']));
+        }
+        if (isset($changes['expiry_hours'])) {
+            $parts[] = 'Requests expire after ' . $was($wallet ? (string) $wallet->approvalExpiryHours() : null, (string) $changes['expiry_hours']) . ' hours';
         }
         if (isset($changes['big_amount'])) {
-            $parts[] = 'big payment alert over ' . $this->naira($changes['big_amount']);
+            $parts[] = 'Big payment alert: over ' . $was(isset($before['notify']) ? $this->naira((int) $before['notify']['big_amount']) : null, $this->naira($changes['big_amount']));
         }
         if (isset($changes['split'])) {
-            $parts[] = match ($changes['split']) {
-                'contributed' => 'split by what each put in',
-                'equal' => 'split equally',
-                default => 'decide together at the time',
-            };
+            $parts[] = 'If one leaves: ' . $was($splitWord($before['leave']['split'] ?? null), (string) $splitWord($changes['split']));
         }
         if (isset($changes['notice_days'])) {
-            $parts[] = "{$changes['notice_days']} days' notice";
+            $parts[] = 'Notice: ' . $was(isset($before['leave']) ? "{$before['leave']['notice_days']} days" : null, "{$changes['notice_days']} days");
         }
 
-        return ucfirst(implode(', ', $parts)) . '.';
+        return implode('. ', $parts) . '.';
+    }
+
+    private function ordinal(int $n): string
+    {
+        $s = ['th', 'st', 'nd', 'rd'];
+        $v = $n % 100;
+
+        return $n . ($s[($v - 20) % 10] ?? $s[$v] ?? $s[0]);
     }
 
     // ----------------------------------------------------------------- leaving and closing
@@ -544,7 +639,7 @@ class JointService
         );
     }
 
-    /** "Monthly statement on the 1st": every payment last month, by email to both. */
+    /** JNT-04 "Monthly statement · PDF on the 1st": last month's payments in the app, and the PDF by email to each of them. */
     public function monthlyStatement(Wallet $wallet, Carbon $month): void
     {
         $start = $month->copy()->startOfMonth();
@@ -559,12 +654,25 @@ class JointService
         $title = "{$wallet->name}: {$month->format('F Y')} statement";
         $body = "{$this->naira($in)} in, {$this->naira($out)} out, closing balance {$this->naira((int) $wallet->balance)}.\n\n" . ($lines ?: 'No payments this month.');
         $this->tellBoth($wallet, 'joint_statement', $title, $body);
+
+        $file = WalletManageService::make()->statementFile($wallet, 'pdf', $start->copy()->utc(), $end->copy()->utc(), true, false);
+        foreach ($this->partners($wallet) as $user) {
+            if ($user->email) {
+                Mail::raw("Hello {$user->first_name},\n\n{$wallet->name}'s statement for {$month->format('F Y')} is attached. {$this->naira($in)} in, {$this->naira($out)} out.\n\nPatriai", function ($m) use ($user, $title, $file) {
+                    $m->to($user->email)->subject($title)->attachData($file['bytes'], $file['name'], ['mime' => $file['mime']]);
+                });
+            }
+        }
     }
 
     // ----------------------------------------------------------------- detail
 
-    /** What the wallet and the invitation show: the rules both agreed. */
-    public function summary(Wallet $wallet): ?array
+    /**
+     * What the wallet and the invitation show: the rules both agreed, and for a
+     * partner looking at it (WPV-03) what each put in, what they can spend alone
+     * today and what's waiting for a yes.
+     */
+    public function summary(Wallet $wallet, ?User $viewer = null): ?array
     {
         $settings = $this->settings($wallet);
         if (!$settings) {
@@ -574,11 +682,21 @@ class JointService
         $naira = fn (int $kobo) => number_format($kobo / 100, 2, '.', '');
         $partner = isset($settings['partner_id']) ? User::find($settings['partner_id']) : null;
         $invite = $partner ? null : WalletInvitation::where('wallet_id', $wallet->id)->where('status', 'pending')->latest()->first();
+        $open = in_array($settings['state'], ['open', 'leaving'], true) && $wallet->status !== 'closed';
+        $mine = $open && $viewer && in_array($viewer->id, $this->partnerIds($wallet), true);
+        // INV-O3 "Your first ₦150,000 moves on 26 Nov".
+        $today = now()->setTimezone(self::TIMEZONE)->startOfDay();
+        $next = $today->copy()->day((int) $c['day']);
+        if ($next->lt($today)) {
+            $next = $today->copy()->addMonthNoOverflow()->day((int) $c['day']);
+        }
+        $proposer = isset($settings['proposal']['by']) ? User::find($settings['proposal']['by']) : null;
 
         return [
             'state' => $settings['state'],
             'partner' => $partner ? ['id' => $partner->id, 'name' => $partner->fullName()] : null,
-            'invitation' => $invite ? ['id' => $invite->id, 'expires_at' => $invite->expires_at?->toIso8601String()] : null,
+            // WCR-07 "Waiting for Emeka".
+            'invitation' => $invite ? ['id' => $invite->id, 'expires_at' => $invite->expires_at?->toIso8601String(), 'name' => $invite->invitee?->fullName() ?? $invite->invitee_identifier] : null,
             'contribution' => ['mode' => $c['mode'], 'day' => $c['day'], 'mine' => $naira($c['mine']), 'partner' => $naira($c['partner'])],
             'short' => $settings['short'],
             'limits' => ['per_payment' => $naira($settings['limits']['per_payment']), 'per_day' => $naira($settings['limits']['per_day'])],
@@ -588,7 +706,31 @@ class JointService
             'leave' => $settings['leave'],
             'leaving' => $settings['leaving'] ?? null,
             'closing' => isset($settings['closing']) ? ['by' => $settings['closing']['by'], 'at' => $settings['closing']['at']] : null,
-            'proposal' => isset($settings['proposal']) ? ['by' => $settings['proposal']['by'], 'summary' => $this->describe($settings['proposal']['changes'])] : null,
+            'proposal' => isset($settings['proposal']) ? [
+                'by' => $settings['proposal']['by'],
+                'by_name' => $proposer?->first_name,
+                'summary' => $this->describe($settings['proposal']['changes'], $settings, $wallet),
+                'before_accept' => !empty($settings['proposal']['before_accept']),
+            ] : null,
+            'first_contribution' => $next->toDateString(),
+            // WPV-03 "Account 803 998 1204 · you each put in ₦150,000".
+            'put_in' => $open ? $this->partners($wallet)->map(fn (User $u) => ['user_id' => $u->id, 'first_name' => $u->first_name, 'amount' => $naira($this->putIn($wallet, $u->id))])->values()->all() : [],
+            // "You can spend alone ₦50,000 · Left today ₦100,000".
+            'me' => $mine ? [
+                'spend_alone' => $naira((int) $settings['limits']['per_payment']),
+                'left_today' => $naira(max(0, (int) $settings['limits']['per_day'] - $this->spentToday($wallet, $viewer))),
+            ] : null,
+            // "Ngozi wants to pay Greenfield School ₦185,000 · Over the alone limit · needs your yes".
+            'waiting' => $open ? ApprovalRequest::with('initiator')->where('wallet_id', $wallet->id)->where('status', 'pending')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))->latest()->get()
+                ->map(fn (ApprovalRequest $r) => [
+                    'id' => $r->id,
+                    'by' => ['id' => $r->initiator_id, 'first_name' => $r->initiator?->first_name],
+                    'amount' => $naira((int) $r->amount),
+                    'to' => $r->payload['to_name'] ?? $r->payload['account_name'] ?? $r->description,
+                    'over' => $r->payload['over_limit'] ?? null,
+                    'expires_at' => $r->expires_at?->toIso8601String(),
+                ])->values()->all() : [],
         ];
     }
 
@@ -632,9 +774,14 @@ class JointService
             ->where('status', 'successful')->where('counterparty->account_number', $accountNumber)->exists();
     }
 
+    /** JNT-03 "Alone, each day": what this partner paid alone today (not what the other said yes to). */
     private function spentToday(Wallet $wallet, User $user): int
     {
-        return (int) $this->spendsSince($wallet, now()->setTimezone(self::TIMEZONE)->startOfDay())->where('user_id', $user->id)->sum('amount');
+        $since = now()->setTimezone(self::TIMEZONE)->startOfDay();
+        $approved = ApprovalRequest::where('wallet_id', $wallet->id)->whereNotNull('executed_transaction_reference')
+            ->where('updated_at', '>=', $since->copy()->utc())->pluck('executed_transaction_reference')->all();
+
+        return (int) $this->spendsSince($wallet, $since)->where('user_id', $user->id)->whereNotIn('reference', $approved)->sum('amount');
     }
 
     /** @return Collection<int, Transaction> money paid out (not fees) */

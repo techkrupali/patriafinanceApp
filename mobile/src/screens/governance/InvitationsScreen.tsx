@@ -10,9 +10,12 @@ import { LoadError } from '../../components/LoadError';
 import { ErrorText } from '../../components/ErrorText';
 import { JoinSavingsSheet } from '../../components/JoinSavingsSheet';
 import { JointTermsSheet } from '../../components/joint/JointTermsSheet';
+import { JointChangeSheet, type JointPart } from '../../components/joint/JointChangeSheet';
+import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
 import { PinSheet } from '../../components/PinSheet';
 import { colors, outline, radius } from '../../theme';
-import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, useWallets, type AcceptInvitationOptions } from '../../api/hooks';
+import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, useSuggestJointChange, useWallets, type AcceptInvitationOptions } from '../../api/hooks';
+import { showAlert } from '../../lib/alert';
 import { walletVisual } from '../../lib/walletVisual';
 import { roleLabel } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
@@ -31,6 +34,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
   // Joint wallets: read the rules, then accept them with your PIN (INV-O1/O2).
   const [jointInvite, setJointInvite] = useState<WalletInvitation | null>(null);
   const [pinFor, setPinFor] = useState<WalletInvitation | null>(null);
+  // INV-O1 "Suggest a change": what to change, then the new values.
+  const [suggestFor, setSuggestFor] = useState<WalletInvitation | null>(null);
+  const [suggestPart, setSuggestPart] = useState<JointPart | null>(null);
+  const [picking, setPicking] = useState(false);
+  const suggest = useSuggestJointChange(suggestFor?.id ?? null);
   const wallets = useWallets();
   const main = (wallets.data ?? []).find((w) => w.type === 'main' && w.my_role === 'owner');
 
@@ -45,7 +53,9 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
         setActingId(null);
         setJoining(null);
         setPinFor(null);
-        navigation.navigate('WalletDetail', { walletId: data.wallet.id });
+        // INV-O3 "Your joint wallet is open".
+        if (inv.joint) navigation.navigate('JointOpen', { walletId: data.wallet.id });
+        else navigation.navigate('WalletDetail', { walletId: data.wallet.id });
       },
       onError: (e) => {
         setActingId(null);
@@ -201,8 +211,55 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
           setPinFor(jointInvite);
           setJointInvite(null);
         }}
+        onSuggest={() => {
+          setSuggestFor(jointInvite);
+          setJointInvite(null);
+          setPicking(true);
+        }}
         onClose={() => setJointInvite(null)}
       />
+      <PtOptionSheet
+        visible={picking}
+        title="What would you change?"
+        options={[
+          { value: 'contribution' as JointPart, label: 'Contributions', hint: 'How much each of you puts in, and when' },
+          { value: 'spend' as JointPart, label: 'Spend alone', hint: 'Per payment and each day, before the other says yes' },
+          { value: 'leave' as JointPart, label: 'If one leaves', hint: 'How the money splits, and the notice' },
+        ]}
+        value={null}
+        onPick={(v) => {
+          setPicking(false);
+          setSuggestPart(v);
+        }}
+        onClose={() => {
+          setPicking(false);
+          setSuggestFor(null);
+        }}
+      />
+      {suggestFor?.joint ? (
+        <JointChangeSheet
+          part={suggestPart}
+          joint={suggestFor.joint}
+          viewerIsPartner
+          otherName={suggestFor.inviter?.name?.split(/\s+/)[0] ?? 'They'}
+          submitTitle={`Send to ${suggestFor.inviter?.name?.split(/\s+/)[0] ?? 'them'}`}
+          onSubmit={(changes) =>
+            suggest.mutate(changes, {
+              onSuccess: () => {
+                const who = suggestFor.inviter?.name?.split(/\s+/)[0] ?? 'They';
+                setSuggestPart(null);
+                setSuggestFor(null);
+                showAlert('Suggestion sent', `${who} can agree to it. Then you accept the rules with your PIN.`);
+              },
+              onError: (e) => showAlert('Not sent', e.message),
+            })
+          }
+          onClose={() => {
+            setSuggestPart(null);
+            setSuggestFor(null);
+          }}
+        />
+      ) : null}
       <PinSheet
         visible={pinFor !== null}
         title="Enter your PIN"

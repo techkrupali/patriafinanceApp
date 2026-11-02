@@ -190,6 +190,9 @@ import { NewProposalScreen } from '../screens/vendor/NewProposalScreen';
 import { ListProjectScreen } from '../screens/vendor/ListProjectScreen';
 import { ListingScreen } from '../screens/vendors/ListingScreen';
 import { FindVendorStewardScreen } from '../screens/vendors/FindVendorStewardScreen';
+import { JointRulesScreen } from '../screens/wallet/JointRulesScreen';
+import { JointLeaveScreen } from '../screens/wallet/JointLeaveScreen';
+import { JointOpenScreen } from '../screens/wallet/JointOpenScreen';
 import { ProjectDocumentsScreen } from '../screens/projects/ProjectDocumentsScreen';
 import { ProjectBudgetScreen } from '../screens/projects/ProjectBudgetScreen';
 import { ApproveProposalScreen } from '../screens/projects/ApproveProposalScreen';
@@ -597,6 +600,9 @@ export function RootNavigator() {
       <RootStack.Screen name="ListProject" component={ListProjectScreen} />
       <RootStack.Screen name="Listing" component={ListingScreen} />
       <RootStack.Screen name="FindVendorSteward" component={FindVendorStewardScreen} />
+      <RootStack.Screen name="JointRules" component={JointRulesScreen} />
+      <RootStack.Screen name="JointLeave" component={JointLeaveScreen} />
+      <RootStack.Screen name="JointOpen" component={JointOpenScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="ProjectDocuments" component={ProjectDocumentsScreen} />
       <RootStack.Screen name="ProjectBudget" component={ProjectBudgetScreen} />
       <RootStack.Screen name="ApproveProposal" component={ApproveProposalScreen} />

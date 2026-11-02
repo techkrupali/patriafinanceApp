@@ -60,6 +60,10 @@ class WalletMemberController extends ApiController
         if ($member->role === 'owner' || $member->user_id === $wallet->user_id) {
             return $this->fail('The wallet owner cannot be modified', 422);
         }
+        // FAM-08 "Lowering Emeka's role on a joint wallet needs his agreement."
+        if ($wallet->type === 'joint' && $member->role === 'co_owner') {
+            return $this->fail("On a joint wallet you're both co-owners. Change the rules together, or give notice to leave.", 422);
+        }
 
         $data = $request->validate([
             'role' => ['sometimes', 'in:co_owner,admin,contributor,viewer'],
@@ -194,6 +198,10 @@ class WalletMemberController extends ApiController
         }
         if ($member->role === 'owner' || $member->user_id === $wallet->user_id) {
             return $this->fail('The wallet owner cannot be removed', 422);
+        }
+        // JNT-05: nobody is taken out of a joint wallet alone; it closes or ends after notice.
+        if ($wallet->type === 'joint' && $member->role === 'co_owner') {
+            return $this->fail("A joint partner can't be removed. Give notice to leave, or close the wallet together.", 422);
         }
 
         // On approval-enabled wallets, removing a member can shrink the approver

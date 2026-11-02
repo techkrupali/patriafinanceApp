@@ -546,7 +546,7 @@ function JointSetup({ navigation, draft }: RootScreenProps<'JointWalletSetup'> &
         <PtPanel>
           <PtSwitchRow title="Weekly summary" subtitle="Sunday evening, for both of you" value={form.weekly} onChange={(v) => set({ weekly: v })} />
           <PtDivider />
-          <PtSwitchRow title="Monthly statement" subtitle="By email on the 1st" value={form.statement} onChange={(v) => set({ statement: v })} />
+          <PtSwitchRow title="Monthly statement" subtitle="PDF on the 1st" value={form.statement} onChange={(v) => set({ statement: v })} />
           <PtDivider />
           <PtSwitchRow title="Big payment alert" subtitle={`Anything over ${formatNaira(form.perDay)}`} value={form.bigPayment} onChange={(v) => set({ bigPayment: v })} />
         </PtPanel>

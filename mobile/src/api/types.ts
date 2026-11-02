@@ -2668,7 +2668,7 @@ export interface JointPayload {
 export interface JointSummary {
   state: 'waiting' | 'open' | 'leaving' | 'closed';
   partner: { id: number; name: string } | null;
-  invitation: { id: number; expires_at: string | null } | null;
+  invitation: { id: number; expires_at: string | null; name?: string | null } | null;
   contribution: { mode: JointMode; day: number; mine: string; partner: string };
   short: 'retry' | 'skip';
   limits: { per_payment: string; per_day: string };
@@ -2678,7 +2678,29 @@ export interface JointSummary {
   leave: { split: JointSplit; notice_days: number };
   leaving: { by: number; at: string; ends_on: string } | null;
   closing: { by: number; at: string } | null;
-  proposal: { by: number; summary: string } | null;
+  /** WAL-19 "Emeka proposed a change · Spend alone: ₦50,000 → ₦80,000 a payment"; before_accept = INV-O1 "Suggest a change". */
+  proposal: { by: number; by_name?: string | null; summary: string; before_accept?: boolean } | null;
+  /** INV-O3 "Your first ₦150,000 moves on 26 Nov", YYYY-MM-DD. */
+  first_contribution?: string;
+  /** WPV-03 "you each put in ₦150,000". */
+  put_in?: { user_id: number; first_name: string; amount: string }[];
+  /** WPV-03 "You can spend alone ₦50,000 · Left today ₦100,000", for a partner. */
+  me?: { spend_alone: string; left_today: string } | null;
+  /** WPV-03 "Ngozi wants to pay Greenfield School ₦185,000 · Over the alone limit". */
+  waiting?: { id: number; by: { id: number; first_name: string | null }; amount: string; to: string | null; over: string | null; expires_at: string | null }[];
+}
+
+/** WAL-19 / INV-O1: what a joint rule change can touch. Amounts are naira. */
+export interface JointChanges {
+  mine?: string;
+  partner?: string;
+  day?: number;
+  per_payment?: string;
+  per_day?: string;
+  expiry_hours?: number;
+  big_amount?: string;
+  split?: JointSplit;
+  notice_days?: number;
 }
 
 export type ChildAgeBand = 'under_6' | '6_9' | '10_12' | '13_15' | '16_17';

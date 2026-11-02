@@ -333,7 +333,7 @@ abstract class ApiController extends Controller
             // SAV-05: until a date or the target; `locked` while it holds.
             // GLW: kind, what it covers, the contribution link, paying someone directly.
             'goal' => $wallet->type === 'goal' ? \App\Services\GoalService::make()->summary($wallet) : null,
-            'joint' => \App\Services\JointService::make()->summary($wallet),
+            'joint' => \App\Services\JointService::make()->summary($wallet, request()->user()),
             'child' => \App\Services\ChildService::make()->summary($wallet),
             // WAL-08 "Named people" and WAL-06 "Notifications".
             'approver_ids' => $wallet->approvalMode() === 'named' ? $wallet->namedApprovers()->all() : null,

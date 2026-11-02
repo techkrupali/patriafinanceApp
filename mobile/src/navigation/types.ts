@@ -419,6 +419,12 @@ export type RootStackParamList = {
   ListProject: undefined;
   /** VLS-02 a finished project on a builder's profile. */
   Listing: { listingId: number };
+  /** WAL-19 Joint wallet rules: propose a change, approve the other's. */
+  JointRules: { walletId: number };
+  /** JNT-05 from WPV-03 Leave: notice to leave and closing with both PINs. */
+  JointLeave: { walletId: number };
+  /** INV-O3 "Your joint wallet is open". */
+  JointOpen: { walletId: number };
   /** VND-03 "Find a vendor" with Steward, over the directory. */
   FindVendorSteward: { category: string; near?: string; projectId?: number };
   /** CTB-02 a funder (who may approve) is invited to a project. */

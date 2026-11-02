@@ -49,7 +49,10 @@ export function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ flex: 1, borderRadius: ptRadius.md, backgroundColor: pt.raised, padding: 12, gap: 4 }}>
       <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{label}</Text>
-      <Text style={{ fontFamily: ptFont.bold, fontSize: 17, lineHeight: 22, color: pt.ink }}>{value}</Text>
+      {/* "₦100,000" fits a third of the row: longer amounts step down a size. */}
+      <Text style={{ fontFamily: ptFont.bold, fontSize: value.length >= 9 ? 14 : value.length >= 8 ? 15 : 17, lineHeight: 22, color: pt.ink }} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
     </View>
   );
 }

@@ -37,7 +37,7 @@ export function JointSection({ wallet, myId }: { wallet: Wallet; myId: number | 
 
   const iAmOwner = wallet.owner ? wallet.owner.id === myId : true;
   const other = iAmOwner ? j.partner : wallet.owner ? { id: wallet.owner.id, name: wallet.owner.name } : null;
-  const otherName = (other?.name ?? 'your partner').split(/\s+/)[0];
+  const otherName = (other?.name ?? j.invitation?.name ?? 'your partner').split(/\s+/)[0];
   const terms = jointTerms(j, !iAmOwner);
   const ids = [myId, other?.id].filter((x): x is number => typeof x === 'number');
   const busy = actions.propose.isPending || actions.answer.isPending || actions.leave.isPending || actions.close.isPending;
@@ -99,8 +99,8 @@ export function JointSection({ wallet, myId }: { wallet: Wallet; myId: number | 
         ? j.proposal.by === myId
           ? banner(`Waiting for ${otherName} to agree`, j.proposal.summary)
           : banner(
-              `${otherName} wants to change the rules`,
-              `${j.proposal.summary} It only changes if you agree.`,
+              `${(j.proposal.by_name ?? otherName).split(/\s+/)[0]} ${j.proposal.before_accept ? 'suggested a change before accepting' : 'wants to change the rules'}`,
+              `${j.proposal.summary} ${j.proposal.before_accept ? 'Agree, and they can accept the rules.' : 'It only changes if you agree.'}`,
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <PtButton title="Say no" variant="secondary" size="sm" style={{ flex: 1 }} onPress={() => setPending({ kind: 'answer', agree: false })} />
                 <PtButton title="Agree" size="sm" style={{ flex: 1 }} onPress={() => setPending({ kind: 'answer', agree: true })} />
