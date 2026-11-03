@@ -274,6 +274,53 @@ export function IconClock({ className }: { className?: string }) {
  * The Patriai mark, as in the app: an outer ring, a lower inner ring and a gold
  * seed (mobile `LogoMark`, 88-unit box). Lighter rings on the dark sidebar.
  */
+export function IconUser({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c1.5-3.6 4.5-5.5 8-5.5s6.5 1.9 8 5.5" />
+    </Svg>
+  );
+}
+
+export function IconLock({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+    </Svg>
+  );
+}
+
+export function IconEye({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
+export function IconEyeOff({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.6A10 10 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.2 4" />
+      <path d="M6.4 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.4 4.2-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </Svg>
+  );
+}
+
+export function IconShield({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6L12 3Z" />
+      <path d="M9 12l2 2 4-4" />
+    </Svg>
+  );
+}
+
 export function PatriaiMark({ className, onDark = false }: { className?: string; onDark?: boolean }) {
   return (
     <svg viewBox="0 0 88 88" className={className ?? "h-9 w-9"} aria-hidden="true">
