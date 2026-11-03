@@ -98,7 +98,7 @@ class DashboardController extends ApiController
             'kyc' => [
                 'tier' => (int) $user->kyc_tier,
                 'status' => $kycPending ? 'pending' : ((int) $user->kyc_tier >= 1 ? 'verified' : 'unverified'),
-                'can_upgrade' => (int) $user->kyc_tier < 3 && !$kycPending,
+                'can_upgrade' => (int) $user->kyc_tier < \App\Services\KycService::maxTier() && !$kycPending,
             ],
         ]);
     }

@@ -7,7 +7,7 @@ import { PtPageScreen } from '../../components/pt/PtPageScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtField } from '../../components/pt/PtField';
 import { PtGroupLabel, PtNote, PtPills } from '../../components/pt/PtForm';
-import { useSubmitTier } from '../../api/account';
+import { useLimits, useSubmitTier } from '../../api/account';
 import { pickFile, type PickedFile } from '../../lib/upload';
 import { notifySuccess, selection } from '../../lib/haptics';
 import { showAlert } from '../../lib/alert';
@@ -58,6 +58,13 @@ function PhotoSlot({ title, sub, file, onPick, camera = true }: { title: string;
 export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmit'>) {
   const tier = route.params.targetTier;
   const submit = useSubmitTier();
+  const limits = useLimits();
+  // A tier added in admin Settings (Tier 4 …): what it's called and what it needs.
+  const info = limits.data?.tiers.find((t) => t.tier === tier);
+  const added = tier > 3;
+  const [note, setNote] = useState('');
+  const [doc, setDoc] = useState<PickedFile | null>(null);
+  const [doc2, setDoc2] = useState<PickedFile | null>(null);
   const [bvn, setBvn] = useState('');
   const [nin, setNin] = useState('');
   const [selfie, setSelfie] = useState<PickedFile | null>(null);
@@ -82,6 +89,11 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
       if (!selfie) return setError('Take a quick selfie.');
       fields = { nin };
       files = { selfie };
+    } else if (added) {
+      if (note.trim().length < 10) return setError('Tell us a little more, at least a sentence.');
+      if (!doc) return setError(info?.needs ? `Add a photo of what's needed: ${info.needs}.` : 'Add a photo of your document.');
+      fields = { note: note.trim() };
+      files = { document: doc, document_2: doc2 };
     } else {
       if (!idPhoto) return setError('Add the photo page of your ID.');
       if (!address.trim() || !city.trim() || !state.trim()) return setError('Fill in your address.');
@@ -104,10 +116,10 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
 
   return (
     <PtPageScreen
-      title={tier === 1 ? 'Enter your BVN' : tier === 2 ? 'NIN and a selfie' : 'ID and address'}
-      subtitle={`Tier ${tier}`}
+      title={tier === 1 ? 'Enter your BVN' : tier === 2 ? 'NIN and a selfie' : added ? `Ask for ${info?.name ?? `Tier ${tier}`}` : 'ID and address'}
+      subtitle={info?.name ?? `Tier ${tier}`}
       onBack={() => navigation.goBack()}
-      footer={<PtButton title={tier === 3 ? 'Submit for review' : tier === 2 ? 'Check NIN and selfie' : 'Check BVN'} onPress={send} loading={submit.isPending} />}
+      footer={<PtButton title={tier >= 3 ? 'Submit for review' : tier === 2 ? 'Check NIN and selfie' : 'Check BVN'} onPress={send} loading={submit.isPending} />}
     >
       {tier === 1 ? (
         <>
@@ -119,6 +131,16 @@ export function KycSubmitScreen({ navigation, route }: RootScreenProps<'KycSubmi
           <PtField label="NIN" value={nin} onChangeText={(t) => setNin(t.replace(/\D/g, '').slice(0, 11))} keyboardType="number-pad" placeholder="11 digits" maxLength={11} hint="On your NIN slip or in the NIMC app. You can also dial *346#." />
           <PhotoSlot title="Take a quick selfie" sub="Good light, no glasses or cap, your face in the frame" file={selfie} onPick={setSelfie} />
           <PtNote tone="info">Tier 2 unlocks sending up to ₦200,000 a day, holding ₦500,000, and shared wallets.</PtNote>
+        </>
+      ) : added ? (
+        <>
+          {info ? (
+            <PtNote tone="info">{`${info.name ?? `Tier ${tier}`} needs: ${info.needs}.${info.description ? ` ${info.description}` : ''}`}</PtNote>
+          ) : null}
+          <PtField label="Tell us about it" value={note} onChangeText={setNote} placeholder="What you use Patriai for, and why you need more" maxLength={1000} multiline />
+          <PhotoSlot title={info?.needs ?? 'Your document'} sub="A clear photo, all four corners in view" file={doc} onPick={setDoc} />
+          <PhotoSlot title="Another page or document" sub="Optional" file={doc2} onPick={setDoc2} />
+          <PtNote tone="info">{`Our team checks it, usually within a day.${info?.daily ? ` ${info.name ?? `Tier ${tier}`} lets you send up to ₦${Math.round(Number(info.daily)).toLocaleString('en-NG')} a day.` : ''}`}</PtNote>
         </>
       ) : (
         <>

@@ -168,7 +168,7 @@ class AdminSecurityController extends ApiController
     public function settings(): JsonResponse
     {
         return $this->ok('Settings', collect(array_keys(SystemSetting::DEFAULTS))->mapWithKeys(fn ($k) => [$k => SystemSetting::get($k)])->all() + [
-            'tiers' => array_map(fn ($n) => LimitService::make()->tier($n), [1, 2, 3]),
+            'tiers' => AdminTierController::list(),
         ]);
     }
 

@@ -43,11 +43,8 @@ class LoanService
     /** KYC-tier borrowing cap in kobo. */
     private function tierCap(User $user): int
     {
-        return match (true) {
-            $user->kyc_tier >= 3 => 100_000_000, // ₦1,000,000
-            $user->kyc_tier === 2 => 20_000_000,  // ₦200,000
-            default => 5_000_000,                 // ₦50,000 (tier 0/1)
-        };
+        // Set per tier in admin Settings (kyc_tiers.loan_cap).
+        return (int) LimitService::make()->tier((int) $user->kyc_tier)['loan_cap'];
     }
 
     /** Sum of the user's successful CREDIT transactions in the last 90 days (kobo). */

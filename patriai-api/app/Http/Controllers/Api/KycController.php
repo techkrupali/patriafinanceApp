@@ -58,15 +58,17 @@ class KycController extends ApiController
 
         return $this->ok('KYC status fetched', [
             'tier' => $tier,
-            'max_tier' => KycService::MAX_TIER,
+            'max_tier' => KycService::maxTier(),
             'status' => $status,
             'pending_submission' => $pending ? $this->serializeKycSubmission($pending) : null,
             'last_rejected' => $lastRejected ? $this->serializeKycSubmission($lastRejected) : null,
             'limits' => $this->presentLimits($svc->limits($tier)),
-            'next_tier' => $tier < KycService::MAX_TIER ? [
-                'tier' => $tier + 1,
-                'requirements' => $svc->requirements($tier + 1),
-                'benefits' => $this->presentLimits($svc->limits($tier + 1)),
+            'next_tier' => ($nextLevel = $tier < 1 ? 1 : \App\Services\LimitService::make()->nextLevel($tier)) ? [
+                'tier' => $nextLevel,
+                'name' => \App\Services\LimitService::make()->tier($nextLevel)['name'],
+                'needs' => \App\Services\LimitService::make()->tier($nextLevel)['needs'],
+                'requirements' => $svc->requirements($nextLevel),
+                'benefits' => $this->presentLimits($svc->limits($nextLevel)),
             ] : null,
         ]);
     }
@@ -75,7 +77,7 @@ class KycController extends ApiController
     public function submit(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'target_tier' => ['required', 'integer', 'min:1', 'max:' . KycService::MAX_TIER],
+            'target_tier' => ['required', 'integer', 'min:1', 'max:' . KycService::maxTier()],
         ]);
 
         $submission = KycService::make()->submit(

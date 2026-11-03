@@ -16,7 +16,14 @@ use Illuminate\Validation\ValidationException;
  */
 class KycService
 {
+    /** The highest tier before admins add more; see maxTier(). */
     public const MAX_TIER = 3;
+
+    /** The highest tier there is (an admin may add Tier 4 …). */
+    public static function maxTier(): int
+    {
+        return \App\Models\KycTier::maxLevel();
+    }
 
     public function __construct(
         private readonly NotificationService $notifications,
@@ -41,11 +48,8 @@ class KycService
             'daily_transfer_limit' => $t['daily'],
             'single_payment_limit' => $t['single'],
             'max_balance' => $t['max_balance'],
-            'loan_cap' => match (true) {
-                $tier >= 3 => 100_000_000, // ₦1,000,000
-                $tier === 2 => 20_000_000, // ₦200,000
-                default => 5_000_000, // ₦50,000
-            },
+            // Set per tier in admin Settings (LoanService uses the same).
+            'loan_cap' => (int) $t['loan_cap'],
         ];
     }
 
@@ -59,12 +63,13 @@ class KycService
             1 => ['bvn'],
             2 => ['nin', 'selfie'],
             3 => ['id_type', 'id_photo', 'address', 'city', 'state', 'proof'],
-            default => [],
+            // A tier an admin added: a note and documents, checked by the team.
+            default => $tier > 3 ? ['note', 'document'] : [],
         };
     }
 
     /** The photos and files a tier keeps (stored privately; admin views them). */
-    public const FILES = ['selfie', 'id_photo', 'id_back', 'proof'];
+    public const FILES = ['selfie', 'id_photo', 'id_back', 'proof', 'document', 'document_2'];
 
     /** Validation rules for the payload of a given target tier. */
     private function rules(int $tier): array
@@ -86,7 +91,11 @@ class KycService
                 'state' => ['required', 'string', 'max:100'],
                 'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
             ],
-            default => [],
+            default => $tier > 3 ? [
+                'note' => ['required', 'string', 'min:10', 'max:1000'],
+                'document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+                'document_2' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+            ] : [],
         };
     }
 
@@ -96,13 +105,13 @@ class KycService
      */
     public function submit(User $u, int $targetTier, array $payload): KycSubmission
     {
-        if ($targetTier < 1 || $targetTier > self::MAX_TIER) {
+        if ($targetTier < 1 || $targetTier > self::maxTier()) {
             throw ValidationException::withMessages(['target_tier' => 'Invalid target tier']);
         }
         if ((int) $u->kyc_tier >= $targetTier) {
             throw ValidationException::withMessages(['target_tier' => 'Already verified at this level']);
         }
-        if ($targetTier !== (int) $u->kyc_tier + 1) {
+        if ($targetTier !== LimitService::make()->nextLevel((int) $u->kyc_tier) && !((int) $u->kyc_tier === 0 && $targetTier === 1)) {
             throw ValidationException::withMessages(['target_tier' => 'Please complete the previous tier first']);
         }
         if (KycSubmission::where('user_id', $u->id)->where('status', 'pending')->exists()) {

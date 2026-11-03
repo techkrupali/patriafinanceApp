@@ -558,6 +558,10 @@ Route::prefix('v1')->group(function () {
             Route::post('support-requests/{supportRequest}/messages', [AdminSecurityController::class, 'reply'])->middleware('throttle:60,1');
             Route::get('system-settings', [AdminSecurityController::class, 'settings']);
             Route::put('system-settings', [AdminSecurityController::class, 'updateSettings']);
+            // Settings → Verification tiers (the app reads the same).
+            Route::post('tiers', [\App\Http\Controllers\Api\Admin\AdminTierController::class, 'store']);
+            Route::put('tiers/{level}', [\App\Http\Controllers\Api\Admin\AdminTierController::class, 'update'])->whereNumber('level');
+            Route::delete('tiers/{level}', [\App\Http\Controllers\Api\Admin\AdminTierController::class, 'destroy'])->whereNumber('level');
             Route::get('wallets', [AdminController::class, 'wallets']);
             Route::get('wallets/{wallet}', [AdminController::class, 'walletDetail']);
             Route::post('wallets/{wallet}/adjust', [AdminController::class, 'adjustWallet']);

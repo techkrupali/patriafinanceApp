@@ -387,7 +387,7 @@ class AdminController extends ApiController
     // PATCH /admin/users/{user}/kyc-tier  { tier: 0..3 }
     public function setUserKycTier(Request $request, User $user): JsonResponse
     {
-        $data = $request->validate(['tier' => ['required', 'integer', 'between:0,3']]);
+        $data = $request->validate(['tier' => ['required', 'integer', 'between:0,' . \App\Services\KycService::maxTier()]]);
 
         // kyc_tier is not mass-assignable (privilege field) — set it explicitly.
         $user->forceFill(['kyc_tier' => $data['tier']])->save();

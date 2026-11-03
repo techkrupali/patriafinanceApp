@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ApprovalRequest;
+use App\Models\KycTier;
 use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\User;
@@ -24,18 +25,46 @@ class LimitService
     }
 
     /**
-     * The verification tiers (CBN tiered KYC, as on ME-23). Tier 0 (phone only)
-     * has Tier 1's limits until the BVN is checked.
+     * The verification tiers (CBN tiered KYC, as on ME-23), from the admin's
+     * Settings (kyc_tiers). Tier 0 (phone only) has Tier 1's limits until the
+     * BVN is checked; a level between two tiers gets the lower one's.
      *
-     * @return array{tier: int, daily: ?int, single: ?int, max_balance: ?int, max_wallets: int, shared_wallets: bool, needs: string}
+     * @return array{tier: int, name: string, daily: ?int, single: ?int, max_balance: ?int, max_wallets: int, shared_wallets: bool, needs: string, description: ?string, loan_cap: int}
      */
     public function tier(int $tier): array
     {
+        $rows = KycTier::catalogue();
+        if ($rows->isNotEmpty()) {
+            $row = $rows->last(fn ($r) => $r['level'] <= max(1, $tier)) ?? $rows->first();
+
+            return ['tier' => $row['level']] + $row;
+        }
+
         return match (true) {
-            $tier >= 3 => ['tier' => 3, 'daily' => 500_000_000, 'single' => 500_000_000, 'max_balance' => null, 'max_wallets' => 20, 'shared_wallets' => true, 'needs' => 'ID document and proof of address'],
-            $tier === 2 => ['tier' => 2, 'daily' => 20_000_000, 'single' => 20_000_000, 'max_balance' => 50_000_000, 'max_wallets' => 3, 'shared_wallets' => true, 'needs' => 'NIN and a selfie'],
-            default => ['tier' => 1, 'daily' => 5_000_000, 'single' => 5_000_000, 'max_balance' => 30_000_000, 'max_wallets' => 1, 'shared_wallets' => false, 'needs' => 'Phone and BVN'],
+            $tier >= 3 => ['tier' => 3, 'name' => 'Tier 3', 'daily' => 500_000_000, 'single' => 500_000_000, 'max_balance' => null, 'max_wallets' => 20, 'shared_wallets' => true, 'needs' => 'ID document and proof of address', 'description' => null, 'loan_cap' => 100_000_000],
+            $tier === 2 => ['tier' => 2, 'name' => 'Tier 2', 'daily' => 20_000_000, 'single' => 20_000_000, 'max_balance' => 50_000_000, 'max_wallets' => 3, 'shared_wallets' => true, 'needs' => 'NIN and a selfie', 'description' => null, 'loan_cap' => 20_000_000],
+            default => ['tier' => 1, 'name' => 'Tier 1', 'daily' => 5_000_000, 'single' => 5_000_000, 'max_balance' => 30_000_000, 'max_wallets' => 1, 'shared_wallets' => false, 'needs' => 'Phone and BVN', 'description' => null, 'loan_cap' => 5_000_000],
         };
+    }
+
+    /** Every tier's level, lowest first. */
+    public function levels(): array
+    {
+        $levels = KycTier::catalogue()->pluck('level')->all();
+
+        return $levels ?: [1, 2, 3];
+    }
+
+    /** The tier after this one, if there is one. */
+    public function nextLevel(int $tier): ?int
+    {
+        foreach ($this->levels() as $l) {
+            if ($l > max(0, $tier)) {
+                return $l;
+            }
+        }
+
+        return null;
     }
 
     /** Money this person sent out today (Lagos day), not counting moves between their own wallets. */
@@ -74,7 +103,9 @@ class LimitService
     {
         $t = $this->tier((int) $user->kyc_tier);
         $sent = $this->sentToday($user);
-        $next = (int) $user->kyc_tier < 3 ? $this->tier(max(1, (int) $user->kyc_tier) + 1) : null;
+        // Tier 0's next step is the BVN (the app asks for it); the next limits shown are Tier 2's.
+        $nextLevel = $this->nextLevel(max(1, (int) $user->kyc_tier));
+        $next = $nextLevel ? $this->tier($nextLevel) : null;
         $naira = fn (?int $k) => $k === null ? null : number_format($k / 100, 2, '.', '');
 
         return [
@@ -89,11 +120,13 @@ class LimitService
             'wallets' => Wallet::where('user_id', $user->id)->where('status', '!=', 'closed')->count(),
             'shared_wallets' => $t['shared_wallets'],
             'receive' => null,
-            'next' => $next ? ['tier' => $next['tier'], 'daily' => $naira($next['daily']), 'max_balance' => $naira($next['max_balance']), 'needs' => $next['needs']] : null,
-            'tiers' => array_map(fn ($n) => ['tier' => $n] + collect($this->tier($n))->only(['needs', 'max_wallets', 'shared_wallets'])->all() + [
+            'next' => $next ? ['tier' => $next['tier'], 'name' => $next['name'], 'daily' => $naira($next['daily']), 'max_balance' => $naira($next['max_balance']), 'needs' => $next['needs']] : null,
+            'max_tier' => max($this->levels()),
+            'tiers' => array_map(fn ($n) => ['tier' => $n] + collect($this->tier($n))->only(['name', 'needs', 'description', 'max_wallets', 'shared_wallets'])->all() + [
                 'daily' => $naira($this->tier($n)['daily']),
+                'single' => $naira($this->tier($n)['single']),
                 'max_balance' => $naira($this->tier($n)['max_balance']),
-            ], [1, 2, 3]),
+            ], $this->levels()),
         ];
     }
 

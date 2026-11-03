@@ -32,7 +32,7 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
   );
 }
 
-const FILE_NAMES: Record<string, string> = { selfie: "Selfie", id_photo: "ID photo page", id_back: "ID signature page", proof: "Proof of address" };
+const FILE_NAMES: Record<string, string> = { selfie: "Selfie", id_photo: "ID photo page", id_back: "ID signature page", proof: "Proof of address", document: "Document", document_2: "Second document" };
 
 /**
  * The tier's details (ME-23): Tier 1 the BVN; Tier 2 the NIN and a selfie;
@@ -41,6 +41,9 @@ const FILE_NAMES: Record<string, string> = { selfie: "Selfie", id_photo: "ID pho
  */
 function PayloadFields({ id, tier, payload, files }: { id: string; tier: number; payload: KycPayload; files: string[] }) {
   const rows: [string, React.ReactNode][] = [];
+  // A tier added in Settings (Tier 4 …): what the person wrote, then their documents.
+  const note = (payload as Record<string, unknown>).note;
+  if (typeof note === "string" && note) rows.push(["Note", note]);
   if (payload.bvn) rows.push(["BVN", payload.bvn]);
   if (payload.nin) rows.push(["NIN", payload.nin]);
   if (payload.id_type) rows.push(["ID type", label(payload.id_type)]);

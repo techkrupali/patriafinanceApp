@@ -54,10 +54,15 @@ export interface SecuritySummary {
   pin_locked_until: string | null;
 }
 
+/** ME-23 one tier, as set in admin Settings (Tier 4 … can be added there). */
 export interface TierRow {
   tier: number;
+  /** "Tier 2", or a name like "Tier 4 · Business". */
+  name?: string;
   needs: string;
-  daily: string;
+  description?: string | null;
+  daily: string | null;
+  single?: string | null;
   max_balance: string | null;
   max_wallets: number;
   shared_wallets: boolean;
@@ -65,16 +70,19 @@ export interface TierRow {
 
 export interface LimitsSummary {
   tier: number;
-  daily: string;
-  left_today: string;
+  /** null when the tier has no limit (set in admin Settings). */
+  daily: string | null;
+  left_today: string | null;
   sent_today: string;
-  single: string;
+  single: string | null;
   max_balance: string | null;
   main_balance: string;
   max_wallets: number;
   wallets: number;
   shared_wallets: boolean;
-  next: { tier: number; daily: string; max_balance: string | null; needs: string } | null;
+  next: { tier: number; name?: string; daily: string | null; max_balance: string | null; needs: string } | null;
+  /** The highest tier there is (3 until an admin adds more). */
+  max_tier?: number;
   tiers: TierRow[];
   pending_tier: number | null;
   plan: 'free' | 'pro';
