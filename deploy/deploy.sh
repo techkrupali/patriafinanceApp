@@ -262,15 +262,17 @@ build_api() {
   step "Storage, permissions and caches"
   [[ -e "$API_DIR/public/storage" ]] || artisan storage:link
   mkdir -p "$API_DIR/storage/logs" "$API_DIR/bootstrap/cache"
-  if [[ $EUID -eq 0 ]] && id "$WEB_USER" >/dev/null 2>&1; then
-    chown -R "$WEB_USER":"$WEB_USER" "$API_DIR/storage" "$API_DIR/bootstrap/cache"
-  fi
-  chmod -R ug+rwX "$API_DIR/storage" "$API_DIR/bootstrap/cache" 2>/dev/null || true
   artisan optimize:clear >/dev/null
   artisan config:cache >/dev/null
   artisan route:cache >/dev/null
   artisan event:cache >/dev/null
   ok "Config, routes and events cached"
+  # After artisan ran (maybe as root): the web server must still write logs and uploads.
+  if [[ $EUID -eq 0 ]] && id "$WEB_USER" >/dev/null 2>&1; then
+    chown -R "$WEB_USER":"$WEB_USER" "$API_DIR/storage" "$API_DIR/bootstrap/cache"
+  fi
+  chmod -R ug+rwX "$API_DIR/storage" "$API_DIR/bootstrap/cache" 2>/dev/null || true
+  ok "storage/ and bootstrap/cache belong to $WEB_USER"
 
   step "Restarting workers"
   artisan queue:restart >/dev/null
