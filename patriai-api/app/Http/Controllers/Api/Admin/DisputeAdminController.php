@@ -16,11 +16,25 @@ use Illuminate\Http\Request;
  */
 class DisputeAdminController extends ApiController
 {
-    // GET /admin/disputes?status=&kind=
+    // GET /admin/disputes?status=&kind=&search=
     public function index(Request $request): JsonResponse
     {
         $service = DisputeService::make();
+        $search = trim((string) $request->query('search', ''));
         $page = Dispute::with(['user', 'against', 'project', 'milestone'])
+            // Subject, DSP number, project, or who raised it (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '#')) . '%';
+                $q->where(function ($w) use ($search, $like) {
+                    $w->whereRaw('LOWER(subject) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(number) LIKE ?', [$like])
+                        ->orWhereHas('project', fn ($p) => $p->whereRaw('LOWER(title) LIKE ?', [$like]))
+                        ->orWhereHas('user', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like]));
+                    if (ctype_digit(ltrim($search, '#'))) {
+                        $w->orWhere('id', (int) ltrim($search, '#'));
+                    }
+                });
+            })
             ->when($request->query('status'), fn ($q, $s) => $s === 'active'
                 ? $q->whereIn('status', Dispute::ACTIVE)
                 : $q->where('status', $s))
@@ -44,6 +58,14 @@ class DisputeAdminController extends ApiController
             'waiting' => [
                 'decision' => Dispute::whereIn('status', ['escalated', 'under_review'])->orWhere(fn ($q) => $q->where('status', 'open')->where(fn ($k) => $k->whereNull('kind')->orWhere('kind', '!=', 'milestone')))->count(),
                 'builder' => Dispute::where('status', 'open')->where('kind', 'milestone')->count(),
+            ],
+            'summary' => [
+                'all' => Dispute::count(),
+                'active' => Dispute::whereIn('status', Dispute::ACTIVE)->count(),
+                'on_hold' => number_format(((int) Dispute::whereIn('status', Dispute::ACTIVE)->sum('amount_on_hold')) / 100, 2, '.', ''),
+                'overdue' => Dispute::whereIn('status', ['escalated', 'under_review', 'open'])->whereNotNull('decision_due')->where('decision_due', '<', now())->count(),
+                'closed_30d' => Dispute::whereNotIn('status', Dispute::ACTIVE)->where('resolved_at', '>=', now()->subDays(30))->count(),
+                'by_kind' => Dispute::whereIn('status', Dispute::ACTIVE)->selectRaw('kind, count(*) as n')->groupBy('kind')->pluck('n', 'kind'),
             ],
             'pagination' => [
                 'page' => $page->currentPage(),

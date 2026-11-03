@@ -24,22 +24,34 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class VendorAdminController extends ApiController
 {
-    // GET /admin/vendors?status=&q=
+    // GET /admin/vendors?status=&category=&q=
     public function index(Request $request): JsonResponse
     {
-        $q = strtolower(trim((string) $request->query('q', '')));
+        $q = mb_strtolower(trim((string) $request->query('q', '')));
         $page = VendorProfile::with('user')
             ->when($request->query('status'), fn ($query, $s) => $query->where('status', $s))
-            ->when($q !== '', fn ($query) => $query->whereRaw('LOWER(business_name) LIKE ?', ["%{$q}%"]))
+            ->when($request->query('category'), fn ($query, $c) => $query->where('category', $c))
+            // Business name, place or the owner's name (any database).
+            ->when($q !== '', fn ($query) => $query->where(fn ($w) => $w->whereRaw('LOWER(business_name) LIKE ?', ["%{$q}%"])
+                ->orWhereRaw('LOWER(location) LIKE ?', ["%{$q}%"])
+                ->orWhereHas('user', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", ["%{$q}%"]))))
             // Waiting for a check first.
             ->orderByRaw("CASE status WHEN 'submitted' THEN 0 WHEN 'needs_changes' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END")
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $oldest = VendorProfile::where('status', 'submitted')->orderBy('submitted_at')->value('submitted_at');
 
         return $this->ok('Vendors fetched', [
             'vendors' => collect($page->items())->map(fn (VendorProfile $p) => $this->row($p))->values(),
             'counts' => VendorProfile::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
+            'summary' => [
+                'all' => VendorProfile::count(),
+                'by_category' => VendorProfile::selectRaw('category, count(*) as n')->whereNotNull('category')->groupBy('category')->orderByDesc('n')->pluck('n', 'category'),
+                'oldest_waiting_at' => $oldest ? \Illuminate\Support\Carbon::parse($oldest)->toIso8601String() : null,
+                'verified_30d' => VendorProfile::where('status', 'verified')->where('verified_at', '>=', now()->subDays(30))->count(),
+                'projects_active' => Project::where('status', 'active')->whereIn('vendor_id', VendorProfile::select('user_id'))->count(),
+            ],
             'pagination' => [
                 'page' => $page->currentPage(),
                 'per_page' => $page->perPage(),

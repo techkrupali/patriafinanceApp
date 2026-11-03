@@ -176,6 +176,10 @@ const APPROVAL_ACTIONS: Record<string, string> = {
   transfer_wallet: "Wallet transfer",
   transfer_user: "User transfer",
   transfer_bank: "Bank transfer",
+  milestone_release: "Milestone release",
+  rule_change: "Rule change",
+  unlock_wallet: "Unlock wallet",
+  close_wallet: "Close wallet",
 };
 
 export function approvalActionLabel(action: string): string {

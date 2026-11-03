@@ -561,25 +561,45 @@ class AdminController extends ApiController
         ]);
     }
 
-    // GET /admin/approvals?status=
+    // GET /admin/approvals?status=&action=&search=
     public function approvals(Request $request): JsonResponse
     {
-        $requests = ApprovalRequest::with(['wallet', 'initiator'])
+        $search = trim((string) $request->query('search', ''));
+        $base = ApprovalRequest::query()
+            ->when($request->query('action'), fn ($q, $a) => $q->where('action', $a))
+            // The wallet, who asked, or #id (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '#')) . '%';
+                $q->where(function ($w) use ($search, $like) {
+                    $w->whereHas('wallet', fn ($x) => $x->whereRaw('LOWER(name) LIKE ?', [$like]))
+                        ->orWhereHas('initiator', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like]));
+                    if (ctype_digit(ltrim($search, '#'))) {
+                        $w->orWhere('id', (int) ltrim($search, '#'));
+                    }
+                });
+            });
+        $requests = (clone $base)->with(['wallet', 'initiator'])
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $pending = ApprovalRequest::where('status', 'pending');
+        $done30 = ApprovalRequest::where('status', 'executed')->where('updated_at', '>=', now()->subDays(30));
+        $naira = fn ($k) => number_format(((int) $k) / 100, 2, '.', '');
 
         return $this->ok('Approvals fetched', [
             'approvals' => collect($requests->items())->map(fn ($r) => [
                 'id' => $r->id,
-                'wallet' => $r->wallet ? ['id' => $r->wallet->id, 'name' => $r->wallet->name] : null,
-                'initiator' => $r->initiator ? ['name' => $r->initiator->fullName(), 'email' => $r->initiator->email] : null,
+                'wallet' => $r->wallet ? ['id' => $r->wallet->id, 'name' => $r->wallet->name, 'type' => $r->wallet->type] : null,
+                'initiator' => $r->initiator ? ['id' => $r->initiator->id, 'name' => $r->initiator->fullName(), 'email' => $r->initiator->email] : null,
                 'action' => $r->action,
+                'description' => $r->description,
                 'amount' => number_format($r->amount / 100, 2, '.', ''),
                 'fee' => number_format($r->fee / 100, 2, '.', ''),
                 'status' => $r->status,
                 'approvals_count' => (int) $r->approvals_count,
                 'required_approvals' => (int) $r->required_approvals,
+                'expires_at' => $r->expires_at?->toIso8601String(),
                 'created_at' => $r->created_at?->toIso8601String(),
             ]),
             'pagination' => [
@@ -587,6 +607,16 @@ class AdminController extends ApiController
                 'per_page' => $requests->perPage(),
                 'total' => $requests->total(),
                 'last_page' => $requests->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => collect(['pending', 'approved', 'executed', 'rejected', 'expired', 'failed', 'cancelled'])->mapWithKeys(fn ($k) => [$k => (int) ($byStatus[$k] ?? 0)]),
+                'all' => (int) $byStatus->sum(),
+                'pending_all' => (clone $pending)->count(),
+                'pending_amount' => $naira((clone $pending)->sum('amount')),
+                'expiring_24h' => (clone $pending)->whereNotNull('expires_at')->where('expires_at', '<=', now()->addDay())->count(),
+                'executed_30d' => (clone $done30)->count(),
+                'executed_30d_amount' => $naira((clone $done30)->sum('amount')),
+                'by_action' => ApprovalRequest::selectRaw('action, count(*) as n')->groupBy('action')->orderByDesc('n')->pluck('n', 'action'),
             ],
         ]);
     }
@@ -683,24 +713,41 @@ class AdminController extends ApiController
         ]);
     }
 
-    // GET /admin/loans?status=
+    // GET /admin/loans?status=&category=&search=
     public function loans(Request $request): JsonResponse
     {
-        $loans = Loan::with('user')
+        $search = trim((string) $request->query('search', ''));
+        $base = Loan::query()
+            ->when($request->query('category'), fn ($q, $c) => $q->where('category', $c))
+            // Reference, or the borrower's name or email (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower($search) . '%';
+                $q->where(fn ($w) => $w->whereRaw('LOWER(reference) LIKE ?', [$like])
+                    ->orWhereHas('user', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])
+                        ->orWhereRaw('LOWER(email) LIKE ?', [$like])));
+            });
+        $loans = (clone $base)->with('user')
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $live = Loan::whereIn('status', ['disbursed', 'active', 'defaulted']);
+        $out30 = Loan::whereNotNull('disbursed_at')->where('disbursed_at', '>=', now()->subDays(30));
+        $naira = fn ($k) => number_format(((int) $k) / 100, 2, '.', '');
 
         return $this->ok('Loans fetched', [
             'loans' => collect($loans->items())->map(fn ($l) => [
                 'id' => $l->id,
                 'reference' => $l->reference,
-                'user' => $l->user ? ['name' => $l->user->fullName(), 'email' => $l->user->email] : null,
+                'user' => $l->user ? ['id' => $l->user->id, 'name' => $l->user->fullName(), 'email' => $l->user->email] : null,
                 'category' => $l->category,
                 'principal' => number_format($l->principal / 100, 2, '.', ''),
                 'total_repayable' => number_format($l->total_repayable / 100, 2, '.', ''),
                 'outstanding' => number_format($l->outstanding / 100, 2, '.', ''),
+                'penalty_accrued' => number_format(((int) $l->penalty_accrued) / 100, 2, '.', ''),
+                'tenor_days' => (int) $l->tenor_days,
                 'status' => $l->status,
+                'due_at' => $l->due_at?->toIso8601String(),
                 'created_at' => $l->created_at?->toIso8601String(),
             ]),
             'pagination' => [
@@ -708,6 +755,19 @@ class AdminController extends ApiController
                 'per_page' => $loans->perPage(),
                 'total' => $loans->total(),
                 'last_page' => $loans->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => collect(['pending', 'approved', 'disbursed', 'active', 'repaid', 'defaulted', 'rejected', 'cancelled'])->mapWithKeys(fn ($k) => [$k => (int) ($byStatus[$k] ?? 0)]),
+                'all' => (int) $byStatus->sum(),
+                'outstanding' => $naira((clone $live)->sum('outstanding')),
+                'live' => (clone $live)->count(),
+                'waiting' => Loan::where('status', 'pending')->count(),
+                'lent_30d' => (clone $out30)->count(),
+                'lent_30d_amount' => $naira((clone $out30)->sum('principal')),
+                'repaid' => Loan::where('status', 'repaid')->count(),
+                'defaulted' => Loan::where('status', 'defaulted')->count(),
+                'defaulted_amount' => $naira(Loan::where('status', 'defaulted')->sum('outstanding')),
+                'by_category' => (clone $live)->selectRaw('category, sum(outstanding) as total')->groupBy('category')->pluck('total', 'category')->map(fn ($k) => $naira($k)),
             ],
         ]);
     }
@@ -786,26 +846,41 @@ class AdminController extends ApiController
         return $this->ok('Loan recovery successful', ['loan' => $this->serializeLoan($result['loan'])]);
     }
 
-    // GET /admin/projects?status=
+    // GET /admin/projects?status=&search=
     public function projects(Request $request): JsonResponse
     {
-        $projects = Project::with(['owner', 'vendor', 'wallet'])
+        $search = trim((string) $request->query('search', ''));
+        $base = Project::query()
+            // Title, or the family's or builder's name (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower($search) . '%';
+                $q->where(fn ($w) => $w->whereRaw('LOWER(title) LIKE ?', [$like])
+                    ->orWhereHas('owner', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like]))
+                    ->orWhereHas('vendor', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])));
+            });
+        $projects = (clone $base)->with(['owner', 'vendor', 'wallet'])
+            ->withCount(['milestones', 'milestones as milestones_released' => fn ($q) => $q->where('status', 'released'), 'milestones as milestones_submitted' => fn ($q) => $q->where('status', 'submitted')])
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $active = Project::where('status', 'active');
+        $naira = fn ($k) => number_format(((int) $k) / 100, 2, '.', '');
 
         return $this->ok('Projects fetched', [
             'projects' => collect($projects->items())->map(fn ($p) => [
                 'id' => $p->id,
                 'title' => $p->title,
-                'owner' => $p->owner ? ['name' => $p->owner->fullName()] : null,
-                'vendor' => $p->vendor ? ['name' => $p->vendor->fullName()] : null,
+                'owner' => $p->owner ? ['id' => $p->owner->id, 'name' => $p->owner->fullName()] : null,
+                'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->fullName()] : null,
                 'budget' => number_format($p->budget / 100, 2, '.', ''),
                 'wallet_balance' => $p->wallet ? $p->wallet->balanceNaira() : number_format(0, 2, '.', ''),
                 'reserved' => number_format($p->reservedAmount() / 100, 2, '.', ''),
                 'released' => number_format($p->releasedAmount() / 100, 2, '.', ''),
                 'status' => $p->status,
-                'milestones_count' => (int) $p->milestones()->count(),
+                'milestones_count' => (int) $p->milestones_count,
+                'milestones_released' => (int) $p->milestones_released,
+                'milestones_submitted' => (int) $p->milestones_submitted,
                 'created_at' => $p->created_at?->toIso8601String(),
             ]),
             'pagination' => [
@@ -813,6 +888,15 @@ class AdminController extends ApiController
                 'per_page' => $projects->perPage(),
                 'total' => $projects->total(),
                 'last_page' => $projects->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => collect(['active', 'completed', 'cancelled'])->mapWithKeys(fn ($k) => [$k => (int) ($byStatus[$k] ?? 0)]),
+                'all' => (int) $byStatus->sum(),
+                'in_escrow' => $naira(Wallet::whereIn('id', (clone $active)->whereNotNull('wallet_id')->pluck('wallet_id'))->sum('balance')),
+                'active_budget' => $naira((clone $active)->sum('budget')),
+                // Paid to builders, less anything refunded after (as releasedAmount()).
+                'released' => $naira(Milestone::where('status', 'released')->get(['amount', 'meta'])->sum(fn ($m) => $m->amount - (int) ($m->meta['refunded'] ?? 0))),
+                'proof_waiting' => Milestone::where('status', 'submitted')->whereHas('project', fn ($q) => $q->where('status', 'active'))->count(),
             ],
         ]);
     }

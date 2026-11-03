@@ -269,8 +269,10 @@ export type ApprovalStatus =
 
 export interface ApiApproval {
   id: number;
-  wallet: { id: number; name: string } | null;
-  initiator: { name: string; email: string } | null;
+  wallet: { id: number; name: string; type?: string } | null;
+  initiator: { id?: number; name: string; email: string } | null;
+  description?: string | null;
+  expires_at?: string | null;
   action: ApprovalAction;
   amount: string; // naira string
   fee: string; // naira string
@@ -423,6 +425,16 @@ export interface TransactionsData {
 export interface ApprovalsData {
   approvals: ApiApproval[];
   pagination: Pagination;
+  summary?: {
+    by_status: Record<ApprovalStatus, number>;
+    all: number;
+    pending_all: number;
+    pending_amount: string;
+    expiring_24h: number;
+    executed_30d: number;
+    executed_30d_amount: string;
+    by_action: Record<string, number> | number[];
+  };
 }
 
 export interface WalletMember {
@@ -594,7 +606,10 @@ export type RepaymentStatus = "pending" | "partial" | "paid" | "overdue";
 export interface LoanListItem {
   id: number;
   reference: string;
-  user: { name: string; email: string } | null;
+  user: { id?: number; name: string; email: string } | null;
+  penalty_accrued?: string;
+  tenor_days?: number;
+  due_at?: string | null;
   category: LoanCategory;
   principal: string; // naira string
   total_repayable: string; // naira string
@@ -606,6 +621,20 @@ export interface LoanListItem {
 export interface LoansData {
   loans: LoanListItem[];
   pagination: Pagination;
+  /** Naira strings. "live" = disbursed, active or defaulted. */
+  summary?: {
+    by_status: Record<LoanStatus, number>;
+    all: number;
+    outstanding: string;
+    live: number;
+    waiting: number;
+    lent_30d: number;
+    lent_30d_amount: string;
+    repaid: number;
+    defaulted: number;
+    defaulted_amount: string;
+    by_category: Record<string, string> | string[];
+  };
 }
 
 export interface LoanRepayment {
@@ -664,20 +693,31 @@ export type MilestoneStatus =
 export interface ProjectListItem {
   id: number;
   title: string;
-  owner: { name: string } | null;
-  vendor: { name: string } | null;
+  owner: { id?: number; name: string } | null;
+  vendor: { id?: number; name: string } | null;
   budget: string; // naira string
   wallet_balance: string; // naira string — escrow balance
   reserved: string; // naira string
   released: string; // naira string
   status: ProjectStatus;
   milestones_count: number;
+  milestones_released?: number;
+  /** Proof sent, waiting for the family. */
+  milestones_submitted?: number;
   created_at: string | null;
 }
 
 export interface ProjectsData {
   projects: ProjectListItem[];
   pagination: Pagination;
+  summary?: {
+    by_status: Record<ProjectStatus, number>;
+    all: number;
+    in_escrow: string;
+    active_budget: string;
+    released: string;
+    proof_waiting: number;
+  };
 }
 
 export interface ProjectMilestone {
@@ -1115,6 +1155,13 @@ export interface VendorsData {
   vendors: VendorRow[];
   counts: Partial<Record<VendorStatus, number>>;
   pagination: Pagination;
+  summary?: {
+    all: number;
+    by_category: Record<string, number> | number[];
+    oldest_waiting_at: string | null;
+    verified_30d: number;
+    projects_active: number;
+  };
 }
 
 export interface VendorVerification {
@@ -1187,6 +1234,14 @@ export interface DisputesData {
   /** Payment disputes go straight to Patriai; milestone ones wait for the builder first. */
   waiting?: { decision: number; builder: number };
   pagination: Pagination;
+  summary?: {
+    all: number;
+    active: number;
+    on_hold: string;
+    overdue: number;
+    closed_30d: number;
+    by_kind: Record<string, number> | number[];
+  };
 }
 
 export interface DisputeDetail {

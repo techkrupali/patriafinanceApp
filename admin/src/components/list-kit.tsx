@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { formatDate } from "@/lib/format";
+import { formatDate, naira } from "@/lib/format";
 import { IconSearch } from "@/components/icons";
 
 /**
@@ -28,8 +28,9 @@ export function PageTitle({ eyebrow, title, subtitle, children }: { eyebrow: str
   );
 }
 
-/** The dark emerald card that leads each page: one big figure and what's behind it. */
-export function HeroCard({ icon: Icon, title, sub, value, unit, children }: { icon: IconT; title: string; sub: string; value: string; unit?: string; children?: React.ReactNode }) {
+/** The dark emerald card that leads each page: one big figure (a count, or naira with `money`) and what's behind it. */
+export function HeroCard({ icon: Icon, title, sub, value, unit, money, children }: { icon: IconT; title: string; sub: string; value?: string; unit?: string; money?: number; children?: React.ReactNode }) {
+  const [whole, kobo] = money !== undefined ? naira(money).replace("₦", "").split(".") : [];
   return (
     <div
       className="relative overflow-hidden rounded-[22px] p-6 text-white shadow-[0_24px_60px_-30px_rgba(8,57,47,0.7)] sm:col-span-2 lg:col-span-2"
@@ -48,10 +49,18 @@ export function HeroCard({ icon: Icon, title, sub, value, unit, children }: { ic
           <p className="text-xs text-white/65">{sub}</p>
         </div>
       </div>
-      <p className="relative mt-5 flex items-baseline gap-2 font-extrabold tracking-tight">
-        <span className="text-[40px] leading-none tabular-nums">{value}</span>
-        {unit ? <span className="text-base font-semibold text-white/60">{unit}</span> : null}
-      </p>
+      {money !== undefined ? (
+        <p className="relative mt-5 flex items-baseline gap-1 font-extrabold tracking-tight">
+          <span className="text-xl text-white/55">₦</span>
+          <span className="text-[34px] leading-none tabular-nums sm:text-[38px]">{whole}</span>
+          <span className="text-lg text-white/55 tabular-nums">.{kobo}</span>
+        </p>
+      ) : (
+        <p className="relative mt-5 flex items-baseline gap-2 font-extrabold tracking-tight">
+          <span className="text-[40px] leading-none tabular-nums">{value}</span>
+          {unit ? <span className="text-base font-semibold text-white/60">{unit}</span> : null}
+        </p>
+      )}
       {children ? <div className="relative mt-5">{children}</div> : null}
     </div>
   );
@@ -200,9 +209,10 @@ const AVATAR_TINTS = [
   "bg-[#FDF1E2] text-[#B5651D]",
 ];
 
-/** Round initials; the tint follows the id so a person keeps their colour. */
+/** Round initials; the tint follows the person's id (or name) so they keep their colour on every row. */
 export function Avatar({ name, seed, size = "md" }: { name?: string | null; seed?: number; size?: "sm" | "md" }) {
-  const tint = AVATAR_TINTS[Math.abs(seed ?? 0) % AVATAR_TINTS.length];
+  const key = seed ?? [...(name ?? "")].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 7);
+  const tint = AVATAR_TINTS[Math.abs(key) % AVATAR_TINTS.length];
   return (
     <span className={cn("flex shrink-0 items-center justify-center rounded-full font-bold", tint, size === "sm" ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-xs")}>
       {initials(name)}
@@ -239,6 +249,45 @@ export function ago(iso: string | null | undefined): string {
 export function agoText(iso: string | null | undefined): string {
   const a = ago(iso);
   return /^\d+[mhd]$/.test(a) ? `${a} ago` : a;
+}
+
+/** Time left: "in 5h", "in 2d", "in 20m"; "passed" once gone. */
+export function until(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "—";
+  const m = Math.floor((t - Date.now()) / 60000);
+  if (m < 0) return "passed";
+  if (m < 60) return `in ${m}m`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `in ${h}h` : `in ${Math.floor(h / 24)}d`;
+}
+
+/** Yeses as filled dots: ●●○ 2 of 3 said yes. */
+export function Yeses({ got, need, word = "said yes" }: { got: number; need: number; word?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-muted">
+      <span className="flex gap-0.5">
+        {Array.from({ length: Math.min(need, 6) }).map((_, i) => (
+          <span key={i} className={cn("h-2 w-2 rounded-full", i < got ? "bg-brand" : "bg-line")} />
+        ))}
+      </span>
+      {got} of {need} {word}
+    </span>
+  );
+}
+
+/** A thin progress bar with a % beside it. */
+export function Progress({ pct, tone = "bg-brand", className }: { pct: number; tone?: string; className?: string }) {
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  return (
+    <div className={cn("flex items-center gap-2", className)}>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-page">
+        <div className={cn("h-full rounded-full", tone)} style={{ width: `${p ? Math.max(p, 3) : 0}%` }} />
+      </div>
+      <span className="w-8 text-right text-[11px] font-semibold tabular-nums text-muted">{p}%</span>
+    </div>
+  );
 }
 
 /** Hours since, for "waiting" colours. */

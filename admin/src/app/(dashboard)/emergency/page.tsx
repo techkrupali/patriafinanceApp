@@ -12,7 +12,7 @@ import { EmptyState, ErrorState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { compactNaira } from "@/components/dashboard/flow-chart";
 import { IconAlert, IconArrowUpRight, IconBook, IconChevronRight, IconEmergency, IconLock, IconSliders, IconUsers } from "@/components/icons";
-import { agoText, Avatar, FilterChip, HeroCard, KpiTile, PageTitle, PANEL, SearchBox, SplitBar, StatusDot, StatusTabs, type IconT } from "@/components/list-kit";
+import { agoText, Avatar, FilterChip, HeroCard, KpiTile, PageTitle, PANEL, SearchBox, SplitBar, StatusDot, StatusTabs, Yeses, type IconT } from "@/components/list-kit";
 
 const METHOD: Record<EmergencyRequestMethod, { icon: IconT; tile: string; dot: string; chip: string }> = {
   document: { icon: IconBook, tile: "bg-info-soft text-info", dot: "#1D5FA8", chip: "Document" },
@@ -34,20 +34,6 @@ const STATUS: Record<EmergencyRequestStatus, { word: string; dot: string; onDark
 const STATUS_ORDER: EmergencyRequestStatus[] = ["pending", "flagged", "approved", "released", "rejected", "cancelled", "expired"];
 
 type Tab = "" | EmergencyRequestStatus;
-
-/** Keyholders' yeses as filled dots: ●●○ 2 of 3. */
-function Yeses({ got, need }: { got: number; need: number }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted">
-      <span className="flex gap-0.5">
-        {Array.from({ length: Math.min(need, 6) }).map((_, i) => (
-          <span key={i} className={cn("h-2 w-2 rounded-full", i < got ? "bg-brand" : "bg-line")} />
-        ))}
-      </span>
-      {got} of {need} said yes
-    </span>
-  );
-}
 
 export default function EmergencyPage() {
   const router = useRouter();
