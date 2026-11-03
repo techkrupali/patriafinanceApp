@@ -424,22 +424,53 @@ class AdminController extends ApiController
     // GET /admin/wallets
     public function wallets(Request $request): JsonResponse
     {
-        $wallets = Wallet::with('owner')
+        $search = trim((string) $request->query('search', ''));
+        $filtered = Wallet::query()
             ->when($request->query('type'), fn ($q, $t) => $q->where('type', $t))
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
-            ->when($request->query('search'), fn ($q, $s) => $q->where(fn ($w) => $w
-                ->where('virtual_account', 'ilike', "%{$s}%")
-                ->orWhere('name', 'ilike', "%{$s}%")))
-            ->latest()
+            // By wallet name, account number, or the owner's name or phone (any database).
+            ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
+                $like = '%' . mb_strtolower($search) . '%';
+                $w->whereRaw('LOWER(name) LIKE ?', [$like])
+                    ->orWhereRaw('LOWER(virtual_account) LIKE ?', [$like])
+                    ->orWhereHas('owner', fn ($o) => $o->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])->orWhere('phone', 'like', "%{$search}%"));
+            }));
+        $sort = $request->query('sort', 'newest');
+        $wallets = (clone $filtered)->with('owner')
+            // Members besides the owner: "shared with 3".
+            ->withCount(['members as others_count' => fn ($m) => $m->where('status', 'active')->whereColumn('wallet_members.user_id', '!=', 'wallets.user_id')])
+            ->when($sort === 'balance', fn ($q) => $q->orderByDesc('balance'), fn ($q) => $q->latest())
             ->paginate(min((int) $request->query('per_page', 20), 100));
 
+        $naira = fn ($kobo) => number_format(((int) $kobo) / 100, 2, '.', '');
+        $byType = Wallet::selectRaw('type, count(*) as n, sum(balance) as total')->groupBy('type')->get()
+            ->mapWithKeys(fn ($r) => [$r->type => ['count' => (int) $r->n, 'balance' => $naira($r->total)]]);
+        $byStatus = Wallet::selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+
         return $this->ok('Wallets fetched', [
-            'wallets' => collect($wallets->items())->map(fn ($w) => $this->serializeWallet($w, withOwner: true)),
+            'wallets' => collect($wallets->items())->map(fn ($w) => $this->serializeWallet($w, withOwner: true) + [
+                'members_count' => (int) $w->others_count,
+                'owner_phone' => $w->owner?->phone,
+            ]),
             'pagination' => [
                 'page' => $wallets->currentPage(),
                 'per_page' => $wallets->perPage(),
                 'total' => $wallets->total(),
                 'last_page' => $wallets->lastPage(),
+            ],
+            // The page's summary: all wallets, and what the filters match.
+            'summary' => [
+                'total' => Wallet::count(),
+                'total_balance' => $naira(Wallet::sum('balance')),
+                'matching_balance' => $naira((clone $filtered)->sum('balance')),
+                'shared' => Wallet::whereHas('members', fn ($m) => $m->where('status', 'active')->whereColumn('wallet_members.user_id', '!=', 'wallets.user_id'))->count(),
+                'by_status' => [
+                    'active' => (int) ($byStatus['active'] ?? 0),
+                    'frozen' => (int) ($byStatus['frozen'] ?? 0),
+                    'suspended' => (int) ($byStatus['suspended'] ?? 0),
+                    'closed' => (int) ($byStatus['closed'] ?? 0),
+                ],
+                'by_type' => $byType,
             ],
         ]);
     }

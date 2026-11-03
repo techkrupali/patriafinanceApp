@@ -382,8 +382,17 @@ export interface UserDetailData {
 }
 
 export interface WalletsData {
-  wallets: ApiWallet[];
+  wallets: (ApiWallet & { members_count?: number; owner_phone?: string | null })[];
   pagination: Pagination;
+  /** All wallets on Patriai, and what the filters match (naira strings). */
+  summary?: {
+    total: number;
+    total_balance: string;
+    matching_balance: string;
+    shared: number;
+    by_status: { active: number; frozen: number; suspended: number; closed: number };
+    by_type: Record<string, { count: number; balance: string }>;
+  };
 }
 
 export interface TransactionsData {
