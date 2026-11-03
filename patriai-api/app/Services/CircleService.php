@@ -208,7 +208,7 @@ class CircleService
         $top = null;
         foreach ($wallets ?? $this->universe($circle) as $w) {
             $role = $w->user_id === $user->id ? 'co_owner' : $w->members->firstWhere('user_id', $user->id)?->role;
-            if ($role && (self::ROLE_RANK[$role] ?? 0) > (self::ROLE_RANK[$top] ?? 0)) {
+            if ($role && (self::ROLE_RANK[$role] ?? 0) > ($top ? (self::ROLE_RANK[$top] ?? 0) : 0)) {
                 $top = $role;
             }
         }
