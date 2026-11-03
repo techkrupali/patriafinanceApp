@@ -321,6 +321,32 @@ export function IconShield({ className }: { className?: string }) {
   );
 }
 
+export function IconHeart({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20Z" />
+    </Svg>
+  );
+}
+
+export function IconBook({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 1 4 17.5v-12Z" />
+      <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 0 1.5-1.5v-12Z" />
+    </Svg>
+  );
+}
+
+export function IconArrowDownLeft({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M17 7 7 17" />
+      <path d="M16 17H7V8" />
+    </Svg>
+  );
+}
+
 export function PatriaiMark({ className, onDark = false }: { className?: string; onDark?: boolean }) {
   return (
     <svg viewBox="0 0 88 88" className={className ?? "h-9 w-9"} aria-hidden="true">

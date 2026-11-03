@@ -1,21 +1,21 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatDate, naira } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import type { AdminOrganisation, OrganisationsData } from "@/lib/types";
-import { PageHeader } from "@/components/page-header";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Toast, type ToastState } from "@/components/toast";
 import { FormModal } from "@/components/admin/form-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { TableSkeleton } from "@/components/ui/skeleton";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { compactNaira } from "@/components/dashboard/flow-chart";
+import { IconBook, IconBuilding, IconCheckCircle, IconClock, IconHeart, IconSearch, IconUsers } from "@/components/icons";
 
 const KINDS = ["church", "mosque", "charity", "school", "other"] as const;
 const CAUSES = ["children", "food", "education", "health", "elderly", "faith"] as const;
@@ -23,6 +23,36 @@ const CAUSES = ["children", "food", "education", "health", "elderly", "faith"] a
 type Draft = Omit<AdminOrganisation, "id" | "saved_by" | "owed" | "created_at"> & { id?: number };
 
 const title = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+
+type IconT = (props: { className?: string }) => React.ReactNode;
+
+/** Each kind's icon and tint. */
+const KIND_STYLE: Record<string, { icon: IconT; tile: string; plural: string }> = {
+  church: { icon: IconBuilding, tile: "bg-brand-soft text-brand", plural: "Churches" },
+  mosque: { icon: IconBuilding, tile: "bg-[#E6F7EF] text-[#14725C]", plural: "Mosques" },
+  charity: { icon: IconHeart, tile: "bg-gold-soft text-warn", plural: "Charities" },
+  school: { icon: IconBook, tile: "bg-info-soft text-info", plural: "Schools" },
+  other: { icon: IconUsers, tile: "bg-page text-muted", plural: "Other" },
+};
+
+function Kpi({ icon: Icon, title: name, value, short, hint, tone }: { icon: IconT; title: string; value: string; short?: string; hint: string; tone: "brand" | "gold" | "muted" }) {
+  const tones = { brand: "bg-brand-soft text-brand", gold: "bg-gold-soft text-warn", muted: "bg-page text-muted" };
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-line/80 bg-white p-4 shadow-card sm:rounded-[22px] sm:p-5">
+      <div className="flex items-center gap-2.5">
+        <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", tones[tone])}>
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <p className="text-sm font-semibold text-ink">{name}</p>
+      </div>
+      <p className="mt-4 truncate text-2xl font-extrabold tracking-tight tabular-nums text-ink sm:text-[28px]">
+        <span className={short ? "sm:hidden" : "hidden"}>{short}</span>
+        <span className={short ? "hidden sm:inline" : ""}>{value}</span>
+      </p>
+      <p className="mt-0.5 text-xs text-muted">{hint}</p>
+    </div>
+  );
+}
 
 const EMPTY: Draft = {
   name: "",
@@ -93,138 +123,244 @@ export default function OrganisationsPage() {
   });
 
   const set = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
+  const [kind, setKind] = useState<"" | (typeof KINDS)[number]>("");
+  const [state, setState] = useState("");
+  const [query, setQuery] = useState("");
+
+  const stats = useMemo(() => {
+    const all = data?.organisations ?? [];
+    return {
+      total: all.length,
+      verified: all.filter((o) => o.verified).length,
+      unverified: all.filter((o) => !o.verified).length,
+      hidden: all.filter((o) => !o.active).length,
+      owed: all.reduce((n, o) => n + (parseFloat(o.owed) || 0), 0),
+    };
+  }, [data]);
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (data?.organisations ?? [])
+      .filter((o) => !kind || o.kind === kind)
+      .filter((o) => (state === "verified" ? o.verified : state === "unverified" ? !o.verified : state === "hidden" ? !o.active : true))
+      .filter((o) => !q || [o.name, o.area, o.state, o.account_number, o.account_name, o.bank_name].some((v) => (v ?? "").toLowerCase().includes(q)));
+  }, [data, kind, state, query]);
 
   return (
-    <>
-      <PageHeader
-        title="Organisations"
-        subtitle="Churches, mosques, charities and schools people can give to. Check each one and its account before marking it verified."
-      >
+    <div className="animate-rise">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">Giving</p>
+          <h1 className="mt-1.5 text-[28px] font-extrabold leading-tight tracking-tight text-ink sm:text-[32px]">
+            Organisations<span className="text-gold">.</span>
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted">Churches, mosques, charities and schools people can give to. Check each one and its account before marking it verified.</p>
+        </div>
         <Button
+          className="h-10 rounded-full px-5"
           onClick={() => {
             setFormError(null);
             setDraft({ ...EMPTY });
           }}
         >
-          Add organisation
+          + Add organisation
         </Button>
-      </PageHeader>
+      </div>
 
-      <Card>
+      {data ? (
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+          <Kpi icon={IconBuilding} title="Organisations" value={stats.total.toLocaleString()} hint={`${stats.hidden} hidden from people`} tone="brand" />
+          <Kpi icon={IconCheckCircle} title="Verified" value={stats.verified.toLocaleString()} hint={stats.total ? `${Math.round((stats.verified / stats.total) * 100)}% checked` : "None yet"} tone="brand" />
+          <Kpi icon={IconClock} title="Waiting for a check" value={stats.unverified.toLocaleString()} hint={stats.unverified ? "Check them and their account" : "All checked"} tone={stats.unverified ? "gold" : "muted"} />
+          <Kpi icon={IconHeart} title="Owed to charities" value={naira(stats.owed)} short={compactNaira(stats.owed)} hint="Half of early-break fees" tone={stats.owed > 0 ? "gold" : "muted"} />
+        </div>
+      ) : isPending ? (
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[140px] rounded-[22px]" />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-5 rounded-[22px] border border-line/80 bg-white p-5 shadow-card">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Kind">
+            {(["", ...KINDS] as const).map((k) => {
+              const n = k ? (data?.organisations ?? []).filter((o) => o.kind === k).length : data?.organisations.length;
+              const S = k ? KIND_STYLE[k] : null;
+              const on = kind === k;
+              return (
+                <button
+                  key={k || "all"}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setKind(k)}
+                  className={cn("inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all", on ? "border-navy bg-navy text-white shadow-sm" : "border-line bg-white text-ink hover:border-brand/40 hover:bg-rowhover")}
+                >
+                  {S ? <S.icon className={cn("h-3.5 w-3.5", on ? "text-[#5FD3A5]" : "text-brand")} /> : null}
+                  {S ? S.plural : "All"}
+                  {n !== undefined ? <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums", on ? "bg-white/15" : "bg-page text-muted")}>{n}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-1 rounded-full bg-page p-1" role="tablist" aria-label="Status">
+            {[
+              { value: "", label: "Any" },
+              { value: "verified", label: "Verified" },
+              { value: "unverified", label: "Not verified" },
+              { value: "hidden", label: "Hidden" },
+            ].map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="tab"
+                aria-selected={state === o.value}
+                onClick={() => setState(o.value)}
+                className={cn("shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors", state === o.value ? "bg-navy text-white shadow-sm" : "text-muted hover:text-ink")}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative min-w-56 flex-1">
+            <IconSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input
+              className="h-10 w-full rounded-full border border-line bg-page pl-10 pr-4 text-sm text-ink transition-colors placeholder:text-muted/70 focus:border-brand focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand/10"
+              placeholder="Search name, area, state or account"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search organisations"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5">
         {isPending ? (
-          <TableSkeleton rows={6} cols={6} />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[260px] rounded-[22px]" />
+            ))}
+          </div>
         ) : isError ? (
-          <ErrorState message={error.message} />
+          <div className="rounded-[22px] border border-line bg-white">
+            <ErrorState message={error.message} />
+          </div>
         ) : data.organisations.length === 0 ? (
-          <EmptyState message="No organisations yet. Add the first one people can give to." />
+          <div className="rounded-[22px] border border-line bg-white">
+            <EmptyState message="No organisations yet. Add the first one people can give to." />
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="rounded-[22px] border border-line bg-white">
+            <EmptyState message="No organisations match your filters." />
+          </div>
         ) : (
-          <Table>
-            <THead>
-              <tr>
-                <TH>Name</TH>
-                <TH>Kind</TH>
-                <TH>Account</TH>
-                <TH>Owed from fees</TH>
-                <TH>Status</TH>
-                <TH />
-              </tr>
-            </THead>
-            <TBody>
-              {data.organisations.map((o) => (
-                <TR key={o.id}>
-                  <TD>
-                    <p className="font-medium">{o.name}</p>
-                    <p className="text-xs text-muted">
-                      {[[o.area, o.state].filter(Boolean).join(", "), o.saved_by ? `saved by ${o.saved_by}` : null].filter(Boolean).join(" · ") || "—"}
-                    </p>
-                  </TD>
-                  <TD>
-                    <p>{title(o.kind)}</p>
-                    {o.cause ? <p className="text-xs text-muted">{title(o.cause)}</p> : null}
-                  </TD>
-                  <TD>
-                    <p className="font-mono text-xs">{o.account_number}</p>
-                    <p className="text-xs text-muted">
-                      {o.bank_name} · {o.account_name}
-                    </p>
-                  </TD>
-                  <TD>
-                    {parseFloat(o.owed) > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{naira(o.owed)}</span>
-                        <Button size="sm" variant="outline" disabled={paid.isPending} onClick={() => paid.mutate(o.id)}>
-                          Mark paid
-                        </Button>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {shown.map((o) => {
+              const S = KIND_STYLE[o.kind] ?? KIND_STYLE.other;
+              const owed = parseFloat(o.owed);
+              return (
+                <div key={o.id} className={cn("flex flex-col rounded-[22px] border bg-white p-5 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-hover", o.active ? "border-line/80" : "border-dashed border-line-strong/50 opacity-80")}>
+                  <div className="flex items-start gap-3">
+                    <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", S.tile)}>
+                      <S.icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-bold text-ink">{o.name}</p>
+                      <p className="truncate text-xs text-muted">{[[o.area, o.state].filter(Boolean).join(", "), title(o.kind), o.cause ? title(o.cause) : null].filter(Boolean).join(" · ") || "—"}</p>
+                    </div>
+                    <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold", o.verified ? "bg-brand-soft text-brand" : "bg-gold-soft text-warn")}>
+                      {o.verified ? <IconCheckCircle className="h-3.5 w-3.5" /> : <IconClock className="h-3.5 w-3.5" />}
+                      {o.verified ? "Verified" : "To check"}
+                    </span>
+                  </div>
+                  {o.about ? <p className="mt-3 line-clamp-2 text-[13px] text-muted">{o.about}</p> : null}
+                  <div className="mt-4 rounded-xl bg-page px-3.5 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{o.bank_name}</p>
+                    <p className="mt-0.5 font-mono text-[15px] font-bold tracking-wider text-ink">{o.account_number}</p>
+                    <p className="truncate text-xs text-muted">{o.account_name}</p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                    <span className="inline-flex items-center gap-1">
+                      <IconUsers className="h-3.5 w-3.5" />
+                      {o.saved_by ? `Saved by ${o.saved_by}` : "Not saved yet"}
+                    </span>
+                    {!o.active ? <Badge tone="gray">Hidden</Badge> : null}
+                    {o.created_at ? <span>Added {formatDate(o.created_at)}</span> : null}
+                  </div>
+                  {owed > 0 ? (
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-gold/40 bg-gold-soft px-3.5 py-2.5">
+                      <div>
+                        <p className="text-[11px] font-semibold text-warn">Owed from early-break fees</p>
+                        <p className="text-sm font-extrabold tabular-nums text-ink">{naira(o.owed)}</p>
                       </div>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </TD>
-                  <TD>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge tone={o.verified ? "green" : "amber"}>{o.verified ? "Verified" : "Not verified"}</Badge>
-                      {!o.active ? <Badge tone="gray">Hidden</Badge> : null}
-                    </div>
-                  </TD>
-                  <TD>
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => patch.mutate({ id: o.id, body: { verified: !o.verified } })}>
-                        {o.verified ? "Unverify" : "Verify"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setFormError(null);
-                          setDraft({ ...o });
-                        }}
-                      >
-                        Edit
+                      <Button size="sm" variant="outline" disabled={paid.isPending} onClick={() => paid.mutate(o.id)}>
+                        Mark paid
                       </Button>
                     </div>
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
+                  ) : null}
+                  <div className="mt-auto flex justify-end gap-1.5 pt-4">
+                    <Button size="sm" variant="ghost" onClick={() => patch.mutate({ id: o.id, body: { verified: !o.verified } })}>
+                      {o.verified ? "Unverify" : "Mark verified"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setFormError(null);
+                        setDraft({ ...o });
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
-      </Card>
+      </div>
 
       {data && data.donations.length > 0 ? (
-        <div className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Early-break fees to charities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <THead>
-                  <tr>
-                    <TH>Receipt</TH>
-                    <TH>Charity</TH>
-                    <TH>From</TH>
-                    <TH>Amount</TH>
-                    <TH>Status</TH>
-                    <TH>Date</TH>
+        <div className="mt-5 overflow-hidden rounded-[22px] border border-line/80 bg-white shadow-card">
+          <div className="flex items-center justify-between gap-3 px-5 pt-5">
+            <div>
+              <h2 className="text-[17px] font-bold tracking-tight text-ink">Early-break fees to charities</h2>
+              <p className="mt-0.5 text-[13px] text-muted">Half of each early-break fee goes to the charity the saver picked</p>
+            </div>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead>
+                <tr className="text-xs text-muted">
+                  <th className="px-5 py-3 font-semibold">Receipt</th>
+                  <th className="px-3 py-3 font-semibold">Charity</th>
+                  <th className="px-3 py-3 font-semibold">From</th>
+                  <th className="px-3 py-3 text-right font-semibold">Amount</th>
+                  <th className="px-3 py-3 font-semibold">Status</th>
+                  <th className="px-3 py-3 font-semibold">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.donations.map((d) => (
+                  <tr key={d.id} className="border-t border-line/70">
+                    <td className="px-5 py-3 font-mono text-xs text-muted">{d.receipt_no}</td>
+                    <td className="px-3 py-3 font-semibold text-ink">{d.organisation ?? "—"}</td>
+                    <td className="px-3 py-3 text-ink">{d.from ?? "—"}</td>
+                    <td className="px-3 py-3 text-right font-extrabold tabular-nums text-ink">{naira(d.amount)}</td>
+                    <td className="px-3 py-3">
+                      <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold", d.status === "paid" ? "text-brand" : "text-warn")}>
+                        <span className={cn("h-2 w-2 rounded-full", d.status === "paid" ? "bg-brand" : "bg-gold")} />
+                        {d.status === "paid" ? "Paid" : "Owed"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-muted">{formatDate(d.created_at)}</td>
                   </tr>
-                </THead>
-                <TBody>
-                  {data.donations.map((d) => (
-                    <TR key={d.id}>
-                      <TD className="font-mono text-xs">{d.receipt_no}</TD>
-                      <TD>{d.organisation ?? "—"}</TD>
-                      <TD>{d.from ?? "—"}</TD>
-                      <TD className="font-medium">{naira(d.amount)}</TD>
-                      <TD>
-                        <Badge tone={d.status === "paid" ? "green" : "amber"}>{d.status === "paid" ? "Paid" : "Owed"}</Badge>
-                      </TD>
-                      <TD className="text-muted">{formatDate(d.created_at)}</TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </CardContent>
-          </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
 
@@ -301,6 +437,6 @@ export default function OrganisationsPage() {
       ) : null}
 
       <Toast toast={toast} onDismiss={dismissToast} />
-    </>
+    </div>
   );
 }

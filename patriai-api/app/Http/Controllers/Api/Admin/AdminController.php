@@ -478,12 +478,38 @@ class AdminController extends ApiController
     // GET /admin/transactions
     public function transactions(Request $request): JsonResponse
     {
-        $txns = Transaction::with(['wallet.owner'])
-            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+        $search = trim((string) $request->query('search', ''));
+        // Today / last 7 / last 30 days (Lagos).
+        $since = match ($request->query('period')) {
+            'today' => now('Africa/Lagos')->startOfDay()->utc(),
+            '7d' => now('Africa/Lagos')->startOfDay()->subDays(6)->utc(),
+            '30d' => now('Africa/Lagos')->startOfDay()->subDays(29)->utc(),
+            default => null,
+        };
+        // Everything but the status, so the status tabs can show their counts.
+        $base = Transaction::query()
             ->when($request->query('type'), fn ($q, $t) => $q->where('type', $t))
-            ->when($request->query('search'), fn ($q, $s) => $q->where('reference', 'ilike', "%{$s}%"))
-            ->latest()
+            ->when(in_array($request->query('direction'), ['credit', 'debit'], true), fn ($q) => $q->where('direction', $request->query('direction')))
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            // Reference, description, wallet or owner (any database).
+            ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
+                $like = '%' . mb_strtolower($search) . '%';
+                $w->whereRaw('LOWER(reference) LIKE ?', [$like])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$like])
+                    ->orWhereHas('wallet', fn ($x) => $x->whereRaw('LOWER(name) LIKE ?', [$like])
+                        ->orWhereHas('owner', fn ($o) => $o->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])));
+            }));
+        $filtered = (clone $base)->when($request->query('status'), fn ($q, $s) => $q->where('status', $s));
+
+        $txns = (clone $filtered)->with(['wallet.owner'])
+            ->latest('id')
             ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        $naira = fn ($kobo) => number_format(((int) $kobo) / 100, 2, '.', '');
+        $ok = (clone $filtered)->where('status', 'successful');
+        $in = (int) (clone $ok)->where('direction', 'credit')->sum('amount');
+        $out = (int) (clone $ok)->where('direction', 'debit')->sum('amount');
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
 
         return $this->ok('Transactions fetched', [
             'transactions' => collect($txns->items())->map(fn ($t) => $this->serializeTransaction($t) + [
@@ -499,6 +525,19 @@ class AdminController extends ApiController
                 'per_page' => $txns->perPage(),
                 'total' => $txns->total(),
                 'last_page' => $txns->lastPage(),
+            ],
+            // What the filters match: money in and out (successful only) and the counts per status.
+            'summary' => [
+                'money_in' => $naira($in),
+                'money_out' => $naira($out),
+                'net' => $naira($in - $out),
+                'fees' => $naira((clone $ok)->sum('fee')),
+                'by_status' => [
+                    'successful' => (int) ($byStatus['successful'] ?? 0),
+                    'pending' => (int) ($byStatus['pending'] ?? 0),
+                    'failed' => (int) ($byStatus['failed'] ?? 0),
+                ],
+                'all' => (int) $byStatus->sum(),
             ],
         ]);
     }

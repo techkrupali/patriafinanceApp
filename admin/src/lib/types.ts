@@ -398,6 +398,15 @@ export interface WalletsData {
 export interface TransactionsData {
   transactions: ApiTransaction[];
   pagination: Pagination;
+  /** What the filters match: successful money in and out (naira strings) and counts per status. */
+  summary?: {
+    money_in: string;
+    money_out: string;
+    net: string;
+    fees: string;
+    by_status: { successful: number; pending: number; failed: number };
+    all: number;
+  };
 }
 
 export interface ApprovalsData {
