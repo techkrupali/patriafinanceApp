@@ -1,3 +1,6 @@
 # Local deliverables (not source)
 /Patriai.apk
 /*.mp4
+
+# Server-specific deploy settings
+deploy/deploy.env

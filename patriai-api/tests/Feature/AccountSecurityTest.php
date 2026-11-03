@@ -448,4 +448,34 @@ class AccountSecurityTest extends TestCase
         $this->get('/a/abc')->assertNotFound();
         $this->get('/join/<x>')->assertNotFound();
     }
+
+    public function test_test_numbers_take_the_fixed_code_and_nothing_is_sent(): void
+    {
+        // Built in, nothing to set on the server: +234 800 000 0011 with 583920.
+        $this->assertContains('+2348000000011', config('services.otp_test.phones'));
+        $this->assertSame('583920', (string) config('services.otp_test.code'));
+
+        // Like a live server with no SMS provider: production mode, no code in the response.
+        config(['services.otp_test.phones' => ['+2348000000001'], 'services.otp_test.code' => '583920', 'services.termii.api_key' => 'termii-key', 'app.debug' => false]);
+        $sms = fn () => collect(Http::recorded())->filter(fn ($r) => str_contains($r[0]->url(), 'termii'))->count();
+
+        $this->postJson('/api/v1/auth/phone/start', ['phone' => '+234 800 000 0001', 'channel' => 'sms'])->assertOk()->assertJsonMissingPath('data.debug_otp');
+        $this->assertSame(0, $sms());
+        $token = $this->postJson('/api/v1/auth/phone/verify', ['phone' => '+2348000000001', 'code' => '583920'])->assertOk()->assertJsonPath('data.account', null)->json('data.phone_token');
+        $this->postJson('/api/v1/auth/phone/register', [
+            'phone_token' => $token, 'first_name' => 'Test', 'last_name' => 'Tester', 'email' => 'tester@example.com',
+            'date_of_birth' => '1990-01-01', 'pin' => '482915', 'consents' => ['terms' => true, 'verify' => true],
+        ] + self::DEVICE)->assertCreated();
+
+        // Everyone else still gets a random code by SMS; the fixed code doesn't open their account.
+        $this->postJson('/api/v1/auth/phone/start', ['phone' => self::PHONE, 'channel' => 'sms'])->assertOk();
+        $this->assertSame(1, $sms());
+        $this->postJson('/api/v1/auth/phone/verify', ['phone' => self::PHONE, 'code' => '583920'])->assertStatus(422);
+
+        // A code that isn't 6 digits switches it off.
+        config(['services.otp_test.code' => '12345']);
+        OtpCode::query()->delete();
+        $this->postJson('/api/v1/auth/phone/start', ['phone' => '+2348000000001', 'channel' => 'sms'])->assertOk();
+        $this->assertSame(2, $sms());
+    }
 }

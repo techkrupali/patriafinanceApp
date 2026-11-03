@@ -30,7 +30,8 @@ class OtpService
             ->whereNull('consumed_at')
             ->update(['consumed_at' => now()]);
 
-        $code = (string) random_int(100000, 999999);
+        $test = $this->testCode($identifier);
+        $code = $test ?? (string) random_int(100000, 999999);
 
         OtpCode::create([
             'identifier' => $identifier,
@@ -40,9 +41,21 @@ class OtpService
             'expires_at' => now()->addMinutes(self::TTL_MINUTES),
         ]);
 
-        $this->deliver($identifier, $purpose, $code, $channel);
+        if ($test === null) {
+            $this->deliver($identifier, $purpose, $code, $channel);
+        } else {
+            Log::info("Test login: fixed {$purpose} code for {$identifier}, nothing sent.");
+        }
 
         return $code;
+    }
+
+    /** The fixed code for a test number (services.otp_test), or null for everyone else. */
+    private function testCode(string $identifier): ?string
+    {
+        $code = (string) config('services.otp_test.code');
+
+        return preg_match('/^\d{6}$/', $code) && in_array($identifier, (array) config('services.otp_test.phones'), true) ? $code : null;
     }
 
     /**
