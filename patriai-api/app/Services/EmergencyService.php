@@ -919,6 +919,11 @@ class EmergencyService
         if ($request->requested_by === $approver->id) {
             throw ValidationException::withMessages(['request' => 'Someone other than the requester has to approve.']);
         }
+        // INV-K2 "Keyholders release money, so Patriai needs your BVN and NIN": until then
+        // they can see the fund and save into it, but not approve a release.
+        if ($request->method === 'dual_approval' && $approver->id !== $wallet->user_id && (int) $approver->kyc_tier < 2) {
+            throw ValidationException::withMessages(['request' => 'Verify your NIN and a selfie (Tier 2) to approve releases.']);
+        }
 
         $done = DB::transaction(function () use ($request, $approver, $wallet, $setting) {
             $locked = EmergencyUnlockRequest::whereKey($request->id)->lockForUpdate()->first();

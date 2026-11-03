@@ -91,23 +91,54 @@ class ChildAppTest extends TestCase
         return [Wallet::find($id), $ngozi, $main, $emeka, $ada, $adaMain, $code];
     }
 
+    /** INV-CH2 → INV-CH3 → INV-CH4: the child's phone asks, a parent says yes, the child sets a PIN. */
+    private function pair(string $code, User $parent, string $pin = '4821', string $device = "Kamsi's tablet")
+    {
+        $this->withoutToken();
+        $start = $this->postJson('/api/v1/children/link/start', ['code' => $code, 'device_name' => $device])->assertCreated();
+        Sanctum::actingAs($parent);
+        $this->postJson('/api/v1/child-link-requests/' . $start->json('data.request_id') . '/approve')->assertOk();
+        $this->withoutToken();
+
+        return $this->postJson('/api/v1/children/link', ['code' => $code, 'pin' => $pin, 'device_name' => $device, 'request_id' => $start->json('data.request_id'), 'secret' => $start->json('data.secret')]);
+    }
+
     public function test_the_childs_phone_links_with_the_code_and_stays_in_the_child_app(): void
     {
         [$wallet, $ngozi, , , , , $code] = $this->kamsi();
 
         // A wrong code, a weak PIN.
-        $this->postJson('/api/v1/children/link', ['code' => 'KMS-0000', 'pin' => '4821'])->assertStatus(422)->assertJsonValidationErrors('code');
-        $this->postJson('/api/v1/children/link', ['code' => $code, 'pin' => '1234'])->assertStatus(422);
+        $this->postJson('/api/v1/children/link/start', ['code' => 'KMS-0000'])->assertStatus(422)->assertJsonValidationErrors('code');
+        $this->postJson('/api/v1/children/link', ['code' => $code, 'pin' => '1234', 'request_id' => 1, 'secret' => 'x'])->assertStatus(422);
 
-        $res = $this->postJson('/api/v1/children/link', ['code' => strtolower($code), 'pin' => '4821', 'device_name' => "Kamsi's tablet"])->assertCreated()
-            ->assertJsonPath('data.user.first_name', 'Kamsi')->assertJsonPath('data.user.role', 'child')->assertJsonPath('data.wallet_id', $wallet->id);
+        // INV-CH3: no PIN before a parent says yes on their phone.
+        $start = $this->postJson('/api/v1/children/link/start', ['code' => $code, 'device_name' => 'Tecno Spark 20'])->assertCreated()
+            ->assertJsonPath('data.child', 'Kamsi')->assertJsonPath('data.parents', ['Ngozi', 'Emeka']);
+        $pairing = ['code' => $code, 'pin' => '4821', 'request_id' => $start->json('data.request_id'), 'secret' => $start->json('data.secret')];
+        $this->postJson('/api/v1/children/link', $pairing)->assertStatus(422)->assertJsonValidationErrors('code');
+        $this->getJson('/api/v1/children/link/' . $pairing['request_id'] . '?secret=' . $pairing['secret'])->assertOk()->assertJsonPath('data.status', 'pending');
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $ngozi->id, 'type' => 'child_link_request', 'title' => 'Link this phone to Kamsi?']);
+        Sanctum::actingAs($ngozi);
+        $this->getJson('/api/v1/child-link-requests/' . $pairing['request_id'])->assertOk()
+            ->assertJsonPath('data.request.device', 'Tecno Spark 20')->assertJsonPath('data.request.will_see', 'Balance, goal, tasks, asking for money');
+        $this->postJson('/api/v1/child-link-requests/' . $pairing['request_id'] . '/approve')->assertOk();
+        $this->withoutToken();
+        $this->getJson('/api/v1/children/link/' . $pairing['request_id'] . '?secret=' . $pairing['secret'])->assertJsonPath('data.status', 'approved');
+
+        $res = $this->postJson('/api/v1/children/link', ['device_name' => "Kamsi's tablet"] + array_merge($pairing, ['code' => strtolower($code)]))->assertCreated()
+            ->assertJsonPath('data.user.first_name', 'Kamsi')->assertJsonPath('data.user.role', 'child')->assertJsonPath('data.wallet_id', $wallet->id)
+            // INV-CH5 "Mum sends ₦3,000 every Monday, and you're saving for a new bicycle".
+            ->assertJsonPath('data.welcome.allowance', 'Ngozi sends ₦3,000 every Monday')
+            ->assertJsonPath('data.welcome.goal.name', 'New bicycle')
+            ->assertJsonPath('data.welcome.goal.match', 'Ngozi adds ₦1 for every ₦2');
         $token = $res->json('data.token');
         $this->assertSame('child', $wallet->fresh()->roleOf(User::where('role', 'child')->sole()));
         $this->assertTrue($wallet->fresh()->meta['child']['phone']['linked']);
         $this->assertDatabaseHas('app_notifications', ['user_id' => $ngozi->id, 'type' => 'child_linked', 'title' => "Kamsi's phone is linked"]);
 
         // The code is used up; the child's sign-in reaches only the child app.
-        $this->postJson('/api/v1/children/link', ['code' => $code, 'pin' => '4821'])->assertStatus(422);
+        $this->postJson('/api/v1/children/link/start', ['code' => $code])->assertStatus(422);
+        $this->postJson('/api/v1/children/link', $pairing)->assertStatus(422);
         $this->kid($token)->getJson('/api/v1/child/home')->assertOk()->assertJsonPath('data.first_name', 'Kamsi');
         $this->kid($token)->getJson('/api/v1/wallets')->assertForbidden()->assertJsonPath('data.code', 'child_account');
         $this->kid($token)->postJson('/api/v1/transfers', [])->assertForbidden();
@@ -119,20 +150,33 @@ class ChildAppTest extends TestCase
         $this->withoutToken();
         Sanctum::actingAs($ngozi);
         $new = $this->postJson("/api/v1/wallets/{$wallet->id}/child/link-code")->json('data.code');
-        $this->postJson('/api/v1/children/link', ['code' => $new, 'pin' => '7392'])->assertCreated();
+        $this->pair($new, $ngozi, '7392')->assertCreated();
         $this->assertSame(1, User::where('role', 'child')->count());
         $this->assertSame(1, User::where('role', 'child')->sole()->tokens()->count());
+
+        // "This isn't Kamsi": the code stops working.
+        Sanctum::actingAs($ngozi);
+        $stranger = $this->postJson("/api/v1/wallets/{$wallet->id}/child/link-code")->json('data.code');
+        $this->withoutToken();
+        $ask = $this->postJson('/api/v1/children/link/start', ['code' => $stranger, 'device_name' => 'Unknown phone'])->assertCreated();
+        Sanctum::actingAs($emeka = User::where('first_name', 'Emeka')->first());
+        $this->postJson('/api/v1/child-link-requests/' . $ask->json('data.request_id') . '/deny')->assertOk()->assertJsonPath('data.status', 'denied');
+        $this->withoutToken();
+        $this->postJson('/api/v1/children/link/start', ['code' => $stranger])->assertStatus(422);
+
         // Codes expire after 10 minutes.
+        Sanctum::actingAs($ngozi);
         $late = $this->postJson("/api/v1/wallets/{$wallet->id}/child/link-code")->json('data.code');
         Carbon::setTestNow(now()->addMinutes(11));
-        $this->postJson('/api/v1/children/link', ['code' => $late, 'pin' => '7392'])->assertStatus(422);
+        $this->withoutToken();
+        $this->postJson('/api/v1/children/link/start', ['code' => $late])->assertStatus(422);
     }
 
     public function test_the_child_asks_saves_and_parents_answer(): void
     {
         [$wallet, $ngozi, , $emeka, $ada] = $this->kamsi();
         $wallet->update(['balance' => 1_000_000]);
-        $token = $this->postJson('/api/v1/children/link', ['code' => $wallet->meta['child']['phone']['code'], 'pin' => '4821'])->json('data.token');
+        $token = $this->pair($wallet->meta['child']['phone']['code'], $ngozi)->json('data.token');
         $bank = ['kind' => 'bank', 'bank_code' => '058', 'account_number' => '0123456789', 'account_name' => 'OLA STORES', 'bank_name' => 'GTBank'];
 
         // CHD-03: "You can spend ₦1,500 today".
@@ -193,7 +237,7 @@ class ChildAppTest extends TestCase
     public function test_tasks_are_set_done_with_a_photo_checked_and_paid(): void
     {
         [$wallet, $ngozi, $main, $emeka] = $this->kamsi();
-        $token = $this->postJson('/api/v1/children/link', ['code' => $wallet->meta['child']['phone']['code'], 'pin' => '4821'])->json('data.token');
+        $token = $this->pair($wallet->meta['child']['phone']['code'], $ngozi)->json('data.token');
 
         // CHD-12 "New task for Kamsi".
         $this->withoutToken();

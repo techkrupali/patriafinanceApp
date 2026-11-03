@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
@@ -11,11 +11,16 @@ import { PtChip } from '../../components/pt/PtChip';
 import { LogoMark } from '../../components/pt/PtLogo';
 import { LoadError } from '../../components/LoadError';
 import { useCancelInvitation, useFamily, useResendInvitation, useWallets } from '../../api/hooks';
+import { useAnswerTransfer, useMoveWalletToCircle } from '../../api/circles';
+import { useCircleStore } from '../../store/circle';
+import { PtNote } from '../../components/pt/PtForm';
+import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
+import { CircleSwitcherSheet } from './CircleSwitcherSheet';
+import { showAlert } from '../../lib/alert';
 import { useAuth } from '../../store/auth';
 import { agoLabel, initials } from '../../lib/format';
 import { formatE164 } from '../../lib/phone';
 import { roleLabel } from '../../lib/governance';
-import { inviteTarget } from '../../lib/invite';
 import { notifySuccess, selection } from '../../lib/haptics';
 import type { FamilyInvitation, FamilyMember } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
@@ -128,20 +133,36 @@ function SentInviteRow({ inv, last }: { inv: FamilyInvitation; last: boolean }) 
 export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHub'>) {
   const isTab = route?.name !== 'FamilyHub';
   const me = useAuth((s) => s.user);
-  const family = useFamily();
+  const circleId = useCircleStore((s) => s.circleId);
+  const setCircle = useCircleStore((s) => s.setCircle);
+  const family = useFamily({ circle: circleId });
   const wallets = useWallets();
+  const answer = useAnswerTransfer(circleId);
+  const move = useMoveWalletToCircle();
+  const [switching, setSwitching] = useState(false);
+  const [moving, setMoving] = useState(false);
+
+  // A circle you left (or that was handed on) goes back to your own family.
+  useEffect(() => {
+    if (circleId && family.error) setCircle(null);
+  }, [circleId, family.error, setCircle]);
 
   const data = family.data;
   const members = data?.members ?? [];
   const received = data?.pending_invitations.received ?? [];
   const sent = data?.pending_invitations.sent ?? [];
   const surname = (me?.last_name || me?.full_name?.split(' ').slice(-1)[0] || 'My').trim();
+  const circle = data?.circle;
+  const circleName = circle ? (circle.is_home ? `${circle.name} circle` : circle.name) : `${surname} family circle`;
+  const iOwn = !circle || circle.my_role === 'owner';
+  const transfer = circle?.transfer ?? null;
+  // Wallets you could share in this circle ("Nothing is shared unless you move it").
+  const movable = (wallets.data ?? []).filter((w) => w.my_role === 'owner' && !['main', 'ajo'].includes(w.type) && w.status === 'active' && (w.circle_id ?? null) !== (circle?.is_home ? null : circle?.id ?? null));
+  const inCircle = circle ? (wallets.data ?? []).filter((w) => circle.wallet_ids.includes(w.id)) : [];
 
-  const startInvite = () => {
-    const t = inviteTarget(wallets.data);
-    if (t.screen === 'InviteMember') navigation.navigate(t.screen, t.params);
-    else navigation.navigate(t.screen);
-  };
+  // FAM-03 "Invite to Okafor family: What will they do?"
+  const startInvite = () => navigation.navigate('InviteRole', { circleId: circle && !circle.is_home ? circle.id : null });
+  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }) : '');
 
   return (
     <PtTabScreen
@@ -161,7 +182,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
         <LoadError message={(family.error as Error).message} onRetry={() => void family.refetch()} />
       ) : (
         <>
-          {/* The circle */}
+          {/* The circle (HOM-06: tap its name to switch) */}
           <View
             style={{
               backgroundColor: pt.raised,
@@ -175,19 +196,39 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           >
             <LogoMark size={64} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontFamily: ptFont.bold, fontSize: 17, lineHeight: 24, color: pt.ink }} numberOfLines={1}>
-                {surname} family circle
-              </Text>
+              <Pressable
+                onPress={() => {
+                  selection();
+                  setSwitching(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${circleName}. Switch circle`}
+                hitSlop={6}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ flexShrink: 1, fontFamily: ptFont.bold, fontSize: 17, lineHeight: 24, color: pt.ink }} numberOfLines={1}>
+                  {circleName}
+                </Text>
+                <Feather name="chevron-down" size={18} color={pt.inkMuted} />
+              </Pressable>
               <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
-                {members.length + 1} member{members.length === 0 ? '' : 's'} · {data?.stats.shared_wallets ?? 0} shared wallet
-                {(data?.stats.shared_wallets ?? 0) === 1 ? '' : 's'}
-              </Text>
-              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
-                Owner: you ·{' '}
+                {members.length + 1} member{members.length === 0 ? '' : 's'} ·{' '}
                 <Text
                   onPress={() => {
                     selection();
-                    navigation.navigate('Activity');
+                    navigation.navigate('CircleView', { circleId });
+                  }}
+                  style={{ fontFamily: ptFont.bold, color: pt.brand }}
+                >
+                  {data?.stats.shared_wallets ?? 0} shared wallet{(data?.stats.shared_wallets ?? 0) === 1 ? '' : 's'}
+                </Text>
+              </Text>
+              <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>
+                Owner: {iOwn ? 'you' : circle?.owner.first_name ?? circle?.owner.name ?? '—'} ·{' '}
+                <Text
+                  onPress={() => {
+                    selection();
+                    navigation.navigate('FamilyActivity', { circleId });
                   }}
                   style={{ fontFamily: ptFont.bold, color: pt.brand }}
                 >
@@ -196,6 +237,52 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
               </Text>
             </View>
           </View>
+
+          {/* FAM-12: a hand-over on its way. */}
+          {transfer ? (
+            transfer.for_you && !transfer.accepted_at ? (
+              <PtNote tone="attention">
+                {`${circle?.owner.first_name ?? 'The owner'} wants to hand you ${circle?.name}. You'd own the circle; their wallets and money stay theirs.`}
+              </PtNote>
+            ) : (
+              <PtNote tone="info">
+                {transfer.accepted_at
+                  ? `${transfer.for_you ? 'You own' : `${transfer.to.name} owns`} ${circle?.name} from ${when(transfer.effective_at)}.${iOwn ? ' You can cancel until then.' : ''}`
+                  : `Waiting for ${transfer.to.name} to accept, by ${when(transfer.accept_by)}.`}
+              </PtNote>
+            )
+          ) : null}
+          {transfer && (transfer.for_you || iOwn) ? (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {transfer.for_you && !transfer.accepted_at ? (
+                <View style={{ flex: 1 }}>
+                  <PtButton
+                    title="Accept"
+                    size="sm"
+                    loading={answer.isPending}
+                    onPress={() => answer.mutate('accept', { onSuccess: () => { notifySuccess(); showAlert('Accepted', `It's yours in 24 hours. ${circle?.owner.first_name ?? 'They'} can cancel until then.`); }, onError: (e) => showAlert('Not accepted', e.message) })}
+                  />
+                </View>
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <PtButton
+                  title={transfer.for_you && !transfer.accepted_at ? 'Not now' : 'Cancel hand-over'}
+                  size="sm"
+                  variant="secondary"
+                  loading={answer.isPending}
+                  onPress={() => answer.mutate('cancel', { onSuccess: () => showAlert('Cancelled', `${circle?.name} stays as it is.`), onError: (e) => showAlert('Not cancelled', e.message) })}
+                />
+              </View>
+            </View>
+          ) : null}
+
+          {/* A new circle has no wallets yet. */}
+          {circle && !circle.is_home && circle.wallet_ids.length === 0 ? (
+            <View style={{ gap: 10 }}>
+              <PtNote tone="info">{`No wallets in ${circle.name} yet. Each circle keeps its own wallets: move one in, then invite people.`}</PtNote>
+              {iOwn ? <PtButton title="Move a wallet here" variant="secondary" onPress={() => (movable.length ? setMoving(true) : showAlert('No wallet to move', 'Make a wallet first, then move it here from its settings.'))} /> : null}
+            </View>
+          ) : null}
 
           {/* Members, you first */}
           <View style={{ gap: 8 }}>
@@ -206,8 +293,8 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
                 last={members.length === 0}
                 left={<PtAvatar initials={initials(me?.full_name)} uri={me?.avatar_url} />}
                 title={`${me?.full_name ?? 'You'} (you)`}
-                subtitle={`${wallets.data?.length ?? 0} wallet${(wallets.data?.length ?? 0) === 1 ? '' : 's'}`}
-                right={<PtChip label="Owner" tone="brand" />}
+                subtitle={circle && !circle.is_home ? `${inCircle.length} wallet${inCircle.length === 1 ? '' : 's'} here` : `${wallets.data?.length ?? 0} wallet${(wallets.data?.length ?? 0) === 1 ? '' : 's'}`}
+                right={<PtChip label={roleLabel(circle?.my_role ?? 'owner')} tone="brand" />}
               />
               {members.map((m, i) => (
                 <PtRow
@@ -218,7 +305,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
                   title={m.name}
                   subtitle={memberSubtitle(m)}
                   right={<PtChip label={memberRole(m)} tone={LEAD_ROLES.includes(m.role) ? 'brand' : 'neutral'} />}
-                  onPress={() => navigation.navigate('FamilyMember', { memberId: m.id })}
+                  onPress={() => navigation.navigate('CircleMember', { circleId, userId: m.id })}
                 />
               ))}
             </PtCard>
@@ -243,7 +330,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
                     title={`${inv.inviter?.name ?? 'Someone'} invited you`}
                     subtitle={`${roleLabel(inv.role)} · ${inv.wallet_name ?? 'A wallet'}`}
                     right={<PtChip label="Review" tone="warning" />}
-                    onPress={() => navigation.navigate('Invitations')}
+                    onPress={() => navigation.navigate('Invitation', { invitationId: inv.id })}
                   />
                 ))}
               </PtCard>
@@ -253,7 +340,7 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
           {/* Invites you've sent */}
           {sent.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <PtSectionTitle title={sent.length === 1 ? 'Pending invite' : 'Pending invites'} />
+              <PtSectionTitle title={sent.length === 1 ? 'Pending invite' : 'Pending invites'} action="See all" onAction={() => navigation.navigate('Invites')} />
               <PtCard>
                 {sent.map((inv, i) => (
                   <SentInviteRow key={inv.id} inv={inv} last={i === sent.length - 1} />
@@ -261,8 +348,45 @@ export function FamilyHubScreen({ navigation, route }: RootScreenProps<'FamilyHu
               </PtCard>
             </View>
           ) : null}
+
+          {/* FAM-11 / FAM-12 */}
+          <PtCard>
+            <PtRow title="Start a new circle" subtitle="Siblings, friends, church: its own wallets" chevron last={!(iOwn && members.length > 0 && !transfer)} onPress={() => navigation.navigate('NewCircle')} />
+            {iOwn && members.length > 0 && !transfer ? (
+              <PtRow title="Transfer ownership" subtitle="Hand the circle to someone else" chevron last onPress={() => navigation.navigate('TransferCircle', { circleId })} />
+            ) : null}
+          </PtCard>
         </>
       )}
+
+      <CircleSwitcherSheet
+        visible={switching}
+        current={circleId}
+        onPick={(r) => {
+          setSwitching(false);
+          setCircle(r.is_home ? null : r.id);
+        }}
+        onAjo={(walletId) => {
+          setSwitching(false);
+          navigation.navigate('Ajo', { walletId });
+        }}
+        onNew={() => {
+          setSwitching(false);
+          navigation.navigate('NewCircle');
+        }}
+        onClose={() => setSwitching(false)}
+      />
+      <PtOptionSheet
+        visible={moving}
+        title={`Move into ${circle?.name ?? 'this circle'}`}
+        options={movable.map((w) => ({ value: w.id, label: w.name }))}
+        value={null}
+        onPick={(walletId) => {
+          setMoving(false);
+          move.mutate({ walletId, circleId: circle?.is_home ? null : circle?.id ?? null }, { onSuccess: () => notifySuccess(), onError: (e) => showAlert('Not moved', e.message) });
+        }}
+        onClose={() => setMoving(false)}
+      />
     </PtTabScreen>
   );
 }

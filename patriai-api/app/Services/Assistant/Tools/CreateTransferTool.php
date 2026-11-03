@@ -146,6 +146,12 @@ class CreateTransferTool implements AssistantTool
             $destType = (isset($input['account_number']) || isset($input['bank'])) ? 'bank' : 'wallet';
         }
 
+        // AIS-05 "Suggest only": Steward tells you how; you do it yourself.
+        $steward = \App\Services\StewardSettingsService::make();
+        if ($steward->settings($user)['mode'] === 'suggest') {
+            return $this->reject('You set Steward to suggest only, so I won\'t set up payments. Tell the user how to do it themselves: Home → Move (between wallets) or Send.');
+        }
+
         if ($destType !== 'bank' && $from->paysBillsDirectly()) {
             return $this->reject('That emergency fund pays bills directly — send it to the hospital or clinic\'s bank account.');
         }
@@ -173,6 +179,15 @@ class CreateTransferTool implements AssistantTool
             'kind' => 'wallet',
             'name' => $to->name,
         ], $amountKobo, 0, $input['description'] ?? null);
+
+        // AIS-05 "Act within limits": between your own wallets, up to the limit, without asking.
+        $steward = \App\Services\StewardSettingsService::make();
+        if ($steward->mayAct($user, $from, $to, $amountKobo)) {
+            $done = \App\Services\WalletService::make()->transferBetweenWallets($from, $to, $amountKobo, $user, 'Steward: ' . ($input['description'] ?? "to {$to->name}"));
+            $steward->log($user, 'move', "Moved ₦" . number_format($amountKobo / 100) . " from {$from->name} to {$to->name}", $amountKobo, $done['reference'] ?? null);
+
+            return ['created' => true, 'message' => 'Done — moved within your limit, no PIN needed. It\'s in What Steward did.', 'summary' => $summary, 'reference' => $done['reference'] ?? null];
+        }
 
         if (($input['confirmed'] ?? false) !== true) {
             return $this->needsConfirmation($summary);

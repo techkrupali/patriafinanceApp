@@ -14,7 +14,7 @@ import { JointChangeSheet, type JointPart } from '../../components/joint/JointCh
 import { PtOptionSheet } from '../../components/pt/PtOptionSheet';
 import { PinSheet } from '../../components/PinSheet';
 import { colors, outline, radius } from '../../theme';
-import { useAcceptInvitation, useDeclineInvitation, useMyInvitations, useSuggestJointChange, useWallets, type AcceptInvitationOptions } from '../../api/hooks';
+import { useAcceptInvitation, useMyInvitations, useSuggestJointChange, useWallets, type AcceptInvitationOptions } from '../../api/hooks';
 import { showAlert } from '../../lib/alert';
 import { walletVisual } from '../../lib/walletVisual';
 import { roleLabel } from '../../lib/governance';
@@ -25,7 +25,6 @@ import type { RootScreenProps } from '../../navigation/types';
 export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>) {
   const query = useMyInvitations();
   const accept = useAcceptInvitation();
-  const decline = useDeclineInvitation();
   const [actingId, setActingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Savings invites: choose the wallet your savings come from before joining.
@@ -73,6 +72,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
       navigation.navigate('FunderInvite', { invitationId: inv.id });
       return;
     }
+    // INV-K1 a keyholder's role, INV-A1 an accountant's read-only access.
+    if (inv.preview?.kind === 'keyholder' || inv.preview?.kind === 'accountant') {
+      navigation.navigate('Invitation', { invitationId: inv.id });
+      return;
+    }
     // INV-J1 "Join the circle": what you pay and receive, and paying from Main.
     if (inv.ajo) {
       navigation.navigate('AjoJoin', { invitationId: inv.id });
@@ -91,14 +95,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
     acceptWith(inv);
   };
 
+  // INV-03 "Decline Ngozi's invite?" — a reason, and blocking them, are optional.
   const onDecline = (inv: WalletInvitation) => {
     selection();
     setError(null);
-    setActingId(inv.id);
-    decline.mutate(inv.id, {
-      onSettled: () => setActingId(null),
-      onError: (e) => setError(e.message),
-    });
+    navigation.navigate('DeclineInvite', { invitationId: inv.id, inviter: inv.inviter?.name?.split(' ')[0] });
   };
 
   return (

@@ -14,6 +14,9 @@ Route::get('/', function () {
 // EMG-05: an emergency fund's trusted contact opens the secure link from their SMS.
 Route::get('/e/{token}', [TrustedContactController::class, 'show'])->middleware('throttle:30,1');
 Route::post('/e/{token}', [TrustedContactController::class, 'store'])->middleware('throttle:10,1');
+// INV-T1 / INV-T2: accept (with the texted code) or decline being a trusted contact.
+Route::post('/e/{token}/accept', [TrustedContactController::class, 'accept'])->middleware('throttle:10,1');
+Route::post('/e/{token}/decline', [TrustedContactController::class, 'decline'])->middleware('throttle:10,1');
 
 // GLW-04 contribution link: anyone with it can add money to a goal.
 Route::get('/g/{slug}', [GoalLinkController::class, 'show'])->middleware('throttle:60,1')->where('slug', '[a-z0-9-]+');
@@ -30,6 +33,10 @@ Route::get('/join/{code}', [AppLinkController::class, 'referral'])->middleware('
 // REQ-02 "patriai.app/r/N3V8": anyone can pay a money request, even without the app.
 Route::get('/r/{code}', [AppLinkController::class, 'moneyRequest'])->middleware('throttle:60,1')->where('code', '[A-Za-z0-9]{4,12}');
 Route::get('/i', [AppLinkController::class, 'invite'])->middleware('throttle:60,1');
+// INV-02 "patriai.app/i/K7Q2": the invite's own link (INV-04 when it has expired).
+Route::get('/i/{code}', [AppLinkController::class, 'inviteCode'])->middleware('throttle:60,1')->where('code', '[A-Za-z0-9]{4,12}');
+// "Ask Ngozi for a new invite" from an expired, declined or cancelled invite's page.
+Route::post('/i/{code}/ask', [AppLinkController::class, 'askAgain'])->middleware('throttle:10,1')->where('code', '[A-Za-z0-9]{4,12}');
 Route::get('/a/{id}', [AppLinkController::class, 'request'])->middleware('throttle:60,1')->where('id', '[0-9]{1,10}');
 Route::get('/p/{tag}', [AppLinkController::class, 'pay'])->middleware('throttle:60,1')->where('tag', '@?[A-Za-z0-9_.]{2,30}');
 

@@ -124,6 +124,26 @@ import { AboutScreen } from '../screens/me/AboutScreen';
 import { CloseAccountScreen } from '../screens/me/CloseAccountScreen';
 import { FamilyHubScreen } from '../screens/family/FamilyHubScreen';
 import { FamilyMemberScreen } from '../screens/family/FamilyMemberScreen';
+import { SplitRuleScreen } from '../screens/automation/SplitRuleScreen';
+import { StewardPermissionsScreen } from '../screens/steward/StewardPermissionsScreen';
+import { StewardAutoActionScreen } from '../screens/steward/StewardAutoActionScreen';
+import { StewardLogScreen } from '../screens/steward/StewardLogScreen';
+import { PaymentShortScreen } from '../screens/send/PaymentShortScreen';
+import { PaymentOutcomeScreen } from '../screens/send/PaymentOutcomeScreen';
+import { RuleTemplatesScreen } from '../screens/automation/RuleTemplatesScreen';
+import { RuleBuilderScreen } from '../screens/automation/RuleBuilderScreen';
+import { DescribeRuleScreen } from '../screens/automation/DescribeRuleScreen';
+import { RuleDetailScreen } from '../screens/automation/RuleDetailScreen';
+import { RulesHelpScreen } from '../screens/automation/RulesHelpScreen';
+import { ContributionRulesScreen } from '../screens/automation/ContributionRulesScreen';
+import { RuleTypesScreen } from '../screens/automation/RuleTypesScreen';
+import { RoundUpRuleScreen } from '../screens/automation/RoundUpRuleScreen';
+import { CircleViewScreen } from '../screens/family/CircleViewScreen';
+import { CircleMemberScreen } from '../screens/family/CircleMemberScreen';
+import { EditCircleRoleScreen } from '../screens/family/EditCircleRoleScreen';
+import { FamilyActivityScreen } from '../screens/family/FamilyActivityScreen';
+import { NewCircleScreen } from '../screens/family/NewCircleScreen';
+import { TransferCircleScreen } from '../screens/family/TransferCircleScreen';
 import { SpousalSyncScreen } from '../screens/family/SpousalSyncScreen';
 import { AutomationsScreen } from '../screens/automation/AutomationsScreen';
 import { CreateAutomationScreen } from '../screens/automation/CreateAutomationScreen';
@@ -166,6 +186,14 @@ import { AjoOrderScreen } from '../screens/ajo/AjoOrderScreen';
 import { AjoMissedScreen } from '../screens/ajo/AjoMissedScreen';
 import { AjoJoinScreen } from '../screens/ajo/AjoJoinScreen';
 import { AjoCodeScreen } from '../screens/ajo/AjoCodeScreen';
+import { InviteRoleScreen } from '../screens/invites/InviteRoleScreen';
+import { InviteHowScreen } from '../screens/invites/InviteHowScreen';
+import { InvitesScreen } from '../screens/invites/InvitesScreen';
+import { InvitationScreen } from '../screens/invites/InvitationScreen';
+import { DeclineInviteScreen } from '../screens/invites/DeclineInviteScreen';
+import { KeyholderVerifyScreen } from '../screens/invites/KeyholderVerifyScreen';
+import { KeyholderDoneScreen } from '../screens/invites/KeyholderDoneScreen';
+import { ChildLinkConfirmScreen } from '../screens/invites/ChildLinkConfirmScreen';
 import { NotificationsScreen } from '../screens/governance/NotificationsScreen';
 import { InvitationsScreen } from '../screens/governance/InvitationsScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
@@ -551,6 +579,26 @@ export function RootNavigator() {
       <RootStack.Screen name="CloseAccount" component={CloseAccountScreen} />
       <RootStack.Screen name="FamilyHub" component={FamilyHubScreen} />
       <RootStack.Screen name="FamilyMember" component={FamilyMemberScreen} />
+      <RootStack.Screen name="SplitRule" component={SplitRuleScreen} />
+      <RootStack.Screen name="StewardPermissions" component={StewardPermissionsScreen} />
+      <RootStack.Screen name="StewardAutoAction" component={StewardAutoActionScreen} />
+      <RootStack.Screen name="StewardLog" component={StewardLogScreen} />
+      <RootStack.Screen name="PaymentShort" component={PaymentShortScreen} />
+      <RootStack.Screen name="PaymentOutcome" component={PaymentOutcomeScreen} />
+      <RootStack.Screen name="RuleTemplates" component={RuleTemplatesScreen} />
+      <RootStack.Screen name="RuleBuilder" component={RuleBuilderScreen} />
+      <RootStack.Screen name="DescribeRule" component={DescribeRuleScreen} />
+      <RootStack.Screen name="RuleDetail" component={RuleDetailScreen} />
+      <RootStack.Screen name="RulesHelp" component={RulesHelpScreen} />
+      <RootStack.Screen name="ContributionRules" component={ContributionRulesScreen} />
+      <RootStack.Screen name="RuleTypes" component={RuleTypesScreen} />
+      <RootStack.Screen name="RoundUpRule" component={RoundUpRuleScreen} />
+      <RootStack.Screen name="CircleView" component={CircleViewScreen} />
+      <RootStack.Screen name="CircleMember" component={CircleMemberScreen} />
+      <RootStack.Screen name="EditCircleRole" component={EditCircleRoleScreen} />
+      <RootStack.Screen name="FamilyActivity" component={FamilyActivityScreen} />
+      <RootStack.Screen name="NewCircle" component={NewCircleScreen} />
+      <RootStack.Screen name="TransferCircle" component={TransferCircleScreen} />
       <RootStack.Screen name="SpousalSync" component={SpousalSyncScreen} />
       <RootStack.Screen name="Automations" component={AutomationsScreen} />
       <RootStack.Screen name="CreateAutomation" component={CreateAutomationScreen} />
@@ -592,6 +640,15 @@ export function RootNavigator() {
       <RootStack.Screen name="AjoMissed" component={AjoMissedScreen} />
       <RootStack.Screen name="AjoJoin" component={AjoJoinScreen} />
       <RootStack.Screen name="AjoCode" component={AjoCodeScreen} />
+      {/* Invitations: FAM-03…06, INV-03/04, INV-K, INV-A1, INV-CH3. */}
+      <RootStack.Screen name="InviteRole" component={InviteRoleScreen} />
+      <RootStack.Screen name="InviteHow" component={InviteHowScreen} />
+      <RootStack.Screen name="Invites" component={InvitesScreen} />
+      <RootStack.Screen name="Invitation" component={InvitationScreen} />
+      <RootStack.Screen name="DeclineInvite" component={DeclineInviteScreen} />
+      <RootStack.Screen name="KeyholderVerify" component={KeyholderVerifyScreen} />
+      <RootStack.Screen name="KeyholderDone" component={KeyholderDoneScreen} />
+      <RootStack.Screen name="ChildLinkConfirm" component={ChildLinkConfirmScreen} />
       <RootStack.Screen name="ApprovalDetail" component={ApprovalDetailScreen} />
       <RootStack.Screen name="Notifications" component={NotificationsScreen} />
       <RootStack.Screen name="Invitations" component={InvitationsScreen} />

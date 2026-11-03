@@ -101,13 +101,6 @@ const K = {
   tasks: (id: number) => ['wallet-tasks', id] as const,
 };
 
-/** CHW-06 "I have a code": the child's phone becomes their own sign-in. */
-export function useLinkChild() {
-  return useMutation({
-    mutationFn: (input: { code: string; pin: string; device_name?: string }) => api<{ token: string; user: User; wallet_id: number }>('/children/link', { method: 'POST', body: input }),
-  });
-}
-
 export function useChildHome() {
   return useQuery({ queryKey: K.home, queryFn: () => api<ChildHome>('/child/home') });
 }

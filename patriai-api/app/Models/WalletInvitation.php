@@ -20,8 +20,14 @@ class WalletInvitation extends Model
         'keyholder',
         'status',
         'token',
+        'code',
         'expires_at',
         'responded_at',
+        'opened_at',
+        'decline_reason',
+        'message',
+        'access_until',
+        'group_key',
     ];
 
     /** "a co-owner", "a contributor", "an approver" — for messages. */
@@ -41,6 +47,8 @@ class WalletInvitation extends Model
             'keyholder' => 'boolean',
             'expires_at' => 'datetime',
             'responded_at' => 'datetime',
+            'opened_at' => 'datetime',
+            'access_until' => 'date',
         ];
     }
 
@@ -57,5 +65,17 @@ class WalletInvitation extends Model
     public function invitee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invitee_user_id');
+    }
+
+    /** INV-04 "This invite has expired": pending but past its date. */
+    public function isExpired(): bool
+    {
+        return $this->status === 'expired' || ($this->status === 'pending' && $this->expires_at && $this->expires_at->isPast());
+    }
+
+    /** INV-01 "patriai.app/i/K7Q2": the invite's own link. */
+    public function link(): ?string
+    {
+        return $this->code ? rtrim((string) config('app.url'), '/') . '/i/' . $this->code : null;
     }
 }

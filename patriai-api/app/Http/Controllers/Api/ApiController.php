@@ -299,6 +299,8 @@ abstract class ApiController extends Controller
             'id' => $wallet->id,
             'type' => $wallet->type,
             'name' => $wallet->name,
+            // FAM-11: the circle it's shared in (null = its owner's own family).
+            'circle_id' => $wallet->circle_id,
             'description' => $wallet->description,
             'currency' => $wallet->currency,
             'balance' => $wallet->balanceNaira(),
@@ -467,6 +469,10 @@ abstract class ApiController extends Controller
                 ? \App\Services\AjoService::make()->preview($circle)
                 : null,
             'status' => $invitation->status,
+            // FAM-06 / INV-K1 / INV-A1: the invite as the invitee sees it, and its link.
+            'code' => $invitation->code,
+            'link' => $invitation->link(),
+            'preview' => $invitation->relationLoaded('wallet') && $invitation->wallet ? \App\Services\InviteFlowService::make()->preview($invitation, request()->user()) : null,
             'expires_at' => $invitation->expires_at?->toIso8601String(),
             'responded_at' => $invitation->responded_at?->toIso8601String(),
             'created_at' => $invitation->created_at?->toIso8601String(),

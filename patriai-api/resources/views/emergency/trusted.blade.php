@@ -37,6 +37,12 @@
 <main>
     <div class="brand"><i></i>Patriai</div>
 
+    @if (session('accepted'))
+        <h1>Thank you, {{ $contact->name }}</h1>
+        <p class="muted">If you ever need to start a request, use this link again. It's the one we texted you.</p>
+        <p class="muted" style="margin-top: 8px">You can stop being a trusted contact at any time from the same link.</p>
+        <div style="height: 24px"></div>
+    @endif
     <h1>{{ $wallet->name }}</h1>
     <p class="muted">Hi {{ $contact->name }}. {{ $owner?->fullName() ?? 'The owner' }} added you as a trusted contact. If they can't ask for help themselves, you can ask for this fund to be released.</p>
 
@@ -98,6 +104,10 @@
     @endif
 
     <div class="note">The keyholders still decide. Money is never released by one person alone.</div>
+    <form method="post" action="/e/{{ $token }}/decline" onsubmit="return confirm('Stop being a trusted contact for {{ $wallet->name }}?')">
+        @csrf
+        <button type="submit" style="background: transparent; color: var(--danger)">Stop being a trusted contact</button>
+    </form>
 </main>
 </body>
 </html>

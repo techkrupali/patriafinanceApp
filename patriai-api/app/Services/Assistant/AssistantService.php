@@ -52,7 +52,7 @@ class AssistantService
         $action = null;
 
         for ($step = 0; $step < self::MAX_STEPS; $step++) {
-            $response = $this->callClaude($messages);
+            $response = $this->callClaude($messages, $request->user());
 
             $stopReason = $response['stop_reason'] ?? null;
             $content = $response['content'] ?? [];
@@ -194,7 +194,7 @@ class AssistantService
     }
 
     /** POST /v1/messages with the current conversation + tool definitions. */
-    private function callClaude(array $messages): array
+    private function callClaude(array $messages, ?\App\Models\User $user = null): array
     {
         $cfg = config('services.anthropic');
 
@@ -205,7 +205,7 @@ class AssistantService
         ])->timeout(60)->post(rtrim($cfg['base_url'], '/').'/messages', [
             'model' => $cfg['model'],
             'max_tokens' => $cfg['max_tokens'],
-            'system' => $this->systemPrompt(),
+            'system' => $this->systemPrompt() . $this->stewardMode($user),
             'tools' => $this->tools->definitions(),
             'messages' => $messages,
         ]);
@@ -264,6 +264,21 @@ class AssistantService
             'per_page' => $raw['per_page'] ?? null,
             'has_more' => ($raw['has_more'] ?? false) || count($all) > self::MAX_DISPLAY,
         ];
+    }
+
+    /** AIS-05: what this person lets Steward do. */
+    private function stewardMode(?\App\Models\User $user): string
+    {
+        if (!$user) {
+            return '';
+        }
+        $s = \App\Services\StewardSettingsService::make()->settings($user);
+
+        return match ($s['mode']) {
+            'suggest' => ' The user set Steward to SUGGEST ONLY: never set up transfers, rules or wallets; explain how they can do it themselves.',
+            'act' => ' The user lets Steward ACT WITHIN LIMITS: moves between their OWN wallets up to ₦' . number_format($s['limit'] / 100) . ' happen without asking (call create_transfer with confirmed=true); anything else still needs their yes and PIN.',
+            default => '',
+        };
     }
 
     private function systemPrompt(): string

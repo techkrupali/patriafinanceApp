@@ -54,6 +54,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('giving:run')->hourly()->between('07:00', '20:00')->timezone('Africa/Lagos');
         // Ajo circles: open rounds, take payments, add late fees and pay turns (AJO-03/04).
         $schedule->command('ajo:run')->hourly()->between('07:00', '20:00')->timezone('Africa/Lagos');
+        // INV-A1: an accountant's access ends on its date.
+        $schedule->command('access:end')->dailyAt('00:30')->timezone('Africa/Lagos');
+        // FAM-12: a circle hand-over takes effect 24 hours after it's accepted.
+        $schedule->call(fn () => \App\Services\CircleService::make()->settleAll())->name('circles:settle')->hourly();
         // Thanksgiving reminders on Saturday evening; statements on 2 January.
         $schedule->command('giving:remind')->weeklyOn(6, '17:00')->timezone('Africa/Lagos');
         $schedule->command('giving:statements')->yearlyOn(1, 2, '08:00')->timezone('Africa/Lagos');
@@ -74,4 +78,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Monthly "time to save" reminders on each wallet's chosen day (WCR-11).
         $schedule->command('wallets:remind-savers')->dailyAt('09:00');
+        // AUT-11: "2 days before" reminders, and the late check a week after reminder day.
+        $schedule->call(fn () => \App\Services\ContributionRulesService::make()->runDaily())->name('contributions:daily')->dailyAt('09:05');
     })->create();

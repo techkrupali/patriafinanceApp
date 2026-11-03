@@ -56,9 +56,17 @@ class InvitationService
         ?int $pledge = null,
         bool $keyholder = false,
         ?string $pledgeKind = null,
+        ?string $message = null,
+        int $expiresInDays = 7,
+        ?string $accessUntil = null,
+        ?string $groupKey = null,
     ): WalletInvitation {
         if ($invitee && $invitee->id === $inviter->id) {
             throw ValidationException::withMessages(['invite' => 'You cannot invite yourself']);
+        }
+        // INV-03 "Block future invites from Ngozi".
+        if ($invitee && \App\Models\InviteBlock::where('user_id', $invitee->id)->where('blocked_user_id', $inviter->id)->exists()) {
+            throw ValidationException::withMessages(['invite' => "You can't invite this person."]);
         }
         // A child's own sign-in joins only their own wallet, through its code (CHW-06).
         if ($invitee?->isChild()) {
@@ -92,7 +100,8 @@ class InvitationService
             })
             ->exists();
         if ($duplicate) {
-            throw ValidationException::withMessages(['invite' => 'A pending invitation already exists for this person']);
+            $who = $invitee?->first_name ?? 'This person';
+            throw ValidationException::withMessages(['invite' => "{$who} already has an invite waiting for {$wallet->name}."]);
         }
 
         return WalletInvitation::create([
@@ -110,8 +119,39 @@ class InvitationService
             'keyholder' => $keyholder && $wallet->type === 'emergency',
             'status' => 'pending',
             'token' => Str::random(40),
-            'expires_at' => now()->addDays(7),
+            // INV-01 "patriai.app/i/K7Q2" — FAM-04 "Invite expires · In 7 days".
+            'code' => $this->newCode(),
+            'expires_at' => now()->addDays(max(1, min(30, $expiresInDays))),
+            'message' => $message !== null && trim($message) !== '' ? mb_substr(trim($message), 0, 300) : null,
+            'access_until' => $accessUntil,
+            'group_key' => $groupKey,
         ]);
+    }
+
+    /** A short code for the invite's link: four letters and digits, no look-alikes. */
+    public function newCode(): string
+    {
+        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        do {
+            $code = '';
+            for ($i = 0; $i < 4; $i++) {
+                $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+        } while (WalletInvitation::where('code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * INV-01 the message the invitee gets: the inviter's note (or a friendly
+     * default), what it's for, and their link.
+     */
+    public function shareMessage(WalletInvitation $invitation, Wallet $wallet, User $inviter): string
+    {
+        $note = $invitation->message ?: "I've added you to {$wallet->name} on Patriai.";
+        $progress = $wallet->target_amount ? ' ₦' . number_format($wallet->balance / 100) . ' of ₦' . number_format($wallet->target_amount / 100) . ' saved.' : '';
+
+        return "Join {$wallet->name} on Patriai.{$progress}\n{$inviter->first_name}: {$note}" . $this->pledgeLine($invitation) . "\n" . ($invitation->link() ?? rtrim((string) config('app.url'), '/') . '/i');
     }
 
     /**
@@ -150,9 +190,11 @@ class InvitationService
             return;
         }
 
-        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai." . $this->pledgeLine($invitation) . ' '
+        $days = $invitation->expires_at ? max(1, (int) round(now()->diffInDays($invitation->expires_at))) : 7;
+        $message = "{$inviter->fullName()} invited you to join {$wallet->name} on Patriai." . $this->pledgeLine($invitation)
+            . ($invitation->message ? " \"{$invitation->message}\"" : '') . ' '
             . 'Get the Patriai app and sign up with this ' . (str_contains($invitation->invitee_identifier, '@') ? 'email' : 'number')
-            . ' to accept. The invite lasts 7 days. ' . rtrim((string) config('app.url'), '/') . '/i';
+            . " to accept. The invite lasts {$days} days. " . ($invitation->link() ?? rtrim((string) config('app.url'), '/') . '/i');
 
         if (str_contains($invitation->invitee_identifier, '@')) {
             try {

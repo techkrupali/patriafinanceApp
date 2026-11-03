@@ -7,6 +7,7 @@ use App\Models\Wallet;
 use App\Models\WalletInvitation;
 use App\Models\WalletMember;
 use App\Services\InvitationService;
+use App\Services\InviteFlowService;
 use App\Services\JointService;
 use App\Services\NotificationService;
 use App\Services\SavingsService;
@@ -51,7 +52,15 @@ class InvitationController extends ApiController
             'permissions.withdraw' => ['sometimes', 'boolean'],
             // CTB-01 "Join the project chat".
             'permissions.chat' => ['sometimes', 'boolean'],
+            // INV-01 the inviter's note; FAM-04 "Invite expires · In 7 days".
+            'message' => ['sometimes', 'nullable', 'string', 'max:300'],
+            'expires_in_days' => ['sometimes', 'integer', 'between:1,30'],
+            // FAM-03 "Keyholder · Agrees when an emergency fund is used".
+            'keyholder' => ['sometimes', 'boolean'],
         ]);
+        if ($request->boolean('keyholder') && $wallet->type !== 'emergency') {
+            return $this->fail('Keyholders guard an emergency fund.', 422);
+        }
 
         $inviteRole = $data['role'] ?? 'contributor';
         $canApprove = $request->boolean('can_approve');
@@ -91,6 +100,9 @@ class InvitationController extends ApiController
                 $inviteRole,
                 $canApprove,
                 $data['permissions'] ?? null,
+                keyholder: $request->boolean('keyholder'),
+                message: $data['message'] ?? null,
+                expiresInDays: (int) ($data['expires_in_days'] ?? 7),
             );
         } catch (ValidationException $e) {
             return $this->fail(collect($e->errors())->flatten()->first(), 422);
@@ -100,6 +112,9 @@ class InvitationController extends ApiController
 
         return $this->ok('Invitation sent', [
             'invitation' => $this->serializeInvitation($invitation->load(['wallet', 'inviter'])),
+            // FAM-03 "Send invite on WhatsApp" / FAM-04 "Share an invite link".
+            'link' => $invitation->link(),
+            'share_message' => $invitations->shareMessage($invitation, $wallet, $request->user()),
         ], 201);
     }
 
@@ -144,6 +159,10 @@ class InvitationController extends ApiController
     // POST /invitations/{invitation}/accept
     public function accept(Request $request, WalletInvitation $invitation): JsonResponse
     {
+        // INV-02 "Invite links only work for the person they were sent to."
+        if ($invitation->invitee_user_id === null && InviteFlowService::make()->isFor($invitation, $request->user())) {
+            $invitation->update(['invitee_user_id' => $request->user()->id]);
+        }
         if ($invitation->invitee_user_id !== $request->user()->id) {
             return $this->fail('Invitation not found', 404);
         }
@@ -154,6 +173,21 @@ class InvitationController extends ApiController
             $invitation->update(['status' => 'expired']);
 
             return $this->fail('This invitation has expired', 422);
+        }
+
+        // INV-A1 "Accept access": read-only, every wallet in the set, until the date.
+        if ($invitation->role === 'accountant') {
+            InviteFlowService::make()->acceptAccountant($invitation, $request->user());
+            $member = WalletMember::where('wallet_id', $invitation->wallet_id)->where('user_id', $request->user()->id)->first();
+            if ($invitation->inviter) {
+                NotificationService::make()->push($invitation->inviter, 'invitation_accepted', 'Invitation accepted',
+                    "{$request->user()->fullName()} can now see your statements until {$invitation->access_until?->format('j M Y')}.", ['wallet_id' => $invitation->wallet_id]);
+            }
+
+            return $this->ok('Invitation accepted', [
+                'wallet' => $this->serializeWallet($invitation->wallet->refresh(), withOwner: true),
+                'member' => $this->serializeMember($member->load('user')),
+            ]);
         }
 
         // INV-J1 "Join the circle": verified people only, paying from Main if they like.
@@ -274,16 +308,78 @@ class InvitationController extends ApiController
     // POST /invitations/{invitation}/decline
     public function decline(Request $request, WalletInvitation $invitation): JsonResponse
     {
-        if ($invitation->invitee_user_id !== $request->user()->id) {
+        $data = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'block' => ['sometimes', 'boolean'],
+        ]);
+        if (!InviteFlowService::make()->isFor($invitation, $request->user())) {
             return $this->fail('Invitation not found', 404);
         }
         if ($invitation->status !== 'pending') {
             return $this->fail('This invitation is no longer pending', 422);
         }
-
-        $invitation->update(['status' => 'declined', 'responded_at' => now()]);
+        // INV-03 "We'll let her know. Adding a reason is optional." · "Block future invites".
+        InviteFlowService::make()->decline($invitation->load(['wallet', 'inviter']), $request->user(), $data['reason'] ?? null, (bool) ($data['block'] ?? false));
 
         return $this->ok('Invitation declined');
+    }
+
+    // GET /invites/{code} — the invite behind a link (INV-02, FAM-06). Signed in or not.
+    public function byCode(Request $request, string $code): JsonResponse
+    {
+        $flow = InviteFlowService::make();
+        $invitation = $flow->byCode($code);
+        $viewer = auth('sanctum')->user();
+        $flow->markOpened($invitation);
+
+        return $this->ok('Invitation fetched', ['invitation' => $flow->preview($invitation, $viewer)]);
+    }
+
+    // POST /invites/{code}/ask-again — INV-04 "Ask Ngozi for a new invite".
+    public function askAgain(Request $request, string $code): JsonResponse
+    {
+        $flow = InviteFlowService::make();
+        $flow->askAgain($flow->byCode($code), auth('sanctum')->user());
+
+        return $this->ok("We've asked them to send a new one");
+    }
+
+    // GET /invitations/sent?tab=waiting|accepted|expired — FAM-05 Invites.
+    public function sent(Request $request): JsonResponse
+    {
+        $tab = in_array($request->query('tab'), ['waiting', 'accepted', 'expired'], true) ? $request->query('tab') : 'waiting';
+
+        return $this->ok('Invites fetched', ['invites' => InviteFlowService::make()->sent($request->user(), $tab), 'tab' => $tab]);
+    }
+
+    // POST /invitations/resend-all — FAM-05 "Resend all".
+    public function resendAll(Request $request): JsonResponse
+    {
+        $n = InviteFlowService::make()->resendAll($request->user());
+
+        return $this->ok($n ? "Sent {$n} again" : 'Nothing to resend', ['sent' => $n]);
+    }
+
+    // POST /accountant-invites — FAM-03 "Accountant · View-only, with statements and exports".
+    public function accountant(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'wallet_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'wallet_ids.*' => ['integer'],
+            'invitee_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'identifier' => ['required_without:invitee_user_id', 'nullable', 'string', 'max:150'],
+            'access_until' => ['required', 'date'],
+            'message' => ['sometimes', 'nullable', 'string', 'max:300'],
+        ]);
+        $invitee = !empty($data['invitee_user_id']) ? User::find($data['invitee_user_id']) : null;
+        $created = InviteFlowService::make()->inviteAccountant($request->user(), $data['wallet_ids'], $invitee, trim((string) ($data['identifier'] ?? '')), $data['access_until'], $data['message'] ?? null);
+        $first = $created[0]->load(['wallet', 'inviter']);
+
+        return $this->ok('Invitation sent', [
+            'invitation' => $this->serializeInvitation($first),
+            'link' => $first->link(),
+            'share_message' => InvitationService::make()->shareMessage($first, $first->wallet, $request->user()),
+        ], 201);
     }
 
     // POST /wallets/{wallet}/invitations/{invitation}/resend — Family tab "Resend"

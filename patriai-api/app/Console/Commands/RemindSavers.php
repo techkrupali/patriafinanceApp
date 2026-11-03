@@ -31,6 +31,10 @@ class RemindSavers extends Command
                     if ($wallet->reminderDay() !== $today->day || ($wallet->meta['reminded_period'] ?? null) === $period) {
                         continue;
                     }
+                    // AUT-11 "Remind them: Off".
+                    if (($wallet->meta['contribution_rules']['remind'] ?? null) === 'off') {
+                        continue;
+                    }
                     if ($wallet->target_amount && $wallet->balance >= $wallet->target_amount) {
                         continue;
                     }

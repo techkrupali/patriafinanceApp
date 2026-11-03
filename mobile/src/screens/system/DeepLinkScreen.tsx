@@ -65,7 +65,10 @@ export function DeepLinkScreen({ route, navigation }: RootScreenProps<'DeepLink'
   useEffect(() => {
     if (!ready) return;
     const t = setTimeout(() => {
-      if (link.kind === 'invite') navigation.replace('Invitations');
+      if (link.kind === 'invite') {
+        if (link.code) navigation.replace('Invitation', { code: link.code, decline: link.decline });
+        else navigation.replace('Invitations');
+      }
       else if (link.kind === 'request') navigation.replace('ApprovalDetail', { approvalId: link.id });
       else if (link.kind === 'moneyRequest') navigation.replace('IncomingRequest', { code: link.code });
       else if (link.kind === 'pay' && payee) {

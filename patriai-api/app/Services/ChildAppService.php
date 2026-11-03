@@ -39,14 +39,18 @@ class ChildAppService
      *
      * @return array{0: User, 1: Wallet, 2: string} the child, their wallet, a token
      */
-    public function link(string $code, string $pin, string $deviceName): array
+    public function link(string $code, string $pin, string $deviceName, ?int $requestId = null, ?string $secret = null): array
     {
-        $code = strtoupper(trim($code));
-        $wallet = Wallet::where('type', 'child')->where('status', '!=', 'closed')->where('meta->child->phone->code', $code)->first();
-        $phone = $wallet?->meta['child']['phone'] ?? null;
-        if (!$wallet || !$phone || empty($phone['expires_at']) || Carbon::parse($phone['expires_at'])->isPast()) {
-            throw ValidationException::withMessages(['code' => 'That code didn\'t work. Ask a parent to show a new one.']);
+        $wallet = $this->walletForCode($code);
+        // INV-CH3: a parent said yes on their own phone first.
+        $pairing = $requestId ? \App\Models\ChildLinkRequest::whereKey($requestId)->where('wallet_id', $wallet->id)->first() : null;
+        if (!$pairing || !$secret || !hash_equals($pairing->secret_hash, hash('sha256', $secret))) {
+            throw ValidationException::withMessages(['code' => 'Ask Mum or Dad to say yes on their phone first.']);
         }
+        if ($pairing->status !== 'approved' || $pairing->expires_at->isPast()) {
+            throw ValidationException::withMessages(['code' => $pairing->status === 'denied' ? 'A parent said this isn\'t you. Ask them to show a new code.' : 'Ask Mum or Dad to say yes on their phone first.']);
+        }
+        $pairing->update(['status' => 'used']);
         $settings = $wallet->meta['child'];
 
         return DB::transaction(function () use ($wallet, $settings, $pin, $deviceName) {
@@ -80,6 +84,127 @@ class ChildAppService
 
             return [$child, $wallet, $child->createToken('child:' . Str::limit($deviceName, 40, ''))->plainTextToken];
         });
+    }
+
+    /**
+     * INV-CH5 "Welcome, Kamsi! Your wallet is ready. Mum sends ₦3,000 every
+     * Monday, and you're saving for a new bicycle."
+     */
+    public function welcome(Wallet $wallet, User $child): array
+    {
+        $s = $wallet->meta['child'] ?? [];
+        $a = $s['allowance'] ?? [];
+        $parent = $wallet->owner?->first_name ?? 'Your parent';
+        $amount = (int) ($a['amount'] ?? 0);
+        $when = match ($a['frequency'] ?? 'weekly') {
+            'monthly' => 'every month',
+            'biweekly' => 'every other ' . Carbon::parse($a['starts_on'] ?? now())->format('l'),
+            default => 'every ' . Carbon::parse($a['starts_on'] ?? now())->format('l'),
+        };
+        $goal = $this->goal($wallet, $child);
+        $match = (int) ($goal['match_percent'] ?? 0);
+
+        return [
+            'first_name' => $child->first_name,
+            'allowance' => $amount > 0 ? "{$parent} sends ₦" . number_format($amount / 100) . " {$when}" : null,
+            'goal' => $goal ? [
+                'name' => $goal['name'],
+                'percent' => $goal['percent'],
+                'target' => $goal['target'],
+                'match' => $match > 0 ? "{$parent} adds " . (100 % $match === 0 ? '₦1 for every ₦' . (100 / $match) : "{$match}% on top") : null,
+            ] : null,
+        ];
+    }
+
+    /** The child wallet a parent's code (KMS-4821) belongs to, while it lasts. */
+    private function walletForCode(string $code): Wallet
+    {
+        $code = strtoupper(trim($code));
+        $wallet = Wallet::where('type', 'child')->where('status', '!=', 'closed')->where('meta->child->phone->code', $code)->first();
+        $phone = $wallet?->meta['child']['phone'] ?? null;
+        if (!$wallet || !$phone || empty($phone['expires_at']) || Carbon::parse($phone['expires_at'])->isPast()) {
+            throw ValidationException::withMessages(['code' => 'That code didn\'t work. Ask a parent to show a new one.']);
+        }
+
+        return $wallet;
+    }
+
+    /**
+     * INV-CH2 "Link my phone": the child typed or scanned the code. The parents
+     * are asked on their phones (INV-CH3) before the child can set a PIN.
+     *
+     * @return array{request_id: int, secret: string, child: string, parents: list<string>}
+     */
+    public function startLink(string $code, string $deviceName): array
+    {
+        $wallet = $this->walletForCode($code);
+        $secret = Str::random(40);
+        \App\Models\ChildLinkRequest::where('wallet_id', $wallet->id)->where('status', 'pending')->update(['status' => 'denied']);
+        $pairing = \App\Models\ChildLinkRequest::create([
+            'wallet_id' => $wallet->id,
+            'device_name' => Str::limit($deviceName, 80, ''),
+            'secret_hash' => hash('sha256', $secret),
+            'status' => 'pending',
+            'expires_at' => now()->addMinutes(15),
+        ]);
+        $first = $wallet->meta['child']['first_name'] ?? 'your child';
+        $parents = $this->parents($wallet);
+        foreach ($parents as $parent) {
+            $this->notifications->push($parent, 'child_link_request', "Link this phone to {$first}?", "A {$pairing->device_name} wants to link to {$first}'s wallet. Only say yes if {$first} is with you right now.", ['wallet_id' => $wallet->id, 'child_link_request_id' => $pairing->id]);
+        }
+
+        return ['request_id' => $pairing->id, 'secret' => $secret, 'child' => $first, 'parents' => $parents->pluck('first_name')->values()->all()];
+    }
+
+    /** The child's phone waits for "Yes, link Kamsi's phone". */
+    public function linkStatus(int $requestId, string $secret): string
+    {
+        $pairing = \App\Models\ChildLinkRequest::find($requestId);
+        if (!$pairing || !hash_equals($pairing->secret_hash, hash('sha256', $secret))) {
+            throw ValidationException::withMessages(['request' => 'Start again with the code.']);
+        }
+
+        return $pairing->status === 'pending' && $pairing->expires_at->isPast() ? 'expired' : $pairing->status;
+    }
+
+    /** INV-CH3 on the parent's phone: which phone, when, and what the child will see. */
+    public function linkRequest(int $requestId, User $parent): array
+    {
+        $pairing = \App\Models\ChildLinkRequest::with('wallet')->findOrFail($requestId);
+        if (!$this->parents($pairing->wallet)->contains('id', $parent->id)) {
+            throw ValidationException::withMessages(['request' => 'Only a parent on this wallet can answer.']);
+        }
+        $first = $pairing->wallet->meta['child']['first_name'] ?? 'your child';
+
+        return [
+            'id' => $pairing->id,
+            'wallet_id' => $pairing->wallet_id,
+            'child' => $first,
+            'child_name' => trim($first . ' ' . ($pairing->wallet->meta['child']['last_name'] ?? '')),
+            'device' => $pairing->device_name,
+            'asked_at' => $pairing->created_at?->toIso8601String(),
+            'status' => $pairing->status === 'pending' && $pairing->expires_at->isPast() ? 'expired' : $pairing->status,
+            'will_see' => 'Balance, goal, tasks, asking for money',
+        ];
+    }
+
+    /** "Yes, link Kamsi's phone" / "This isn't Kamsi". */
+    public function decideLink(int $requestId, User $parent, bool $approve): string
+    {
+        $info = $this->linkRequest($requestId, $parent);
+        if ($info['status'] !== 'pending') {
+            throw ValidationException::withMessages(['request' => $info['status'] === 'expired' ? 'This request has expired. Ask them to type the code again.' : 'This was already answered.']);
+        }
+        \App\Models\ChildLinkRequest::whereKey($requestId)->update(['status' => $approve ? 'approved' : 'denied', 'decided_by' => $parent->id, 'decided_at' => now()]);
+        if (!$approve) {
+            // A stranger had the code: it stops working.
+            $wallet = Wallet::find($info['wallet_id']);
+            $meta = $wallet->meta;
+            $meta['child']['phone']['expires_at'] = now()->subSecond()->toIso8601String();
+            $wallet->update(['meta' => $meta]);
+        }
+
+        return $approve ? 'approved' : 'denied';
     }
 
     /** The wallet a child's own sign-in belongs to. */

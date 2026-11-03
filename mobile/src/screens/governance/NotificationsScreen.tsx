@@ -16,6 +16,7 @@ import { timeLabel } from '../../lib/format';
 import { notificationVisual, numFromData } from '../../lib/governance';
 import { selection } from '../../lib/haptics';
 import type { AppNotification } from '../../api/types';
+import { useCircleStore } from '../../store/circle';
 import type { RootScreenProps } from '../../navigation/types';
 
 export function NotificationsScreen({ navigation }: RootScreenProps<'Notifications'>) {
@@ -46,6 +47,16 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
       navigation.navigate('IncomingRequest', { code: requestCode });
       return;
     }
+    // RUL-07 not enough money coming up; RUL-08 cancelled or skipped; RUL-04 confirm it.
+    const scheduledId = numFromData(n.data, ['scheduled_payment_id']);
+    if (scheduledId && type === 'scheduled_payment_short') {
+      navigation.navigate('PaymentShort', { paymentId: scheduledId });
+      return;
+    }
+    if (scheduledId && (type === 'scheduled_payment_cancelled' || type === 'scheduled_payment_skipped' || type === 'scheduled_payment_confirm')) {
+      navigation.navigate('PaymentOutcome', { paymentId: scheduledId, confirm: type === 'scheduled_payment_confirm' });
+      return;
+    }
     // SND-15: a scheduled payment went, waited, was skipped or didn't go.
     if (type.startsWith('scheduled_payment')) {
       navigation.navigate('ScheduledPayments');
@@ -54,6 +65,39 @@ export function NotificationsScreen({ navigation }: RootScreenProps<'Notificatio
     // Ajo circles: a payment that didn't go or is late opens AJO-04; the rest the circle.
     if (type.startsWith('ajo_') && walletId) {
       navigation.navigate(type === 'ajo_late' || type === 'ajo_payment_failed' ? 'AjoMissed' : 'Ajo', { walletId });
+      return;
+    }
+    // INV-CH3 "Link this phone to Kamsi?"
+    const childLink = numFromData(n.data, ['child_link_request_id']);
+    if (type === 'child_link_request' && childLink) {
+      navigation.navigate('ChildLinkConfirm', { requestId: childLink });
+      return;
+    }
+    // AUT-06/08/10: a rule asks for your yes, ran, told you something, or didn't run.
+    const ruleId = numFromData(n.data, ['automation_rule_id']);
+    if (type === 'automation_failed') {
+      navigation.navigate('RulesHelp');
+      return;
+    }
+    if (ruleId && type.startsWith('automation_')) {
+      navigation.navigate('RuleDetail', { ruleId });
+      return;
+    }
+    // FAM-08/09/12: your role, leaving a circle, a hand-over.
+    if (type.startsWith('circle_')) {
+      const circle = numFromData(n.data, ['circle_id']);
+      useCircleStore.getState().setCircle(type === 'circle_removed' ? null : circle ?? null);
+      navigation.navigate('FamilyHub');
+      return;
+    }
+    // FAM-05: someone declined or asked for a new invite.
+    if (type === 'invitation_declined' || type === 'invitation_ask_again' || type === 'invitation_accepted') {
+      navigation.navigate('Invites');
+      return;
+    }
+    // FAM-06 the invite itself.
+    if (invitationId && type === 'invitation_received') {
+      navigation.navigate('Invitation', { invitationId });
       return;
     }
     if (invitationId || type.startsWith('invitation')) {

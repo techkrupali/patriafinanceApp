@@ -28,6 +28,63 @@ class AppLinkController extends Controller
         return $this->page('invite', 'You have a family wallet invitation', 'Open Patriai and sign in with the number or email the invite was sent to.');
     }
 
+    // GET /i/{code} — INV-02 "Ngozi Okafor invited you to join School fees 2027", or INV-04 expired.
+    public function inviteCode(string $code): View
+    {
+        $flow = \App\Services\InviteFlowService::make();
+        $invitation = \App\Models\WalletInvitation::with(['wallet', 'inviter'])->where('code', strtoupper($code))->first() ?? abort(404);
+        $flow->markOpened($invitation);
+        $p = $flow->preview($invitation);
+        $first = $p['inviter']['first_name'] ?? 'they';
+        $path = 'i/' . $invitation->code;
+        $intent = fn (string $path) => 'intent://' . $path . '#Intent;scheme=patriai;package=com.patriai.app;end';
+        [$title, $body] = match ($p['status']) {
+            'pending' => ["{$p['inviter']['name']} invited you to join {$p['wallet']['name']}", ''],
+            'accepted' => ['This invite has been used', "It was accepted already. Open Patriai to see {$p['wallet']['name']}."],
+            'declined' => ['This invite was declined', "Ask {$first} to send a new one if you changed your mind."],
+            'cancelled' => ['This invite was cancelled', "Ask {$first} to send a new one."],
+            default => ['This invite has expired', "Invites last 7 days. Ask {$first} to send a new one. We can remind them for you."],
+        };
+
+        return view('link.invite', [
+            'state' => $p['status'] === 'pending' ? 'open' : 'closed',
+            'url' => preg_replace('#^https?://#', '', (string) $invitation->link()),
+            'title' => $title,
+            'body' => $body,
+            'inviter' => $p['inviter']['name'] ?? 'Someone',
+            'initials' => collect(explode(' ', (string) ($p['inviter']['name'] ?? '?')))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->join(''),
+            'wallet' => $p['wallet']['name'],
+            'role' => $p['role_label'],
+            'can' => $p['can'],
+            'cannot' => $p['cannot'],
+            'note' => $p['note'],
+            'appUrl' => 'patriai://' . $path,
+            'androidUrl' => $intent($path),
+            'declineUrl' => 'patriai://' . $path . '?decline=1',
+            'first' => $first,
+            'code' => $invitation->code,
+            'canAsk' => $p['status'] !== 'accepted' && $invitation->inviter_id !== null,
+            'androidDeclineUrl' => $intent($path . '?decline=1'),
+        ]);
+    }
+
+    // POST /i/{code}/ask — the page of a closed invite tells the inviter someone wants a new one.
+    public function askAgain(string $code): \Illuminate\Http\RedirectResponse
+    {
+        $invitation = \App\Models\WalletInvitation::with(['wallet', 'inviter'])->where('code', strtoupper($code))->first() ?? abort(404);
+        $back = redirect('/i/' . $invitation->code);
+        if ($invitation->status === 'pending' && !$invitation->isExpired()) {
+            return $back;
+        }
+        try {
+            \App\Services\InviteFlowService::make()->askAgain($invitation, null);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $back->withErrors($e->errors());
+        }
+
+        return $back->with('asked', true);
+    }
+
     // GET /a/{id} — a request waiting for your yes.
     public function request(int $id): View
     {

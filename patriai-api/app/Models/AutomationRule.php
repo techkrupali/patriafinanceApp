@@ -42,6 +42,14 @@ class AutomationRule extends Model
         'last_run_at',
         'retry_count',
         'retry_at',
+        'watch_wallet_id',
+        'threshold',
+        'event',
+        'before_day',
+        'action',
+        'notify_user_ids',
+        'agreement',
+        'priority',
     ];
 
     protected function casts(): array
@@ -63,6 +71,11 @@ class AutomationRule extends Model
             'last_run_at' => 'datetime',
             'retry_count' => 'integer',
             'retry_at' => 'datetime',
+            'threshold' => 'integer',
+            'before_day' => 'integer',
+            'notify_user_ids' => 'array',
+            'agreement' => 'array',
+            'priority' => 'integer',
         ];
     }
 
@@ -89,6 +102,82 @@ class AutomationRule extends Model
     public function toWallet(): BelongsTo
     {
         return $this->belongsTo(Wallet::class, 'to_wallet_id');
+    }
+
+    public function watchWallet(): BelongsTo
+    {
+        return $this->belongsTo(Wallet::class, 'watch_wallet_id');
+    }
+
+    public function runs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AutomationRun::class);
+    }
+
+    /**
+     * Your goals behind schedule: what's saved vs a straight line from when the
+     * wallet was made to its date, and the weekly amount that catches up.
+     *
+     * @return list<array{name: string, behind: int, weekly: int}>
+     */
+    public static function behindGoals(int $userId, ?Carbon $now = null): array
+    {
+        $now ??= now();
+        $out = [];
+        foreach (Wallet::where('user_id', $userId)->where('status', 'active')->whereIn('type', ['savings', 'goal'])->whereNotNull('target_amount')->whereNotNull('target_date')->get() as $w) {
+            $start = $w->created_at ?? $now;
+            $end = Carbon::parse($w->target_date);
+            if ($end->lte($now) || $end->lte($start) || (int) $w->balance >= (int) $w->target_amount) {
+                continue;
+            }
+            $expected = (int) round($w->target_amount * min(1, $start->diffInSeconds($now) / max(1, $start->diffInSeconds($end))));
+            $behind = $expected - (int) $w->balance;
+            if ($behind <= 100_000) {
+                continue;
+            }
+            $weeks = max(1, (int) ceil($now->diffInDays($end) / 7));
+            $out[] = ['name' => $w->name, 'behind' => $behind, 'weekly' => (int) (ceil(($w->target_amount - $w->balance) / $weeks / 10_000) * 10_000)];
+        }
+
+        return $out;
+    }
+
+    /** AUT-06 "Emeka must agree": everyone needed has said yes. */
+    public function agreed(): bool
+    {
+        $needed = $this->agreement['needed'] ?? [];
+
+        return !$needed || !array_diff($needed, $this->agreement['given'] ?? []);
+    }
+
+    /** The wallet a balance or event rule watches. */
+    public function watched(): ?Wallet
+    {
+        return Wallet::find($this->watch_wallet_id ?? $this->to_wallet_id);
+    }
+
+    /**
+     * AUT-03 "A wallet balance changes" (Household falls below ₦30,000) and
+     * "Something happens" (a goal is reached, a request is made): due when it
+     * happened and the rule hasn't run in this period.
+     */
+    private function happened(Carbon $now): bool
+    {
+        $w = $this->watched();
+        if (!$w) {
+            return false;
+        }
+        if ($this->trigger === 'balance') {
+            return $this->threshold !== null && (int) $w->balance < (int) $this->threshold && $this->last_run_period !== $this->currentPeriod($now);
+        }
+
+        return match ($this->event) {
+            'goal_reached' => (int) $w->target_amount > 0 && (int) $w->balance >= (int) $w->target_amount && $this->last_run_period !== 'goal:' . $w->target_amount,
+            'request_made' => ApprovalRequest::where('wallet_id', $w->id)->where('created_at', '>', $this->last_run_at ?? $this->created_at)->exists(),
+            // RUL-09 once a week, when one of your goals is behind its date.
+            'goal_behind' => $this->last_run_period !== $this->currentPeriod($now) && self::behindGoals($this->user_id) !== [],
+            default => false,
+        };
     }
 
     /**
@@ -125,6 +214,9 @@ class AutomationRule extends Model
         if ($this->isRetryDue($now)) {
             return true;
         }
+        if (in_array($this->trigger, ['balance', 'event'], true)) {
+            return $this->happened($now);
+        }
 
         if (!$this->scheduleMatches($now)) {
             return false;
@@ -144,7 +236,7 @@ class AutomationRule extends Model
      */
     public function nextRunOn(Carbon $from): ?Carbon
     {
-        if (!$this->enabled) {
+        if (!$this->enabled || in_array($this->trigger, ['balance', 'event', 'salary', 'deposit', 'roundup'], true)) {
             return null;
         }
 

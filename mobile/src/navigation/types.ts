@@ -212,6 +212,18 @@ export type RootStackParamList = {
   // ---- Family Hub & Spousal Sync ----
   FamilyHub: undefined;
   FamilyMember: { memberId: number };
+  /** FAM-02 "Who is in which wallet". */
+  CircleView: { circleId: number | null };
+  /** FAM-07 a member's profile in a circle. */
+  CircleMember: { circleId: number | null; userId: number };
+  /** FAM-08 "Edit role". */
+  EditCircleRole: { circleId: number | null; userId: number };
+  /** FAM-10 "Family activity". */
+  FamilyActivity: { circleId: number | null };
+  /** FAM-11 "New circle". */
+  NewCircle: undefined;
+  /** FAM-12 "Transfer ownership". */
+  TransferCircle: { circleId: number | null };
   SpousalSync: undefined;
   // ---- Wallet governance (Audit / Lock / Automation) ----
   // ---- Me and settings (ME-03…22) ----
@@ -331,6 +343,34 @@ export type RootStackParamList = {
   WalletStatement: { walletId: number; audit?: boolean };
   Automations: undefined;
   CreateAutomation: { fromWalletId?: number; toWalletId?: number } | undefined;
+  /** AUT-02 "New rule · Start from a template". */
+  RuleTemplates: undefined;
+  /** AUT-03…06 the builder (a template, a sentence, or editing a rule). */
+  RuleBuilder: { preset?: import('../api/rules').RuleDraft; ruleId?: number; step?: number } | undefined;
+  /** AUT-07 "Describe your rule". */
+  DescribeRule: undefined;
+  /** AUT-08 a rule and its runs (AUT-09 in its menu). */
+  RuleDetail: { ruleId: number };
+  /** AUT-10 "Rules need your help". */
+  RulesHelp: undefined;
+  /** AUT-11 "Contribution rules". */
+  ContributionRules: { walletId?: number };
+  /** RUL-01 "What should it do?" */
+  RuleTypes: undefined;
+  /** RUL-01 "Round up and save". */
+  RoundUpRule: undefined;
+  /** RUL-02…06 "Split between accounts" (a scheduled payment to several). */
+  SplitRule: { paymentId?: number };
+  /** AIS-05 what Steward may do on its own. */
+  StewardPermissions: undefined;
+  /** RUL-09 "Steward auto-action". */
+  StewardAutoAction: undefined;
+  /** AIS-06 "What Steward did". */
+  StewardLog: undefined;
+  /** RUL-07 "Not enough for Sunday's payment". */
+  PaymentShort: { paymentId: number };
+  /** RUL-08 cancelled or skipped; RUL-04 confirm tomorrow's payment. */
+  PaymentOutcome: { paymentId: number; confirm?: boolean };
   // ---- Support & compliance ----
   /** DSP-01 */
   Disputes: undefined;
@@ -382,6 +422,22 @@ export type RootStackParamList = {
   ApprovalOutcome: { approvalId: number };
   /** APR-09 Away mode. */
   AwayMode: undefined;
+  /** FAM-03 "Invite: choose role" — co-owner, contributor, child, keyholder, accountant or vendor. */
+  InviteRole: { walletId?: number; circleId?: number | null } | undefined;
+  /** FAM-04 "Invite by phone, link or QR". */
+  InviteHow: { role: 'co_owner' | 'contributor' | 'keyholder' | 'accountant'; walletIds: number[]; phone?: string; dial?: string; accessUntil?: string };
+  /** FAM-05 Invites you sent: Waiting / Accepted / Expired. */
+  Invites: undefined;
+  /** FAM-06 / INV-K1 / INV-A1 an invitation, or INV-04 when it can't open. */
+  Invitation: { invitationId?: number; code?: string; decline?: boolean };
+  /** INV-03 "Decline Ngozi's invite?" */
+  DeclineInvite: { invitationId: number; inviter?: string };
+  /** INV-K2 "Verify to become a keyholder · Tier 2 needed". */
+  KeyholderVerify: { walletId: number };
+  /** INV-K3 "You're a keyholder". */
+  KeyholderDone: { walletId: number };
+  /** INV-CH3 "Link this phone to Kamsi?" on the parent's phone. */
+  ChildLinkConfirm: { requestId: number };
   /** AJO-03 a member's circle, WPV-06 the organiser's, or a circle still forming. */
   Ajo: { walletId: number };
   /** AJO-01 "New ajo circle", or "Edit rules" on one. */

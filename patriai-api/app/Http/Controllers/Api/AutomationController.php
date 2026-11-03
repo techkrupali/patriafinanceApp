@@ -151,6 +151,146 @@ class AutomationController extends ApiController
         return $this->ok('Automation deleted');
     }
 
+    // POST /automations/preview — AUT-06 review of a draft.
+    public function preview(Request $request): JsonResponse
+    {
+        return $this->ok('Preview', \App\Services\RuleBuilderService::make()->preview($request->user(), $this->draft($request)));
+    }
+
+    // POST /automations/builder — AUT-06 "Turn on" (and ask a co-owner).
+    public function build(Request $request): JsonResponse
+    {
+        $rule = \App\Services\RuleBuilderService::make()->create($request->user(), $this->draft($request));
+
+        return $this->ok($rule->agreed() ? 'Rule is on' : 'Rule waits for a yes', ['automation' => $this->serializeRule($rule->load(['fromWallet:id,name', 'toWallet:id,name']))], 201);
+    }
+
+    // POST /automations/parse { text } — AUT-07 "Describe your rule".
+    public function parse(Request $request): JsonResponse
+    {
+        $d = $request->validate(['text' => ['required', 'string', 'min:5', 'max:500']]);
+        $svc = \App\Services\RuleBuilderService::make();
+        $res = $svc->parse($request->user(), $d['text']);
+
+        return $this->ok('Parsed', $res + ['preview' => $res['draft'] ? $svc->preview($request->user(), $res['draft']) : null]);
+    }
+
+    // GET /automations/{rule}/detail — AUT-08 (also for a co-owner asked to agree).
+    public function detail(Request $request, AutomationRule $automationRule): JsonResponse
+    {
+        $user = $request->user();
+        $asked = in_array($user->id, $automationRule->agreement['needed'] ?? [], true);
+        if ($automationRule->user_id !== $user->id && !$asked) {
+            return $this->fail('Automation not found', 404);
+        }
+        $svc = \App\Services\RuleBuilderService::make();
+
+        return $this->ok('Automation', [
+            'automation' => $this->serializeRule($automationRule->load(['fromWallet:id,name', 'toWallet:id,name'])),
+            'made_by' => $automationRule->user?->first_name,
+            'mine' => $automationRule->user_id === $user->id,
+            'can_agree' => $asked && !in_array($user->id, $automationRule->agreement['given'] ?? [], true),
+            'runs' => $svc->runs($automationRule),
+        ]);
+    }
+
+    // GET /wallets/{wallet}/contribution-rules — AUT-11.
+    public function contributionRules(Request $request, Wallet $wallet): JsonResponse
+    {
+        if (!$wallet->isAccessibleBy($request->user())) {
+            return $this->fail('Wallet not found', 404);
+        }
+
+        return $this->ok('Contribution rules', \App\Services\ContributionRulesService::make()->show($wallet, $request->user()));
+    }
+
+    // PUT /wallets/{wallet}/contribution-rules
+    public function saveContributionRules(Request $request, Wallet $wallet): JsonResponse
+    {
+        $d = $request->validate([
+            'remind' => ['nullable', 'in:day,before_and_day,off'],
+            'late_fee_on' => ['nullable', 'boolean'],
+            'late_fee' => ['nullable', 'numeric', 'min:0'],
+            'tell_owners_after' => ['nullable', 'integer', 'between:1,14'],
+            'share_by' => ['nullable', 'in:contributions,equal'],
+            'streak_bonus' => ['nullable', 'boolean'],
+        ]);
+        if (isset($d['late_fee'])) {
+            $d['late_fee'] = $this->toKobo($d['late_fee']);
+        }
+        if ($request->exists('tell_owners_after') && $request->input('tell_owners_after') === null) {
+            $d['tell_owners_after'] = null;
+        }
+
+        return $this->ok('Saved', \App\Services\ContributionRulesService::make()->save($wallet, $request->user(), $d));
+    }
+
+    // PUT /automations/{rule}/builder — AUT-09 "Edit rule".
+    public function rebuild(Request $request, AutomationRule $automationRule): JsonResponse
+    {
+        $rule = \App\Services\RuleBuilderService::make()->update($automationRule, $request->user(), $this->draft($request));
+
+        return $this->ok('Rule updated', ['automation' => $this->serializeRule($rule->load(['fromWallet:id,name', 'toWallet:id,name']))]);
+    }
+
+    // POST /automations/{rule}/agree { yes }
+    public function agree(Request $request, AutomationRule $automationRule): JsonResponse
+    {
+        $d = $request->validate(['yes' => ['required', 'boolean']]);
+        $rule = \App\Services\RuleBuilderService::make()->agree($automationRule, $request->user(), (bool) $d['yes']);
+
+        return $this->ok($d['yes'] ? 'Agreed' : 'Said no', ['automation' => $this->serializeRule($rule->load(['fromWallet:id,name', 'toWallet:id,name']))]);
+    }
+
+    // GET /automations/help — AUT-10 "Rules need your help".
+    public function help(Request $request): JsonResponse
+    {
+        return $this->ok('Help', \App\Services\RuleBuilderService::make()->help($request->user()));
+    }
+
+    // PUT /automations/order { ids } — "Save order".
+    public function order(Request $request): JsonResponse
+    {
+        $d = $request->validate(['ids' => ['required', 'array', 'max:50'], 'ids.*' => ['integer']]);
+        \App\Services\RuleBuilderService::make()->order($request->user(), $d['ids']);
+
+        return $this->ok('Order saved', \App\Services\RuleBuilderService::make()->help($request->user()));
+    }
+
+    /** A builder draft: naira in, kobo out. */
+    private function draft(Request $request): array
+    {
+        $d = $request->validate([
+            'name' => ['nullable', 'string', 'max:80'],
+            'trigger' => ['required', 'in:balance,event,schedule,salary,roundup'],
+            'roundup_to' => ['nullable', 'numeric', 'min:0'],
+            'event' => ['nullable', 'in:goal_reached,request_made'],
+            'watch_wallet_id' => ['nullable', 'integer'],
+            'threshold' => ['nullable', 'numeric', 'min:0'],
+            'frequency' => ['nullable', 'in:daily,weekly,monthly'],
+            'day_of_week' => ['nullable', 'integer', 'between:1,7'],
+            'day_of_month' => ['nullable', 'integer', 'between:1,28'],
+            'percent' => ['nullable', 'integer', 'between:1,90'],
+            'from_wallet_id' => ['nullable', 'integer'],
+            'to_wallet_id' => ['nullable', 'integer'],
+            'amount' => ['nullable', 'numeric', 'min:0'],
+            'fill_to' => ['nullable', 'boolean'],
+            'action' => ['nullable', 'in:move,sweep,notify'],
+            'min_balance' => ['nullable', 'numeric', 'min:0'],
+            'before_day' => ['nullable', 'integer', 'between:2,28'],
+            'max_per' => ['nullable', 'in:day,week,month'],
+            'notify_user_ids' => ['nullable', 'array'],
+            'notify_user_ids.*' => ['integer'],
+        ]);
+        foreach (['threshold', 'amount', 'min_balance', 'roundup_to'] as $k) {
+            if (isset($d[$k]) && $d[$k] !== null) {
+                $d[$k] = $this->toKobo($d[$k]);
+            }
+        }
+
+        return $d;
+    }
+
     // POST /automations/{automationRule}/run  — manual "run now" (force=true), owner-only
     public function run(Request $request, AutomationRule $automationRule): JsonResponse
     {
@@ -190,9 +330,26 @@ class AutomationController extends ApiController
 
     private function serializeRule(AutomationRule $rule): array
     {
+        $builder = \App\Services\RuleBuilderService::make();
+        $waiting = array_diff($rule->agreement['needed'] ?? [], $rule->agreement['given'] ?? []);
+        $last = \App\Models\AutomationRun::where('automation_rule_id', $rule->id)->latest('id')->first();
+
         return [
             'id' => $rule->id,
             'name' => $rule->name,
+            // AUT-01/06/08 "When … If … Then …" in words.
+            'words' => $builder->words($rule),
+            'action' => $rule->action ?? 'move',
+            'watch_wallet_id' => $rule->watch_wallet_id,
+            'threshold' => $rule->threshold !== null ? number_format($rule->threshold / 100, 2, '.', '') : null,
+            'event' => $rule->event,
+            'before_day' => $rule->before_day,
+            'notify_user_ids' => $rule->notify_user_ids ?? [],
+            'priority' => (int) $rule->priority,
+            // "Turn on and ask Emeka": who still has to agree.
+            'waiting_for' => $waiting ? \App\Models\User::whereIn('id', $waiting)->pluck('first_name')->values()->all() : [],
+            'last_run' => $last ? ['status' => $last->status, 'at' => $last->created_at?->toIso8601String(), 'note' => $last->note] : null,
+            'runs_count' => \App\Models\AutomationRun::where('automation_rule_id', $rule->id)->where('status', 'ran')->count(),
             'from_wallet' => $rule->fromWallet ? ['id' => $rule->fromWallet->id, 'name' => $rule->fromWallet->name] : null,
             'to_wallet' => $rule->toWallet ? ['id' => $rule->toWallet->id, 'name' => $rule->toWallet->name] : null,
             'amount' => number_format($rule->amount / 100, 2, '.', ''),

@@ -225,6 +225,13 @@ export function StewardScreen({ navigation, route }: TabScreenProps<'Steward'>) 
             Suggests and prepares. Acts only with your OK.
           </Text>
         </View>
+        {/* AIS-05 / AIS-06 */}
+        <Pressable onPress={() => navigation.navigate('StewardLog')} accessibilityRole="button" accessibilityLabel="What Steward did" hitSlop={8} style={{ padding: 6 }}>
+          <MaterialCommunityIcons name="history" size={24} color={pt.ink} />
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('StewardPermissions')} accessibilityRole="button" accessibilityLabel="What Steward can do" hitSlop={8} style={{ padding: 6 }}>
+          <MaterialCommunityIcons name="cog-outline" size={24} color={pt.ink} />
+        </Pressable>
       </View>
 
       <ScrollView

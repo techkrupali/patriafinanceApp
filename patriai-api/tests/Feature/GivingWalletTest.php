@@ -164,7 +164,7 @@ class GivingWalletTest extends TestCase
         $this->assertSame(4_500_000, $wallet->refresh()->balance);
         $this->deposit($business, 100_000);
         $this->assertSame(5_000_000, $wallet->refresh()->balance);
-        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('title', 'Set aside ₦5000.00 into Tithes and offerings')->count());
+        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('title', 'Set aside ₦5,000 into Tithes and offerings')->count());
 
         // The fixed ₦20,000 on the 25th.
         Carbon::setTestNow(Carbon::parse('2026-11-25 10:00:00', 'UTC'));

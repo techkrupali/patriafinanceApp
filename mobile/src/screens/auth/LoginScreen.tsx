@@ -67,7 +67,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       gap={16}
       footer={
         <View style={{ gap: 4 }}>
-          <PtButton title={copy.continue} onPress={submit} loading={start.isPending} />
+          <PtButton title={copy.continue} variant="ghost" onPress={submit} loading={start.isPending} />
           <PtButton title={copy.login.createAccount} variant="ghost" onPress={() => navigation.replace('Phone')} />
         </View>
       }

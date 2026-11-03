@@ -61,6 +61,8 @@ export interface Wallet {
   id: number;
   type: WalletType;
   name: string;
+  /** FAM-11: the circle it's shared in (null = its owner's own family). */
+  circle_id?: number | null;
   currency: string;
   /** Naira amount as a decimal string, e.g. "12500.00" */
   balance: string;
@@ -249,6 +251,11 @@ export interface WalletInvitation {
   joint?: JointSummary | null;
   /** INV-J1: the ajo circle the person is asked to join. */
   ajo?: import('./ajo').AjoPreview | null;
+  /** INV-01 the invite's own link and code. */
+  code?: string | null;
+  link?: string | null;
+  /** FAM-06 / INV-K1 / INV-A1: the invite as the invitee sees it. */
+  preview?: import('./invites').InvitePreview | null;
   /** CTB-02 "Approvals · 2 of 3: Ngozi, Chidi and you · Next to approve: Tiling". */
   project?: { id: number; title: string; approvals: { needed: number; of: number; names: string[] }; next: { title: string; amount: string } | null } | null;
 }
@@ -599,6 +606,10 @@ export interface MemberUpdatedData {
 
 export interface InvitationCreatedData {
   invitation: WalletInvitation;
+  /** INV-01 "patriai.app/i/K7Q2". */
+  link?: string | null;
+  /** INV-01 the WhatsApp / SMS text with the inviter's note and the link. */
+  share_message?: string;
 }
 
 export interface InvitationsData {
@@ -1357,6 +1368,12 @@ export interface CreateInvitationPayload {
   can_approve?: boolean;
   /** Per-person access applied when they accept (contributor/admin). */
   permissions?: InvitePermissions;
+  /** INV-01 the inviter's note. */
+  message?: string;
+  /** FAM-04 "Invite expires · In 7 days". */
+  expires_in_days?: number;
+  /** FAM-03 a keyholder for an emergency fund. */
+  keyholder?: boolean;
 }
 
 /** Slim user shape returned by GET /users/search. */
@@ -2064,7 +2081,36 @@ export interface FamilyStats {
   vendor_members: number;
 }
 
+/** FAM-01 "Okafor family circle", or another one (FAM-11). */
+export interface CircleInfo {
+  id: number;
+  name: string;
+  kind: string;
+  kind_label: string;
+  purpose: string | null;
+  /** Your own family circle. */
+  is_home: boolean;
+  owner: { id: number; name: string | null; first_name: string | null };
+  my_role: string;
+  /** Invite and remove people (FAM-08). */
+  can_manage: boolean;
+  /** Sees every wallet in the circle. */
+  sees_all: boolean;
+  wallet_ids: number[];
+  /** FAM-12: a hand-over waiting or counting down. */
+  transfer: {
+    to: { id: number | null; name: string | null };
+    requested_at: string | null;
+    accept_by: string | null;
+    accepted_at: string | null;
+    effective_at: string | null;
+    for_you: boolean;
+  } | null;
+  circles_count?: number;
+}
+
 export interface FamilyData {
+  circle?: CircleInfo;
   members: FamilyMember[];
   pending_invitations: {
     sent: FamilyInvitation[];
@@ -2188,15 +2234,35 @@ export interface AuditLogPageData {
 
 export type AutomationFrequency = 'daily' | 'weekly' | 'monthly';
 
+/** AUT-01/06/08 "When … If … Then …" in words. */
+export interface RuleWords {
+  when: string;
+  if: string | null;
+  then: string;
+}
+
 export interface AutomationRule {
   id: number;
   name: string;
+  words?: RuleWords;
+  /** move · sweep · notify */
+  action?: 'move' | 'sweep' | 'notify';
+  watch_wallet_id?: number | null;
+  threshold?: string | null;
+  event?: 'goal_reached' | 'request_made' | null;
+  before_day?: number | null;
+  notify_user_ids?: number[];
+  priority?: number;
+  /** First names still to agree (AUT-06 "Turn on and ask Emeka"). */
+  waiting_for?: string[];
+  last_run?: { status: 'ran' | 'skipped' | 'failed'; at: string | null; note: string | null } | null;
+  runs_count?: number;
   from_wallet: { id: number; name: string };
   to_wallet: { id: number; name: string };
   /** Naira decimal string. */
   amount: string;
   /** schedule (calendar) | salary (percent of each salary) | roundup (swept daily). */
-  trigger?: 'schedule' | 'salary' | 'roundup';
+  trigger?: 'schedule' | 'salary' | 'roundup' | 'deposit' | 'balance' | 'event';
   percent?: number | null;
   roundup_to?: string | null;
   /** Round-ups built up and not yet moved. */

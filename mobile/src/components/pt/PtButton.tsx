@@ -5,13 +5,15 @@ import { pt, ptFont, ptRadius } from '../../theme';
 import { selection } from '../../lib/haptics';
 
 /** `mint` is the light-on-dark button on the emerald Welcome canvas. */
-type Variant = 'primary' | 'secondary' | 'ghost' | 'mint';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'mint' | 'danger';
 
 const fill: Record<Variant, { bg: string; fg: string }> = {
   primary: { bg: pt.brand, fg: pt.onBrand },
   secondary: { bg: pt.brandSoft, fg: pt.brand },
   ghost: { bg: 'transparent', fg: pt.brand },
   mint: { bg: pt.emerald300, fg: pt.emerald900 },
+  // FAM-09 "Remove Aunty Ada": something that can't be undone.
+  danger: { bg: pt.danger, fg: '#FFFFFF' },
 };
 
 interface PtButtonProps {

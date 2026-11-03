@@ -223,7 +223,7 @@ class ChatService
         $this->tell($c->members()->whereNull('left_at')->pluck('user_id'), $me, $c->key(), $c->kind === 'direct' ? $me->fullName() : "{$me->first_name} in {$c->title}", $message->body, ['conversation_id' => $c->id]);
 
         // CHT-02 "Steward can answer questions here" — in a group linked to a project.
-        if ($c->steward && $c->project && $this->asksSteward($body)) {
+        if ($c->steward && $c->project && ($this->asksSteward($body) || $this->vendorAsks($c->project, $me, $body))) {
             ConversationMessage::create(['conversation_id' => $c->id, 'kind' => 'steward', 'body' => ChatStewardService::make()->answer($c->project, $body)]);
         }
 
@@ -249,7 +249,7 @@ class ChatService
         $message = ProjectMessage::create(['project_id' => $project->id, 'user_id' => $me->id, 'kind' => 'message', 'body' => trim($body)]);
         $this->read($me, "project:{$project->id}", $message->id);
         $this->tell($this->projectPeople($project), $me, "project:{$project->id}", "{$me->first_name} on {$project->title}", $message->body, ['project_id' => $project->id]);
-        if ($this->asksSteward($body)) {
+        if ($this->asksSteward($body) || $this->vendorAsks($project, $me, $body)) {
             ProjectMessage::create(['project_id' => $project->id, 'kind' => 'steward', 'body' => ChatStewardService::make()->answer($project, $body)]);
         }
 
@@ -316,6 +316,25 @@ class ChatService
     }
 
     /** "@Steward", "Steward, …" */
+    /**
+     * RUL-09 "A vendor asks in chat → answer the vendor from project records":
+     * the family turned it on, and the builder asked a question.
+     */
+    private function vendorAsks(Project $project, User $me, string $body): bool
+    {
+        $owner = $project->owner;
+        if (!str_contains($body, '?') || !$owner || $me->id === $owner->id) {
+            return false;
+        }
+        $isVendor = $project->vendor_id === $me->id;
+        if (!$isVendor || !StewardSettingsService::make()->settings($owner)['answer_vendors']) {
+            return false;
+        }
+        StewardSettingsService::make()->log($owner, 'answer', "Answered {$me->first_name} in {$project->title}", null, null, ['project_id' => $project->id]);
+
+        return true;
+    }
+
     private function asksSteward(string $body): bool
     {
         return (bool) preg_match('/\bsteward\b/i', $body);

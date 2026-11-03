@@ -6,9 +6,11 @@ import { PtTabScreen, PtSwitch } from '../../components/pt/PtTabScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtCard, PtRow, PtSectionTitle } from '../../components/pt/PtList';
 import { LoadError } from '../../components/LoadError';
-import { useApprovalRules, useAutomations, useDeleteAutomation, useRunAutomation, useUpdateAutomation } from '../../api/hooks';
+import { useApprovalRules, useAutomations, useUpdateAutomation } from '../../api/hooks';
+import { useRulesHelp } from '../../api/rules';
+import { Feather } from '@expo/vector-icons';
 import { formatNaira, formatYmd, shortDay } from '../../lib/format';
-import { notifySuccess, selection } from '../../lib/haptics';
+import { selection } from '../../lib/haptics';
 import type { ApprovalRuleSummary, AutomationRule } from '../../api/types';
 import type { RootScreenProps } from '../../navigation/types';
 
@@ -58,42 +60,21 @@ function approvalLine(a: ApprovalRuleSummary): string {
   return `${joined || 'You'} approve${names.length === 1 ? 's' : ''} ${scope}`;
 }
 
-/** One automation: name, on/off switch, When/Then, last or next run. Tap for Run now / Delete. */
-function RuleCard({ rule }: { rule: AutomationRule }) {
+/** AUT-01 one automation: name, on/off switch, When/Then, last or next run. Tap for AUT-08. */
+function RuleCard({ rule, onOpen }: { rule: AutomationRule; onOpen: () => void }) {
   const update = useUpdateAutomation(rule.id);
-  const run = useRunAutomation();
-  const remove = useDeleteAutomation();
-
-  const actions = () => {
-    selection();
-    Alert.alert(rule.name, undefined, [
-      {
-        text: 'Run now',
-        onPress: () =>
-          run.mutate(rule.id, {
-            onSuccess: (d) => {
-              notifySuccess();
-              Alert.alert(
-                d.result.status === 'ran' ? 'Rule ran' : 'Skipped',
-                d.result.status === 'ran' ? `Moved ${formatNaira(d.result.amount ?? rule.amount)} to ${rule.to_wallet.name}.` : d.result.reason || 'Nothing to do.',
-              );
-            },
-            onError: (e) => Alert.alert('Could not run', e.message),
-          }),
-      },
-      {
-        text: 'Delete rule',
-        style: 'destructive',
-        onPress: () => remove.mutate(rule.id, { onError: (e) => Alert.alert('Could not delete', e.message) }),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
+  const w = rule.words;
+  const waiting = rule.waiting_for ?? [];
+  const meta = waiting.length
+    ? `Waiting for ${waiting.join(' and ')} to agree`
+    : rule.last_run?.status === 'failed'
+      ? `Didn't run: ${rule.last_run.note ?? ''}`
+      : metaLine(rule);
 
   return (
     <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 14, paddingHorizontal: 16, gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Pressable onPress={actions} accessibilityRole="button" style={{ flex: 1 }}>
+        <Pressable onPress={() => { selection(); onOpen(); }} accessibilityRole="button" style={{ flex: 1 }}>
           <Text style={{ fontFamily: ptFont.bold, fontSize: 15, lineHeight: 22, color: pt.ink }}>{rule.name}</Text>
         </Pressable>
         <PtSwitch
@@ -103,15 +84,20 @@ function RuleCard({ rule }: { rule: AutomationRule }) {
           onChange={(v) => update.mutate({ enabled: v }, { onError: (e) => Alert.alert('Could not update', e.message) })}
         />
       </View>
-      <Pressable onPress={actions} accessibilityRole="button" style={{ gap: 4 }}>
+      <Pressable onPress={() => { selection(); onOpen(); }} accessibilityRole="button" accessibilityLabel={`${rule.name}. Open`} style={{ gap: 4 }}>
         <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.ink }}>
-          <Text style={{ fontFamily: ptFont.bold, color: pt.brand }}>When</Text> {whenLine(rule)}
+          <Text style={{ fontFamily: ptFont.bold, color: pt.brand }}>When</Text> {w ? w.when.charAt(0).toLowerCase() + w.when.slice(1) : whenLine(rule)}
         </Text>
+        {w?.if ? (
+          <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.ink }}>
+            <Text style={{ fontFamily: ptFont.bold, color: pt.info }}>If</Text> {w.if.charAt(0).toLowerCase() + w.if.slice(1)}
+          </Text>
+        ) : null}
         <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.ink }}>
-          <Text style={{ fontFamily: ptFont.bold, color: pt.brand }}>Then</Text> {thenLine(rule)}
+          <Text style={{ fontFamily: ptFont.bold, color: pt.brand }}>Then</Text> {w ? w.then.charAt(0).toLowerCase() + w.then.slice(1) : thenLine(rule)}
         </Text>
       </Pressable>
-      <Text style={{ fontFamily: ptFont.medium, fontSize: 12, lineHeight: 16, color: pt.inkMuted }}>{metaLine(rule)}</Text>
+      <Text style={{ fontFamily: ptFont.medium, fontSize: 12, lineHeight: 16, color: rule.last_run?.status === 'failed' || waiting.length ? '#8F5400' : pt.inkMuted }}>{meta}</Text>
     </View>
   );
 }
@@ -125,6 +111,7 @@ export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automa
   const isTab = route?.name !== 'Automations';
   const rules = useAutomations();
   const approvals = useApprovalRules();
+  const help = useRulesHelp();
   const list = rules.data ?? [];
   const running = list.filter((r) => r.enabled).length;
 
@@ -132,9 +119,12 @@ export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automa
     <PtTabScreen
       title="Rules"
       onBack={isTab ? undefined : () => navigation.goBack()}
-      action={<PtButton title="New rule" variant="secondary" size="sm" onPress={() => navigation.navigate('CreateAutomation')} />}
+      action={<PtButton title="New rule" variant="secondary" size="sm" onPress={() => navigation.navigate('RuleTemplates')} />}
       refreshing={rules.isRefetching}
-      onRefresh={() => void rules.refetch()}
+      onRefresh={() => {
+        void rules.refetch();
+        void help.refetch();
+      }}
     >
       <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: pt.inkMuted, marginTop: -8 }}>
         Systems, not memory. These run on their own and log everything they do.
@@ -146,6 +136,21 @@ export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automa
         <LoadError message={(rules.error as Error).message} onRetry={() => void rules.refetch()} />
       ) : (
         <>
+          {/* AUT-10 */}
+          {help.data && help.data.count > 0 ? (
+            <Pressable
+              onPress={() => { selection(); navigation.navigate('RulesHelp'); }}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FDEBC8', borderRadius: ptRadius.md, padding: 14 }}
+            >
+              <Feather name="alert-triangle" size={20} color="#8F5400" />
+              <Text style={{ flex: 1, fontFamily: ptFont.semibold, fontSize: 14, color: pt.ink }}>
+                {`Rules need your help · ${[help.data.failed.length ? `${help.data.failed.length} failed` : null, help.data.salary_day ? 'salary day order' : null].filter(Boolean).join(', ')}`}
+              </Text>
+              <Feather name="chevron-right" size={18} color={pt.inkMuted} />
+            </Pressable>
+          ) : null}
+
           <View style={{ gap: 8 }}>
             <PtSectionTitle title={`Automations · ${running} running`} />
             {list.length === 0 ? (
@@ -155,7 +160,7 @@ export function AutomationsScreen({ navigation, route }: RootScreenProps<'Automa
                 </Text>
               </PtCard>
             ) : (
-              list.map((r) => <RuleCard key={r.id} rule={r} />)
+              list.map((r) => <RuleCard key={r.id} rule={r} onOpen={() => navigation.navigate('RuleDetail', { ruleId: r.id })} />)
             )}
           </View>
 

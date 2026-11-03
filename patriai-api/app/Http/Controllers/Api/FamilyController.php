@@ -22,58 +22,17 @@ class FamilyController extends ApiController
     {
         $user = $request->user();
 
-        // Wallets the user owns, plus wallets where they are an active member.
-        $ownedIds = $user->wallets()->pluck('id')->all();
-        $memberIds = WalletMember::where('user_id', $user->id)
-            ->where('status', 'active')
-            ->pluck('wallet_id')
-            ->all();
-        $walletIds = array_values(array_unique(array_merge($ownedIds, $memberIds)));
-
-        $wallets = Wallet::whereIn('id', $walletIds)
-            ->with([
-                'owner',
-                'members' => fn ($q) => $q->where('status', 'active')->with('user'),
-            ])
-            ->get();
-
-        // Aggregate distinct people (by user_id) across those wallets, excluding the
-        // authed user. $people[user_id] => ['user' => User, 'memberships' => [...], 'types' => [...]].
+        // FAM-01 for one circle (HOM-06): your own family unless ?circle= says otherwise.
+        $circles = \App\Services\CircleService::make();
+        $circle = $circles->resolve($user, $request->integer('circle') ?: null);
+        $wallets = $circles->universe($circle, $user);
+        $walletIds = $wallets->pluck('id')->all();
         $people = [];
-
-        $addPerson = function (?User $person, string $role, bool $canApprove, Wallet $wallet) use (&$people, $user) {
-            if (!$person || $person->id === $user->id) {
-                return;
-            }
-
-            if (!isset($people[$person->id])) {
-                $people[$person->id] = ['user' => $person, 'memberships' => [], 'wallet_ids' => [], 'types' => []];
-            }
-
-            // One membership entry per wallet per person (the owner entry wins over a
-            // stray member row for the same wallet).
-            if (in_array($wallet->id, $people[$person->id]['wallet_ids'], true)) {
-                return;
-            }
-
-            $people[$person->id]['wallet_ids'][] = $wallet->id;
-            $people[$person->id]['types'][] = $wallet->type;
-            $people[$person->id]['memberships'][] = [
-                'wallet_id' => $wallet->id,
-                'wallet_name' => $wallet->name,
-                'wallet_type' => $wallet->type,
-                'role' => $role,
-                'can_approve' => $canApprove,
+        foreach ($circles->people($circle, $user, $wallets) as $id => $p) {
+            $people[$id] = $p + [
+                'wallet_ids' => array_column($p['memberships'], 'wallet_id'),
+                'types' => array_column($p['memberships'], 'wallet_type'),
             ];
-        };
-
-        foreach ($wallets as $wallet) {
-            // The wallet owner is a person even when they hold no member row.
-            $addPerson($wallet->owner, 'owner', true, $wallet);
-
-            foreach ($wallet->members as $member) {
-                $addPerson($member->user, $member->role, $this->memberCanApprove($member->role, (bool) $member->can_approve), $wallet);
-            }
         }
 
         $members = [];
@@ -88,6 +47,14 @@ class FamilyController extends ApiController
                     $topRank = $rank;
                     $topRole = $m['role'];
                 }
+            }
+
+            // A circle role (FAM-08) or ownership of the circle wins over wallet roles.
+            $circleRole = $circles->roleIn($circle, $u, $wallets);
+            if ($circleRole && ($circleRole === 'owner' || $circles->membership($circle, $u))) {
+                $topRole = $circleRole;
+            } elseif ($topRole === 'owner') {
+                $topRole = 'co_owner';
             }
 
             $members[] = [
@@ -109,6 +76,7 @@ class FamilyController extends ApiController
         $sent = WalletInvitation::with('wallet')
             ->where('inviter_id', $user->id)
             ->where('status', 'pending')
+            ->when(!$circle->is_home, fn ($q) => $q->whereIn('wallet_id', $walletIds))
             ->latest()
             ->get()
             ->map(fn ($i) => $this->serializeFamilyInvitation($i, 'sent'));
@@ -118,6 +86,8 @@ class FamilyController extends ApiController
 
         $received = WalletInvitation::with(['wallet', 'inviter'])
             ->where('status', 'pending')
+            // Invites to you show in your own family; another circle shows only its own.
+            ->when(!$circle->is_home || $circle->created_by !== $user->id, fn ($q) => $q->whereIn('wallet_id', $walletIds))
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
@@ -133,7 +103,8 @@ class FamilyController extends ApiController
             ->map(fn ($i) => $this->serializeFamilyInvitation($i, 'received'));
 
         // ---- Stats (only cleanly derivable values) ----
-        $sharedWallets = $wallets->whereIn('type', self::SHARED_TYPES)->count();
+        // "4 shared wallets": wallets with someone besides their owner in them.
+        $sharedWallets = $wallets->filter(fn ($w) => $w->members->contains(fn ($m) => $m->user_id !== $w->user_id))->count();
         $childWallets = $wallets->where('type', 'child')->count();
 
         $vendorMembers = 0;
@@ -162,6 +133,7 @@ class FamilyController extends ApiController
         ];
 
         return $this->ok('Family fetched', [
+            'circle' => $circles->describe($circle, $user) + ['circles_count' => count($circles->forUser($user))],
             'members' => array_values($members),
             'pending_invitations' => [
                 'sent' => $sent->values(),

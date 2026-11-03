@@ -84,8 +84,14 @@ Route::prefix('v1')->group(function () {
 
     // SYS-02/03 (before sign-in) and ME-19 Legal.
     Route::get('app/status', [AppStatusController::class, 'show'])->middleware('throttle:60,1,app-status');
+    // INV-02 / INV-04: the invite behind a link, signed in or not, and "Ask for a new invite".
+    Route::get('invites/{code}', [InvitationController::class, 'byCode'])->middleware('throttle:60,1,invite-code')->where('code', '[A-Za-z0-9]{4,12}');
+    Route::post('invites/{code}/ask-again', [InvitationController::class, 'askAgain'])->middleware('throttle:5,1,invite-ask')->where('code', '[A-Za-z0-9]{4,12}');
     // CHW-06 "Install Patriai on Kamsi's phone, tap I have a code": the child's own sign-in.
     Route::post('children/link', [ChildController::class, 'link'])->middleware('throttle:10,1,child-link');
+    // INV-CH2 → INV-CH3: the child's phone asks, a parent says yes on theirs.
+    Route::post('children/link/start', [ChildController::class, 'startLink'])->middleware('throttle:10,1,child-link-start');
+    Route::get('children/link/{id}', [ChildController::class, 'linkStatus'])->middleware('throttle:60,1,child-link-status')->whereNumber('id');
     Route::get('legal', [AppStatusController::class, 'legal']);
     Route::get('legal/{key}', [AppStatusController::class, 'document'])->where('key', '[a-z_]+');
 
@@ -154,6 +160,23 @@ Route::prefix('v1')->group(function () {
         // Family member detail ({member} implicitly binds App\Models\User by id)
         Route::get('family/{member}', [FamilyMemberController::class, 'show']);
 
+        // Family circles (HOM-06, FAM-02/07…12). {circle} 0 = your own family.
+        Route::get('circles', [\App\Http\Controllers\Api\CircleController::class, 'index']);
+        Route::post('circles', [\App\Http\Controllers\Api\CircleController::class, 'store'])->middleware('throttle:10,1');
+        Route::prefix('circles/{circle}')->whereNumber('circle')->controller(\App\Http\Controllers\Api\CircleController::class)->group(function () {
+            Route::get('view', 'view');
+            Route::get('activity', 'activity');
+            Route::get('members/{member}', 'member');
+            Route::put('members/{member}/role', 'role')->middleware('throttle:30,1');
+            Route::get('members/{member}/remove', 'removePreview');
+            Route::delete('members/{member}', 'remove')->middleware('throttle:30,1');
+            Route::get('transfer', 'transferInfo');
+            Route::post('transfer', 'transfer')->middleware('throttle:10,1');
+            Route::post('transfer/accept', 'acceptTransfer')->middleware('throttle:10,1');
+            Route::post('transfer/cancel', 'cancelTransfer')->middleware('throttle:10,1');
+        });
+        Route::patch('wallets/{wallet}/circle', [\App\Http\Controllers\Api\CircleController::class, 'moveWallet'])->middleware('throttle:30,1');
+
         // Spousal Sync (two-person financial-transparency link)
         Route::get('sync', [SpousalSyncController::class, 'show']);
         Route::post('sync', [SpousalSyncController::class, 'store'])->middleware('throttle:20,1');
@@ -164,7 +187,23 @@ Route::prefix('v1')->group(function () {
         Route::post('sync/{spousalSync}/end', [SpousalSyncController::class, 'end'])->middleware('throttle:30,1');
 
         // Automation / Smart Rules (V1: scheduled auto-transfer between own wallets)
+        // AIS-05/06, RUL-09: what Steward may do, its auto-actions, what it did.
+        Route::get('steward/settings', [\App\Http\Controllers\Api\StewardController::class, 'settings']);
+        Route::put('steward/settings', [\App\Http\Controllers\Api\StewardController::class, 'save'])->middleware('throttle:30,1');
+        Route::post('steward/auto-actions', [\App\Http\Controllers\Api\StewardController::class, 'autoAction'])->middleware('throttle:20,1');
+        Route::get('steward/actions', [\App\Http\Controllers\Api\StewardController::class, 'actions']);
         Route::get('automations', [AutomationController::class, 'index']);
+        // AUT-03…10: the rule builder, a rule's runs, a co-owner's yes, rules that need help.
+        Route::post('automations/preview', [AutomationController::class, 'preview'])->middleware('throttle:60,1');
+        Route::post('automations/builder', [AutomationController::class, 'build'])->middleware('throttle:20,1');
+        Route::post('automations/parse', [AutomationController::class, 'parse'])->middleware('throttle:30,1');
+        Route::get('automations/help', [AutomationController::class, 'help']);
+        Route::put('automations/order', [AutomationController::class, 'order'])->middleware('throttle:30,1');
+        Route::get('automations/{automationRule}/detail', [AutomationController::class, 'detail']);
+        Route::post('automations/{automationRule}/agree', [AutomationController::class, 'agree'])->middleware('throttle:20,1');
+        Route::put('automations/{automationRule}/builder', [AutomationController::class, 'rebuild'])->middleware('throttle:20,1');
+        Route::get('wallets/{wallet}/contribution-rules', [AutomationController::class, 'contributionRules']);
+        Route::put('wallets/{wallet}/contribution-rules', [AutomationController::class, 'saveContributionRules'])->middleware('throttle:30,1');
         Route::post('automations', [AutomationController::class, 'store'])->middleware('throttle:20,1');
         Route::get('automations/{automationRule}', [AutomationController::class, 'show']);
         Route::patch('automations/{automationRule}', [AutomationController::class, 'update'])->middleware('throttle:30,1');
@@ -223,6 +262,8 @@ Route::prefix('v1')->group(function () {
 
         // Child wallets — a code to link the child's own phone.
         Route::post('children/link-code', [ChildController::class, 'reserve'])->middleware('throttle:20,1');
+        Route::get('child-link-requests/{id}', [ChildController::class, 'linkRequest'])->whereNumber('id');
+        Route::post('child-link-requests/{id}/{decision}', [ChildController::class, 'decideLink'])->middleware('throttle:20,1')->whereNumber('id')->whereIn('decision', ['approve', 'deny']);
         Route::post('wallets/{wallet}/child/link-code', [ChildController::class, 'renew'])->middleware('throttle:20,1');
         // CHD-09 / WPV-04 / WPV-05 what parents, co-parents and relatives see; limits; notes; tasks (CHD-12).
         Route::get('wallets/{wallet}/child', [ChildController::class, 'view']);
@@ -302,6 +343,10 @@ Route::prefix('v1')->group(function () {
         Route::get('scheduled-payments/{id}', [ScheduledPaymentController::class, 'show'])->whereNumber('id');
         Route::patch('scheduled-payments/{id}', [ScheduledPaymentController::class, 'update'])->middleware('throttle:30,1')->whereNumber('id');
         Route::delete('scheduled-payments/{id}', [ScheduledPaymentController::class, 'destroy'])->middleware('throttle:30,1')->whereNumber('id');
+        Route::post('scheduled-payments/{id}/confirm', [ScheduledPaymentController::class, 'confirm'])->middleware('throttle:30,1')->whereNumber('id');
+        Route::get('scheduled-payments/{id}/shortfall', [ScheduledPaymentController::class, 'shortfall'])->whereNumber('id');
+        Route::post('scheduled-payments/{id}/send-now', [ScheduledPaymentController::class, 'sendNow'])->middleware('throttle:10,1')->whereNumber('id');
+        Route::post('scheduled-payments/{id}/cancel-next', [ScheduledPaymentController::class, 'cancelNext'])->middleware('throttle:10,1')->whereNumber('id');
         Route::get('bill-splits/{key}', [MoneyRequestController::class, 'showSplit'])->whereUuid('key');
         Route::post('bill-splits/{key}/remind', [MoneyRequestController::class, 'remindSplit'])->middleware('throttle:10,1')->whereUuid('key');
         Route::post('saved-accounts', [SavedAccountController::class, 'store'])->middleware('throttle:20,1');
@@ -340,6 +385,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('wallets/{wallet}/invitations/{invitation}', [InvitationController::class, 'cancel'])->middleware('throttle:30,1');
         Route::post('wallets/{wallet}/invitations/{invitation}/resend', [InvitationController::class, 'resend'])->middleware('throttle:10,1');
         Route::get('invitations', [InvitationController::class, 'myIndex']);
+        // FAM-05 Invites: what you sent, Resend all; INV-A1 accountant access.
+        Route::get('invitations/sent', [InvitationController::class, 'sent']);
+        Route::post('invitations/resend-all', [InvitationController::class, 'resendAll'])->middleware('throttle:5,1');
+        Route::post('accountant-invites', [InvitationController::class, 'accountant'])->middleware('throttle:10,1');
         Route::post('invitations/{invitation}/accept', [InvitationController::class, 'accept'])->middleware('throttle:30,1');
         Route::post('invitations/{invitation}/decline', [InvitationController::class, 'decline'])->middleware('throttle:30,1');
 

@@ -103,7 +103,18 @@ class EmergencyTrustedContactsTest extends TestCase
         $token = $this->linkToken();
         $this->assertNotNull(EmergencyTrustedContact::sole()->link_sent_at);
 
-        // No app: the link opens a page. The balance stays hidden — the owner said so.
+        // INV-T1: no app. The link asks them to accept, with a code texted to their phone.
+        $this->get("/e/{$token}")->assertOk()->assertSee('added you as a trusted contact')->assertSee('You: Trusted contact')
+            ->assertSee("You can&#039;t see the balance or release money", false);
+        $this->post("/e/{$token}", ['note' => 'too soon'])->assertSessionHasErrors();
+        $this->post("/e/{$token}/accept", ['code' => '000000'])->assertSessionHasErrors('code');
+        preg_match('/\b(\d{6})\b/', (string) collect($this->sms)->last(fn ($m) => $m['to'] === '2348031112214')['sms'], $otp);
+        // INV-T2 "Thank you, Dr Chika".
+        $this->followingRedirects()->post("/e/{$token}/accept", ['code' => $otp[1]])->assertOk()->assertSee('Thank you, Dr Chika Nwosu');
+        $this->assertNotNull(EmergencyTrustedContact::sole()->accepted_at);
+        $this->assertSame(1, AppNotification::where('user_id', $ngozi->id)->where('type', 'trusted_contact_accepted')->count());
+
+        // The balance stays hidden — the owner said so.
         $this->get("/e/{$token}")->assertOk()->assertSee('Health fund')->assertSee('Dr Chika Nwosu')->assertDontSee('₦3,000.00');
 
         $this->post("/e/{$token}", ['note' => 'Papa admitted at Mercy Hospital'])->assertRedirect("/e/{$token}");

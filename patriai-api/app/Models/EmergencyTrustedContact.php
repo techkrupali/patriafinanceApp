@@ -13,13 +13,13 @@ use Illuminate\Support\Str;
  */
 class EmergencyTrustedContact extends Model
 {
-    protected $fillable = ['wallet_id', 'name', 'phone', 'relation', 'token_hash', 'link_sent_at'];
+    protected $fillable = ['wallet_id', 'name', 'phone', 'relation', 'token_hash', 'link_sent_at', 'accepted_at', 'declined_at'];
 
     protected $hidden = ['token_hash'];
 
     protected function casts(): array
     {
-        return ['link_sent_at' => 'datetime'];
+        return ['link_sent_at' => 'datetime', 'accepted_at' => 'datetime', 'declined_at' => 'datetime'];
     }
 
     public function wallet(): BelongsTo

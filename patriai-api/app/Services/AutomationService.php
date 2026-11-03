@@ -47,6 +47,12 @@ class AutomationService
         return number_format($kobo / 100, 2, '.', '');
     }
 
+    /** "₦28,400" for people to read. */
+    private function nice(int $kobo): string
+    {
+        return '₦' . number_format($kobo / 100);
+    }
+
     /** Both wallets must belong to $user; amount must be positive kobo. */
     public function createRule(User $user, array $data): AutomationRule
     {
@@ -347,7 +353,9 @@ class AutomationService
             $retrying = $locked->isRetryDue($now);
 
             // Primary idempotency guard: already ran for this period.
-            if ($locked->last_run_period === $period && !$retrying) {
+            // AUT-09 "Run it now — ignores the once-a-week limit".
+            $ignoreLimit = $force && in_array($locked->trigger, ['balance', 'event'], true);
+            if ($locked->last_run_period === $period && !$retrying && !$ignoreLimit) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Already ran this period', 'period' => $period];
             }
 
@@ -361,9 +369,34 @@ class AutomationService
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Runs when money lands', 'period' => $period];
             }
 
+            // AUT-06 "Emeka must agree because it moves money into a shared wallet".
+            if (!$locked->agreed()) {
+                $waiting = User::whereIn('id', array_diff($locked->agreement['needed'] ?? [], $locked->agreement['given'] ?? []))->pluck('first_name')->join(' and ');
+
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => "Waiting for {$waiting} to agree", 'period' => $period];
+            }
+
             // Scheduled runs must match the calendar; a manual force skips only this.
             if (!$force && !$locked->isDue($now)) {
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Not due', 'period' => $period];
+            }
+
+            // A goal reached fires once per target; a request made, once per new request.
+            if ($locked->trigger === 'event' && $locked->event === 'goal_reached') {
+                $period = 'goal:' . (int) ($locked->watched()?->target_amount ?? 0);
+            }
+
+            // AUT-04 "It's before the 20th of the month — late-month top-ups wait for salary".
+            if (!$force && $locked->before_day && $now->copy()->setTimezone('Africa/Lagos')->day >= $locked->before_day) {
+                $locked->update(['last_run_period' => $period]);
+                $this->logRun($locked, 'skipped', null, "After the {$this->ordinal($locked->before_day)}, waited for salary");
+
+                return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => "After the {$this->ordinal($locked->before_day)} of the month", 'period' => $period];
+            }
+
+            // AUT-05 "Only notify — no money moves".
+            if ($locked->action === 'notify') {
+                return $this->notifyOnly($locked, $period, $now);
             }
 
             $from = Wallet::find($locked->from_wallet_id);
@@ -379,8 +412,11 @@ class AutomationService
             $amount = match (true) {
                 $locked->trigger === 'roundup' => (int) $locked->pending_amount,
                 $locked->fill_to => max(0, (int) $locked->amount - (int) $to->fresh()->balance),
+                // RUL-01 "Sweep what's left": everything above what stays behind.
+                $locked->action === 'sweep' => max(0, $from->availableToSpend() - (int) $locked->amount),
                 default => (int) $locked->amount,
             };
+            $watchedBefore = in_array($locked->trigger, ['balance', 'event'], true) ? (int) ($locked->watched()?->balance ?? 0) : null;
 
             // Defense-in-depth money guards (in addition to the create-time validation):
             // never move a non-positive amount, and re-confirm BOTH wallets still belong
@@ -416,6 +452,16 @@ class AutomationService
             $available = $from->availableToSpend();
             $plan = $locked->savings_contribution ? $to->savingsPlan : null;
 
+            // AUT-04 "Main has more than ₦100,000 — so Main never runs dry".
+            if (in_array($locked->trigger, ['balance', 'event'], true) && $locked->min_balance !== null && $available <= (int) $locked->min_balance) {
+                $locked->update(['last_run_period' => $period]);
+                $note = "{$from->name} had {$this->nice($available)}, under {$this->nice((int) $locked->min_balance)}";
+                $this->logRun($locked, 'failed', null, $note);
+                $this->notifications->push($owner, 'automation_failed', "{$locked->name} didn't run", "{$note}. {$to->name} is at {$this->nice((int) $to->fresh()->balance)}.", ['automation_rule_id' => $locked->id]);
+
+                return ['rule_id' => $locked->id, 'status' => 'failed', 'reason' => $note, 'period' => $period];
+            }
+
             // Must not overdraw funds already committed to approvals/milestones.
             if ($available < $amount) {
                 // Round-ups wait for tomorrow's sweep; a savings plan says what a miss does.
@@ -425,6 +471,13 @@ class AutomationService
                 // Someone's share into a shared wallet (SPD-04 "Split between us").
                 if ($locked->savings_contribution && $locked->trigger === 'schedule') {
                     return $this->shareMissed($locked, $from, $to, $owner, $amount, $period, $now);
+                }
+
+                $note = "{$from->name} had {$this->nice($available)}, needed {$this->nice($amount)}";
+                $this->logRun($locked, 'failed', null, $note);
+                if (in_array($locked->trigger, ['balance', 'event'], true)) {
+                    $locked->update(['last_run_period' => $period]);
+                    $this->notifications->push($owner, 'automation_failed', "{$locked->name} didn't run", "{$note}.", ['automation_rule_id' => $locked->id]);
                 }
 
                 return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Insufficient available balance', 'period' => $period];
@@ -456,11 +509,17 @@ class AutomationService
                 'pending_amount' => $locked->trigger === 'roundup' ? max(0, $locked->pending_amount - $amount) : $locked->pending_amount,
             ]);
 
+            $this->logRun($locked, 'ran', $amount, ($watchedBefore !== null ? "{$locked->watched()?->name} was {$this->nice($watchedBefore)} · moved {$this->nice($amount)}" : "Moved {$this->nice($amount)} to {$to->name}"), $result['reference']);
+            // AUT-05 "Also tell Emeka".
+            foreach (User::whereIn('id', $locked->notify_user_ids ?? [])->where('id', '!=', $owner->id)->get() as $other) {
+                $this->notifications->push($other, 'automation_run', "{$owner->first_name}'s rule moved {$this->nice($amount)}", "{$locked->name}: {$this->nice($amount)} from {$from->name} to {$to->name}.", ['automation_rule_id' => $locked->id]);
+            }
+
             $this->notifications->push(
                 $owner,
                 'automation_run',
                 'Automation ran: ' . $locked->name,
-                '₦' . $this->naira($amount) . ' moved from ' . $from->name . ' to ' . $to->name . '.',
+                $this->nice($amount) . ' moved from ' . $from->name . ' to ' . $to->name . '.',
                 [
                     'automation_rule_id' => $locked->id,
                     'reference' => $result['reference'],
@@ -479,6 +538,71 @@ class AutomationService
         });
     }
 
+    /** AUT-05 "Only notify": tell the owner (and whoever else) what happened; no money moves. */
+    private function notifyOnly(AutomationRule $rule, string $period, Carbon $now): array
+    {
+        $w = $rule->watched();
+        $text = match (true) {
+            $rule->trigger === 'balance' => "{$w?->name} is at {$this->nice((int) ($w?->balance ?? 0))}, below {$this->nice((int) $rule->threshold)}",
+            $rule->event === 'goal_reached' => "{$w?->name} reached its goal of {$this->nice((int) ($w?->target_amount ?? 0))}",
+            $rule->event === 'request_made' => $this->latestRequestLine($rule, $w),
+            $rule->event === 'goal_behind' => $this->catchUpLine($rule),
+            default => $rule->name,
+        };
+        $ids = collect($rule->notify_user_ids ?? [])->push($rule->user_id)->unique();
+        foreach (User::whereIn('id', $ids)->get() as $u) {
+            $this->notifications->push($u, 'automation_notice', $rule->name, "{$text}.", ['automation_rule_id' => $rule->id, 'wallet_id' => $w?->id]);
+        }
+        $rule->update(['last_run_period' => $period, 'last_run_at' => $now]);
+        $told = User::whereIn('id', $ids)->get()->map(fn (User $u) => $u->id === $rule->user_id ? 'you' : $u->first_name)->join(', ', ' and ');
+        $this->logRun($rule, 'ran', null, "{$text} · told {$told}");
+
+        return ['rule_id' => $rule->id, 'status' => 'ran', 'reason' => $text, 'period' => $period];
+    }
+
+    /** RUL-09 "Suggest a catch-up plan": the goals behind schedule and what a week would fix it. */
+    private function catchUpLine(AutomationRule $rule): string
+    {
+        $lines = collect(AutomationRule::behindGoals($rule->user_id))->map(fn ($g) => "{$g['name']} is {$this->nice($g['behind'])} behind. Add {$this->nice($g['weekly'])} a week to catch up")->all();
+        if ($lines) {
+            StewardSettingsService::make()->log($rule->user, 'suggest', implode('. ', $lines));
+        }
+
+        return $lines ? implode('. ', $lines) : 'Your goals are on track';
+    }
+
+    private function latestRequestLine(AutomationRule $rule, ?Wallet $w): string
+    {
+        $r = \App\Models\ApprovalRequest::with('initiator')->where('wallet_id', $w?->id)->latest('id')->first();
+
+        return $r ? "{$r->initiator?->first_name} asked for {$this->nice((int) $r->amount)} from {$w?->name}" : "A request was made on {$w?->name}";
+    }
+
+    /** AUT-08 run log; the same line isn't written twice within a day. */
+    private function logRun(AutomationRule $rule, string $status, ?int $amount, string $note, ?string $reference = null): void
+    {
+        $last = \App\Models\AutomationRun::where('automation_rule_id', $rule->id)->latest('id')->first();
+        if ($last && $last->status === $status && $last->note === $note && $last->created_at?->gt(now()->subDay())) {
+            return;
+        }
+        \App\Models\AutomationRun::create([
+            'automation_rule_id' => $rule->id,
+            'user_id' => $rule->user_id,
+            'rule_name' => $rule->name,
+            'status' => $status,
+            'amount' => $amount,
+            'note' => mb_substr($note, 0, 250),
+            'reference' => $reference,
+        ]);
+    }
+
+    private function ordinal(int $n): string
+    {
+        $s = ($n % 100 >= 11 && $n % 100 <= 13) ? 'th' : (['', 'st', 'nd', 'rd'][$n % 10] ?? 'th');
+
+        return $n . ($s ?: 'th');
+    }
+
     /**
      * SAV-06 "If a save can't happen". retry: try again in 3 days, up to 3 times;
      * partial: move what's there, keeping ₦5,000 in the source; skip: wait for the
@@ -495,9 +619,9 @@ class AutomationService
             if ($move >= 10_000) {
                 $moved = $this->wallets->transferBetweenWallets($from, $to, $move, $owner, 'Automation: ' . $rule->name . ' (part)');
                 $rule->update($stamp + ['last_run_at' => $now, 'retry_count' => 0, 'retry_at' => null]);
-                $this->notifications->push($owner, 'savings_missed', "Saved ₦{$this->naira($move)} into {$to->name}", "{$from->name} didn't have the full ₦{$this->naira($amount)}, so we saved what was there and kept ₦" . number_format(self::KEEP_IN_SOURCE / 100) . " in {$from->name}.", ['wallet_id' => $to->id, 'reference' => $moved['reference']]);
-                $this->sms($plan, $owner, "Patriai: {$from->name} was short, so we saved ₦{$this->naira($move)} of ₦{$this->naira($amount)} into {$to->name}.");
-                $this->tellOthers($plan, $to, $owner, "{$owner->first_name} saved part of their ₦{$this->naira($amount)}");
+                $this->notifications->push($owner, 'savings_missed', "Saved {$this->nice($move)} into {$to->name}", "{$from->name} didn't have the full {$this->nice($amount)}, so we saved what was there and kept ₦" . number_format(self::KEEP_IN_SOURCE / 100) . " in {$from->name}.", ['wallet_id' => $to->id, 'reference' => $moved['reference']]);
+                $this->sms($plan, $owner, "Patriai: {$from->name} was short, so we saved {$this->nice($move)} of {$this->nice($amount)} into {$to->name}.");
+                $this->tellOthers($plan, $to, $owner, "{$owner->first_name} saved part of their {$this->nice($amount)}");
 
                 return ['status' => 'partial', 'amount' => $this->naira($move), 'reference' => $moved['reference']] + $result;
             }
@@ -506,17 +630,17 @@ class AutomationService
         if ($plan->missed_policy === 'retry' && $rule->retry_count < self::MAX_RETRIES) {
             $retryAt = $now->copy()->addDays(self::RETRY_DAYS);
             $rule->update($stamp + ['retry_count' => $rule->retry_count + 1, 'retry_at' => $retryAt]);
-            $this->notifications->push($owner, 'savings_missed', "Couldn't save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. We'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
-            $this->sms($plan, $owner, "Patriai: your ₦{$this->naira($amount)} save into {$to->name} didn't go — {$from->name} was short. We'll try again on {$retryAt->format('j M')}.");
-            $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save — trying again on {$retryAt->format('j M')}");
+            $this->notifications->push($owner, 'savings_missed', "Couldn't save into {$to->name}", "{$from->name} was short of {$this->nice($amount)}. We'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
+            $this->sms($plan, $owner, "Patriai: your {$this->nice($amount)} save into {$to->name} didn't go — {$from->name} was short. We'll try again on {$retryAt->format('j M')}.");
+            $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a {$this->nice($amount)} save — trying again on {$retryAt->format('j M')}");
 
             return ['retry_at' => $retryAt->toIso8601String()] + $result;
         }
 
         $rule->update($stamp + ['retry_count' => 0, 'retry_at' => null]);
-        $this->notifications->push($owner, 'savings_missed', "Skipped a save into {$to->name}", "{$from->name} was short of ₦{$this->naira($amount)}. Your next save happens as planned.", ['wallet_id' => $to->id]);
-        $this->sms($plan, $owner, "Patriai: we skipped your ₦{$this->naira($amount)} save into {$to->name} — {$from->name} was short. Your next save happens as planned.");
-        $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a ₦{$this->naira($amount)} save");
+        $this->notifications->push($owner, 'savings_missed', "Skipped a save into {$to->name}", "{$from->name} was short of {$this->nice($amount)}. Your next save happens as planned.", ['wallet_id' => $to->id]);
+        $this->sms($plan, $owner, "Patriai: we skipped your {$this->nice($amount)} save into {$to->name} — {$from->name} was short. Your next save happens as planned.");
+        $this->tellOthers($plan, $to, $owner, "{$owner->first_name} missed a {$this->nice($amount)} save");
 
         return $result;
     }
@@ -539,7 +663,7 @@ class AutomationService
             $ids = $to->members()->where('status', 'active')->whereIn('role', ['owner', 'co_owner'])->pluck('user_id')->push($to->user_id)->unique();
             foreach (User::whereIn('id', $ids)->get() as $partner) {
                 $title = $partner->id === $payer->id ? "Your share into {$to->name} didn't go" : "{$payer->first_name}'s share into {$to->name} didn't go";
-                $this->notifications->push($partner, 'share_missed', $title, "{$from->name} is short of ₦{$this->naira($amount)}. {$then}", ['wallet_id' => $to->id]);
+                $this->notifications->push($partner, 'share_missed', $title, "{$from->name} is short of {$this->nice($amount)}. {$then}", ['wallet_id' => $to->id]);
             }
 
             return ($retry ? ['retry_at' => $retryAt->toIso8601String()] : []) + $result;
@@ -548,15 +672,15 @@ class AutomationService
         if ($rule->retry_at === null) {
             $retryAt = $now->copy()->addDays(2);
             $rule->update(['last_run_period' => $period, 'retry_count' => 1, 'retry_at' => $retryAt]);
-            $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} didn't go", "{$from->name} is short of ₦{$this->naira($amount)}. Add money and we'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
+            $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} didn't go", "{$from->name} is short of {$this->nice($amount)}. Add money and we'll try again on {$retryAt->format('j M')}.", ['wallet_id' => $to->id]);
 
             return ['retry_at' => $retryAt->toIso8601String()] + $result;
         }
 
         $rule->update(['retry_count' => 0, 'retry_at' => null]);
-        $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} still didn't go", "{$from->name} was short of ₦{$this->naira($amount)} again. {$to->owner->first_name} has been told.", ['wallet_id' => $to->id]);
+        $this->notifications->push($payer, 'share_missed', "Your share into {$to->name} still didn't go", "{$from->name} was short of {$this->nice($amount)} again. {$to->owner->first_name} has been told.", ['wallet_id' => $to->id]);
         if ($to->owner && $to->owner->id !== $payer->id) {
-            $this->notifications->push($to->owner, 'share_missed', "{$payer->first_name}'s share hasn't arrived", "{$payer->fullName()}'s ₦{$this->naira($amount)} into {$to->name} didn't go through after 2 days.", ['wallet_id' => $to->id]);
+            $this->notifications->push($to->owner, 'share_missed', "{$payer->first_name}'s share hasn't arrived", "{$payer->fullName()}'s {$this->nice($amount)} into {$to->name} didn't go through after 2 days.", ['wallet_id' => $to->id]);
         }
 
         return $result;
@@ -614,6 +738,10 @@ class AutomationService
                     }
 
                     $amount = min(intdiv($credit->amount * (int) $locked->percent, 100), $main->fresh()->availableToSpend());
+                    // RUL-09 "Limit: up to ₦60,000 each time".
+                    if ((int) $locked->amount > 0) {
+                        $amount = min($amount, (int) $locked->amount);
+                    }
                     if ($amount <= 0) {
                         return ['rule_id' => $locked->id, 'status' => 'skipped', 'reason' => 'Nothing available'];
                     }
@@ -623,8 +751,8 @@ class AutomationService
                     $this->notifications->push(
                         $owner,
                         'automation_run',
-                        "Saved ₦{$this->naira($amount)} into {$to->name}",
-                        "{$locked->percent}% of the ₦{$this->naira($credit->amount)} that just landed in {$main->name}.",
+                        "Saved {$this->nice($amount)} into {$to->name}",
+                        "{$locked->percent}% of the {$this->nice($credit->amount)} that just landed in {$main->name}.",
                         ['automation_rule_id' => $locked->id, 'reference' => $result['reference'], 'amount' => $this->naira($amount)],
                     );
 
@@ -679,8 +807,8 @@ class AutomationService
                     $this->notifications->push(
                         $owner,
                         'automation_run',
-                        "Set aside ₦{$this->naira($amount)} into {$to->name}",
-                        "{$locked->percent}% of the ₦{$this->naira($credit->amount)} that just landed in {$wallet->name}.",
+                        "Set aside {$this->nice($amount)} into {$to->name}",
+                        "{$locked->percent}% of the {$this->nice($credit->amount)} that just landed in {$wallet->name}.",
                         ['automation_rule_id' => $locked->id, 'reference' => $result['reference'], 'amount' => $this->naira($amount)],
                     );
 

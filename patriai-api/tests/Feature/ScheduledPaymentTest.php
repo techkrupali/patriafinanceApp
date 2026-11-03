@@ -210,4 +210,53 @@ class ScheduledPaymentTest extends TestCase
         $this->assertSame('sent', ScheduledPayment::find($big)->last_result);
         $this->artisan('payments:run-scheduled')->assertSuccessful();
     }
+
+    public function test_rule_first_sunday_ask_first_and_if_short(): void
+    {
+        Carbon::setTestNow('2026-10-25 09:00:00');
+        [$ngozi, $main] = $this->person('Ngozi', 'ngozi', 10_000_000);
+        [$emeka] = $this->person('Emeka', 'emeka');
+        [$bisi, $bisiMain] = $this->person('Bisi', 'bisi');
+        $tithe = Wallet::create(['user_id' => $ngozi->id, 'type' => 'giving', 'name' => 'Tithes and offerings', 'balance' => 2_840_000, 'status' => 'active']);
+        WalletMember::create(['wallet_id' => $tithe->id, 'user_id' => $emeka->id, 'role' => 'co_owner', 'status' => 'active']);
+        Sanctum::actingAs($ngozi);
+
+        // RUL-03 "First Sunday of the month, 7:00 am"; RUL-04 ask Ngozi or Emeka; RUL-05 warn 3 days before, cancel on the day.
+        $p = $this->schedule($tithe, [
+            'name' => 'Tithe', 'amount' => '45000', 'frequency' => 'monthly', 'week_of_month' => 1, 'weekday' => 7,
+            'starts_at' => '2026-10-26T07:00:00+01:00',
+            'confirm' => ['user_ids' => [$ngozi->id, $emeka->id], 'mode' => 'any'],
+            'short_policy' => ['check_days' => 3, 'remind_day_before' => true, 'on_day' => 'cancel'],
+        ])->assertCreated()->assertJsonPath('data.when', 'First Sunday of the month, 7:00 am')->json('data');
+        $this->assertSame('2026-11-01T06:00:00+00:00', $p['next_run_at']);
+        $svc = ScheduledPaymentService::make();
+
+        // Thu 29 Oct: ₦28,400 there, ₦45,000 going out → RUL-07 warning; again on Sat.
+        $svc->runDue(Carbon::parse('2026-10-29 08:00:00'));
+        $this->assertSame("Not enough for Sunday's payment", AppNotification::where('user_id', $ngozi->id)->where('type', 'scheduled_payment_short')->value('title'));
+        $short = $this->getJson("/api/v1/scheduled-payments/{$p['id']}/shortfall")->assertOk()->json('data');
+        $this->assertSame('₦16,600 short', $short['short_label']);
+        // Saturday 7 pm: the confirmers are asked.
+        $svc->runDue(Carbon::parse('2026-10-31 18:30:00'));
+        $this->assertSame(2, AppNotification::where('user_id', $ngozi->id)->where('type', 'scheduled_payment_short')->count());
+        $this->assertSame(1, AppNotification::where('user_id', $emeka->id)->where('type', 'scheduled_payment_confirm')->count());
+
+        // Sunday 7 am, nobody confirmed: it waits until noon, then it's skipped.
+        $this->assertSame([], $svc->runDue(Carbon::parse('2026-11-01 06:05:00')));
+        $r = $svc->runDue(Carbon::parse('2026-11-01 11:05:00'));
+        $this->assertSame('skipped', $r[0]['result']);
+        $this->assertSame('2026-12-06 06:00:00', ScheduledPayment::find($p['id'])->next_run_at->format('Y-m-d H:i:s'));
+
+        // December: Emeka says yes, but the wallet is still short → cancelled, the rule stays on.
+        Sanctum::actingAs($emeka);
+        $this->postJson("/api/v1/scheduled-payments/{$p['id']}/confirm")->assertOk()->assertJsonPath('data.confirmed', true);
+        $r = $svc->runDue(Carbon::parse('2026-12-06 06:05:00'));
+        $this->assertSame('cancelled', $r[0]['result']);
+        $this->assertStringStartsWith('Tithe was cancelled', AppNotification::where('user_id', $ngozi->id)->where('type', 'scheduled_payment_cancelled')->value('title'));
+
+        // RUL-08 "Send it now instead", with what's there.
+        Sanctum::actingAs($ngozi);
+        $this->postJson("/api/v1/scheduled-payments/{$p['id']}/send-now", ['pin' => '1234', 'amount' => '28400'])->assertOk();
+        $this->assertSame(0, (int) $tithe->fresh()->balance);
+    }
 }

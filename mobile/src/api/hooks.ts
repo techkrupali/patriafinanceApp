@@ -1006,10 +1006,11 @@ export function useSubmitKyc() {
 
 /** Aggregated people, pending invitations and stats across the user's wallets. */
 /** `adults`: for pickers (keyholders, co-owners, invitees) — a child's own sign-in is never one. */
-export function useFamily(opts: { adults?: boolean } = {}) {
+/** FAM-01: your own family, or another circle (HOM-06). */
+export function useFamily(opts: { adults?: boolean; circle?: number | null } = {}) {
   return useQuery({
-    queryKey: keys.family,
-    queryFn: () => api<FamilyData>('/family'),
+    queryKey: [...keys.family, opts.circle ?? 0],
+    queryFn: () => api<FamilyData>(opts.circle ? `/family?circle=${opts.circle}` : '/family'),
     select: opts.adults ? (d: FamilyData) => ({ ...d, members: d.members.filter((m) => !m.is_child) }) : undefined,
   });
 }

@@ -65,6 +65,19 @@ class ScheduledPaymentController extends ApiController
             'frequency' => ['required', 'in:' . implode(',', ScheduledPayment::FREQUENCIES)],
             'starts_at' => ['required', 'date'],
             'ends_after' => ['nullable', 'integer', 'min:1', 'max:520'],
+            // RUL-02…05: a name, "first Sunday of the month", an end date, ask first, if short.
+            'name' => ['nullable', 'string', 'max:80'],
+            'week_of_month' => ['nullable', 'integer', 'between:1,5'],
+            'weekday' => ['nullable', 'integer', 'between:1,7', 'required_with:week_of_month'],
+            'ends_on' => ['nullable', 'date'],
+            'confirm' => ['nullable', 'array'],
+            'confirm.user_ids' => ['required_with:confirm', 'array', 'min:1', 'max:6'],
+            'confirm.user_ids.*' => ['integer'],
+            'confirm.mode' => ['nullable', 'in:any,all'],
+            'short_policy' => ['nullable', 'array'],
+            'short_policy.check_days' => ['nullable', 'integer', 'between:1,7'],
+            'short_policy.remind_day_before' => ['nullable', 'boolean'],
+            'short_policy.on_day' => ['required_with:short_policy', 'in:topup_main,pay_what_there,skip,cancel'],
             'pin' => ['required', self::TXN_PIN],
             'two_factor_code' => ['nullable', 'string'],
         ]);
@@ -110,8 +123,34 @@ class ScheduledPaymentController extends ApiController
             'starts_at' => Carbon::parse($data['starts_at'])->utc(),
             'ends_after' => $data['ends_after'] ?? null,
         ]);
+        // Confirmers must share the wallet it pays from (or be you).
+        $confirm = null;
+        if (!empty($data['confirm']['user_ids'])) {
+            $allowed = $from->members()->where('status', 'active')->pluck('user_id')->push($from->user_id)->push($user->id)->unique();
+            $ids = array_values(array_filter(array_map('intval', $data['confirm']['user_ids']), fn ($id) => $allowed->contains($id)));
+            $confirm = $ids ? ['user_ids' => $ids, 'mode' => $data['confirm']['mode'] ?? 'any'] : null;
+        }
+        $extra = array_filter([
+            'name' => isset($data['name']) ? trim($data['name']) : null,
+            'week_of_month' => $data['week_of_month'] ?? null,
+            'weekday' => $data['weekday'] ?? null,
+            'ends_on' => $data['ends_on'] ?? null,
+            'confirm' => $confirm,
+            'short_policy' => isset($data['short_policy']) ? [
+                'check_days' => (int) ($data['short_policy']['check_days'] ?? 3),
+                'remind_day_before' => (bool) ($data['short_policy']['remind_day_before'] ?? true),
+                'on_day' => $data['short_policy']['on_day'],
+            ] : null,
+        ], fn ($v) => $v !== null && $v !== '');
+        if ($extra) {
+            $payment->update($extra);
+            // "First Sunday of the month": the first date follows the weekday rule.
+            if (isset($extra['week_of_month'])) {
+                $payment->update(['next_run_at' => $payment->fresh()->occurrence(0)]);
+            }
+        }
 
-        return $this->ok('Scheduled', $this->serialize($payment->load('fromWallet')), 201);
+        return $this->ok('Scheduled', $this->serialize($payment->fresh()->load('fromWallet')), 201);
     }
 
     // GET /scheduled-payments/{id}
@@ -182,7 +221,65 @@ class ScheduledPaymentController extends ApiController
             'last_run_at' => $p->last_run_at?->toIso8601String(),
             'last_result' => $p->last_result,
             'last_reason' => $p->last_reason,
+            'name' => $p->name,
+            'week_of_month' => $p->week_of_month,
+            'weekday' => $p->weekday,
+            'ends_on' => $p->ends_on?->toDateString(),
+            'confirm' => $p->confirm,
+            'confirmed' => ScheduledPaymentService::make()->confirmed($p),
+            'short_policy' => $p->short_policy,
+            // RUL-08 "Warned you Thu 29 Oct and Sat 31 Oct".
+            'warned_on' => collect($p->warned ?? [])->filter(fn ($w) => str_contains($w, ':on:'))->map(fn ($w) => substr($w, strrpos($w, ':') + 1))->values()->all(),
         ];
+    }
+
+    // POST /scheduled-payments/{id}/confirm — RUL-04 "Ask before each payment".
+    public function confirm(Request $request, int $id): JsonResponse
+    {
+        $p = ScheduledPayment::with('fromWallet')->where('status', 'active')->find($id);
+        if (!$p) {
+            return $this->fail('Not found', 404);
+        }
+
+        return $this->ok('Confirmed', $this->serialize(ScheduledPaymentService::make()->confirm($p, $request->user())->load('fromWallet')));
+    }
+
+    // GET /scheduled-payments/{id}/shortfall — RUL-07.
+    public function shortfall(Request $request, int $id): JsonResponse
+    {
+        $p = ScheduledPayment::with('fromWallet')->where('user_id', $request->user()->id)->where('status', 'active')->find($id);
+
+        return $p ? $this->ok('Shortfall', ScheduledPaymentService::make()->shortfall($p) + ['payment' => $this->serialize($p)]) : $this->fail('Not found', 404);
+    }
+
+    // POST /scheduled-payments/{id}/send-now { pin, amount? } — RUL-07 "Pay ₦28,400 now" / RUL-08 "Send it now instead".
+    public function sendNow(Request $request, int $id): JsonResponse
+    {
+        $d = $request->validate(['pin' => ['required', self::TXN_PIN], 'amount' => ['nullable', 'numeric', 'min:1']]);
+        $p = ScheduledPayment::with('fromWallet')->where('user_id', $request->user()->id)->whereIn('status', ['active', 'paused', 'done'])->find($id);
+        if (!$p) {
+            return $this->fail('Not found', 404);
+        }
+        app(PinService::class)->verify($request->user(), $d['pin']);
+        $amount = isset($d['amount']) ? min($this->toKobo($d['amount']), $p->amount) : null;
+        $r = ScheduledPaymentService::make()->sendNow($p, $amount);
+        if (in_array($r['result'], ['failed', 'skipped'], true)) {
+            return $this->fail($r['reason'] ?? 'It did not go through.', 422);
+        }
+
+        return $this->ok($r['result'] === 'sent' ? 'Sent' : 'On its way', $r + ['payment' => $this->serialize($p->fresh()->load('fromWallet'))]);
+    }
+
+    // POST /scheduled-payments/{id}/cancel-next — RUL-07 "Cancel this payment — the rule stays on for next month".
+    public function cancelNext(Request $request, int $id): JsonResponse
+    {
+        $p = ScheduledPayment::with('fromWallet')->where('user_id', $request->user()->id)->where('status', 'active')->find($id);
+        if (!$p) {
+            return $this->fail('Not found', 404);
+        }
+        ScheduledPaymentService::make()->passOver($p, $p->next_run_at ?? now(), 'cancelled', 'You cancelled this one. Nothing was sent.');
+
+        return $this->ok('Cancelled', $this->serialize($p->fresh()->load('fromWallet')));
     }
 
     private function naira(int $kobo): string

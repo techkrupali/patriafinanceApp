@@ -44,13 +44,46 @@ class ChildController extends ApiController
             'code' => ['required', 'string', 'max:12'],
             'pin' => ['required', 'digits:4'],
             'device_name' => ['nullable', 'string', 'max:80'],
+            // INV-CH3: the pairing a parent said yes to.
+            'request_id' => ['required', 'integer'],
+            'secret' => ['required', 'string', 'max:64'],
         ]);
         if (preg_match('/^(\d)\1{3}$|^(0123|1234|2345|3456|4567|5678|6789|9876|8765|7654|6543|5432|4321|3210)$/', $data['pin'])) {
             return response()->json(['status' => false, 'message' => 'Pick a harder PIN.', 'errors' => ['pin' => ['Pick a harder PIN, not 1111 or 1234.']]], 422);
         }
-        [$child, $wallet, $token] = ChildAppService::make()->link($data['code'], $data['pin'], $data['device_name'] ?? 'Child phone');
+        [$child, $wallet, $token] = ChildAppService::make()->link($data['code'], $data['pin'], $data['device_name'] ?? 'Child phone', (int) $data['request_id'], $data['secret']);
 
-        return $this->ok('Linked', ['token' => $token, 'user' => $this->serializeUser($child), 'wallet_id' => $wallet->id], 201);
+        return $this->ok('Linked', ['token' => $token, 'user' => $this->serializeUser($child), 'wallet_id' => $wallet->id, 'welcome' => ChildAppService::make()->welcome($wallet->refresh(), $child)], 201);
+    }
+
+    // POST /children/link/start — INV-CH2 "Link my phone": the parents are asked first.
+    public function startLink(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:12'], 'device_name' => ['nullable', 'string', 'max:80']]);
+
+        return $this->ok('Asked your parent', ChildAppService::make()->startLink($data['code'], $data['device_name'] ?? 'Child phone'), 201);
+    }
+
+    // GET /children/link/{id}?secret= — the child's phone waits for the parent's yes.
+    public function linkStatus(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['secret' => ['required', 'string', 'max:64']]);
+
+        return $this->ok('Status', ['status' => ChildAppService::make()->linkStatus($id, $data['secret'])]);
+    }
+
+    // GET /child-link-requests/{id} — INV-CH3 "Link this phone to Kamsi?"
+    public function linkRequest(Request $request, int $id): JsonResponse
+    {
+        return $this->ok('Request', ['request' => ChildAppService::make()->linkRequest($id, $request->user())]);
+    }
+
+    // POST /child-link-requests/{id}/{decision} — "Yes, link Kamsi's phone" / "This isn't Kamsi".
+    public function decideLink(Request $request, int $id, string $decision): JsonResponse
+    {
+        $status = ChildAppService::make()->decideLink($id, $request->user(), $decision === 'approve');
+
+        return $this->ok($status === 'approved' ? 'Linked when they set their PIN' : 'Stopped', ['status' => $status]);
     }
 
     // GET /child/home — CHD-03, on the child's own phone.

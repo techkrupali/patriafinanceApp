@@ -11,6 +11,7 @@ import { formatNaira, formatYmd } from '../../lib/format';
 import { notifySuccess } from '../../lib/haptics';
 import { showAlert } from '../../lib/alert';
 import type { WalletNotify } from '../../api/types';
+import { useCircles, useMoveWalletToCircle } from '../../api/circles';
 import type { RootScreenProps } from '../../navigation/types';
 
 const NOTIFY: { value: WalletNotify; label: string; hint: string }[] = [
@@ -38,6 +39,9 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
   const pause = useWalletLock(walletId);
   const deletion = useWalletDeletion(walletId);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [circleOpen, setCircleOpen] = useState(false);
+  const circles = useCircles();
+  const move = useMoveWalletToCircle();
 
   const d = detail.data;
   const wallet = d?.wallet;
@@ -164,6 +168,19 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
         ) : null}
       </PtPanel>
 
+      {/* FAM-11: which circle shares this wallet. */}
+      {role === 'owner' && !isMain && type !== 'ajo' && !archived ? (
+        <PtPanel>
+          <SettingsRow
+            icon="users"
+            title="Circle"
+            sub={(circles.data ?? []).find((c) => (wallet.circle_id ? c.id === wallet.circle_id : c.is_home))?.name ?? 'Your family'}
+            onPress={() => setCircleOpen(true)}
+            last
+          />
+        </PtPanel>
+      ) : null}
+
       <PtPanel>
         <SettingsRow
           icon="bell"
@@ -205,6 +222,20 @@ export function WalletSettingsScreen({ navigation, route }: RootScreenProps<'Wal
       ) : null}
 
       <View style={{ height: 8 }} />
+      <PtOptionSheet
+        visible={circleOpen}
+        title="Which circle shares it?"
+        options={(circles.data ?? []).filter((c) => c.id !== null && (c.is_home || c.my_role === 'owner')).map((c) => ({ value: c.is_home ? 0 : (c.id as number), label: c.name }))}
+        value={wallet.circle_id ?? 0}
+        onPick={(id) => {
+          setCircleOpen(false);
+          move.mutate(
+            { walletId, circleId: id || null },
+            { onSuccess: () => { notifySuccess(); void detail.refetch(); }, onError: (e) => showAlert('Not moved', e.message) },
+          );
+        }}
+        onClose={() => setCircleOpen(false)}
+      />
       <PtOptionSheet
         visible={notifyOpen}
         title="Notifications"
