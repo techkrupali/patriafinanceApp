@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { shrinkPhoto } from '../../../lib/upload';
 import { KeyboardAwareScrollView } from '../../../components/KeyboardAwareScrollView';
 import { Screen } from '../../../components/Screen';
 import { Header } from '../../../components/Header';
@@ -182,7 +183,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
+    const asset = await shrinkPhoto(result.assets[0]);
     setProof({ uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType });
   };
 
@@ -237,7 +238,7 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
+    const asset = await shrinkPhoto(result.assets[0]);
     actions.submitDocument.mutate(
       { documentType: docType, note: docNote.trim() || undefined, asset: { uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType } },
       {

@@ -94,7 +94,7 @@ function MoneyHero({ summary }: { summary: NonNullable<WalletsData["summary"]> }
       className="relative overflow-hidden rounded-[22px] p-6 text-white shadow-[0_24px_60px_-30px_rgba(8,57,47,0.7)] sm:col-span-2 lg:col-span-2"
       style={{ background: "linear-gradient(140deg, #08392F 0%, #0B5D4B 60%, #12775F 100%)" }}
     >
-      <svg viewBox="0 0 400 400" className="animate-ring pointer-events-none absolute -right-28 -top-32 h-80 w-80 opacity-60" aria-hidden="true">
+      <svg viewBox="0 0 400 400" className="pointer-events-none absolute -right-28 -top-32 h-80 w-80 opacity-60" aria-hidden="true">
         <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(243,247,244,0.10)" strokeWidth="30" />
         <circle cx="200" cy="262" r="92" fill="none" stroke="#5FD3A5" strokeOpacity="0.35" strokeWidth="26" strokeDasharray="420 160" strokeLinecap="round" />
       </svg>
