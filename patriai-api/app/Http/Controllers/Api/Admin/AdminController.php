@@ -84,12 +84,103 @@ class AdminController extends ApiController
                     ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                     ->count(),
             ],
+            // The dashboard's chart, recent list and sparkline.
+            'trend' => $this->flowTrend(),
+            'recent' => $this->recentTransactions(),
+            'signups_daily' => $this->signupsDaily(),
+            'balance_by_type' => Wallet::selectRaw('type, sum(balance) as total')->groupBy('type')->pluck('total', 'type')
+                ->map(fn ($kobo) => number_format(((int) $kobo) / 100, 2, '.', '')),
             // Without these keys phone sign-up codes are only logged, and Steward answers offline.
             'system' => [
                 'sms_configured' => !empty(config('services.termii.api_key')),
                 'ai_configured' => !empty(config('services.anthropic.api_key')),
             ],
         ]);
+    }
+
+    /** Money coming into Patriai (bank deposits) and leaving it (payouts to banks). */
+    private const MONEY_IN = ['fund', 'funding'];
+    private const MONEY_OUT = ['withdrawal'];
+
+    /** A date bucket in SQL, for SQLite and Postgres. */
+    private function bucket(string $format): string
+    {
+        return DB::getDriverName() === 'pgsql'
+            ? "to_char(created_at AT TIME ZONE 'Africa/Lagos', '" . ($format === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD') . "')"
+            : "strftime('" . ($format === 'month' ? '%Y-%m' : '%Y-%m-%d') . "', created_at, '+1 hour')";
+    }
+
+    /**
+     * Cash flow trend: money in vs out for the last 12 months, and each day of
+     * the last 30 (naira strings).
+     *
+     * @return array{monthly: list<array{key: string, label: string, in: string, out: string}>, daily: list<array{key: string, label: string, in: string, out: string}>}
+     */
+    private function flowTrend(): array
+    {
+        $sum = function (string $format, $since) {
+            $b = $this->bucket($format);
+
+            return Transaction::where('status', 'successful')->where('created_at', '>=', $since)
+                ->whereIn('type', [...self::MONEY_IN, ...self::MONEY_OUT])
+                ->selectRaw("{$b} as k, sum(case when type in ('" . implode("','", self::MONEY_IN) . "') then amount else 0 end) as money_in, sum(case when type in ('" . implode("','", self::MONEY_OUT) . "') then amount else 0 end) as money_out")
+                ->groupBy('k')->get()->keyBy('k');
+        };
+        $naira = fn ($kobo) => number_format(((int) $kobo) / 100, 2, '.', '');
+        $now = now()->setTimezone('Africa/Lagos');
+
+        $months = $sum('month', $now->copy()->startOfMonth()->subMonths(11)->utc());
+        $monthly = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $m = $now->copy()->startOfMonth()->subMonths($i);
+            $row = $months->get($m->format('Y-m'));
+            $monthly[] = ['key' => $m->format('Y-m'), 'label' => $m->format('M'), 'in' => $naira($row?->money_in), 'out' => $naira($row?->money_out)];
+        }
+
+        $days = $sum('day', $now->copy()->startOfDay()->subDays(29)->utc());
+        $daily = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $d = $now->copy()->startOfDay()->subDays($i);
+            $row = $days->get($d->format('Y-m-d'));
+            $daily[] = ['key' => $d->format('Y-m-d'), 'label' => $d->format('j M'), 'in' => $naira($row?->money_in), 'out' => $naira($row?->money_out)];
+        }
+
+        return ['monthly' => $monthly, 'daily' => $daily];
+    }
+
+    /** The latest money movements, for the dashboard's table. */
+    private function recentTransactions(): array
+    {
+        return Transaction::with(['wallet:id,name,user_id', 'wallet.owner:id,first_name,last_name'])
+            ->latest('id')->limit(6)->get()
+            ->map(fn (Transaction $t) => [
+                'id' => $t->id,
+                'reference' => $t->reference,
+                'description' => $t->description ?: ucfirst(str_replace('_', ' ', $t->type)),
+                'type' => $t->type,
+                'direction' => $t->direction,
+                'amount' => number_format($t->amount / 100, 2, '.', ''),
+                'status' => $t->status,
+                'created_at' => $t->created_at?->toIso8601String(),
+                'wallet' => $t->wallet?->name,
+                'owner' => $t->wallet?->owner ? trim($t->wallet->owner->first_name . ' ' . $t->wallet->owner->last_name) : null,
+            ])->all();
+    }
+
+    /** New customers each day for the last 14 days. */
+    private function signupsDaily(): array
+    {
+        $now = now()->setTimezone('Africa/Lagos');
+        $b = $this->bucket('day');
+        $rows = User::where('role', 'user')->where('created_at', '>=', $now->copy()->startOfDay()->subDays(13)->utc())
+            ->selectRaw("{$b} as k, count(*) as n")->groupBy('k')->pluck('n', 'k');
+        $out = [];
+        for ($i = 13; $i >= 0; $i--) {
+            $d = $now->copy()->startOfDay()->subDays($i);
+            $out[] = ['key' => $d->format('Y-m-d'), 'label' => $d->format('D j'), 'count' => (int) ($rows[$d->format('Y-m-d')] ?? 0)];
+        }
+
+        return $out;
     }
 
     /**

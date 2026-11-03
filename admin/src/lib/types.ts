@@ -168,6 +168,26 @@ export interface LoginData {
   token: string;
 }
 
+export interface FlowPoint {
+  key: string;
+  label: string;
+  in: string;
+  out: string;
+}
+
+export interface RecentTransaction {
+  id: number;
+  reference: string;
+  description: string;
+  type: string;
+  direction: "credit" | "debit";
+  amount: string;
+  status: string;
+  created_at: string | null;
+  wallet: string | null;
+  owner: string | null;
+}
+
 export interface StatsData {
   users: {
     total: number;
@@ -213,6 +233,17 @@ export interface StatsData {
   };
   rules: { active: number; paused: number };
   invitations: { pending: number };
+  /** Money into Patriai (bank deposits) vs out (payouts), naira strings. */
+  trend?: {
+    monthly: FlowPoint[];
+    daily: FlowPoint[];
+  };
+  /** The latest money movements. */
+  recent?: RecentTransaction[];
+  /** New customers a day, last 14 days. */
+  signups_daily?: { key: string; label: string; count: number }[];
+  /** Naira held per wallet type. */
+  balance_by_type?: Record<string, string>;
   system: {
     /** Termii key set: sign-up codes go out by SMS/WhatsApp. */
     sms_configured: boolean;

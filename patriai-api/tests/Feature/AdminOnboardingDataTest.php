@@ -56,6 +56,27 @@ class AdminOnboardingDataTest extends TestCase
             ->assertJsonPath('data.system', ['sms_configured' => false, 'ai_configured' => true]);
     }
 
+    public function test_stats_carry_the_dashboard_trend_recent_list_and_signups(): void
+    {
+        $ngozi = $this->phoneCustomer(['first_name' => 'Ngozi']);
+        $main = Wallet::create(['user_id' => $ngozi->id, 'type' => 'main', 'name' => 'Main', 'balance' => 500_000]);
+        \App\Models\Transaction::create(['wallet_id' => $main->id, 'user_id' => $ngozi->id, 'type' => 'fund', 'direction' => 'credit', 'amount' => 4_500_000, 'fee' => 0, 'balance_after' => 4_500_000, 'status' => 'successful', 'reference' => 'PTX-D-1', 'description' => 'Salary']);
+        \App\Models\Transaction::create(['wallet_id' => $main->id, 'user_id' => $ngozi->id, 'type' => 'withdrawal', 'direction' => 'debit', 'amount' => 4_000_000, 'fee' => 0, 'balance_after' => 500_000, 'status' => 'successful', 'reference' => 'PTX-D-2', 'description' => 'Rent']);
+        // Moves between wallets aren't money in or out of Patriai.
+        \App\Models\Transaction::create(['wallet_id' => $main->id, 'user_id' => $ngozi->id, 'type' => 'transfer_out', 'direction' => 'debit', 'amount' => 99_900, 'fee' => 0, 'balance_after' => 0, 'status' => 'successful', 'reference' => 'PTX-D-3', 'description' => 'Move']);
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+
+        $d = $this->getJson('/api/v1/admin/stats')->assertOk()->json('data');
+        $this->assertCount(12, $d['trend']['monthly']);
+        $this->assertCount(30, $d['trend']['daily']);
+        $this->assertSame(['in' => '45000.00', 'out' => '40000.00'], array_intersect_key(end($d['trend']['monthly']), ['in' => 1, 'out' => 1]));
+        $this->assertSame('Move', $d['recent'][0]['description']);
+        $this->assertSame('Ngozi', explode(' ', $d['recent'][0]['owner'])[0]);
+        $this->assertCount(14, $d['signups_daily']);
+        $this->assertSame(1, end($d['signups_daily'])['count']);
+        $this->assertSame('5000.00', $d['balance_by_type']['main']);
+    }
+
     public function test_users_filter_by_signup_and_detail_carries_rules_and_invites(): void
     {
         $ngozi = $this->phoneCustomer(['first_name' => 'Ngozi', 'date_of_birth' => '1988-03-14', 'onboarding_purposes' => ['ajo']]);
