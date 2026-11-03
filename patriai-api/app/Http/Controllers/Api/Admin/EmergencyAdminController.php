@@ -37,11 +37,26 @@ class EmergencyAdminController extends ApiController
     // GET /admin/emergency-requests?status=&method=
     public function index(Request $request): JsonResponse
     {
-        $page = EmergencyUnlockRequest::with(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer', 'trustedContact'])
-            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+        $search = trim((string) $request->query('search', ''));
+        $base = EmergencyUnlockRequest::query()
             ->when($request->query('method'), fn ($q, $m) => $q->where('method', $m))
+            // The wallet, or its owner's name (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '#')) . '%';
+                $q->where(function ($w) use ($search, $like) {
+                    $w->whereHas('wallet', fn ($x) => $x->whereRaw('LOWER(name) LIKE ?', [$like])
+                        ->orWhereHas('owner', fn ($o) => $o->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])));
+                    if (ctype_digit(ltrim($search, '#'))) {
+                        $w->orWhere('id', (int) ltrim($search, '#'));
+                    }
+                });
+            });
+        $page = (clone $base)->with(['wallet.owner', 'wallet.emergencySetting', 'requester', 'approver', 'reviewer', 'trustedContact'])
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $fast30 = EmergencyUnlockRequest::where('method', 'fast_release')->where('created_at', '>=', now()->subDays(30));
 
         return $this->ok('Emergency requests fetched', [
             'requests' => collect($page->items())->map(fn ($r) => $this->serialize($r)),
@@ -50,6 +65,15 @@ class EmergencyAdminController extends ApiController
                 'per_page' => $page->perPage(),
                 'total' => $page->total(),
                 'last_page' => $page->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => collect(['pending', 'approved', 'released', 'flagged', 'rejected', 'cancelled', 'expired'])->mapWithKeys(fn ($k) => [$k => (int) ($byStatus[$k] ?? 0)]),
+                'all' => (int) $byStatus->sum(),
+                'pending_all' => EmergencyUnlockRequest::where('status', 'pending')->count(),
+                'flagged_all' => EmergencyUnlockRequest::where('status', 'flagged')->count(),
+                'fast_30d' => (clone $fast30)->count(),
+                'fast_30d_amount' => number_format(((int) (clone $fast30)->sum('amount')) / 100, 2, '.', ''),
+                'locked_wallets' => \App\Models\Wallet::where('type', 'emergency')->where('status', 'active')->get()->filter(fn ($w) => $w->isEmergencyLocked())->count(),
             ],
         ]);
     }

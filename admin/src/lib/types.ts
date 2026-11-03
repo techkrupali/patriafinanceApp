@@ -281,8 +281,19 @@ export interface ApiApproval {
 }
 
 export interface UsersData {
-  users: AdminListUser[];
+  users: (AdminListUser & { wallets_count?: number })[];
   pagination: Pagination;
+  /** Every customer, and the status counts for these filters. by_tier may arrive as an array (tiers 0..n). */
+  summary?: {
+    total: number;
+    active: number;
+    suspended: number;
+    new_7d: number;
+    verified: number;
+    by_tier: Record<string, number> | number[];
+    by_status: { active: number; suspended: number };
+    matching: number;
+  };
 }
 
 export interface UserDevice {
@@ -750,16 +761,29 @@ export type KycStatus = "pending" | "approved" | "rejected";
 
 export interface KycListItem {
   id: number;
-  user: { name: string; email: string } | null;
+  user: { id?: number; name: string; email: string; phone?: string | null; tier?: number } | null;
   target_tier: number;
+  /** The tier's name and what it asks for, from admin Settings. */
+  tier_name?: string;
+  needs?: string | null;
   type: string;
   status: KycStatus;
+  review_note?: string | null;
+  reviewed_at?: string | null;
   created_at: string | null;
 }
 
 export interface KycData {
   submissions: KycListItem[];
   pagination: Pagination;
+  summary?: {
+    by_status: { pending: number; approved: number; rejected: number };
+    all: number;
+    oldest_pending_at: string | null;
+    approved_30d: number;
+    rejected_30d: number;
+    pending_by_tier: Record<string, number> | number[];
+  };
 }
 
 /** Tier-specific fields captured on the mobile KYC form. */
@@ -899,6 +923,14 @@ export interface SupportRequestDetail extends SupportRequestListItem {
 export interface SupportRequestsData {
   support_requests: SupportRequestListItem[];
   pagination: Pagination;
+  summary?: {
+    by_status: Record<SupportRequestStatus, number>;
+    all: number;
+    open: number;
+    open_high: number;
+    oldest_open_at: string | null;
+    resolved_7d: number;
+  };
 }
 
 export interface SupportRequestDetailData {
@@ -1004,6 +1036,15 @@ export interface AdminEmergencyRequest {
 export interface EmergencyRequestsData {
   requests: AdminEmergencyRequest[];
   pagination: Pagination;
+  summary?: {
+    by_status: Record<EmergencyRequestStatus, number>;
+    all: number;
+    pending_all: number;
+    flagged_all: number;
+    fast_30d: number;
+    fast_30d_amount: string;
+    locked_wallets: number;
+  };
 }
 
 export interface EmergencyRules {

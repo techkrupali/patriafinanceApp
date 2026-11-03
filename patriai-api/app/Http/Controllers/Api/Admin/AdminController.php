@@ -217,33 +217,52 @@ class AdminController extends ApiController
     // GET /admin/users?search=&status=&page=
     public function users(Request $request): JsonResponse
     {
-        $users = User::query()
-            ->where('role', 'user')
-            ->when($request->query('search'), function ($q, $s) {
+        $search = trim((string) $request->query('search', ''));
+        $base = User::query()->where('role', 'user')
+            // Name, @username, email or phone (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '@')) . '%';
                 $q->where(fn ($w) => $w
-                    ->where('email', 'ilike', "%{$s}%")
-                    ->orWhere('phone', 'ilike', "%{$s}%")
-                    ->orWhere('first_name', 'ilike', "%{$s}%")
-                    ->orWhere('last_name', 'ilike', "%{$s}%")
-                    ->orWhere('username', 'ilike', "%{$s}%"));
+                    ->whereRaw('LOWER(email) LIKE ?', [$like])
+                    ->orWhere('phone', 'like', '%' . $search . '%')
+                    ->orWhereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])
+                    ->orWhereRaw('LOWER(username) LIKE ?', [$like]));
             })
-            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             // signup=phone: joined with phone + PIN; signup=password: older email + password accounts.
             ->when($request->query('signup') === 'phone', fn ($q) => $q->whereNull('password'))
             ->when($request->query('signup') === 'password', fn ($q) => $q->whereNotNull('password'))
+            ->when($request->query('tier') !== null && $request->query('tier') !== '', fn ($q) => $q->where('kyc_tier', (int) $request->query('tier')));
+        $users = (clone $base)
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->withSum('wallets as total_balance', 'balance')
+            ->withCount('wallets')
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        $all = User::where('role', 'user');
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
 
         return $this->ok('Users fetched', [
             'users' => collect($users->items())->map(fn ($u) => $this->serializeUser($u) + [
                 'total_balance' => number_format(($u->total_balance ?? 0) / 100, 2, '.', ''),
+                'wallets_count' => (int) $u->wallets_count,
             ]),
             'pagination' => [
                 'page' => $users->currentPage(),
                 'per_page' => $users->perPage(),
                 'total' => $users->total(),
                 'last_page' => $users->lastPage(),
+            ],
+            // The page's summary: every customer, and the status counts for these filters.
+            'summary' => [
+                'total' => (clone $all)->count(),
+                'active' => (clone $all)->where('status', 'active')->count(),
+                'suspended' => (clone $all)->where('status', 'suspended')->count(),
+                'new_7d' => (clone $all)->where('created_at', '>=', now()->subDays(7))->count(),
+                'verified' => (clone $all)->where('kyc_tier', '>=', 1)->count(),
+                'by_tier' => (clone $all)->selectRaw('kyc_tier, count(*) as n')->groupBy('kyc_tier')->orderBy('kyc_tier')->pluck('n', 'kyc_tier'),
+                'by_status' => ['active' => (int) ($byStatus['active'] ?? 0), 'suspended' => (int) ($byStatus['suspended'] ?? 0)],
+                'matching' => (int) $byStatus->sum(),
             ],
         ]);
     }
@@ -860,18 +879,39 @@ class AdminController extends ApiController
     // GET /admin/kyc?status=
     public function kyc(Request $request): JsonResponse
     {
-        $submissions = KycSubmission::with('user')
+        $search = trim((string) $request->query('search', ''));
+        $base = KycSubmission::query()
+            ->when($request->query('tier'), fn ($q, $t) => $q->where('target_tier', (int) $t))
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '#')) . '%';
+                $q->where(function ($w) use ($search, $like) {
+                    $w->whereHas('user', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like])
+                        ->orWhereRaw('LOWER(email) LIKE ?', [$like])->orWhere('phone', 'like', "%{$search}%"));
+                    if (ctype_digit(ltrim($search, '#'))) {
+                        $w->orWhere('id', (int) ltrim($search, '#'));
+                    }
+                });
+            });
+        $submissions = (clone $base)->with('user')
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
-            ->latest()
+            // The queue reads oldest first; everything else newest first.
+            ->when($request->query('status') === 'pending', fn ($q) => $q->oldest(), fn ($q) => $q->latest())
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $oldest = KycSubmission::where('status', 'pending')->oldest()->value('created_at');
+        $reviewed30 = KycSubmission::whereIn('status', ['approved', 'rejected'])->where('reviewed_at', '>=', now()->subDays(30));
 
         return $this->ok('KYC submissions fetched', [
             'submissions' => collect($submissions->items())->map(fn ($s) => [
                 'id' => $s->id,
-                'user' => $s->user ? ['name' => $s->user->fullName(), 'email' => $s->user->email] : null,
+                'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->fullName(), 'email' => $s->user->email, 'phone' => $s->user->phone, 'tier' => (int) $s->user->kyc_tier] : null,
                 'target_tier' => (int) $s->target_tier,
+                'tier_name' => \App\Services\LimitService::make()->tier((int) $s->target_tier)['name'] ?? "Tier {$s->target_tier}",
+                'needs' => \App\Services\LimitService::make()->tier((int) $s->target_tier)['needs'] ?? null,
                 'type' => $s->type,
                 'status' => $s->status,
+                'review_note' => $s->review_note ?? null,
+                'reviewed_at' => $s->reviewed_at?->toIso8601String(),
                 'created_at' => $s->created_at?->toIso8601String(),
             ]),
             'pagination' => [
@@ -879,6 +919,18 @@ class AdminController extends ApiController
                 'per_page' => $submissions->perPage(),
                 'total' => $submissions->total(),
                 'last_page' => $submissions->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => [
+                    'pending' => (int) ($byStatus['pending'] ?? 0),
+                    'approved' => (int) ($byStatus['approved'] ?? 0),
+                    'rejected' => (int) ($byStatus['rejected'] ?? 0),
+                ],
+                'all' => (int) $byStatus->sum(),
+                'oldest_pending_at' => $oldest ? \Illuminate\Support\Carbon::parse($oldest)->toIso8601String() : null,
+                'approved_30d' => (clone $reviewed30)->where('status', 'approved')->count(),
+                'rejected_30d' => (clone $reviewed30)->where('status', 'rejected')->count(),
+                'pending_by_tier' => KycSubmission::where('status', 'pending')->selectRaw('target_tier, count(*) as n')->groupBy('target_tier')->pluck('n', 'target_tier'),
             ],
         ]);
     }
@@ -1267,27 +1319,27 @@ class AdminController extends ApiController
     public function supportRequests(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('search', ''));
-        // Portable case-insensitive LIKE: ilike on Postgres, like elsewhere (sqlite/mysql).
-        $like = SupportRequest::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-
-        $items = SupportRequest::with('user')
-            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+        $base = SupportRequest::query()
             ->when($request->query('category'), fn ($q, $c) => $q->where('category', $c))
             ->when($request->query('priority'), fn ($q, $p) => $q->where('priority', $p))
-            ->when($search !== '', function ($q) use ($search, $like) {
+            // #id, subject, reference or the person's name (any database).
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%' . mb_strtolower(ltrim($search, '#')) . '%';
                 $q->where(function ($w) use ($search, $like) {
-                    $w->where('subject', $like, "%{$search}%")
-                        ->orWhere('reference', $like, "%{$search}%")
-                        ->orWhereHas('user', fn ($u) => $u
-                            ->where('first_name', $like, "%{$search}%")
-                            ->orWhere('last_name', $like, "%{$search}%"));
-                    if (ctype_digit($search)) {
-                        $w->orWhere('id', (int) $search);
+                    $w->whereRaw('LOWER(subject) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(reference) LIKE ?', [$like])
+                        ->orWhereHas('user', fn ($u) => $u->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$like]));
+                    if (ctype_digit(ltrim($search, '#'))) {
+                        $w->orWhere('id', (int) ltrim($search, '#'));
                     }
                 });
-            })
+            });
+        $items = (clone $base)->with('user')
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
+        $byStatus = (clone $base)->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+        $open = SupportRequest::whereIn('status', ['pending', 'in_review']);
 
         return $this->ok('Support requests fetched', [
             'support_requests' => collect($items->items())->map(fn ($r) => $this->serializeSupportRequest($r)),
@@ -1296,6 +1348,19 @@ class AdminController extends ApiController
                 'per_page' => $items->perPage(),
                 'total' => $items->total(),
                 'last_page' => $items->lastPage(),
+            ],
+            'summary' => [
+                'by_status' => [
+                    'pending' => (int) ($byStatus['pending'] ?? 0),
+                    'in_review' => (int) ($byStatus['in_review'] ?? 0),
+                    'resolved' => (int) ($byStatus['resolved'] ?? 0),
+                    'closed' => (int) ($byStatus['closed'] ?? 0),
+                ],
+                'all' => (int) $byStatus->sum(),
+                'open' => (clone $open)->count(),
+                'open_high' => (clone $open)->where('priority', 'high')->count(),
+                'oldest_open_at' => ($o = (clone $open)->oldest()->value('created_at')) ? \Illuminate\Support\Carbon::parse($o)->toIso8601String() : null,
+                'resolved_7d' => SupportRequest::whereIn('status', ['resolved', 'closed'])->where('updated_at', '>=', now()->subDays(7))->count(),
             ],
         ]);
     }
