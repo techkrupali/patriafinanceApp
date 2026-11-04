@@ -166,8 +166,11 @@ export function TransactionsScreen({ navigation, route }: RootScreenProps<'Activ
           { key: 'date', label: date === 'all' ? 'Date ▾' : DATES.find((d) => d.value === date)!.label, on: date !== 'all', press: () => setSheet('date') },
           { key: 'kind', label: direction === 'credit' ? 'Money in' : direction === 'debit' ? 'Money out' : 'In or out ▾', on: Boolean(direction), press: () => setSheet('kind') },
         ].map((c) => (
-          <Pressable key={c.key} onPress={() => { selection(); c.press(); }} accessibilityRole="button" style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: c.on ? pt.emerald900 : pt.lineStrong, backgroundColor: c.on ? pt.emerald900 : 'transparent' }}>
-            <Text style={{ fontFamily: ptFont.medium, fontSize: 14, color: c.on ? '#FFFFFF' : pt.ink }}>{c.label}</Text>
+          <Pressable key={c.key} onPress={() => { selection(); c.press(); }} accessibilityRole="button" style={{ borderRadius: 999 }}>
+            {/* Fill on a View so it shows on every Android phone. */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: c.on ? pt.emerald900 : pt.lineStrong, backgroundColor: c.on ? pt.emerald900 : 'transparent' }}>
+              <Text style={{ fontFamily: ptFont.medium, fontSize: 14, color: c.on ? '#FFFFFF' : pt.ink }}>{c.label}</Text>
+            </View>
           </Pressable>
         ))}
       </View>

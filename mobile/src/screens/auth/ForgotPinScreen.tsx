@@ -229,15 +229,18 @@ export function ForgotPinScreen({ route, navigation }: AuthScreenProps<'ForgotPi
           onPress={() => void takeSelfie()}
           accessibilityRole="button"
           accessibilityLabel={selfie ? 'Retake selfie' : 'Take selfie'}
-          style={{ height: 220, borderRadius: ptRadius.md, backgroundColor: pt.emerald900, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+          style={{ borderRadius: ptRadius.md }}
         >
-          {selfie ? (
-            <Image source={{ uri: selfie.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          ) : (
-            <View style={{ width: 120, height: 150, borderRadius: 75, borderWidth: 2, borderColor: pt.emerald300, alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="camera" size={26} color={pt.emerald300} />
-            </View>
-          )}
+          {/* Fill on a View so it shows on every Android phone. */}
+          <View style={{ height: 220, borderRadius: ptRadius.md, backgroundColor: pt.emerald900, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {selfie ? (
+              <Image source={{ uri: selfie.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <View style={{ width: 120, height: 150, borderRadius: 75, borderWidth: 2, borderColor: pt.emerald300, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="camera" size={26} color={pt.emerald300} />
+              </View>
+            )}
+          </View>
         </Pressable>
         {selfie ? <PtText variant="caption" color={pt.inkMuted}>Selfie taken. Tap it to take another.</PtText> : null}
         {error ? <PtText variant="caption" color={pt.danger}>{error}</PtText> : null}

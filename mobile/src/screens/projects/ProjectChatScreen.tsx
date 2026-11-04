@@ -66,9 +66,11 @@ export function ChatComposer({ onSend, sending, placeholder = 'Message…', stew
           onPress={() => { selection(); setText((t) => (/^steward\b/i.test(t) ? t : `Steward, ${t}`)); }}
           accessibilityRole="button"
           accessibilityLabel="Ask Steward"
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: pt.emerald900, alignItems: 'center', justifyContent: 'center' }}
+          style={{ borderRadius: 22 }}
         >
-          <Feather name="shield" size={18} color={pt.emerald300} />
+          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: pt.emerald900, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="shield" size={18} color={pt.emerald300} />
+          </View>
         </Pressable>
       ) : null}
       <Pressable
@@ -76,9 +78,12 @@ export function ChatComposer({ onSend, sending, placeholder = 'Message…', stew
         disabled={!text.trim() || sending}
         accessibilityRole="button"
         accessibilityLabel="Send"
-        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: text.trim() ? pt.brand : pt.sunken, alignItems: 'center', justifyContent: 'center' }}
+        style={{ borderRadius: 22 }}
       >
-        {sending ? <ActivityIndicator color="#FFFFFF" /> : <Feather name="send" size={18} color={text.trim() ? '#FFFFFF' : pt.inkSubtle} />}
+        {/* Fill on a View so it shows on every Android phone. */}
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: text.trim() ? pt.brand : pt.sunken, alignItems: 'center', justifyContent: 'center' }}>
+          {sending ? <ActivityIndicator color="#FFFFFF" /> : <Feather name="send" size={18} color={text.trim() ? '#FFFFFF' : pt.inkSubtle} />}
+        </View>
       </Pressable>
     </View>
   );

@@ -77,7 +77,7 @@ export function WalletAccountScreen({ navigation, route }: RootScreenProps<'Wall
       {account ? (
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <PtButton title={copied ? 'Copied' : 'Copy'} variant="mint" icon={<Feather name="copy" size={17} color={pt.brand} />} style={{ flex: 1 }} onPress={() => void copy()} />
-          <PtButton title="Share" icon={<Feather name="share" size={17} color={pt.onBrand} />} style={{ flex: 1 }} onPress={share} />
+          <PtButton title="Share" icon={<Feather name="share" size={17} color={pt.emerald900} />} style={{ flex: 1 }} onPress={share} />
         </View>
       ) : null}
 

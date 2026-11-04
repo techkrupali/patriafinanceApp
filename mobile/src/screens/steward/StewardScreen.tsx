@@ -354,16 +354,21 @@ export function StewardScreen({ navigation, route }: TabScreenProps<'Steward'>) 
             disabled={!input.trim() || chat.isPending}
             accessibilityRole="button"
             accessibilityLabel="Send"
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 24,
-              backgroundColor: input.trim() ? pt.brand : pt.lineStrong,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            style={{ borderRadius: 24 }}
           >
-            <Feather name="arrow-up" size={22} color={pt.onBrand} />
+            {/* Fill on a View so it shows on every Android phone. */}
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: input.trim() ? pt.brand : pt.lineStrong,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Feather name="arrow-up" size={22} color={pt.onBrand} />
+            </View>
           </Pressable>
         </View>
       </View>

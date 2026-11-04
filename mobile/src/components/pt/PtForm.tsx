@@ -114,18 +114,23 @@ export function PtPills<T extends string | number>({
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            style={{
-              height: compact ? 36 : 40,
-              paddingHorizontal: solid ? 11 : compact ? 14 : 16,
-              borderRadius: 20,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: solid ? 0 : on ? 2 : 1.5,
-              borderColor: on ? pt.brand : pt.lineStrong,
-              backgroundColor: solid ? (on ? pt.brand : pt.sunken) : on ? pt.brandSoft : pt.raised,
-            }}
+            style={{ borderRadius: 20 }}
           >
-            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: compact ? 14 : 15, color: solid ? (on ? '#FFFFFF' : pt.ink) : on ? pt.brand : pt.ink }}>{o.label}</Text>
+            {/* The fill sits on a View: some Android phones don't paint a gesture-handler button's own background. */}
+            <View
+              style={{
+                height: compact ? 36 : 40,
+                paddingHorizontal: solid ? 11 : compact ? 14 : 16,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: solid ? 0 : on ? 2 : 1.5,
+                borderColor: on ? pt.brand : pt.lineStrong,
+                backgroundColor: solid ? (on ? pt.brand : pt.sunken) : on ? pt.brandSoft : pt.raised,
+              }}
+            >
+              <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: compact ? 14 : 15, color: solid ? (on ? '#FFFFFF' : pt.ink) : on ? pt.brand : pt.ink }}>{o.label}</Text>
+            </View>
           </Pressable>
         );
       });

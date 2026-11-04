@@ -100,7 +100,7 @@ export function UnlockScreen({ route, navigation }: AuthScreenProps<'Unlock'>) {
         <PtText variant="title" style={{ fontFamily: ptFont.extrabold }} accessibilityRole="header">
           {copy.unlock.hi(account.first_name)}
         </PtText>
-        <PtText color={pt.inkMuted}>{account.new_device ? 'Enter your PIN to finish on this phone' : copy.unlock.enterPin}</PtText>
+        <PtText color={pt.emerald900} style={{ fontFamily: ptFont.semibold }}>{account.new_device ? 'Enter your PIN to finish on this phone' : copy.unlock.enterPin}</PtText>
       </View>
 
       <View style={{ paddingVertical: 6 }}>

@@ -40,14 +40,17 @@ export function RuleTemplatesScreen({ navigation }: RootScreenProps<'RuleTemplat
         }}
         accessibilityRole="button"
         accessibilityLabel="Just say it"
-        style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.md, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 16 }}
+        style={{ borderRadius: ptRadius.md }}
       >
-        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: pt.emerald300, alignItems: 'center', justifyContent: 'center' }}>
-          <Feather name="mic" size={22} color={pt.emerald900} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: ptFont.bold, fontSize: 17, color: '#fff' }}>Just say it</Text>
-          <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: '#D5EDE3' }}>"Top up Household when it falls below ₦30k"</Text>
+        {/* Fill on a View so it shows on every Android phone. */}
+        <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.md, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: pt.emerald300, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="mic" size={22} color={pt.emerald900} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: ptFont.bold, fontSize: 17, color: '#fff' }}>Just say it</Text>
+            <Text style={{ fontFamily: ptFont.regular, fontSize: 14, lineHeight: 20, color: '#D5EDE3' }}>"Top up Household when it falls below ₦30k"</Text>
+          </View>
         </View>
       </Pressable>
       <PtCard>
