@@ -19,27 +19,6 @@ import {
   PatriaiMark,
 } from "@/components/icons";
 
-/** The logo's three circles, drawn big: an outer ring, the mint ring and the gold seed. */
-function Rings({ className }: { className?: string }) {
-  return (
-    <div className={className} aria-hidden="true">
-      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-        <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(243,247,244,0.10)" strokeWidth="2" strokeDasharray="2 14" />
-      </svg>
-      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(243,247,244,0.16)" strokeWidth="34" />
-      </svg>
-      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-        <circle cx="200" cy="262" r="92" fill="none" stroke="#5FD3A5" strokeOpacity="0.55" strokeWidth="30" strokeDasharray="420 160" strokeLinecap="round" />
-      </svg>
-      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-        <circle cx="200" cy="296" r="40" fill="#F2A93B" />
-        <circle cx="200" cy="296" r="58" fill="none" stroke="#F2A93B" strokeOpacity="0.25" strokeWidth="2" />
-      </svg>
-    </div>
-  );
-}
-
 const DESK = [
   { icon: IconKyc, title: "KYC and vendor checks", line: "BVN, NIN, selfies and builders, one queue" },
   { icon: IconTransactions, title: "Money as it moves", line: "Wallets, transfers and approvals, live" },
@@ -96,7 +75,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-page lg:flex-row">
-      {/* The brand side: deep emerald, the logo's rings, what the desk is for. */}
+      {/* The brand side: deep emerald and what the desk is for. */}
       <section
         style={{ background: "linear-gradient(135deg, #08392F 0%, #0A4A3D 55%, #0B5D4B 100%)" }}
         className="relative overflow-hidden px-6 pb-8 pt-7 text-[#F3F7F4] sm:px-10 lg:flex lg:w-[52%] lg:flex-col lg:justify-between lg:px-14 lg:py-12">
@@ -105,7 +84,6 @@ export default function LoginPage() {
           style={{ backgroundImage: "radial-gradient(#F3F7F4 1px, transparent 1px)", backgroundSize: "22px 22px" }}
           aria-hidden="true"
         />
-        <Rings className="pointer-events-none absolute -right-32 -top-28 h-[240px] w-[240px] sm:-right-24 sm:-top-20 sm:h-[360px] sm:w-[360px] lg:-right-40 lg:top-auto lg:bottom-[-120px] lg:h-[620px] lg:w-[620px]" />
 
         <div className="relative flex items-center gap-3">
           <PatriaiMark onDark className="h-10 w-10" />
