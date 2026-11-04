@@ -7,7 +7,7 @@ import { PtStepScreen } from '../../components/pt/PtStepScreen';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtCodeInput } from '../../components/pt/PtCodeInput';
 import { PtField } from '../../components/pt/PtField';
-import { PtKeypad, PtPinDots } from '../../components/pt/PtPinPad';
+import { PtPinField } from '../../components/pt/PtPinPad';
 import { PtText } from '../../components/pt/PtText';
 import { PtNote } from '../../components/pt/PtForm';
 import { usePhoneStart, usePhoneVerify, usePinForgot, usePinReset } from '../../api/hooks';
@@ -256,16 +256,14 @@ export function ForgotPinScreen({ route, navigation }: AuthScreenProps<'ForgotPi
       step="STEP 3 OF 3"
       title={confirming ? 'Enter it again' : 'Set a new PIN'}
       subtitle="For your safety, payments over ₦50,000 wait 24 hours."
-      gap={36}
+      gap={28}
       scroll={false}
-      footer={
-        <>
-          {reset.isPending ? <ActivityIndicator color={pt.brand} /> : error ? <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>{error}</PtText> : null}
-          <PtKeypad value={confirming ? confirm : pin} onChange={onPin} length={PIN_LENGTH} disabled={reset.isPending} />
-        </>
-      }
     >
-      <PtPinDots length={PIN_LENGTH} filled={(confirming ? confirm : pin).length} />
+      {/* The phone's own number keyboard types the PIN. */}
+      <View style={{ gap: 14 }}>
+        <PtPinField value={confirming ? confirm : pin} onChange={onPin} length={PIN_LENGTH} disabled={reset.isPending} />
+        {reset.isPending ? <ActivityIndicator color={pt.brand} /> : error ? <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>{error}</PtText> : null}
+      </View>
       <PtNote tone="info" icon="clock">6 digits. Not your birthday or 123456.</PtNote>
     </PtStepScreen>
   );

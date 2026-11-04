@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { pt } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
-import { PtKeypad, PtPinDots } from '../../components/pt/PtPinPad';
+import { PtPinField } from '../../components/pt/PtPinPad';
 import { PtText } from '../../components/pt/PtText';
 import { TwoStepSheet, twoStepAsked } from '../../components/TwoStepSheet';
 import { useChangePinSecure } from '../../api/account';
@@ -106,16 +106,14 @@ export function ChangePinScreen({ navigation }: RootScreenProps<'ChangePin'>) {
       onBack={() => navigation.goBack()}
       title={phase === 'current' ? 'Enter your PIN' : phase === 'new' ? 'Enter a new PIN' : 'Enter it again'}
       subtitle={phase === 'current' ? 'The one you use now' : '6 digits. Not your birthday or 123456.'}
-      gap={40}
+      gap={36}
       scroll={false}
-      footer={
-        <>
-          {change.isPending ? <ActivityIndicator color={pt.brand} /> : error ? <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>{error}</PtText> : null}
-          <PtKeypad value={value} onChange={onDigits} length={length} disabled={change.isPending} />
-        </>
-      }
     >
-      <PtPinDots length={length} filled={value.length} />
+      {/* The phone's own number keyboard types the PIN. */}
+      <View style={{ gap: 14 }}>
+        <PtPinField value={value} onChange={onDigits} length={length} disabled={change.isPending} />
+        {change.isPending ? <ActivityIndicator color={pt.brand} /> : error ? <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>{error}</PtText> : null}
+      </View>
       <TwoStepSheet asked={asked} busy={change.isPending} error={twoErr} onSubmit={(code) => submit(code)} onClose={() => restart('Change cancelled.')} />
     </PtStepScreen>
   );

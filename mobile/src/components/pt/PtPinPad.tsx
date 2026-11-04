@@ -1,5 +1,5 @@
-import React from 'react';
-import { Text, View } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import { Platform, Text, TextInput, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { pt, ptFont, ptRadius } from '../../theme';
@@ -34,6 +34,56 @@ export function PtPinDots({ length, filled, variant = 'plain' }: { length: numbe
     </View>
   );
 }
+
+interface PtPinFieldProps {
+  value: string;
+  onChange: (next: string) => void;
+  length: number;
+  variant?: Variant;
+  /** While a request runs: typing is ignored, the keyboard stays up. */
+  disabled?: boolean;
+}
+
+/**
+ * PIN entry with the phone's own number keyboard: the dots, driven by one
+ * hidden input (like the code boxes). Tapping the dots brings the keyboard
+ * back. Digits only, no autofill or suggestions.
+ */
+export const PtPinField = forwardRef<TextInput, PtPinFieldProps>(function PtPinField(
+  { value, onChange, length, variant = 'plain', disabled = false },
+  ref,
+) {
+  const input = useRef<TextInput>(null);
+  useImperativeHandle(ref, () => input.current as TextInput);
+
+  return (
+    <Pressable onPress={() => input.current?.focus()} accessibilityRole="button" accessibilityLabel="Enter your PIN" style={{ paddingVertical: 14 }}>
+      <PtPinDots length={length} filled={value.length} variant={variant} />
+      <TextInput
+        ref={input}
+        value={value}
+        onChangeText={(t) => {
+          const next = t.replace(/\D/g, '').slice(0, length);
+          if (disabled || next === value) return;
+          if (next.length > value.length) tapMedium();
+          else tapLight();
+          onChange(next);
+        }}
+        keyboardType="number-pad"
+        // Android: a numeric password field, so the keyboard doesn't learn or suggest it.
+        secureTextEntry={Platform.OS === 'android'}
+        maxLength={length}
+        autoFocus
+        autoCorrect={false}
+        autoComplete="off"
+        importantForAutofill="no"
+        contextMenuHidden
+        caretHidden
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
+    </Pressable>
+  );
+});
 
 interface PtKeypadProps {
   value: string;

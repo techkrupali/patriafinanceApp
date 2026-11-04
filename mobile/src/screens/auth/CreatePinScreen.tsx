@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { pt } from '../../theme';
 import { PtStepScreen } from '../../components/pt/PtStepScreen';
-import { PtKeypad, PtPinDots } from '../../components/pt/PtPinPad';
+import { PtPinField } from '../../components/pt/PtPinPad';
 import { PtButton } from '../../components/pt/PtButton';
 import { PtText } from '../../components/pt/PtText';
 import { isWeakPin, useOnboardingCopy } from '../../lib/onboardingCopy';
@@ -149,20 +149,18 @@ export function CreatePinScreen({ route, navigation }: AuthScreenProps<'CreatePi
       step={copy.step(confirming ? 5 : 4, SIGNUP_STEPS)}
       title={confirming ? copy.pin.confirmTitle : copy.pin.title}
       subtitle={confirming ? copy.pin.confirmSubtitle : copy.pin.subtitle}
-      gap={44}
+      gap={36}
       scroll={false}
-      footer={
-        <>
-          {error ? (
-            <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>
-              {error}
-            </PtText>
-          ) : null}
-          <PtKeypad value={value} onChange={onDigits} length={PIN_LENGTH} />
-        </>
-      }
     >
-      <PtPinDots length={PIN_LENGTH} filled={value.length} />
+      {/* The phone's own number keyboard types the PIN. */}
+      <View style={{ gap: 14 }}>
+        <PtPinField value={value} onChange={onDigits} length={PIN_LENGTH} />
+        {error ? (
+          <PtText variant="caption" color={pt.danger} style={{ textAlign: 'center' }}>
+            {error}
+          </PtText>
+        ) : null}
+      </View>
     </PtStepScreen>
   );
 }
