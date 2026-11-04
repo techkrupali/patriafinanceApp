@@ -23,16 +23,16 @@ import {
 function Rings({ className }: { className?: string }) {
   return (
     <div className={className} aria-hidden="true">
-      <svg viewBox="0 0 400 400" className="animate-ring absolute inset-0 h-full w-full">
+      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
         <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(243,247,244,0.10)" strokeWidth="2" strokeDasharray="2 14" />
       </svg>
       <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
         <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(243,247,244,0.16)" strokeWidth="34" />
       </svg>
-      <svg viewBox="0 0 400 400" className="animate-ring-reverse absolute inset-0 h-full w-full">
+      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
         <circle cx="200" cy="262" r="92" fill="none" stroke="#5FD3A5" strokeOpacity="0.55" strokeWidth="30" strokeDasharray="420 160" strokeLinecap="round" />
       </svg>
-      <svg viewBox="0 0 400 400" className="animate-seed absolute inset-0 h-full w-full">
+      <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
         <circle cx="200" cy="296" r="40" fill="#F2A93B" />
         <circle cx="200" cy="296" r="58" fill="none" stroke="#F2A93B" strokeOpacity="0.25" strokeWidth="2" />
       </svg>

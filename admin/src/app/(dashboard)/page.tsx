@@ -114,10 +114,6 @@ function BalanceHero({ stats, in30, out30 }: { stats: StatsData; in30: number; o
       className="relative flex h-full flex-col overflow-hidden rounded-[22px] p-6 text-white shadow-[0_24px_60px_-30px_rgba(8,57,47,0.7)] sm:p-7"
       style={{ background: "linear-gradient(140deg, #08392F 0%, #0B5D4B 58%, #12775F 100%)" }}
     >
-      <svg viewBox="0 0 400 400" className="pointer-events-none absolute -right-36 -top-32 h-72 w-72 opacity-60 sm:-right-28 sm:-top-28 sm:h-80 sm:w-80 sm:opacity-80" aria-hidden="true">
-        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(243,247,244,0.10)" strokeWidth="30" />
-        <circle cx="200" cy="262" r="92" fill="none" stroke="#5FD3A5" strokeOpacity="0.35" strokeWidth="26" strokeDasharray="420 160" strokeLinecap="round" />
-      </svg>
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.06]"
         style={{ backgroundImage: "radial-gradient(#F3F7F4 1px, transparent 1px)", backgroundSize: "20px 20px" }}
