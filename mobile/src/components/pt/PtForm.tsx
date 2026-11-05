@@ -167,19 +167,24 @@ export function PtSegmented<T extends string | number>({
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            style={{
-              flex: 1,
-              minHeight: 40,
-              paddingHorizontal: 6,
-              paddingVertical: 4,
-              borderRadius: ptRadius.sm - 3,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: on ? pt.raised : 'transparent',
-            }}
+            style={{ flex: 1, borderRadius: ptRadius.sm - 3 }}
           >
-            {/* A long label ("Share of income") wraps centred, as in JNT-02. */}
-            <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: 15, lineHeight: 19, textAlign: 'center', color: on ? pt.brand : pt.inkMuted }}>{o.label}</Text>
+            {/* The white chosen segment sits on a View: some Android phones don't paint a gesture-handler button's own background. */}
+            <View
+              style={{
+                flex: 1,
+                minHeight: 40,
+                paddingHorizontal: 6,
+                paddingVertical: 4,
+                borderRadius: ptRadius.sm - 3,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: on ? pt.raised : 'transparent',
+              }}
+            >
+              {/* A long label ("Share of income") wraps centred, as in JNT-02. */}
+              <Text style={{ fontFamily: on ? ptFont.semibold : ptFont.medium, fontSize: 15, lineHeight: 19, textAlign: 'center', color: on ? pt.brand : pt.inkMuted }}>{o.label}</Text>
+            </View>
           </Pressable>
         );
       })}

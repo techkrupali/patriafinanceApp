@@ -20,12 +20,13 @@ import type { RootScreenProps } from '../../navigation/types';
  * if wanted. Download, or email it to yourself.
  */
 export function WalletStatementScreen({ navigation, route }: RootScreenProps<'WalletStatement'>) {
-  const { walletId, audit: withAudit } = route.params;
+  const { walletId, audit: withAudit, from: presetFrom, to: presetTo } = route.params;
   const detail = useWallet(walletId);
   const today = toYmd(new Date());
-  const [period, setPeriod] = useState<StatementPeriod>('since_start');
-  const [from, setFrom] = useState<string>(toYmd(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)));
-  const [to, setTo] = useState<string>(today);
+  // From a month on INS-07: those dates, picked.
+  const [period, setPeriod] = useState<StatementPeriod>(presetFrom ? 'custom' : 'since_start');
+  const [from, setFrom] = useState<string>(presetFrom ?? toYmd(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)));
+  const [to, setTo] = useState<string>(presetTo ?? today);
   const [picking, setPicking] = useState<'from' | 'to' | null>(null);
   const [format, setFormat] = useState<'pdf' | 'csv'>('pdf');
   const [contributions, setContributions] = useState(true);

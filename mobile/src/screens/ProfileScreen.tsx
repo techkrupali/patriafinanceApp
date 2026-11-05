@@ -108,7 +108,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
       {/* Records */}
       <View style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Tile label="Insights" icon={<Feather name="trending-up" size={18} color={pt.brand} />} />
+          <Tile label="Insights" icon={<Feather name="trending-up" size={18} color={pt.brand} />} onPress={() => navigation.navigate('Insights')} />
           <Tile
             label="Transactions"
             icon={<MaterialCommunityIcons name="swap-vertical" size={19} color={pt.brand} />}
@@ -116,7 +116,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
           />
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Tile label="Statements" icon={<Feather name="file-text" size={18} color={pt.brand} />} />
+          <Tile label="Statements" icon={<Feather name="file-text" size={18} color={pt.brand} />} onPress={() => navigation.navigate('Statements')} />
           <Tile label="Chats" icon={<Feather name="message-square" size={18} color={pt.brand} />} onPress={() => navigation.navigate('Chats')} />
         </View>
       </View>

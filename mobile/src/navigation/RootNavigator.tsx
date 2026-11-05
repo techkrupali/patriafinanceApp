@@ -107,6 +107,16 @@ import { LockWalletScreen } from '../screens/wallet/LockWalletScreen';
 import { AskToUnlockScreen } from '../screens/wallet/AskToUnlockScreen';
 import { CloseWalletScreen } from '../screens/wallet/CloseWalletScreen';
 import { WalletStatementScreen } from '../screens/wallet/WalletStatementScreen';
+import { InsightsScreen } from '../screens/insights/InsightsScreen';
+import { InsightsCategoriesScreen } from '../screens/insights/InsightsCategoriesScreen';
+import { InsightsWalletScreen } from '../screens/insights/InsightsWalletScreen';
+import { InsightsBudgetScreen } from '../screens/insights/InsightsBudgetScreen';
+import { InsightsForecastScreen } from '../screens/insights/InsightsForecastScreen';
+import { InsightsContributionsScreen } from '../screens/insights/InsightsContributionsScreen';
+import { StatementsScreen } from '../screens/insights/StatementsScreen';
+import { StatementsPickScreen } from '../screens/insights/StatementsPickScreen';
+import { StatementsReadyScreen } from '../screens/insights/StatementsReadyScreen';
+import { ExportSyncScreen } from '../screens/insights/ExportSyncScreen';
 import { PersonalDetailsScreen } from '../screens/me/PersonalDetailsScreen';
 import { LinkedBanksScreen } from '../screens/me/LinkedBanksScreen';
 import { AppLockScreen } from '../screens/me/AppLockScreen';
@@ -529,6 +539,16 @@ export function RootNavigator() {
       <RootStack.Screen name="AskToUnlock" component={AskToUnlockScreen} />
       <RootStack.Screen name="CloseWallet" component={CloseWalletScreen} />
       <RootStack.Screen name="WalletStatement" component={WalletStatementScreen} />
+      <RootStack.Screen name="Insights" component={InsightsScreen} />
+      <RootStack.Screen name="InsightsCategories" component={InsightsCategoriesScreen} />
+      <RootStack.Screen name="InsightsWallet" component={InsightsWalletScreen} />
+      <RootStack.Screen name="InsightsBudget" component={InsightsBudgetScreen} />
+      <RootStack.Screen name="InsightsForecast" component={InsightsForecastScreen} />
+      <RootStack.Screen name="InsightsContributions" component={InsightsContributionsScreen} />
+      <RootStack.Screen name="Statements" component={StatementsScreen} />
+      <RootStack.Screen name="StatementsPick" component={StatementsPickScreen} />
+      <RootStack.Screen name="StatementsReady" component={StatementsReadyScreen} />
+      <RootStack.Screen name="ExportSync" component={ExportSyncScreen} />
       <RootStack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />
       <RootStack.Screen name="LinkedBanks" component={LinkedBanksScreen} />
       <RootStack.Screen name="AppLockSettings" component={AppLockScreen} />

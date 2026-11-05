@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\AdminSecurityController;
 use App\Http\Controllers\Api\AppStatusController;
 use App\Http\Controllers\Api\MoneyRequestController;
 use App\Http\Controllers\Api\EarlyBreakController;
+use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\ScheduledPaymentController;
 use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
@@ -238,6 +239,19 @@ Route::prefix('v1')->group(function () {
         Route::get('wallets/{wallet}/statement', [WalletManageController::class, 'statement']);
         Route::post('wallets/{wallet}/statement/link', [WalletManageController::class, 'statementLink'])->middleware('throttle:30,1,wallet-statement');
         Route::post('wallets/{wallet}/statement/email', [WalletManageController::class, 'email'])->middleware('throttle:5,1,wallet-statement-email');
+
+        // INS-01…06 insights; INS-07, STM-01/02 statements for several wallets
+        Route::get('insights', [InsightsController::class, 'overview']);
+        Route::get('insights/categories', [InsightsController::class, 'categories']);
+        Route::get('insights/wallets/{wallet}', [InsightsController::class, 'wallet']);
+        Route::get('insights/budget', [InsightsController::class, 'budget']);
+        Route::get('insights/forecast', [InsightsController::class, 'forecast']);
+        Route::get('insights/contributions', [InsightsController::class, 'contributions']);
+        Route::get('statements', [InsightsController::class, 'statementWallets']);
+        Route::get('statements/months', [InsightsController::class, 'statementMonths']);
+        Route::post('statements/batch', [InsightsController::class, 'batch'])->middleware('throttle:30,1,statement-batch');
+        Route::post('statements/batch/link', [InsightsController::class, 'batchLink'])->middleware('throttle:30,1,statement-batch');
+        Route::post('statements/batch/email', [InsightsController::class, 'batchEmail'])->middleware('throttle:5,1,statement-batch-email');
 
         // Wallet members
         Route::get('wallets/{wallet}/members', [WalletMemberController::class, 'index']);

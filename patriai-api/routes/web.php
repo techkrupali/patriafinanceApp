@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppLinkController;
 use App\Http\Controllers\DirectorController;
 use App\Http\Controllers\GoalLinkController;
+use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\WalletManageController;
 use App\Http\Controllers\TrustedContactController;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,8 @@ Route::post('/d/{token}', [DirectorController::class, 'store'])->middleware('thr
 
 // WAL-15: a statement download, from a 10-minute signed link the app asked for.
 Route::get('/statements/{wallet}', [WalletManageController::class, 'download'])->name('wallet.statement')->middleware(['signed', 'throttle:30,1']);
+// STM-02: statements for several wallets (one file, combined or a zip), from a 10-minute signed link.
+Route::get('/statement-files', [InsightsController::class, 'download'])->name('statements.files')->middleware(['signed', 'throttle:30,1']);
 
 // SYS-08: links in SMS and WhatsApp hand over to the app (referral, invitation, a request).
 Route::get('/join/{code}', [AppLinkController::class, 'referral'])->middleware('throttle:60,1')->where('code', '[A-Za-z0-9_-]{3,32}');

@@ -738,7 +738,9 @@ class WalletManageService
         return $statement['transactions']->map(fn (Transaction $t) => [
             $t->created_at->copy()->setTimezone('Africa/Lagos')->format('j M Y, g:i a'),
             // "Automation: Save from every salary" reads "Save from every salary (rule)".
-            preg_replace('/^Automation: (.*?)(?: \(part\))?$/', '$1 (rule)', (string) $t->description) ?: ucfirst(str_replace('_', ' ', $t->type)),
+            preg_replace('/^Automation: (.*?)(?: \(part\))?$/', '$1 (rule)', (string) $t->description)
+                // No note: say which wallet it went to or came from ("To Car deposit").
+                ?: (isset($t->counterparty['wallet_name']) ? ($t->direction === 'credit' ? 'From ' : 'To ') . $t->counterparty['wallet_name'] : ucfirst(str_replace('_', ' ', $t->type))),
             $t->user ? ($t->user->first_name ?: $t->user->fullName()) : ($t->counterparty['source_name'] ?? ''),
             $t->direction === 'credit' ? $t->amount : null,
             $t->direction === 'debit' ? $t->amount + $t->fee : null,

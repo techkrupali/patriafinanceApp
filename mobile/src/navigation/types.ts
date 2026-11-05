@@ -339,8 +339,28 @@ export type RootStackParamList = {
   AskToUnlock: { walletId: number };
   /** WAL-13 */
   CloseWallet: { walletId: number };
-  /** WAL-15; `audit` when opened from the audit log's export. */
-  WalletStatement: { walletId: number; audit?: boolean };
+  /** WAL-15; `audit` when opened from the audit log's export; `from`/`to` from a month on INS-07. */
+  WalletStatement: { walletId: number; audit?: boolean; from?: string; to?: string };
+  /** INS-01 Insights home. */
+  Insights: undefined;
+  /** INS-02 spending by category, a month ("2026-10"). */
+  InsightsCategories: { month?: string } | undefined;
+  /** INS-03 one wallet's report. */
+  InsightsWallet: { walletId?: number } | undefined;
+  /** INS-04 budget vs actual. */
+  InsightsBudget: { walletId?: number } | undefined;
+  /** INS-05 savings forecast. */
+  InsightsForecast: undefined;
+  /** INS-06 who put in what. */
+  InsightsContributions: undefined;
+  /** INS-07 statements by month, for a wallet or all of them. */
+  Statements: { wallet?: number | 'all' } | undefined;
+  /** STM-01 pick wallets and a period (dates from a month on INS-07). */
+  StatementsPick: { walletIds?: number[]; from?: string; to?: string } | undefined;
+  /** STM-02 the files, to download or email. */
+  StatementsReady: { walletIds: number[]; period: 'last_month' | 'last_3_months' | 'this_year' | 'custom'; from?: string | null; to?: string | null; combined: boolean };
+  /** INS-08 export and sync. */
+  ExportSync: undefined;
   Automations: undefined;
   CreateAutomation: { fromWalletId?: number; toWalletId?: number } | undefined;
   /** AUT-02 "New rule · Start from a template". */
