@@ -74,6 +74,8 @@ class AutomationController extends ApiController
     public function store(Request $request): JsonResponse
     {
         $data = $this->validatePayload($request, creating: true);
+        // PLN-04 "You've used your 2 free rules".
+        \App\Services\PlanService::make()->guard($request->user(), 'rules');
 
         $payload = [
             'name' => $data['name'],
@@ -160,6 +162,7 @@ class AutomationController extends ApiController
     // POST /automations/builder — AUT-06 "Turn on" (and ask a co-owner).
     public function build(Request $request): JsonResponse
     {
+        \App\Services\PlanService::make()->guard($request->user(), 'rules');
         $rule = \App\Services\RuleBuilderService::make()->create($request->user(), $this->draft($request));
 
         return $this->ok($rule->agreed() ? 'Rule is on' : 'Rule waits for a yes', ['automation' => $this->serializeRule($rule->load(['fromWallet:id,name', 'toWallet:id,name']))], 201);

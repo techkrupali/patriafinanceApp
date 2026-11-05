@@ -26,6 +26,7 @@ import { useAppLock } from './src/store/appLock';
 import { useNetwork } from './src/store/network';
 import { AppStatusGate, DeepLinkHandler, ErrorBoundary, SessionLock } from './src/components/system/SystemStates';
 import { LogoMark, markOnDark, PtLogo } from './src/components/pt/PtLogo';
+import { PlanLimitPrompt } from './src/components/PlanLimitPrompt';
 import { pt } from './src/theme';
 
 const queryClient = new QueryClient({
@@ -90,6 +91,8 @@ function Gate() {
       <RootNavigator />
       {status === 'authed' ? <SessionLock /> : null}
       <DeepLinkHandler />
+      {/* PLN-04: a plan's limit, wherever it was hit. */}
+      {status === 'authed' ? <PlanLimitPrompt /> : null}
     </AppStatusGate>
   );
 }

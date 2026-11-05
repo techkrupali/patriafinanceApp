@@ -327,6 +327,9 @@ class WalletController extends ApiController
 
         $user = $request->user();
 
+        // PLN-04: the family's plan may hold fewer wallets than the tier (when Free's limits are on).
+        \App\Services\PlanService::make()->guard($user, 'wallets');
+
         // ME-23 wallets per tier (closed ones don't count): "On Tier 3 you can have up
         // to 20 wallets. Close one you no longer use." — the same rule WalletService enforces.
         if ($blocked = \App\Services\LimitService::make()->walletAllowance($user)) {

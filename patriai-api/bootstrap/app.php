@@ -40,6 +40,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // A spending wallet's new period: move the leftover before the top-up runs
         // (same minute, registered first, so it runs first).
         $schedule->command('budgets:roll')->dailyAt('00:00');
+        // PLN-02/03: trial reminders, renewals, grace days.
+        $schedule->command('plans:renew')->hourly()->withoutOverlapping();
 
         // Run due automation rules (scheduled auto-transfers). Idempotent per period,
         // so an hourly cadence safely fires daily/weekly/monthly rules.

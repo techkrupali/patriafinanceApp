@@ -12,6 +12,7 @@ import { PtButton } from '../components/pt/PtButton';
 import { PtSheet } from '../components/pt/PtSheet';
 import { PtSwitchRow } from '../components/pt/PtForm';
 import { useDevices, useHome, useLogoutApi, useMyVendorProfile } from '../api/hooks';
+import { usePlans } from '../api/plans';
 import { useTeamInvites, useVendorHome } from '../api/projectFlow';
 import { useAuth } from '../store/auth';
 import { useLanguage } from '../store/language';
@@ -56,12 +57,17 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
   const lang = useLanguage((s) => s.lang);
   const home = useHome();
   const devices = useDevices();
+  const plans = usePlans();
   const logoutApi = useLogoutApi();
   const qc = useQueryClient();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [keepTrusted, setKeepTrusted] = useState(true);
 
   const tier = user?.kyc_tier ?? 0;
+  // PLN-01/03: "Free", "Pro · trial"; the plan comes from admin.
+  const sub = plans.data?.subscription;
+  const planName = sub ? sub.plan.name : plans.data?.plans.find((p) => p.slug === plans.data?.current)?.name ?? 'Free';
+  const planLine = sub ? (sub.status === 'trialing' ? `${planName} · trial` : sub.cancel_at_period_end ? `${planName} · ending` : planName) : planName;
   const unread = home.data?.unread_notifications ?? 0;
   const deviceCount = devices.data?.length ?? 0;
   const contact = [user?.username ? `@${user.username}` : null, user?.phone ? formatE164(user.phone) : null].filter(Boolean).join(' · ');
@@ -123,7 +129,8 @@ export function ProfileScreen({ navigation }: TabScreenProps<'More'>) {
 
       {/* Settings */}
       <PtCard>
-        <PtRow title="Account level" right={`Tier ${tier} · Free`} chevron minHeight={46} onPress={() => navigation.navigate('Kyc')} />
+        <PtRow title="Account level" right={`Tier ${tier} · ${planName}`} chevron minHeight={46} onPress={() => navigation.navigate('Kyc')} />
+        <PtRow title="Plan" right={planLine} chevron minHeight={46} onPress={() => navigation.navigate(sub ? 'Subscription' : 'Plans')} />
         <PtRow title="Security" right="PIN, Face ID" chevron minHeight={46} onPress={() => navigation.navigate('SecurityCenter')} />
         <PtRow
           title="Notifications"

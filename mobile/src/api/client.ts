@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { API_URL, STORAGE_KEYS } from '../config';
 import { useAuth } from '../store/auth';
 import { useNetwork } from '../store/network';
+import { isPlanLimit, usePlanPrompt } from '../store/planPrompt';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -94,6 +95,8 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
       res.status >= 500 && res.status !== 503
         ? "That's on us, not you. Nothing was sent or changed. Try again in a moment."
         : firstValidationError(json?.errors) ?? json?.message ?? `Request failed (${res.status})`;
+    // PLN-04: a plan's limit opens the "See Pro" sheet, wherever it was hit.
+    if (isPlanLimit(json?.data)) usePlanPrompt.getState().show(json.data);
     throw new ApiError(message, res.status, json?.errors, json?.data);
   }
 

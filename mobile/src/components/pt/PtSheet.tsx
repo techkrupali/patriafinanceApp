@@ -38,9 +38,11 @@ export function PtSheet({
           >
             <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: pt.line }} />
             <View style={{ paddingHorizontal: 20, paddingTop: 10, gap: 2 }}>
-              <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, lineHeight: 26, color: pt.ink }} accessibilityRole="header">
-                {title}
-              </Text>
+              {title ? (
+                <Text style={{ fontFamily: ptFont.extrabold, fontSize: 20, lineHeight: 26, color: pt.ink }} accessibilityRole="header">
+                  {title}
+                </Text>
+              ) : null}
               {subtitle ? <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: pt.inkMuted }}>{subtitle}</Text> : null}
             </View>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6, gap: 14 }} keyboardShouldPersistTaps="handled">

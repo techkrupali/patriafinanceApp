@@ -580,6 +580,50 @@ export interface OrganisationsData {
   donations: CharityDonationRow[];
 }
 
+/** GET /admin/plans — PLN-01…04. */
+export interface AdminPlan {
+  id: number;
+  slug: string;
+  name: string;
+  covers: string | null;
+  monthly_price: string;
+  yearly_price: string;
+  yearly_saves_months: number;
+  trial_days: number;
+  is_free: boolean;
+  active: boolean;
+  limits: { wallets: number | null; shared_wallets: number | null; rules: number | null };
+  families: number;
+}
+
+export interface PlanFeatureRow {
+  label: string;
+  values: Record<string, string>;
+}
+
+export interface AdminSubscription {
+  id: number;
+  user: { id: number; name: string | null; phone: string | null };
+  family: number;
+  plan: string | null;
+  interval: "monthly" | "yearly";
+  status: "trialing" | "active" | "past_due" | "expired";
+  cancelling: boolean;
+  price: string;
+  next_at: string | null;
+  paid_from: string | null;
+  failure: string | null;
+  started_at: string | null;
+}
+
+export interface PlansData {
+  plans: AdminPlan[];
+  features: PlanFeatureRow[];
+  enforce: boolean;
+  summary: { paying: number; trials: number; cancelling: number; past_due: number; mrr: string; paid_30d: string };
+  subscriptions: AdminSubscription[];
+}
+
 /** GET /admin/agents — ADD-06 cash agents. */
 export interface AdminAgent {
   id: number;

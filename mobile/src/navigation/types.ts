@@ -351,6 +351,12 @@ export type RootStackParamList = {
   CloseWallet: { walletId: number };
   /** WAL-15; `audit` when opened from the audit log's export; `from`/`to` from a month on INS-07. */
   WalletStatement: { walletId: number; audit?: boolean; from?: string; to?: string };
+  /** PLN-01 Free vs Pro. */
+  Plans: { interval?: 'monthly' | 'yearly' } | undefined;
+  /** PLN-02 Upgrade and pay. */
+  PlanUpgrade: { plan: string; interval: 'monthly' | 'yearly' };
+  /** PLN-03 Manage subscription. */
+  Subscription: undefined;
   /** INS-01 Insights home. */
   Insights: undefined;
   /** INS-02 spending by category, a month ("2026-10"). */

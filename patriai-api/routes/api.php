@@ -8,12 +8,14 @@ use App\Http\Controllers\Api\MoneyRequestController;
 use App\Http\Controllers\Api\EarlyBreakController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\FundingController;
+use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\ScheduledPaymentController;
 use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
 use App\Http\Controllers\Api\Admin\OrganisationAdminController;
 use App\Http\Controllers\Api\Admin\AgentAdminController;
+use App\Http\Controllers\Api\Admin\AdminPlanController;
 use App\Http\Controllers\Api\Admin\VendorAdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AssistantController;
@@ -264,6 +266,14 @@ Route::prefix('v1')->group(function () {
         Route::post('statements/batch', [InsightsController::class, 'batch'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/link', [InsightsController::class, 'batchLink'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/email', [InsightsController::class, 'batchEmail'])->middleware('throttle:5,1,statement-batch-email');
+
+        // PLN-01…03 Free and Pro
+        Route::get('plans', [PlanController::class, 'index']);
+        Route::post('subscription', [PlanController::class, 'start'])->middleware('throttle:10,1,plan-start');
+        Route::get('subscription', [PlanController::class, 'show']);
+        Route::patch('subscription', [PlanController::class, 'update'])->middleware('throttle:20,1');
+        Route::post('subscription/cancel', [PlanController::class, 'cancel'])->middleware('throttle:10,1');
+        Route::post('subscription/resume', [PlanController::class, 'resume'])->middleware('throttle:10,1');
 
         // ADD-01…09 adding money by card, USSD or cash at an agent
         Route::get('funding/options', [FundingController::class, 'options']);
@@ -655,6 +665,11 @@ Route::prefix('v1')->group(function () {
             Route::post('wallets/{wallet}/emergency/crisis-unlock', [EmergencyAdminController::class, 'crisisUnlock']);
 
             // Organisations people give to, and charities' share of early-break fees.
+            // PLN-01…04 plans, the comparison, Free's limits, subscriptions
+            Route::get('plans', [AdminPlanController::class, 'index']);
+            Route::put('plans/features', [AdminPlanController::class, 'features'])->middleware('throttle:30,1');
+            Route::patch('plans/settings', [AdminPlanController::class, 'settings'])->middleware('throttle:30,1');
+            Route::patch('plans/{plan}', [AdminPlanController::class, 'update'])->middleware('throttle:60,1');
             // ADD-06 cash agents
             Route::get('agents', [AgentAdminController::class, 'index']);
             Route::post('agents', [AgentAdminController::class, 'store'])->middleware('throttle:60,1');

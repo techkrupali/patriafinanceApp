@@ -93,7 +93,7 @@ class AccountController extends ApiController
 
         return $this->ok('Limits', LimitService::make()->summary($user) + [
             'pending_tier' => $pending?->target_tier,
-            'plan' => 'free',
+            'plan' => \App\Services\PlanService::make()->planFor($user)->slug,
         ]);
     }
 

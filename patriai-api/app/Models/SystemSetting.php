@@ -23,6 +23,18 @@ class SystemSetting extends Model
         'latest_app_version' => '1.0.0',
         'maintenance' => ['on' => false, 'until' => null, 'message' => null],
         'support_phone' => null,
+        // PLN-01: hold families on Free to Free's limits (off until the business decides).
+        'plans_enforce' => false,
+        // PLN-01 "Free · Pro" rows: what each plan gives, as people read it, by plan slug.
+        'plan_features' => [
+            ['label' => 'Wallets', 'values' => ['free' => 'Up to 3', 'pro' => 'Up to 20']],
+            ['label' => 'Shared wallets', 'values' => ['free' => '1', 'pro' => 'Unlimited']],
+            ['label' => 'Rules', 'values' => ['free' => '2, simple', 'pro' => 'Unlimited, multi-step']],
+            ['label' => 'Steward', 'values' => ['free' => '20 questions a month', 'pro' => 'Unlimited, remembers']],
+            ['label' => 'Reports', 'values' => ['free' => 'Basic', 'pro' => 'Full, with forecasts']],
+            ['label' => 'Sync', 'values' => ['free' => 'CSV download', 'pro' => 'Sheets, QuickBooks, Drive']],
+            ['label' => 'History', 'values' => ['free' => '6 months', 'pro' => 'Everything']],
+        ],
     ];
 
     public static function get(string $key): mixed

@@ -10,6 +10,7 @@ import {
   IconEmergency,
   IconBuilding,
   IconMapPin,
+  IconCheckCircle,
   IconKyc,
   IconLoans,
   IconProjects,
@@ -44,6 +45,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/transactions", label: "Transactions", icon: IconTransactions },
       { href: "/organisations", label: "Organisations", icon: IconBuilding },
       { href: "/agents", label: "Agents", icon: IconMapPin },
+      { href: "/plans", label: "Plans", icon: IconCheckCircle },
     ],
   },
   {
