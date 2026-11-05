@@ -50,6 +50,11 @@ import { BreakEarlyScreen } from '../screens/savings/BreakEarlyScreen';
 import { BreakDoneScreen } from '../screens/savings/BreakDoneScreen';
 import { ScheduledPaymentsScreen } from '../screens/send/ScheduledPaymentsScreen';
 import { AddMoneyScreen } from '../screens/send/AddMoneyScreen';
+import { CardPayScreen } from '../screens/addmoney/CardPayScreen';
+import { CardOtpScreen } from '../screens/addmoney/CardOtpScreen';
+import { CardResultScreen } from '../screens/addmoney/CardResultScreen';
+import { UssdScreen } from '../screens/addmoney/UssdScreen';
+import { AgentsScreen } from '../screens/addmoney/AgentsScreen';
 import { BankTransferScreen } from '../screens/send/BankTransferScreen';
 import { TransactionsScreen } from '../screens/send/TransactionsScreen';
 import { TransactionDetailScreen } from '../screens/send/TransactionDetailScreen';
@@ -589,6 +594,11 @@ export function RootNavigator() {
       <RootStack.Screen name="BreakDone" component={BreakDoneScreen} />
       <RootStack.Screen name="ScheduledPayments" component={ScheduledPaymentsScreen} />
       <RootStack.Screen name="AddMoney" component={AddMoneyScreen} />
+      <RootStack.Screen name="CardPay" component={CardPayScreen} />
+      <RootStack.Screen name="CardOtp" component={CardOtpScreen} />
+      <RootStack.Screen name="CardResult" component={CardResultScreen} options={{ gestureEnabled: false }} />
+      <RootStack.Screen name="Ussd" component={UssdScreen} />
+      <RootStack.Screen name="Agents" component={AgentsScreen} />
       <RootStack.Screen name="BankTransfer" component={BankTransferScreen} />
       <RootStack.Screen name="Permissions" component={PermissionsScreen} options={{ gestureEnabled: false }} />
       <RootStack.Screen name="DeepLink" component={DeepLinkScreen} />

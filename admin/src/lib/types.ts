@@ -580,6 +580,29 @@ export interface OrganisationsData {
   donations: CharityDonationRow[];
 }
 
+/** GET /admin/agents — ADD-06 cash agents. */
+export interface AdminAgent {
+  id: number;
+  name: string;
+  address: string | null;
+  area: string | null;
+  city: string;
+  state: string | null;
+  lat: number | null;
+  lng: number | null;
+  hours: string | null;
+  phone: string | null;
+  cash_in: boolean;
+  cash_out: boolean;
+  active: boolean;
+  created_at: string | null;
+}
+
+export interface AgentsData {
+  agents: AdminAgent[];
+  summary: { all: number; active: number; off: number; cash_out: number; no_location: number; cities: number };
+}
+
 export type LoanStatus =
   | "pending"
   | "approved"

@@ -57,6 +57,22 @@ return [
         'webhook_secret' => env('MATRIX_WEBHOOK_SECRET'),
     ],
 
+    // ADD-03/04 paying in by card, through the payment partner (Paystack).
+    // CARD_DRIVER: "paystack" (needs PAYSTACK_SECRET_KEY) or "sandbox" (local
+    // test cards, never in production). Unset: card shows as coming soon.
+    'paystack' => [
+        'secret' => env('PAYSTACK_SECRET_KEY'),
+        'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+    ],
+    'cards' => [
+        'driver' => env('CARD_DRIVER'),
+        'fee_percent' => (float) env('CARD_FEE_PERCENT', 1.5),
+        // Naira: the fee never goes above this, and the smallest and largest top-up.
+        'fee_cap' => (int) env('CARD_FEE_CAP', 2000),
+        'min' => (int) env('CARD_MIN', 100),
+        'max' => (int) env('CARD_MAX', 1000000),
+    ],
+
     // SMS + WhatsApp delivery for phone sign-up codes (Termii). Without a key,
     // codes are only written to the log (fine for local dev, not for launch).
     'termii' => [

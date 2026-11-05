@@ -275,6 +275,16 @@ export type RootStackParamList = {
   MoveMoney: { fromWalletId?: number; toWalletId?: number } | undefined;
   /** ADD-01, to a wallet (Main by default). */
   AddMoney: { walletId?: number } | undefined;
+  /** ADD-03 Pay with card (a saved card or the payment partner's page). */
+  CardPay: { walletId: number; amount?: string };
+  /** ADD-04 the bank's code for a card payment. */
+  CardOtp: { reference: string };
+  /** ADD-08 Money added / ADD-09 didn't go through (waits for the bank). */
+  CardResult: { reference: string; walletId: number };
+  /** ADD-05 USSD. */
+  Ussd: { walletId: number };
+  /** ADD-06 Cash at an agent. */
+  Agents: { walletId: number };
   /** ADD-02 the wallet's account details. */
   BankTransfer: { walletId: number };
   MyQr: undefined;

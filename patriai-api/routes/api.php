@@ -7,11 +7,13 @@ use App\Http\Controllers\Api\AppStatusController;
 use App\Http\Controllers\Api\MoneyRequestController;
 use App\Http\Controllers\Api\EarlyBreakController;
 use App\Http\Controllers\Api\InsightsController;
+use App\Http\Controllers\Api\FundingController;
 use App\Http\Controllers\Api\ScheduledPaymentController;
 use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
 use App\Http\Controllers\Api\Admin\EmergencyAdminController;
 use App\Http\Controllers\Api\Admin\OrganisationAdminController;
+use App\Http\Controllers\Api\Admin\AgentAdminController;
 use App\Http\Controllers\Api\Admin\VendorAdminController;
 use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\AssistantController;
@@ -103,6 +105,11 @@ Route::prefix('v1')->group(function () {
 
     // Banking rails webhook (server-to-server)
     Route::post('webhooks/banking', [WebhookController::class, 'banking']);
+    // ADD-03/04 the card partner's signed notification; its checkout sends people back here; local test checkout.
+    Route::post('webhooks/paystack', [FundingController::class, 'paystackWebhook'])->middleware('throttle:120,1,paystack');
+    Route::get('funding/card/return', [FundingController::class, 'cardReturn'])->middleware('throttle:60,1,card-return');
+    Route::get('funding/sandbox/{reference}', [FundingController::class, 'sandboxPage'])->middleware('throttle:60,1,card-sandbox')->where('reference', 'PTF-[A-Z0-9]{4}-\\d{2}');
+    Route::post('funding/sandbox/{reference}', [FundingController::class, 'sandboxPay'])->middleware('throttle:30,1,card-sandbox')->where('reference', 'PTF-[A-Z0-9]{4}-\\d{2}');
 
     // ---- Authenticated ----
     Route::middleware(['auth:sanctum', 'child.scope'])->group(function () {
@@ -257,6 +264,15 @@ Route::prefix('v1')->group(function () {
         Route::post('statements/batch', [InsightsController::class, 'batch'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/link', [InsightsController::class, 'batchLink'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/email', [InsightsController::class, 'batchEmail'])->middleware('throttle:5,1,statement-batch-email');
+
+        // ADD-01…09 adding money by card, USSD or cash at an agent
+        Route::get('funding/options', [FundingController::class, 'options']);
+        Route::post('funding/card', [FundingController::class, 'card'])->middleware('throttle:20,1,card-pay');
+        Route::get('funding/card/{reference}', [FundingController::class, 'show'])->middleware('throttle:60,1,card-status');
+        Route::post('funding/card/{reference}/otp', [FundingController::class, 'otp'])->middleware('throttle:10,1,card-otp');
+        Route::get('funding/agents', [FundingController::class, 'agents']);
+        Route::get('cards', [FundingController::class, 'savedCards']);
+        Route::delete('cards/{card}', [FundingController::class, 'removeCard'])->middleware('throttle:20,1');
 
         // Wallet members
         Route::get('wallets/{wallet}/members', [WalletMemberController::class, 'index']);
@@ -639,6 +655,10 @@ Route::prefix('v1')->group(function () {
             Route::post('wallets/{wallet}/emergency/crisis-unlock', [EmergencyAdminController::class, 'crisisUnlock']);
 
             // Organisations people give to, and charities' share of early-break fees.
+            // ADD-06 cash agents
+            Route::get('agents', [AgentAdminController::class, 'index']);
+            Route::post('agents', [AgentAdminController::class, 'store'])->middleware('throttle:60,1');
+            Route::patch('agents/{agent}', [AgentAdminController::class, 'update'])->middleware('throttle:60,1');
             Route::get('organisations', [OrganisationAdminController::class, 'index']);
             Route::post('organisations', [OrganisationAdminController::class, 'store'])->middleware('throttle:60,1');
             Route::patch('organisations/{organisation}', [OrganisationAdminController::class, 'update'])->middleware('throttle:60,1');
