@@ -85,6 +85,11 @@ Route::prefix('v1')->group(function () {
 
     // SYS-02/03 (before sign-in) and ME-19 Legal.
     Route::get('app/status', [AppStatusController::class, 'show'])->middleware('throttle:60,1,app-status');
+
+    // WAL-15 and STM-02 downloads from a 10-minute signed link the app asked for. Under /api because
+    // on the live server only /api reaches Laravel (everything else is the admin panel).
+    Route::get('statement-files', [InsightsController::class, 'download'])->name('statements.files')->middleware(['signed', 'throttle:30,1,statement-files']);
+    Route::get('statement-files/wallets/{wallet}', [WalletManageController::class, 'download'])->name('wallet.statement')->middleware(['signed', 'throttle:30,1,statement-files']);
     // INV-02 / INV-04: the invite behind a link, signed in or not, and "Ask for a new invite".
     Route::get('invites/{code}', [InvitationController::class, 'byCode'])->middleware('throttle:60,1,invite-code')->where('code', '[A-Za-z0-9]{4,12}');
     Route::post('invites/{code}/ask-again', [InvitationController::class, 'askAgain'])->middleware('throttle:5,1,invite-ask')->where('code', '[A-Za-z0-9]{4,12}');

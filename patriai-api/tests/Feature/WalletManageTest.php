@@ -231,6 +231,7 @@ class WalletManageTest extends TestCase
 
         $url = $this->postJson("/api/v1/wallets/{$fees->id}/statement/link", ['period' => 'since_start', 'format' => 'csv', 'contributions' => true])
             ->assertOk()->json('data.url');
+        $this->assertStringContainsString("/api/v1/statement-files/wallets/{$fees->id}?", $url);
         $csv = $this->get($url)->assertOk()->assertHeader('Content-Type', 'text/csv; charset=UTF-8')->getContent();
         $this->assertStringContainsString('Who put in what', $csv);
         $this->assertStringContainsString('"Ngozi Okafor","300,000.00",44%', $csv);

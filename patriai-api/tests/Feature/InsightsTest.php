@@ -253,6 +253,7 @@ class InsightsTest extends TestCase
 
         // One file, the zip of all, and the combined file in each format.
         $url = $this->postJson('/api/v1/statements/batch/link', $body + ['format' => 'pdf', 'wallet_id' => $fees->id])->json('data.url');
+        $this->assertStringContainsString('/api/v1/statement-files?', $url); // on the live server only /api reaches Laravel
         $this->assertStringStartsWith('%PDF-1.4', $this->get($url)->assertOk()->getContent());
         $zip = $this->get($this->postJson('/api/v1/statements/batch/link', $body + ['format' => 'csv'])->json('data.url'))
             ->assertOk()->assertHeader('Content-Type', 'application/zip')->getContent();
