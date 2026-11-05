@@ -87,6 +87,11 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
       setJointInvite(inv);
       return;
     }
+    // INV-C1/C2: a contributor to a goal gives a few details, then says how they'll add money.
+    if (inv.role === 'contributor' && (inv.wallet?.type === 'goal' || inv.wallet?.type === 'savings')) {
+      navigation.navigate('ContributorJoin', { invitationId: inv.id });
+      return;
+    }
     if (inv.savings || inv.pledge) {
       setJoinError(null);
       setJoining(inv);
@@ -174,27 +179,30 @@ export function InvitationsScreen({ navigation }: RootScreenProps<'Invitations'>
                   </View>
 
                   <View className="mt-4 flex-row" style={{ gap: 10 }}>
+                    {/* Fills sit on inner Views: some Android phones don't paint a gesture-handler button's own background. */}
                     <Pressable
                       onPress={() => onDecline(inv)}
                       disabled={busy}
-                      className={`flex-1 items-center justify-center rounded bg-lav py-3.5 ${
-                        busy ? 'opacity-50' : 'active:opacity-80'
-                      }`}
+                      accessibilityRole="button"
+                      className={`flex-1 rounded ${busy ? 'opacity-50' : 'active:opacity-80'}`}
                     >
-                      <Text className="text-[15px] font-semibold text-navy">Decline</Text>
+                      <View className="items-center justify-center rounded bg-lav py-3.5">
+                        <Text className="text-[15px] font-semibold text-navy">Decline</Text>
+                      </View>
                     </Pressable>
                     <Pressable
                       onPress={() => onAccept(inv)}
                       disabled={busy}
-                      className={`flex-1 items-center justify-center rounded bg-navy py-3.5 ${
-                        busy ? 'opacity-60' : 'active:opacity-90'
-                      }`}
+                      accessibilityRole="button"
+                      className={`flex-1 rounded ${busy ? 'opacity-60' : 'active:opacity-90'}`}
                     >
-                      {busy ? (
-                        <ActivityIndicator color={colors.white} />
-                      ) : (
-                        <Text className="text-[15px] font-semibold text-white">Accept</Text>
-                      )}
+                      <View className="items-center justify-center rounded bg-navy py-3.5">
+                        {busy ? (
+                          <ActivityIndicator color={colors.white} />
+                        ) : (
+                          <Text className="text-[15px] font-semibold text-white">Accept</Text>
+                        )}
+                      </View>
                     </Pressable>
                   </View>
                 </View>

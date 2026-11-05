@@ -273,6 +273,24 @@ class InvitationController extends ApiController
                     'day_of_week' => $weekly ? $day : null,
                     'day_of_month' => $weekly ? null : $day,
                 ]);
+            } elseif (!empty($data['source_wallet_id']) && $invitation->pledge_kind !== 'gift' && !$invitation->wallet->savingsPlan && in_array($invitation->wallet->type, SavingsService::TYPES, true)) {
+                // INV-C2 "Contribute every month" into a goal with no plan of its own: the amount and day chosen.
+                $source = \App\Models\Wallet::where('id', (int) $data['source_wallet_id'])->where('user_id', $request->user()->id)->first();
+                if (!$source) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['source_wallet_id' => 'Choose one of your own wallets to save from.']);
+                }
+                $amount = isset($data['amount']) ? $this->toKobo((string) $data['amount']) : (int) $invitation->pledge_amount;
+                if ($amount <= 0) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'Enter how much to add each time.']);
+                }
+                $frequency = $data['frequency'] ?? 'monthly';
+                \App\Services\AutomationService::make()->createContributionRule($request->user(), $source, $invitation->wallet->refresh(), [
+                    'name' => ['daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'][$frequency] . " into {$invitation->wallet->name}",
+                    'amount' => $amount,
+                    'frequency' => $frequency,
+                    'day_of_week' => $data['day_of_week'] ?? 1,
+                    'day_of_month' => $data['day_of_month'] ?? min(28, now('Africa/Lagos')->day),
+                ]);
             } elseif (!empty($data['source_wallet_id']) && $invitation->pledge_kind !== 'gift') {
                 // GLW-03: their own amount ("Emeka · ₦120,000"), unless they choose another.
                 $overrides = array_filter([

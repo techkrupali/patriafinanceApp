@@ -49,39 +49,44 @@ export function PtChoiceCard({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
-      style={{
-        minHeight: 64,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        borderRadius: ptRadius.md,
-        borderWidth: 2,
-        borderColor: selected ? pt.brand : 'transparent',
-        backgroundColor: selected ? pt.brandSoft : pt.raised,
-      }}
+      style={{ borderRadius: ptRadius.md }}
     >
-      {icon ? (
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: selected ? pt.brand : pt.brandSoft,
-          }}
-        >
-          <Feather name={icon} size={18} color={selected ? pt.onBrand : pt.brand} />
+      {/* The fill sits on a View: some Android phones don't paint a gesture-handler button's own background. */}
+      <View
+        style={{
+          minHeight: 64,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          borderRadius: ptRadius.md,
+          borderWidth: 2,
+          borderColor: selected ? pt.brand : 'transparent',
+          backgroundColor: selected ? pt.brandSoft : pt.raised,
+        }}
+      >
+        {icon ? (
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: selected ? pt.brand : pt.brandSoft,
+            }}
+          >
+            <Feather name={icon} size={18} color={selected ? pt.onBrand : pt.brand} />
+          </View>
+        ) : null}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontFamily: ptFont.bold, fontSize: 16, lineHeight: 22, color: selected ? pt.brand : pt.ink }}>{title}</Text>
+          {subtitle ? <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>{subtitle}</Text> : null}
+          {selected && extra ? <View style={{ marginTop: 4 }}>{extra}</View> : null}
         </View>
-      ) : null}
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: ptFont.bold, fontSize: 16, lineHeight: 22, color: selected ? pt.brand : pt.ink }}>{title}</Text>
-        {subtitle ? <Text style={{ fontFamily: ptFont.regular, fontSize: 13, lineHeight: 18, color: pt.inkMuted }}>{subtitle}</Text> : null}
-        {selected && extra ? <View style={{ marginTop: 4 }}>{extra}</View> : null}
+        {kind === 'radio' ? <PtRadio checked={selected} /> : <PtCheckbox checked={selected} />}
       </View>
-      {kind === 'radio' ? <PtRadio checked={selected} /> : <PtCheckbox checked={selected} />}
     </Pressable>
   );
 }

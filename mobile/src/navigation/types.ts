@@ -533,7 +533,9 @@ export type RootStackParamList = {
   /** GOL-12 Newborn plan. */
   NewbornPlan: undefined;
   /** INV-C3 "You've joined". */
-  GoalJoined: { walletId: number };
+  GoalJoined: { walletId: number; how?: 'bank' | 'wallet' };
+  /** INV-C1/C2 joining a goal as a contributor: a few details, then how you'll add money. */
+  ContributorJoin: { invitationId: number };
   /** WAL-19 Joint wallet rules: propose a change, approve the other's. */
   JointRules: { walletId: number };
   /** JNT-05 from WPV-03 Leave: notice to leave and closing with both PINs. */

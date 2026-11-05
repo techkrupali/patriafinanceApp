@@ -121,26 +121,22 @@ export function PtSwitch({
       accessibilityState={{ checked: value, disabled }}
       accessibilityLabel={label}
       hitSlop={6}
-      style={{
-        width: 48,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: value ? pt.brand : pt.lineStrong,
-        opacity: disabled ? 0.5 : 1,
-        justifyContent: 'center',
-      }}
+      style={{ width: 48, height: 28, borderRadius: 14, opacity: disabled ? 0.5 : 1 }}
     >
-      <View
-        style={{
-          position: 'absolute',
-          top: 3,
-          left: value ? 23 : 3,
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: '#FFFFFF',
-        }}
-      />
+      {/* The track sits on a View: some Android phones don't paint a gesture-handler button's own background. */}
+      <View style={{ width: 48, height: 28, borderRadius: 14, backgroundColor: value ? pt.brand : pt.lineStrong, justifyContent: 'center' }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: 3,
+            left: value ? 23 : 3,
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: '#FFFFFF',
+          }}
+        />
+      </View>
     </Pressable>
   );
 }

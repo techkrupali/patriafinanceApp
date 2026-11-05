@@ -47,7 +47,10 @@ export function BreakEarlyScreen({ navigation, route }: RootScreenProps<'BreakEa
   const charityPart = lock?.charity ? Math.floor(fee * CHARITY_SHARE * 100) / 100 : 0;
   const approvers = (q.data?.approval.approvers ?? []).map((a) => a.name.split(' ')[0]);
   const needsYes = approvers.length > 0 && (lock?.approval ?? true);
-  const until = lock?.mode === 'date' && lock.until ? `locked until ${formatYmd(lock.until).replace(/ \d{4}$/, '')}` : 'locked until the target';
+  // "locked until 30 Jun", or "30 Jun 2027" when it's not this year.
+  const until = lock?.mode === 'date' && lock.until
+    ? `locked until ${lock.until.startsWith(String(new Date().getFullYear())) ? formatYmd(lock.until).replace(/ \d{4}$/, '') : formatYmd(lock.until)}`
+    : 'locked until the target';
   const over = n > balance;
 
   const send = (pin: string, twoFactorCode?: string) => {
@@ -85,11 +88,13 @@ export function BreakEarlyScreen({ navigation, route }: RootScreenProps<'BreakEa
   if (q.isLoading) return <ActivityIndicator color={pt.brand} style={{ marginTop: 80 }} />;
   if (!wallet) return <LoadError message={(q.error as Error | null)?.message} onRetry={() => void q.refetch()} />;
   const canBreak = Boolean(q.data?.my_can_spend) && Boolean(lock?.early_break);
+  // GOL-11 "Break goal early" on a goal; BRK-04 on other savings.
+  const goal = wallet.type === 'goal';
   const askLabel = needsYes ? `Ask ${namesList(approvers)} to approve` : 'Break early';
 
   return (
     <PtPageScreen
-      title="Break savings early"
+      title={goal ? 'Break goal early' : 'Break savings early'}
       subtitle={`${wallet.name} · ${until}`}
       onBack={() => navigation.goBack()}
       footer={
@@ -99,15 +104,20 @@ export function BreakEarlyScreen({ navigation, route }: RootScreenProps<'BreakEa
         </View>
       }
     >
-      {!canBreak ? (
+      {canBreak ? (
+        <PtNote tone="attention" icon="alert-triangle">
+          <Text style={{ fontFamily: ptFont.bold }}>Breaking early costs you{'\n'}</Text>
+          {`This ${goal ? 'goal' : 'wallet'} is locked. Taking money out now has a ${feePct}% fee.`}
+        </PtNote>
+      ) : (
         <PtNote tone="attention" icon="lock">
           {lock?.early_break === false ? 'This wallet was set to open only on its date or target. Ask to unlock instead.' : 'Only owners can take money out of this wallet.'}
         </PtNote>
-      ) : null}
+      )}
 
       <View style={{ alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>How much do you need?</Text>
-        <PtHeroAmount value={amount} onChange={setAmount} label="How much do you need?" />
+        <Text style={{ fontFamily: ptFont.bold, fontSize: 15, color: pt.ink }}>{goal ? 'Amount to take out' : 'How much do you need?'}</Text>
+        <PtHeroAmount value={amount} onChange={setAmount} label={goal ? 'Amount to take out' : 'How much do you need?'} />
         <Text style={{ fontFamily: ptFont.regular, fontSize: 14, color: over ? pt.danger : pt.inkMuted }}>{`${formatNaira(balance)} in the wallet`}</Text>
       </View>
 
@@ -119,8 +129,13 @@ export function BreakEarlyScreen({ navigation, route }: RootScreenProps<'BreakEa
           sub={lock?.charity ? `${formatAmount(String(charityPart))} to ${lock.charity.name} · ${formatAmount(String(fee - charityPart))} Patriai fee` : 'All of it a Patriai fee (no charity picked)'}
         />
         <PtReviewRow label={`You receive in ${main?.name ?? 'Main'}`} value={formatAmount(String(Math.max(0, n - fee)))} />
-        {needsYes ? <PtReviewRow label="Also needs" value={`${namesList(approvers)}'s approval`} sub={approvers.length === 1 ? 'They save into this wallet' : 'They save into this wallet too'} /> : null}
-        <PtReviewRow label="After this" value={`${formatNaira(Math.max(0, balance - n))} left`} sub="Still locked" last />
+        {needsYes ? <PtReviewRow label="Also needs" value={`${namesList(approvers)}'s approval`} sub={goal ? 'They co-own this goal' : approvers.length === 1 ? 'They save into this wallet' : 'They save into this wallet too'} /> : null}
+        <PtReviewRow
+          label={goal ? 'Goal after this' : 'After this'}
+          value={goal ? `${formatNaira(Math.max(0, balance - n))} · stays open` : `${formatNaira(Math.max(0, balance - n))} left`}
+          sub="Still locked"
+          last
+        />
       </PtPanel>
 
       <PtField label={needsYes ? `Reason (${namesList(approvers)} will see it)` : 'Reason (optional)'} value={reason} onChangeText={setReason} placeholder="Hospital bill" maxLength={200} />

@@ -22,7 +22,7 @@ const groupAccount = (n: string) => n.replace(/^(\d{3})(\d{3})(\d+)$/, '$1 $2 $3
  * number, your role — then See the wallet or Add money now.
  */
 export function GoalJoinedScreen({ navigation, route }: RootScreenProps<'GoalJoined'>) {
-  const { walletId } = route.params;
+  const { walletId, how } = route.params;
   const insets = useSafeAreaInsets();
   const me = useAuth((s) => s.user);
   const q = useWallet(walletId);
@@ -59,7 +59,14 @@ export function GoalJoinedScreen({ navigation, route }: RootScreenProps<'GoalJoi
       </ScrollView>
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 12) + 18, gap: 12 }}>
         <PtButton title="See the wallet" onPress={() => navigation.replace('WalletDetail', { walletId })} />
-        {role !== 'viewer' ? <PtButton title="Add money now" variant="ghost" onPress={() => navigation.replace('MoveMoney', { toWalletId: walletId })} /> : null}
+        {role !== 'viewer' ? (
+          <PtButton
+            title="Add money now"
+            variant="ghost"
+            // INV-C2 "Bank transfer": the account to send to; "From my Patriai wallet": move it now.
+            onPress={() => (how === 'bank' ? navigation.replace('WalletAccount', { walletId }) : navigation.replace('MoveMoney', { toWalletId: walletId }))}
+          />
+        ) : null}
       </View>
     </View>
   );
