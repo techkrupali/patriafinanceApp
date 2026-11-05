@@ -9,6 +9,7 @@ import { pt } from '../theme';
 import type { RootScreenProps } from '../navigation/types';
 
 const SECTIONS: { key: HomeSection; title: string }[] = [
+  { key: 'setup', title: 'Get set up' },
   { key: 'upcoming', title: 'Next 7 days' },
   { key: 'goals', title: 'Goals' },
   { key: 'projects', title: 'Projects' },

@@ -114,6 +114,7 @@ import { CloseWalletScreen } from '../screens/wallet/CloseWalletScreen';
 import { WalletStatementScreen } from '../screens/wallet/WalletStatementScreen';
 import { InsightsScreen } from '../screens/insights/InsightsScreen';
 import { PlansScreen } from '../screens/plans/PlansScreen';
+import { SearchScreen } from '../screens/SearchScreen';
 import { PlanUpgradeScreen } from '../screens/plans/PlanUpgradeScreen';
 import { SubscriptionScreen } from '../screens/plans/SubscriptionScreen';
 import { InsightsCategoriesScreen } from '../screens/insights/InsightsCategoriesScreen';
@@ -549,6 +550,7 @@ export function RootNavigator() {
       <RootStack.Screen name="CloseWallet" component={CloseWalletScreen} />
       <RootStack.Screen name="WalletStatement" component={WalletStatementScreen} />
       <RootStack.Screen name="Insights" component={InsightsScreen} />
+      <RootStack.Screen name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
       <RootStack.Screen name="Plans" component={PlansScreen} />
       <RootStack.Screen name="PlanUpgrade" component={PlanUpgradeScreen} />
       <RootStack.Screen name="Subscription" component={SubscriptionScreen} />

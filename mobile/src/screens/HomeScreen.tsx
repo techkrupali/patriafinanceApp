@@ -25,6 +25,10 @@ import { useHomeCopy } from '../lib/homeCopy';
 import { formatMoney, formatNaira, initials, shortDay } from '../lib/format';
 import { inviteTarget } from '../lib/invite';
 import { selection } from '../lib/haptics';
+import * as Clipboard from 'expo-clipboard';
+import { showAlert } from '../lib/alert';
+import { SetupCard } from '../components/home/SetupCard';
+import type { HomeSetupStep } from '../api/types';
 import type { HomeNeedItem, HomeUpcomingItem } from '../api/types';
 import type { TabScreenProps } from '../navigation/types';
 
@@ -99,6 +103,23 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
 
   const addMoney = () => navigation.navigate('AddMoney', main ? { walletId: main.id } : undefined);
 
+  // HOM-03 "Get set up".
+  const setup = data?.setup;
+  const savePrefs = useHomePrefs((s) => s.save);
+  const hideOnOpen = useHomePrefs((s) => s.hideOnOpen);
+  const hideSetup = () => void savePrefs({ hideOnOpen, sections: { ...sections, setup: false } });
+  const openStep = (key: HomeSetupStep) => {
+    if (key === 'verify') navigation.navigate('Kyc');
+    else if (key === 'family') navigation.navigate('FamilyHub');
+    else if (key === 'shared_wallet') navigation.navigate('CreateWallet');
+  };
+  const copyDetails = async () => {
+    const m = setup?.main;
+    if (!m?.account_number) return;
+    await Clipboard.setStringAsync(m.account_number);
+    showAlert('Account number copied', `${m.account_number}${m.bank ? ` · ${m.bank}` : ''}. Send money to it from any bank.`);
+  };
+
   const openNeeds = (items: HomeNeedItem[]) => {
     const kinds = new Set(items.map((i) => i.kind));
     if (kinds.has('approval')) navigation.navigate('Approvals', { scope: 'to_me' });
@@ -164,11 +185,15 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
         <PtAvatar initials={initials(user?.full_name)} uri={user?.avatar_url} />
       </Pressable>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{copy.greeting(new Date().getHours())}</Text>
+        <Text style={{ fontFamily: ptFont.regular, fontSize: 12, color: pt.inkMuted }}>{data?.setup?.new ? copy.welcome : copy.greeting(new Date().getHours())}</Text>
         <Text style={{ fontFamily: ptFont.bold, fontSize: 18, color: pt.ink }} numberOfLines={1}>
           {data?.first_name ?? user?.first_name ?? ''}
         </Text>
       </View>
+      {/* HOM-05 Search Patriai. */}
+      <HeaderButton label="Search" onPress={() => navigation.navigate('Search')}>
+        <Feather name="search" size={18} color={pt.ink} />
+      </HeaderButton>
       <HeaderButton label="Customise home" onPress={() => navigation.navigate('CustomiseHome')}>
         <Feather name="sliders" size={18} color={pt.ink} />
       </HeaderButton>
@@ -245,59 +270,94 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
           <LoadError message={(home.error as Error | null)?.message} onRetry={() => void home.refetch()} />
         ) : (
           <>
-            {/* Everything the family can see */}
-            <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.lg, paddingVertical: 16, paddingHorizontal: 18, gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.85 }}>
-                  {copy.everything(data.wallet_count)}
+            {setup?.new && setup.main ? (
+              // HOM-03: someone new sees Main itself, its account and the first steps.
+              <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.lg, padding: 18, gap: 6 }}>
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.85 }}>MAIN WALLET</Text>
+                <Text style={{ fontFamily: ptFont.bold, fontSize: 34, lineHeight: 40, letterSpacing: -0.6, color: pt.emerald50, fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>
+                  {hidden ? '₦ ••••••' : formatMoney(setup.main.balance)}
+                </Text>
+                {setup.main.account_number ? (
+                  <Text style={{ fontFamily: ptFont.regular, fontSize: 13, color: pt.emerald50, opacity: 0.9 }}>
+                    {`Account ${setup.main.account_number.replace(/(\d{3})(\d{3})(\d+)/, '$1 $2 $3')}${setup.main.bank ? ` · ${setup.main.bank}` : ''}`}
+                  </Text>
+                ) : null}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                  <PtButton title={copy.addMoney} variant="mint" size="sm" onPress={addMoney} style={{ flex: 1 }} />
+                  {setup.main.account_number ? (
+                    <Pressable
+                      onPress={() => void copyDetails()}
+                      accessibilityRole="button"
+                      style={{ flex: 1, borderRadius: ptRadius.sm }}
+                    >
+                      <View style={{ height: 40, borderRadius: ptRadius.sm, borderWidth: 1.5, borderColor: 'rgba(243,247,244,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.emerald50 }}>Copy details</Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <>
+              {/* Everything the family can see */}
+              <View style={{ backgroundColor: pt.emerald900, borderRadius: ptRadius.lg, paddingVertical: 16, paddingHorizontal: 18, gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: ptFont.bold, fontSize: 11, letterSpacing: 0.88, color: pt.emerald50, opacity: 0.85 }}>
+                    {copy.everything(data.wallet_count)}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      selection();
+                      toggleHidden();
+                    }}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={hidden ? 'Show balances' : 'Hide balances'}
+                  >
+                    <Feather name={hidden ? 'eye-off' : 'eye'} size={16} color={pt.emerald50} />
+                  </Pressable>
+                </View>
+                <Text
+                  style={{ fontFamily: ptFont.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: pt.emerald50, fontVariant: ['tabular-nums'] }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {hidden ? '₦ ••••••' : formatMoney(data.totals.total)}
                 </Text>
                 <Pressable
                   onPress={() => {
                     selection();
-                    toggleHidden();
+                    navigation.navigate('Treasury');
                   }}
-                  hitSlop={10}
                   accessibilityRole="button"
-                  accessibilityLabel={hidden ? 'Show balances' : 'Hide balances'}
                 >
-                  <Feather name={hidden ? 'eye-off' : 'eye'} size={16} color={pt.emerald50} />
+                  <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 17, color: pt.emerald50, opacity: 0.9 }}>
+                    {copy.breakdown(
+                      mask(formatNaira(data.totals.yours)),
+                      mask(formatNaira(data.totals.shared)),
+                      mask(formatNaira(data.totals.children)),
+                    )}
+                  </Text>
                 </Pressable>
               </View>
-              <Text
-                style={{ fontFamily: ptFont.bold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: pt.emerald50, fontVariant: ['tabular-nums'] }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {hidden ? '₦ ••••••' : formatMoney(data.totals.total)}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  selection();
-                  navigation.navigate('Treasury');
-                }}
-                accessibilityRole="button"
-              >
-                <Text style={{ fontFamily: ptFont.regular, fontSize: 12, lineHeight: 17, color: pt.emerald50, opacity: 0.9 }}>
-                  {copy.breakdown(
-                    mask(formatNaira(data.totals.yours)),
-                    mask(formatNaira(data.totals.shared)),
-                    mask(formatNaira(data.totals.children)),
-                  )}
-                </Text>
-              </Pressable>
-            </View>
 
-            {/* Quick actions */}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <PtQuickAction label={copy.send} icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Send')} />
-              <PtQuickAction label={copy.addMoney} icon={<Feather name="arrow-down" size={22} color={pt.brand} />} onPress={addMoney} />
-              <PtQuickAction
-                label={copy.move}
-                icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
-                onPress={() => navigation.navigate('MoveMoney')}
-              />
-              <PtQuickAction label={copy.more} icon={<Feather name="menu" size={21} color={pt.brand} />} onPress={() => setSheet(true)} />
-            </View>
+              {/* Quick actions */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <PtQuickAction label={copy.send} icon={<Feather name="send" size={21} color={pt.brand} />} onPress={() => navigation.navigate('Send')} />
+                <PtQuickAction label={copy.addMoney} icon={<Feather name="arrow-down" size={22} color={pt.brand} />} onPress={addMoney} />
+                <PtQuickAction
+                  label={copy.move}
+                  icon={<MaterialCommunityIcons name="swap-vertical" size={23} color={pt.brand} />}
+                  onPress={() => navigation.navigate('MoveMoney')}
+                />
+                <PtQuickAction label={copy.more} icon={<Feather name="menu" size={21} color={pt.brand} />} onPress={() => setSheet(true)} />
+              </View>
+              </>
+            )}
+
+            {setup && sections.setup !== false && (setup.new || setup.done < setup.total) ? (
+              <SetupCard setup={setup} onStep={openStep} onHide={setup.new ? undefined : hideSetup} />
+            ) : null}
 
             {/* N need you */}
             {data.needs_you.count > 0 ? (
@@ -329,7 +389,8 @@ export function HomeScreen({ navigation }: TabScreenProps<'Home'>) {
             ) : null}
 
             {/* Next 7 days */}
-            {sections.upcoming ? (
+            {/* Someone new has nothing coming up yet (HOM-03 shows just the first steps). */}
+            {sections.upcoming && !setup?.new ? (
               <View style={{ backgroundColor: pt.raised, borderRadius: ptRadius.md, paddingVertical: 4, paddingHorizontal: 14 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingBottom: 2 }}>
                   <Text style={{ fontFamily: ptFont.bold, fontSize: 13, color: pt.ink }}>{copy.next7}</Text>

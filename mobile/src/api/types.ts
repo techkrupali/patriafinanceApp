@@ -513,6 +513,18 @@ export interface HomeData {
   goals: HomeGoal[];
   projects: HomeProject[];
   unread_notifications: number;
+  /** HOM-03 "Get set up · 1 of 4 done"; `new`: only Main, nothing moved yet. */
+  setup?: HomeSetup;
+}
+
+export type HomeSetupStep = 'main_wallet' | 'verify' | 'family' | 'shared_wallet';
+
+export interface HomeSetup {
+  steps: { key: HomeSetupStep; done: boolean }[];
+  done: number;
+  total: number;
+  new: boolean;
+  main: { id: number; balance: string; account_number: string | null; bank: string | null } | null;
 }
 
 export interface DashboardData {

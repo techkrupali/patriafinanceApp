@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\EarlyBreakController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\FundingController;
 use App\Http\Controllers\Api\PlanController;
+use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ScheduledPaymentController;
 use App\Http\Controllers\Api\SupportChatController;
 use App\Http\Controllers\Api\Admin\DisputeAdminController;
@@ -266,6 +267,9 @@ Route::prefix('v1')->group(function () {
         Route::post('statements/batch', [InsightsController::class, 'batch'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/link', [InsightsController::class, 'batchLink'])->middleware('throttle:30,1,statement-batch');
         Route::post('statements/batch/email', [InsightsController::class, 'batchEmail'])->middleware('throttle:5,1,statement-batch-email');
+
+        // HOM-05 Search Patriai: wallets, money in and out, rules
+        Route::get('search', [SearchController::class, 'index'])->middleware('throttle:60,1,search');
 
         // PLN-01…03 Free and Pro
         Route::get('plans', [PlanController::class, 'index']);

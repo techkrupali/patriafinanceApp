@@ -6,6 +6,8 @@ import { useLanguage, type Lang } from '../store/language';
  */
 const en = {
   greeting: (hour: number): string => (hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : 'Good evening,'),
+  /** HOM-03, someone new. */
+  welcome: 'Welcome to Patriai,',
   everything: (n: number) => `EVERYTHING · ${n} WALLET${n === 1 ? '' : 'S'}`,
   breakdown: (yours: string, shared: string, children: string) =>
     `${yours} yours · ${shared} shared · ${children} children ›`,
@@ -38,6 +40,7 @@ type Copy = typeof en;
 
 const pcm: Copy = {
   greeting: () => 'How you dey,',
+  welcome: 'Welcome to Patriai,',
   everything: (n) => `ALL YOUR MONEY · ${n} WALLET${n === 1 ? '' : 'S'}`,
   breakdown: (yours, shared, children) => `${yours} your own · ${shared} we share · ${children} pikin ›`,
   send: 'Send',

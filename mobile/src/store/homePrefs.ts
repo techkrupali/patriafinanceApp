@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { STORAGE_KEYS } from '../config';
 
 /** Home sections a person can switch off (prototype HOM-08 "Customise home"). */
-export type HomeSection = 'upcoming' | 'goals' | 'projects' | 'ajo';
+export type HomeSection = 'setup' | 'upcoming' | 'goals' | 'projects' | 'ajo';
 
 interface Prefs {
   /** Start every session with balances masked (HOM-02). */
@@ -11,7 +11,7 @@ interface Prefs {
   sections: Record<HomeSection, boolean>;
 }
 
-const DEFAULTS: Prefs = { hideOnOpen: false, sections: { upcoming: true, goals: true, projects: true, ajo: true } };
+const DEFAULTS: Prefs = { hideOnOpen: false, sections: { setup: true, upcoming: true, goals: true, projects: true, ajo: true } };
 
 interface HomePrefsState extends Prefs {
   /** Masked right now (the eye on the balance card). */

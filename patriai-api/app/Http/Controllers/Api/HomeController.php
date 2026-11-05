@@ -207,7 +207,44 @@ class HomeController extends ApiController
             'goals' => $this->goals($wallets),
             'projects' => $this->projects($user),
             'unread_notifications' => $user->notificationsFeed()->whereNull('read_at')->count(),
+            'setup' => $this->setup($user, $wallets),
         ]);
+    }
+
+    /**
+     * HOM-03 "Get set up · 1 of 4 done": the main wallet, NIN and a selfie,
+     * family invited, a first shared wallet. `new` when there's only Main and
+     * no money has moved yet — Home then welcomes them and shows Main itself.
+     */
+    private function setup(User $user, Collection $wallets): array
+    {
+        $own = $wallets->where('user_id', $user->id);
+        $main = $own->firstWhere('type', 'main');
+        $ownShared = $own->contains(fn (Wallet $w) => $w->type !== 'main'
+            && ($w->members->where('user_id', '!=', $user->id)->isNotEmpty() || \App\Models\WalletInvitation::where('wallet_id', $w->id)->where('status', 'pending')->exists()));
+        $circle = \App\Services\PlanService::make()->homeCircle($user);
+        $family = ($circle && \App\Models\CircleMember::where('circle_id', $circle->id)->where('user_id', '!=', $user->id)->exists())
+            || \App\Models\WalletInvitation::where('inviter_id', $user->id)->exists();
+        $steps = [
+            ['key' => 'main_wallet', 'done' => $main !== null],
+            ['key' => 'verify', 'done' => (int) $user->kyc_tier >= 2],
+            ['key' => 'family', 'done' => $family],
+            ['key' => 'shared_wallet', 'done' => $ownShared],
+        ];
+        $moved = $wallets->isNotEmpty() && Transaction::whereIn('wallet_id', $wallets->pluck('id'))->exists();
+
+        return [
+            'steps' => $steps,
+            'done' => collect($steps)->where('done', true)->count(),
+            'total' => count($steps),
+            'new' => $wallets->count() <= 1 && !$moved,
+            'main' => $main ? [
+                'id' => $main->id,
+                'balance' => $main->balanceNaira(),
+                'account_number' => $main->virtual_account,
+                'bank' => $main->virtual_account_bank,
+            ] : null,
+        ];
     }
 
     /** Wallets the person owns plus wallets they are an active member of. */

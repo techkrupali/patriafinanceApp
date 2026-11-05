@@ -351,6 +351,8 @@ export type RootStackParamList = {
   CloseWallet: { walletId: number };
   /** WAL-15; `audit` when opened from the audit log's export; `from`/`to` from a month on INS-07. */
   WalletStatement: { walletId: number; audit?: boolean; from?: string; to?: string };
+  /** HOM-05 Search Patriai. */
+  Search: undefined;
   /** PLN-01 Free vs Pro. */
   Plans: { interval?: 'monthly' | 'yearly' } | undefined;
   /** PLN-02 Upgrade and pay. */
