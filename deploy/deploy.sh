@@ -352,8 +352,8 @@ post_checks() {
     ok "Test login is off (OTP_TEST_CODE is empty)"
   else
     local phones code6
-    phones="$(env_get OTP_TEST_PHONES)"; phones="${phones:-+2348000000011}"
-    code6="$(env_get OTP_TEST_CODE)"; code6="${code6:-583920}"
+    phones="$(env_get OTP_TEST_PHONES)"; phones="${phones:-+2348000000022}"
+    code6="$(env_get OTP_TEST_CODE)"; code6="${code6:-271845}"
     warn "Test login is ON: $phones with code $code6. Before real users, add OTP_TEST_CODE= (empty) to .env and deploy again."
   fi
 }

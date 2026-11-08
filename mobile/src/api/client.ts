@@ -72,6 +72,8 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
             : JSON.stringify(options.body),
     });
   } catch {
+    // A photo or file upload cut off on the way: say so, not just "Network error".
+    if (isForm) throw new ApiError("The photo didn't go through. Check your connection and take it again.", 0);
     // SYS-04: the app shows it's offline and what it last saw.
     useNetwork.getState().setOffline(true);
     throw new ApiError('Network error. Check your connection and try again.', 0);

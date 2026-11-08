@@ -451,9 +451,9 @@ class AccountSecurityTest extends TestCase
 
     public function test_test_numbers_take_the_fixed_code_and_nothing_is_sent(): void
     {
-        // Built in, nothing to set on the server: +234 800 000 0011 with 583920.
-        $this->assertContains('+2348000000011', config('services.otp_test.phones'));
-        $this->assertSame('583920', (string) config('services.otp_test.code'));
+        // Built in, nothing to set on the server: +234 800 000 0022 with 271845.
+        $this->assertContains('+2348000000022', config('services.otp_test.phones'));
+        $this->assertSame('271845', (string) config('services.otp_test.code'));
 
         // Like a live server with no SMS provider: production mode, no code in the response.
         config(['services.otp_test.phones' => ['+2348000000001'], 'services.otp_test.code' => '583920', 'services.termii.api_key' => 'termii-key', 'app.debug' => false]);

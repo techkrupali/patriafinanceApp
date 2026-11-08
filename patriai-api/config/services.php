@@ -83,13 +83,13 @@ return [
         'sms_channel' => env('TERMII_SMS_CHANNEL', 'dnd'),
     ],
 
-    // Test login: +234 800 000 0011 always takes code 583920 and no SMS is sent,
+    // Test login: +234 800 000 0022 always takes code 271845 and no SMS is sent,
     // with nothing to set on the server. Every other number still needs a real
     // code. OTP_TEST_PHONES / OTP_TEST_CODE change them; OTP_TEST_CODE= (empty)
     // switches it off — do that before real people use the app.
     'otp_test' => [
-        'phones' => array_values(array_filter(array_map(fn ($p) => preg_replace('/[^\d+]/', '', $p), explode(',', (string) env('OTP_TEST_PHONES', '+2348000000011'))))),
-        'code' => env('OTP_TEST_CODE', '583920'),
+        'phones' => array_values(array_filter(array_map(fn ($p) => preg_replace('/[^\d+]/', '', $p), explode(',', (string) env('OTP_TEST_PHONES', '+2348000000022'))))),
+        'code' => env('OTP_TEST_CODE', '271845'),
     ],
 
 ];

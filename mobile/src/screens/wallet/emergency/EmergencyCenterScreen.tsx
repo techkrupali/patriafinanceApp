@@ -183,7 +183,11 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-    const asset = await shrinkPhoto(result.assets[0]);
+    const asset = await shrinkPhoto(result.assets[0]).catch((e: Error) => {
+      showAlert('Photo too big', e.message);
+      return null;
+    });
+    if (!asset) return;
     setProof({ uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType });
   };
 
@@ -238,7 +242,11 @@ export function EmergencyCenterScreen({ navigation, route }: RootScreenProps<'Em
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-    const asset = await shrinkPhoto(result.assets[0]);
+    const asset = await shrinkPhoto(result.assets[0]).catch((e: Error) => {
+      showAlert('Photo too big', e.message);
+      return null;
+    });
+    if (!asset) return;
     actions.submitDocument.mutate(
       { documentType: docType, note: docNote.trim() || undefined, asset: { uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType } },
       {
